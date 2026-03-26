@@ -1,0 +1,11 @@
+.git
+.github
+.saqula
+.wrangler
+node_modules
+coverage
+dist
+tmp
+*.log
+docs/spec-coverage/coverage-report.json
+docs/spec-coverage/openapi-coverage-report.json

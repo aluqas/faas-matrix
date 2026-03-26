@@ -1,0 +1,144 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "matrix-worker-complement",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-11-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tuwunel-db",
+      "database_id": "36b31035-03de-40ed-8940-753d325bae27"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "366e0561b7054c2ebb07ceb44e8f92a5"
+    },
+    {
+      "binding": "DEVICE_KEYS",
+      "id": "9c44be58428049ddbc69727e0e0ff3ef"
+    },
+    {
+      "binding": "CACHE",
+      "id": "121081991bbb4b44806dd973ea185404"
+    },
+    {
+      "binding": "CROSS_SIGNING_KEYS",
+      "id": "b3f387bf735b4fc684a25656f1808abc"
+    },
+    {
+      "binding": "ACCOUNT_DATA",
+      "id": "326dab002ae54bc7a10b99daad566670"
+    },
+    {
+      "binding": "ONE_TIME_KEYS",
+      "id": "c3739acd328748f5a966c3b7ff2a6352"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "tuwunel-media"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ROOMS",
+        "class_name": "RoomDurableObject"
+      },
+      {
+        "name": "SYNC",
+        "class_name": "SyncDurableObject"
+      },
+      {
+        "name": "FEDERATION",
+        "class_name": "FederationDurableObject"
+      },
+      {
+        "name": "CALL_ROOMS",
+        "class_name": "CallRoomDurableObject"
+      },
+      {
+        "name": "ADMIN",
+        "class_name": "AdminDurableObject"
+      },
+      {
+        "name": "USER_KEYS",
+        "class_name": "UserKeysDurableObject"
+      },
+      {
+        "name": "PUSH",
+        "class_name": "PushDurableObject"
+      },
+      {
+        "name": "RATE_LIMIT",
+        "class_name": "RateLimitDurableObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "RoomDurableObject",
+        "SyncDurableObject",
+        "FederationDurableObject"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_classes": [
+        "CallRoomDurableObject"
+      ]
+    },
+    {
+      "tag": "v3",
+      "new_classes": [
+        "AdminDurableObject"
+      ]
+    },
+    {
+      "tag": "v4",
+      "new_classes": [
+        "UserKeysDurableObject"
+      ]
+    },
+    {
+      "tag": "v5",
+      "new_classes": [
+        "PushDurableObject"
+      ]
+    },
+    {
+      "tag": "v6",
+      "new_classes": [
+        "RateLimitDurableObject"
+      ]
+    }
+  ],
+  "vars": {
+    "SERVER_NAME": "hs1",
+    "SERVER_VERSION": "0.1.0-complement",
+    "MATRIX_FEATURE_PROFILE": "core",
+    "TURN_KEY_ID": "complement-turn-key",
+    "LIVEKIT_API_KEY": "devkey",
+    "LIVEKIT_URL": "wss://invalid.local"
+  },
+  "workflows": [
+    {
+      "name": "room-join-workflow",
+      "binding": "ROOM_JOIN_WORKFLOW",
+      "class_name": "RoomJoinWorkflow"
+    },
+    {
+      "name": "push-notification-workflow",
+      "binding": "PUSH_NOTIFICATION_WORKFLOW",
+      "class_name": "PushNotificationWorkflow"
+    }
+  ]
+}
