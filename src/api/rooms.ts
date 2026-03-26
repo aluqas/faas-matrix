@@ -1120,87 +1120,33 @@ app.get('/_matrix/client/v3/rooms/:roomId/aliases', requireAuth(), async (c) => 
 
 // POST /_matrix/client/v3/join/:roomIdOrAlias - Join room by ID or alias
 app.post('/_matrix/client/v3/join/:roomIdOrAlias', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomIdOrAlias = decodeURIComponent(c.req.param('roomIdOrAlias'));
-  const db = c.env.DB;
+  try {
+    const roomIdOrAlias = decodeURIComponent(c.req.param('roomIdOrAlias'));
+    const db = c.env.DB;
+    const remoteServers = c.req.queries('server_name');
 
-  let roomId: string;
-
-  // Determine if it's an alias or room ID
-  if (roomIdOrAlias.startsWith('#')) {
-    // It's an alias, resolve it
-    const resolved = await getRoomByAlias(db, roomIdOrAlias);
-    if (!resolved) {
-      return Errors.notFound('Room alias not found').toResponse();
+    let roomId = roomIdOrAlias;
+    if (roomIdOrAlias.startsWith('#')) {
+      const resolved = await getRoomByAlias(db, roomIdOrAlias);
+      if (!resolved) {
+        return Errors.notFound('Room alias not found').toResponse();
+      }
+      roomId = resolved;
     }
-    roomId = resolved;
-  } else {
-    roomId = roomIdOrAlias;
+
+    const response = await c.get('appContext').services.rooms.joinRoom({
+      userId: c.get('userId'),
+      roomId,
+      remoteServers,
+    });
+
+    return c.json(response);
+  } catch (error) {
+    if (error instanceof Error && 'toResponse' in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
   }
-
-  // Check if room exists
-  const room = await getRoom(db, roomId);
-  if (!room) {
-    return Errors.notFound('Room not found').toResponse();
-  }
-
-  // Check current membership
-  const currentMembership = await getMembership(db, roomId, userId);
-
-  // Check join rules
-  const joinRulesEvent = await getStateEvent(db, roomId, 'm.room.join_rules');
-  const joinRule = (joinRulesEvent?.content as any)?.join_rule || 'invite';
-
-  // Determine if user can join
-  let canJoin = false;
-  if (joinRule === 'public') {
-    canJoin = true;
-  } else if (currentMembership?.membership === 'invite') {
-    canJoin = true;
-  } else if (currentMembership?.membership === 'join') {
-    return c.json({ room_id: roomId });
-  }
-
-  if (!canJoin) {
-    return Errors.forbidden('Cannot join room').toResponse();
-  }
-
-  // Create join event
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  const createEvent = await getStateEvent(db, roomId, 'm.room.create');
-  const powerLevelsEvent = await getStateEvent(db, roomId, 'm.room.power_levels');
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (joinRulesEvent) authEvents.push(joinRulesEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (currentMembership) authEvents.push(currentMembership.eventId);
-
-  const { events: latestEvents } = await getRoomEvents(db, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
-
-  const memberContent: RoomMemberContent = {
-    membership: 'join',
-  };
-
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: 'm.room.member',
-    state_key: userId,
-    content: memberContent,
-    origin_server_ts: Date.now(),
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
-
-  await storeEvent(db, event);
-  await updateMembership(db, roomId, userId, 'join', eventId);
-
-  return c.json({ room_id: roomId });
 });
 
 // Room alias endpoints

@@ -122,6 +122,28 @@ async function main() {
         ...(operationMapping.unitId ? [operationMapping.unitId] : []),
       ])];
 
+      const unexpectedOperationRowIds = operationRowIds.filter((rowId) => !resolvedRowIds.includes(rowId));
+      if (unexpectedOperationRowIds.length > 0) {
+        invalidRowIds.push({
+          key,
+          operationId: operation.operationId,
+          rowIds: unexpectedOperationRowIds,
+          reason: "operation-rowid-outside-file-rowids",
+        });
+        continue;
+      }
+
+      const unexpectedOperationUnitIds = operationUnitIds.filter((unitId) => !unitIds.includes(unitId));
+      if (unexpectedOperationUnitIds.length > 0) {
+        invalidUnitRefs.push({
+          key,
+          operationId: operation.operationId,
+          unitIds: unexpectedOperationUnitIds,
+          reason: "operation-unitid-outside-file-unitids",
+        });
+        continue;
+      }
+
       const invalidOperationRowIds = operationRowIds.filter((rowId) => !checklistIndex.byRowId.has(rowId));
       if (invalidOperationRowIds.length > 0) {
         invalidRowIds.push({

@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-03-26T21:41:59.950Z",
+  "checklist": "docs/matrix/speccheck-matrix-v2.md",
+  "checklistRowCount": 90,
+  "mappedRowCount": 90,
+  "missingRowIdCount": 0,
+  "unknownRowIdCount": 0,
+  "invalidTestCount": 0,
+  "duplicateTestCount": 0,
+  "legacyTitleRowCount": 0,
+  "missingRowIds": [],
+  "unknownRowIds": [],
+  "invalidTests": [],
+  "duplicateTests": [],
+  "legacyTitleRows": []
+}

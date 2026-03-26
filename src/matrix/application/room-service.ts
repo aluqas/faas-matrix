@@ -20,6 +20,7 @@ export interface CreateRoomInput {
 export interface JoinRoomInput {
   userId: string;
   roomId: string;
+  remoteServers?: string[];
 }
 
 export interface SendEventInput {
@@ -145,14 +146,15 @@ export class MatrixRoomService {
     const roomServer = getServerFromRoomId(input.roomId);
     const isRemoteRoom =
       roomServer && roomServer !== this.appContext.capabilities.config.serverName;
+    const preferredRemoteServer = input.remoteServers?.[0] || roomServer || undefined;
     const room = await this.repository.getRoom(input.roomId);
 
-    if (!room && isRemoteRoom && roomServer) {
+    if (!room && (isRemoteRoom || preferredRemoteServer)) {
       const instance = await this.appContext.capabilities.workflow.createRoomJoin({
         roomId: input.roomId,
         userId: input.userId,
         isRemote: true,
-        remoteServer: roomServer,
+        remoteServer: preferredRemoteServer,
       });
 
       const status = (await instance) as

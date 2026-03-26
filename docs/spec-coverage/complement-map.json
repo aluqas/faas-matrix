@@ -7,11 +7,19 @@
   "notes": [
     "Complement is the primary behavior and interoperability evidence source, not the primary checklist completeness source.",
     "Out-of-repo Complement supports client-server and multi-homeserver tests directly.",
-    "Mock federation server support is not generally available out-of-repo, so some federation-heavy evidence may require an adapter image, a local fork, or upstream integration work."
+    "Mock federation server support is not generally available out-of-repo, so some federation-heavy evidence may require an adapter image, a local fork, or upstream integration work.",
+    "rowsById is the canonical machine-readable map. Legacy rows-by-title data has been retired."
   ],
-  "rows": {
-    "API standards": {
-      "status": "partial",
+  "rowsById": {
+    "cs-core-api-standards": {
+      "section": "Client-Server Core",
+      "title": "API standards",
+      "evidence": "`complement:fail`",
+      "notes": "Unknown endpoints return 404 instead of 405 (`TestUnknownEndpoints`)",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/unknown_endpoints_test.go",
@@ -19,8 +27,26 @@
         }
       ]
     },
-    "Server discovery": {
-      "status": "partial",
+    "cs-core-web-browser-clients": {
+      "section": "Client-Server Core",
+      "title": "Web browser clients",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
+      "tests": []
+    },
+    "cs-core-server-discovery": {
+      "section": "Client-Server Core",
+      "title": "Server discovery",
+      "evidence": "`complement:partial`",
+      "notes": "`TestVersionStructure` covers `/versions`; `.well-known` and auth metadata still need explicit evidence",
+      "surface_status": "`present`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/csapi/apidoc_version_test.go",
@@ -28,8 +54,15 @@
         }
       ]
     },
-    "Client authentication": {
-      "status": "partial",
+    "cs-core-client-authentication": {
+      "section": "Client-Server Core",
+      "title": "Client authentication",
+      "evidence": "`complement:partial`",
+      "notes": "Login/logout/change-password/deactivate/refresh-token flows have csapi tests; registration and login-token coverage still incomplete",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/csapi/apidoc_login_test.go",
@@ -53,8 +86,15 @@
         }
       ]
     },
-    "Capabilities negotiation": {
-      "status": "direct",
+    "cs-core-capabilities-negotiation": {
+      "section": "Client-Server Core",
+      "title": "Capabilities negotiation",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/csapi/apidoc_server_capabilities_test.go",
@@ -62,8 +102,15 @@
         }
       ]
     },
-    "Filtering": {
-      "status": "partial",
+    "cs-core-filtering": {
+      "section": "Client-Server Core",
+      "title": "Filtering",
+      "evidence": "`complement:fail`",
+      "notes": "`TestSyncOmitsStateChangeOnFilteredEvents` failing",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/csapi/sync_filter_test.go",
@@ -75,8 +122,15 @@
         }
       ]
     },
-    "Events": {
-      "status": "partial",
+    "cs-core-events": {
+      "section": "Client-Server Core",
+      "title": "Events",
+      "evidence": "`complement:partial`",
+      "notes": "Basic send/recv passing; size limits pass (`TestEventSizeLimits`)",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_sync_test.go",
@@ -88,8 +142,15 @@
         }
       ]
     },
-    "Rooms": {
-      "status": "partial",
+    "cs-core-rooms": {
+      "section": "Client-Server Core",
+      "title": "Rooms",
+      "evidence": "`complement:partial`",
+      "notes": "Local join/leave/alias passing; restricted rooms partially failing",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/restricted_rooms_test.go",
@@ -101,8 +162,15 @@
         }
       ]
     },
-    "User data": {
-      "status": "partial",
+    "cs-core-user-data": {
+      "section": "Client-Server Core",
+      "title": "User data",
+      "evidence": "`complement:fail`",
+      "notes": "`TestWriteMDirectAccountData` → 500; account_data sync incremental failing",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/direct_messaging_test.go",
@@ -110,12 +178,26 @@
         }
       ]
     },
-    "Support information": {
-      "status": "planned",
+    "cs-core-support-information": {
+      "section": "Client-Server Core",
+      "title": "Support information",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Content repository": {
-      "status": "direct",
+    "cs-module-content-repository": {
+      "section": "Client-Server Modules",
+      "title": "Content repository",
+      "evidence": "`complement:partial`",
+      "notes": "Local media passing; remote/federation media explicitly unsupported (`TestContentMediaV1`)",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/media_thumbnail_test.go",
@@ -135,8 +217,15 @@
         }
       ]
     },
-    "Direct messaging": {
-      "status": "direct",
+    "cs-module-direct-messaging": {
+      "section": "Client-Server Modules",
+      "title": "Direct messaging",
+      "evidence": "`complement:partial`",
+      "notes": "`TestIsDirectFlagLocal` passes; `TestIsDirectFlagFederation` still fails because invited-room sync is missing `invite_state`",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/direct_messaging_test.go",
@@ -144,8 +233,15 @@
         }
       ]
     },
-    "Ignoring users": {
-      "status": "direct",
+    "cs-module-ignoring-users": {
+      "section": "Client-Server Modules",
+      "title": "Ignoring users",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/csapi/ignored_users_test.go",
@@ -153,12 +249,26 @@
         }
       ]
     },
-    "Instant messaging": {
-      "status": "planned",
+    "cs-module-instant-messaging": {
+      "section": "Client-Server Modules",
+      "title": "Instant messaging",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Presence": {
-      "status": "partial",
+    "cs-module-presence": {
+      "section": "Client-Server Modules",
+      "title": "Presence",
+      "evidence": "`complement:fail`",
+      "notes": "`TestRemotePresence` failing — presence EDU federation not implemented",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_presence_test.go",
@@ -166,12 +276,26 @@
         }
       ]
     },
-    "Push notifications": {
-      "status": "planned",
+    "cs-module-push-notifications": {
+      "section": "Client-Server Modules",
+      "title": "Push notifications",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Receipts": {
-      "status": "partial",
+    "cs-module-receipts": {
+      "section": "Client-Server Modules",
+      "title": "Receipts",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/csapi/apidoc_room_receipts_test.go",
@@ -183,8 +307,15 @@
         }
       ]
     },
-    "Room history visibility": {
-      "status": "partial",
+    "cs-module-room-history-visibility": {
+      "section": "Client-Server Modules",
+      "title": "Room history visibility",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_room_get_missing_events_test.go",
@@ -192,16 +323,37 @@
         }
       ]
     },
-    "Room upgrades": {
-      "status": "planned",
+    "cs-module-room-upgrades": {
+      "section": "Client-Server Modules",
+      "title": "Room upgrades",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Third-party invites": {
-      "status": "planned",
+    "cs-module-third-party-invites": {
+      "section": "Client-Server Modules",
+      "title": "Third-party invites",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Typing notifications": {
-      "status": "partial",
+    "cs-module-typing-notifications": {
+      "section": "Client-Server Modules",
+      "title": "Typing notifications",
+      "evidence": "`complement:fail`",
+      "notes": "`TestRemoteTyping` failing",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_room_typing_test.go",
@@ -209,16 +361,37 @@
         }
       ]
     },
-    "User and room mentions": {
-      "status": "planned",
+    "cs-module-user-and-room-mentions": {
+      "section": "Client-Server Modules",
+      "title": "User and room mentions",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Voice over IP": {
-      "status": "planned",
+    "cs-module-voice-over-ip": {
+      "section": "Client-Server Modules",
+      "title": "Voice over IP",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Client config": {
-      "status": "partial",
+    "cs-module-client-config": {
+      "section": "Client-Server Modules",
+      "title": "Client config",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/csapi/account_data_test.go",
@@ -230,12 +403,26 @@
         }
       ]
     },
-    "Application service adjunct endpoints": {
-      "status": "planned",
+    "cs-module-application-service-adjunct-endpoints": {
+      "section": "Client-Server Modules",
+      "title": "Application service adjunct endpoints",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Device management": {
-      "status": "partial",
+    "cs-module-device-management": {
+      "section": "Client-Server Modules",
+      "title": "Device management",
+      "evidence": "`complement:fail`",
+      "notes": "`TestDeviceListsUpdateOverFederation` — invite_state missing from sync",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/csapi/apidoc_device_management_test.go",
@@ -247,8 +434,15 @@
         }
       ]
     },
-    "End-to-end encryption": {
-      "status": "partial",
+    "cs-module-end-to-end-encryption": {
+      "section": "Client-Server Modules",
+      "title": "End-to-end encryption",
+      "evidence": "`complement:partial`",
+      "notes": "Device key upload/query surface exists, but federation device-list propagation is still failing",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/csapi/upload_keys_test.go",
@@ -276,20 +470,48 @@
         }
       ]
     },
-    "Event annotations and reactions": {
-      "status": "planned",
+    "cs-module-event-annotations-and-reactions": {
+      "section": "Client-Server Modules",
+      "title": "Event annotations and reactions",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Event context": {
-      "status": "planned",
+    "cs-module-event-context": {
+      "section": "Client-Server Modules",
+      "title": "Event context",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Event replacements": {
-      "status": "planned",
+    "cs-module-event-replacements": {
+      "section": "Client-Server Modules",
+      "title": "Event replacements",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Read and unread markers": {
-      "status": "direct",
+    "cs-module-read-and-unread-markers": {
+      "section": "Client-Server Modules",
+      "title": "Read and unread markers",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/csapi/apidoc_room_receipts_test.go",
@@ -297,24 +519,59 @@
         }
       ]
     },
-    "Guest access": {
-      "status": "planned",
+    "cs-module-guest-access": {
+      "section": "Client-Server Modules",
+      "title": "Guest access",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Moderation policy lists": {
-      "status": "planned",
+    "cs-module-moderation-policy-lists": {
+      "section": "Client-Server Modules",
+      "title": "Moderation policy lists",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Policy servers": {
-      "status": "planned",
+    "cs-module-policy-servers": {
+      "section": "Client-Server Modules",
+      "title": "Policy servers",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "OpenID": {
-      "status": "planned",
+    "cs-module-openid": {
+      "section": "Client-Server Modules",
+      "title": "OpenID",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Notifications": {
-      "status": "partial",
+    "cs-module-notifications": {
+      "section": "Client-Server Modules",
+      "title": "Notifications",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/csapi/thread_notifications_test.go",
@@ -322,32 +579,81 @@
         }
       ]
     },
-    "Old sync and legacy endpoints": {
-      "status": "planned",
+    "cs-module-old-sync-and-legacy-endpoints": {
+      "section": "Client-Server Modules",
+      "title": "Old sync and legacy endpoints",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Peeking events": {
-      "status": "planned",
+    "cs-module-peeking-events": {
+      "section": "Client-Server Modules",
+      "title": "Peeking events",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Recently used emoji": {
-      "status": "planned",
+    "cs-module-recently-used-emoji": {
+      "section": "Client-Server Modules",
+      "title": "Recently used emoji",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Reference relations": {
-      "status": "planned",
+    "cs-module-reference-relations": {
+      "section": "Client-Server Modules",
+      "title": "Reference relations",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Reporting content": {
-      "status": "planned",
+    "cs-module-reporting-content": {
+      "section": "Client-Server Modules",
+      "title": "Reporting content",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Rich replies": {
-      "status": "planned",
+    "cs-module-rich-replies": {
+      "section": "Client-Server Modules",
+      "title": "Rich replies",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Room previews": {
-      "status": "partial",
+    "cs-module-room-previews": {
+      "section": "Client-Server Modules",
+      "title": "Room previews",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/csapi/sync_test.go",
@@ -355,20 +661,48 @@
         }
       ]
     },
-    "Room tagging": {
-      "status": "planned",
+    "cs-module-room-tagging": {
+      "section": "Client-Server Modules",
+      "title": "Room tagging",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "SSO client login/authentication": {
-      "status": "planned",
+    "cs-module-sso-client-login-authentication": {
+      "section": "Client-Server Modules",
+      "title": "SSO client login/authentication",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Secrets": {
-      "status": "planned",
+    "cs-module-secrets": {
+      "section": "Client-Server Modules",
+      "title": "Secrets",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Send-to-device messaging": {
-      "status": "partial",
+    "cs-module-send-to-device-messaging": {
+      "section": "Client-Server Modules",
+      "title": "Send-to-device messaging",
+      "evidence": "`complement:fail`",
+      "notes": "`TestToDeviceMessagesOverFederation` failing — federation EDU delivery",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_to_device_test.go",
@@ -376,8 +710,15 @@
         }
       ]
     },
-    "Server ACLs": {
-      "status": "direct",
+    "cs-module-server-access-control-lists-acls-for-rooms": {
+      "section": "Client-Server Modules",
+      "title": "Server ACLs",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/federation_acl_test.go",
@@ -385,8 +726,15 @@
         }
       ]
     },
-    "Server administration": {
-      "status": "partial",
+    "cs-module-server-administration": {
+      "section": "Client-Server Modules",
+      "title": "Server administration",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/csapi/admin_test.go",
@@ -394,8 +742,15 @@
         }
       ]
     },
-    "Server notices": {
-      "status": "direct",
+    "cs-module-server-notices": {
+      "section": "Client-Server Modules",
+      "title": "Server notices",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/csapi/admin_test.go",
@@ -403,8 +758,15 @@
         }
       ]
     },
-    "Server side search": {
-      "status": "direct",
+    "cs-module-server-side-search": {
+      "section": "Client-Server Modules",
+      "title": "Server side search",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/csapi/apidoc_search_test.go",
@@ -412,8 +774,15 @@
         }
       ]
     },
-    "Spaces": {
-      "status": "partial",
+    "cs-module-spaces": {
+      "section": "Client-Server Modules",
+      "title": "Spaces",
+      "evidence": "`complement:fail`",
+      "notes": "`/hierarchy` present but `TestClientSpacesSummary` failing on redacted child handling",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/room_hierarchy_test.go",
@@ -425,16 +794,37 @@
         }
       ]
     },
-    "Sticker messages": {
-      "status": "planned",
+    "cs-module-sticker-messages": {
+      "section": "Client-Server Modules",
+      "title": "Sticker messages",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Third-party networks": {
-      "status": "planned",
+    "cs-module-third-party-networks": {
+      "section": "Client-Server Modules",
+      "title": "Third-party networks",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "Threading": {
-      "status": "partial",
+    "cs-module-threading": {
+      "section": "Client-Server Modules",
+      "title": "Threading",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/csapi/room_threads_test.go",
@@ -450,12 +840,42 @@
         }
       ]
     },
-    "Invite permission": {
-      "status": "planned",
+    "cs-module-invite-permission": {
+      "section": "Client-Server Modules",
+      "title": "Invite permission",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
       "tests": []
     },
-    "TLS": {
-      "status": "indirect",
+    "ss-core-api-standards": {
+      "section": "Server-Server Core",
+      "title": "API standards",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
+      "tests": [
+        {
+          "file": "tests/unknown_endpoints_test.go",
+          "why": "Covers 404 for unknown endpoints and 405 for unsupported methods."
+        }
+      ]
+    },
+    "ss-subsection-api-standards-tls": {
+      "section": "Server-Server Core",
+      "title": "TLS",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "indirect",
       "tests": [
         {
           "file": "README.md",
@@ -463,8 +883,15 @@
         }
       ]
     },
-    "Unsupported endpoints": {
-      "status": "direct",
+    "ss-subsection-api-standards-unsupported-endpoints": {
+      "section": "Server-Server Core",
+      "title": "Unsupported endpoints",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/unknown_endpoints_test.go",
@@ -472,8 +899,31 @@
         }
       ]
     },
-    "Authentication": {
-      "status": "partial",
+    "ss-core-server-discovery": {
+      "section": "Server-Server Core",
+      "title": "Server discovery",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`none`",
+      "mappingStatus": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/apidoc_version_test.go",
+          "why": "Covers /_matrix/client/versions response shape and advertised version values."
+        }
+      ]
+    },
+    "ss-core-authentication": {
+      "section": "Server-Server Core",
+      "title": "Authentication",
+      "evidence": "`complement:fail`",
+      "notes": "`TestInboundFederationKeys` failing; signature verification issues in some flows",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_keys_test.go",
@@ -481,8 +931,63 @@
         }
       ]
     },
-    "Transactions": {
-      "status": "partial",
+    "ss-subsection-authentication-request-authentication": {
+      "section": "Server-Server Core",
+      "title": "Request Authentication",
+      "evidence": "`complement:fail`",
+      "notes": "`TestInboundFederationKeys` failing; signature verification issues in some flows",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_keys_test.go",
+          "why": "Covers server key retrieval used in signed federation authentication."
+        }
+      ]
+    },
+    "ss-subsection-authentication-response-authentication": {
+      "section": "Server-Server Core",
+      "title": "Response Authentication",
+      "evidence": "`complement:fail`",
+      "notes": "`TestInboundFederationKeys` failing; signature verification issues in some flows",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_keys_test.go",
+          "why": "Covers server key retrieval used in signed federation authentication."
+        }
+      ]
+    },
+    "ss-subsection-authentication-client-tls-certificates": {
+      "section": "Server-Server Core",
+      "title": "Client TLS Certificates",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_keys_test.go",
+          "why": "Covers server key retrieval used in signed federation authentication."
+        }
+      ]
+    },
+    "ss-core-transactions": {
+      "section": "Server-Server Core",
+      "title": "Transactions",
+      "evidence": "`complement:fail`",
+      "notes": "`TestOutboundFederationSend` / `TestNetworkPartitionOrdering` failing",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_room_send_test.go",
@@ -494,8 +999,15 @@
         }
       ]
     },
-    "PDUs": {
-      "status": "partial",
+    "ss-core-pdus": {
+      "section": "Server-Server Core",
+      "title": "PDUs",
+      "evidence": "`complement:fail`",
+      "notes": "`TestEventAuth`, `TestCorruptedAuthChain`, `TestInboundFederationRejectsEventsWithRejectedAuthEvents`",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_room_send_test.go",
@@ -515,8 +1027,15 @@
         }
       ]
     },
-    "EDUs": {
-      "status": "partial",
+    "ss-core-edus": {
+      "section": "Server-Server Core",
+      "title": "EDUs",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_presence_test.go",
@@ -532,8 +1051,15 @@
         }
       ]
     },
-    "Room state resolution": {
-      "status": "partial",
+    "ss-core-room-state-resolution": {
+      "section": "Server-Server Core",
+      "title": "Room state resolution",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_sync_test.go",
@@ -545,8 +1071,15 @@
         }
       ]
     },
-    "Backfill / missing events": {
-      "status": "direct",
+    "ss-core-backfilling-and-retrieving-missing-events": {
+      "section": "Server-Server Core",
+      "title": "Backfill / missing events",
+      "evidence": "`complement:fail`",
+      "notes": "`TestInboundCanReturnMissingEvents` — endpoint not returning events",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/federation_room_get_missing_events_test.go",
@@ -554,8 +1087,15 @@
         }
       ]
     },
-    "Retrieving events": {
-      "status": "partial",
+    "ss-core-retrieving-events": {
+      "section": "Server-Server Core",
+      "title": "Retrieving events",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_event_auth_test.go",
@@ -571,8 +1111,15 @@
         }
       ]
     },
-    "Joining rooms": {
-      "status": "direct",
+    "ss-core-joining-rooms": {
+      "section": "Server-Server Core",
+      "title": "Joining rooms",
+      "evidence": "`complement:partial`",
+      "notes": "`TestJoinViaRoomIDAndServerName` now passing; `send_join` validation incomplete",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/federation_room_join_test.go",
@@ -584,8 +1131,15 @@
         }
       ]
     },
-    "Knocking": {
-      "status": "direct",
+    "ss-core-knocking-upon-a-room": {
+      "section": "Server-Server Core",
+      "title": "Knocking",
+      "evidence": "`complement:fail`",
+      "notes": "`TestKnocking`, `TestKnockingInMSC3787Room`",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
       "tests": [
         {
           "file": "tests/knocking_test.go",
@@ -597,8 +1151,15 @@
         }
       ]
     },
-    "Inviting": {
-      "status": "partial",
+    "ss-core-inviting-to-a-room": {
+      "section": "Server-Server Core",
+      "title": "Inviting",
+      "evidence": "`complement:fail`",
+      "notes": "`TestFederationRoomsInvite` — FK constraint on invite insert",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_room_invite_test.go",
@@ -610,8 +1171,15 @@
         }
       ]
     },
-    "Leaving rooms": {
-      "status": "partial",
+    "ss-core-leaving-rooms-rejecting-invites": {
+      "section": "Server-Server Core",
+      "title": "Leaving rooms",
+      "evidence": "`complement:fail`",
+      "notes": "`TestCannotSendNonLeaveViaSendLeaveV1/V2` — partial (some subtests pass)",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_unreject_rejected_test.go",
@@ -619,8 +1187,26 @@
         }
       ]
     },
-    "Published room directory": {
-      "status": "partial",
+    "ss-core-third-party-invites": {
+      "section": "Server-Server Core",
+      "title": "Third-party invites",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
+      "tests": []
+    },
+    "ss-core-published-room-directory": {
+      "section": "Server-Server Core",
+      "title": "Published room directory",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_room_alias_test.go",
@@ -632,21 +1218,87 @@
         }
       ]
     },
-    "Typing / Presence / Receipts": {
-      "status": "partial",
+    "ss-core-spaces": {
+      "section": "Server-Server Core",
+      "title": "Spaces",
+      "evidence": "`complement:fail`",
+      "notes": "`/hierarchy` present but `TestClientSpacesSummary` failing on redacted child handling",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
-          "file": "tests/federation_room_typing_test.go",
-          "why": "Covers typing EDU behavior."
+          "file": "tests/room_hierarchy_test.go",
+          "why": "Covers space hierarchy behavior."
         },
         {
-          "file": "tests/federation_presence_test.go",
-          "why": "Covers presence EDU behavior."
+          "file": "tests/restricted_room_hierarchy_test.go",
+          "why": "Covers restricted hierarchy behavior."
         }
       ]
     },
-    "Querying for information": {
-      "status": "partial",
+    "ss-core-typing-notifications": {
+      "section": "Server-Server Core",
+      "title": "Typing Notifications",
+      "evidence": "`complement:fail`",
+      "notes": "`TestRemoteTyping` failing",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_room_typing_test.go",
+          "why": "Covers typing notification behavior over federation."
+        }
+      ]
+    },
+    "ss-core-presence": {
+      "section": "Server-Server Core",
+      "title": "Presence",
+      "evidence": "`complement:fail`",
+      "notes": "`TestRemotePresence` failing — presence EDU federation not implemented",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_presence_test.go",
+          "why": "Covers federation presence behavior."
+        }
+      ]
+    },
+    "ss-core-receipts": {
+      "section": "Server-Server Core",
+      "title": "Receipts",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/apidoc_room_receipts_test.go",
+          "why": "Covers read receipts and receipt propagation."
+        },
+        {
+          "file": "tests/csapi/thread_notifications_test.go",
+          "why": "Covers threaded receipt semantics in sync."
+        }
+      ]
+    },
+    "ss-core-querying-for-information": {
+      "section": "Server-Server Core",
+      "title": "Querying for information",
+      "evidence": "`complement:partial`",
+      "notes": "`TestInboundFederationProfile` 1/2 subtests pass; `TestOutboundFederationProfile` failing",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/federation_query_profile_test.go",
@@ -658,8 +1310,164 @@
         }
       ]
     },
-    "Security considerations": {
-      "status": "partial",
+    "ss-core-openid": {
+      "section": "Server-Server Core",
+      "title": "OpenID",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
+      "tests": []
+    },
+    "ss-core-device-management": {
+      "section": "Server-Server Core",
+      "title": "Device management",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/apidoc_device_management_test.go",
+          "why": "Covers client device list, update, and delete flows."
+        },
+        {
+          "file": "tests/federation_device_list_update_test.go",
+          "why": "Covers device list updates over federation."
+        }
+      ]
+    },
+    "ss-core-end-to-end-encryption": {
+      "section": "Server-Server Core",
+      "title": "End-to-end encryption",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/upload_keys_test.go",
+          "why": "Covers device key upload, claim ordering, and idempotency."
+        },
+        {
+          "file": "tests/csapi/e2e_key_backup_test.go",
+          "why": "Covers key backup semantics."
+        },
+        {
+          "file": "tests/federation_keys_test.go",
+          "why": "Covers federation key retrieval behavior."
+        },
+        {
+          "file": "tests/federation_upload_keys_test.go",
+          "why": "Covers cross-server upload/query key behavior."
+        },
+        {
+          "file": "tests/federation_device_list_update_test.go",
+          "why": "Covers device list update semantics."
+        },
+        {
+          "file": "tests/federation_to_device_test.go",
+          "why": "Covers federation to-device delivery."
+        }
+      ]
+    },
+    "ss-core-send-to-device-messaging": {
+      "section": "Server-Server Core",
+      "title": "Send-to-device messaging",
+      "evidence": "`complement:fail`",
+      "notes": "`TestToDeviceMessagesOverFederation` failing — federation EDU delivery",
+      "surface_status": "`partial`",
+      "behavior_status": "`partial`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_to_device_test.go",
+          "why": "Covers to-device behavior over federation."
+        }
+      ]
+    },
+    "ss-core-content-repository": {
+      "section": "Server-Server Core",
+      "title": "Content repository",
+      "evidence": "`complement:fail`",
+      "notes": "Remote media paths are reached by Complement, but currently return \"not supported\"",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
+      "tests": [
+        {
+          "file": "tests/media_thumbnail_test.go",
+          "why": "Covers local and remote thumbnail behavior."
+        },
+        {
+          "file": "tests/media_filename_test.go",
+          "why": "Covers media download filename behavior."
+        },
+        {
+          "file": "tests/media_nofilename_test.go",
+          "why": "Covers media behavior without a filename."
+        },
+        {
+          "file": "tests/federation_media_content_test.go",
+          "why": "Covers federation media retrieval."
+        }
+      ]
+    },
+    "ss-core-server-access-control-lists-acls": {
+      "section": "Server-Server Core",
+      "title": "Server ACLs",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "direct",
+      "tests": [
+        {
+          "file": "tests/federation_acl_test.go",
+          "why": "Directly covers ACL enforcement behavior."
+        }
+      ]
+    },
+    "ss-core-policy-servers": {
+      "section": "Server-Server Core",
+      "title": "Policy servers",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`none`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
+      "tests": []
+    },
+    "ss-core-signing-events": {
+      "section": "Server-Server Core",
+      "title": "Signing events",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`none`",
+      "mappingStatus": "planned",
+      "tests": []
+    },
+    "ss-core-security-considerations": {
+      "section": "Server-Server Core",
+      "title": "Security considerations",
+      "evidence": "`complement:gap`",
+      "notes": "Not explicitly covered in complement-gap-analysis.md test runs.",
+      "surface_status": "`partial`",
+      "behavior_status": "`not-audited`",
+      "evidence_status": "`complement`",
+      "mappingStatus": "partial",
       "tests": [
         {
           "file": "tests/unknown_endpoints_test.go",

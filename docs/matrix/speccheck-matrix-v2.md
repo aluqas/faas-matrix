@@ -35,6 +35,7 @@ Automation note:
 
 - `spec:coverage` reads only the three primary checklist sections below.
 - `Cross-Cutting Evidence Rows` and `Complement Evidence Summary` are evidence/reporting sections, not coverage targets.
+- `docs/matrix/speccheck-matrix-v2-endpoint.md` is a “導線” view generated from OpenAPI operation mappings, and is not a coverage target.
 - `row_id` is the stable machine identifier. Display labels may change without breaking coverage as long as `row_id` stays stable.
 
 ## Client-Server Core
@@ -111,7 +112,10 @@ Automation note:
 | TLS | no explicit tracking in current docs | certificate rules, SNI expectations, test-mode allowances | `none` | `not-audited` | `none` | `ss-subsection-api-standards-tls` |
 | Unsupported endpoints | no explicit tracking | `404/405 M_UNRECOGNIZED` behavior | `partial` | `partial` | `complement` | `ss-subsection-api-standards-unsupported-endpoints` |
 | Server discovery | `src/services/server-discovery.ts`, federation routes | `.well-known`, SRV, delegated names, cache policy | `partial` | `partial` | `none` | `ss-core-server-discovery` |
-| Authentication | `src/middleware/federation-auth.ts`, `src/services/federation-keys.ts`, crypto utils | request auth, response auth, client TLS certificate assumptions | `partial` | `partial` | `complement` | `ss-core-authentication` |
+| Authentication | `src/middleware/federation-auth.ts`, `src/services/federation-keys.ts`, crypto utils | request/response authentication and client TLS certificate assumptions | `partial` | `partial` | `complement` | `ss-core-authentication` |
+| Request Authentication | `src/middleware/federation-auth.ts`, `src/services/federation-keys.ts`, crypto utils | request auth semantics, verification inputs, and failure-mode mapping | `partial` | `partial` | `complement` | `ss-subsection-authentication-request-authentication` |
+| Response Authentication | `src/middleware/federation-auth.ts`, `src/services/federation-keys.ts`, crypto utils | response auth semantics, signature verification, and response failure handling | `partial` | `partial` | `complement` | `ss-subsection-authentication-response-authentication` |
+| Client TLS Certificates | `src/middleware/federation-auth.ts` | certificate rules, SNI expectations, and client certificate assumptions | `none` | `not-audited` | `none` | `ss-subsection-authentication-client-tls-certificates` |
 | Transactions | `src/api/federation.ts`, `src/services/transactions.ts` | transaction size limits, idempotency, retry semantics | `partial` | `not-audited` | `complement` | `ss-core-transactions` |
 | PDUs | `src/api/federation.ts`, `src/services/event-auth.ts`, `src/services/state-resolution*.ts` | receipt checks, reject vs soft-fail, room-version-sensitive validation | `partial` | `partial` | `complement` | `ss-core-pdus` |
 | EDUs | `src/api/federation.ts`, sync/presence/push surfaces | EDU-specific semantics and delivery guarantees | `partial` | `partial` | `complement` | `ss-core-edus` |
@@ -125,7 +129,9 @@ Automation note:
 | Third-party invites | `src/api/federation.ts` | identity-service-linked flow correctness | `partial` | `not-audited` | `none` | `ss-core-third-party-invites` |
 | Published room directory | `src/api/federation.ts`, alias/rooms APIs | federation search/list semantics | `partial` | `partial` | `complement` | `ss-core-published-room-directory` |
 | Spaces | `src/api/federation.ts`, `src/api/spaces.ts` | federation hierarchy behavior | `partial` | `partial` | `complement` | `ss-core-spaces` |
-| Typing / Presence / Receipts | `src/api/federation.ts`, corresponding client APIs | EDU federation semantics, batching, expiry | `partial` | `not-audited` | `complement` | `ss-core-typing-presence-receipts` |
+| Typing Notifications | `src/api/typing.ts`, `src/api/federation.ts` | typing EDU semantics, batching, and timeout behavior | `partial` | `not-audited` | `complement` | `ss-core-typing-notifications` |
+| Presence | `src/api/presence.ts`, `src/api/federation.ts` | presence EDUs, last active semantics, and capability alignment | `partial` | `not-audited` | `complement` | `ss-core-presence` |
+| Receipts | `src/api/receipts.ts`, `src/api/federation.ts` | read/unread receipt semantics, threaded/private receipts, and batching | `partial` | `not-audited` | `complement` | `ss-core-receipts` |
 | Querying for information | `src/api/federation.ts` | directory/profile/user/device queries | `partial` | `partial` | `complement` | `ss-core-querying-for-information` |
 | OpenID | `src/api/federation.ts` | federation OpenID validation | `partial` | `not-audited` | `none` | `ss-core-openid` |
 | Device management | `src/api/federation.ts`, `src/api/devices.ts` | user devices over federation | `partial` | `partial` | `complement` | `ss-core-device-management` |
@@ -161,51 +167,9 @@ The current `docs/matrix/speccheck-matrix.md` should be considered incomplete un
 
 ## Complement Evidence Summary
 
-> Detailed analysis: [`docs/matrix/complement-gap-analysis.md`](./complement-gap-analysis.md)
-> Based on Complement test runs test1–test5 (2026-03-27). 200 tests reached, 34 passing (17%).
+Complement Evidence Summary の一覧と証跡は [`docs/matrix/speccheck-matrix-v2-complement.md`](./speccheck-matrix-v2-complement.md) に移動しました。
 
-This section maps Complement results to the spec areas tracked above.
-`complement:pass` = at least one subtest passing. `complement:fail` = all subtests failing. `complement:gap` = not yet reached by any test in these runs.
-
-### Client-Server Core — Complement Evidence
-
-| Area | Evidence | Notes | surface_status | behavior_status | evidence_status |
-|------|----------|-------|----------------|-----------------|-----------------|
-| API standards | `complement:fail` | Unknown endpoints return 404 instead of 405 (`TestUnknownEndpoints`) | `partial` | `partial` | `complement` |
-| Server discovery | `complement:partial` | `TestVersionStructure` covers `/versions`; `.well-known` and auth metadata still need explicit evidence | `present` | `partial` | `complement` |
-| Client authentication | `complement:partial` | Login/logout/change-password/deactivate/refresh-token flows have csapi tests; registration and login-token coverage still incomplete | `partial` | `partial` | `complement` |
-| Filtering | `complement:fail` | `TestSyncOmitsStateChangeOnFilteredEvents` failing | `partial` | `partial` | `complement` |
-| Events | `complement:partial` | Basic send/recv passing; size limits pass (`TestEventSizeLimits`) | `partial` | `partial` | `complement` |
-| Rooms | `complement:partial` | Local join/leave/alias passing; restricted rooms partially failing | `partial` | `partial` | `complement` |
-| User data | `complement:fail` | `TestWriteMDirectAccountData` → 500; account_data sync incremental failing | `partial` | `partial` | `complement` |
-
-### Client-Server Modules — Complement Evidence
-
-| Module | Evidence | Notes | surface_status | behavior_status | evidence_status |
-|--------|----------|-------|----------------|-----------------|-----------------|
-| Content repository | `complement:partial` | Local media passing; remote/federation media explicitly unsupported (`TestContentMediaV1`) | `partial` | `partial` | `complement` |
-| Direct messaging | `complement:partial` | `TestIsDirectFlagLocal` passes; `TestIsDirectFlagFederation` still fails because invited-room sync is missing `invite_state` | `partial` | `partial` | `complement` |
-| Presence | `complement:fail` | `TestRemotePresence` failing — presence EDU federation not implemented | `partial` | `partial` | `complement` |
-| Typing notifications | `complement:fail` | `TestRemoteTyping` failing | `partial` | `partial` | `complement` |
-| Send-to-device messaging | `complement:fail` | `TestToDeviceMessagesOverFederation` failing — federation EDU delivery | `partial` | `partial` | `complement` |
-| Device management | `complement:fail` | `TestDeviceListsUpdateOverFederation` — invite_state missing from sync | `partial` | `partial` | `complement` |
-| End-to-end encryption | `complement:partial` | Device key upload/query surface exists, but federation device-list propagation is still failing | `partial` | `partial` | `complement` |
-| Spaces | `complement:fail` | `/hierarchy` present but `TestClientSpacesSummary` failing on redacted child handling | `partial` | `partial` | `complement` |
-
-### Server-Server Core — Complement Evidence
-
-| Area | Evidence | Notes | surface_status | behavior_status | evidence_status |
-|------|----------|-------|----------------|-----------------|-----------------|
-| Authentication | `complement:fail` | `TestInboundFederationKeys` failing; signature verification issues in some flows | `partial` | `partial` | `complement` |
-| Transactions | `complement:fail` | `TestOutboundFederationSend` / `TestNetworkPartitionOrdering` failing | `partial` | `not-audited` | `complement` |
-| PDUs | `complement:fail` | `TestEventAuth`, `TestCorruptedAuthChain`, `TestInboundFederationRejectsEventsWithRejectedAuthEvents` | `partial` | `partial` | `complement` |
-| Backfill / missing events | `complement:fail` | `TestInboundCanReturnMissingEvents` — endpoint not returning events | `partial` | `partial` | `complement` |
-| Joining rooms | `complement:partial` | `TestJoinViaRoomIDAndServerName` now passing; `send_join` validation incomplete | `partial` | `partial` | `complement` |
-| Inviting | `complement:fail` | `TestFederationRoomsInvite` — FK constraint on invite insert | `partial` | `partial` | `complement` |
-| Leaving rooms | `complement:fail` | `TestCannotSendNonLeaveViaSendLeaveV1/V2` — partial (some subtests pass) | `partial` | `partial` | `complement` |
-| Knocking | `complement:fail` | `TestKnocking`, `TestKnockingInMSC3787Room` | `partial` | `partial` | `complement` |
-| Querying for information | `complement:partial` | `TestInboundFederationProfile` 1/2 subtests pass; `TestOutboundFederationProfile` failing | `partial` | `partial` | `complement` |
-| Content repository | `complement:fail` | Remote media paths are reached by Complement, but currently return "not supported" | `none` | `not-audited` | `complement` |
+OpenAPI operation（endpoint）一覧の導線は [`docs/matrix/speccheck-matrix-v2-endpoint.md`](./speccheck-matrix-v2-endpoint.md) にあります。
 
 ## Suggested Next Step
 

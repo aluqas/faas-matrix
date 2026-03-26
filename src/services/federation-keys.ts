@@ -2,7 +2,7 @@
 // Handles fetching, caching, and validating remote server signing keys
 // Includes notary support for key query endpoints
 
-import { verifySignature, signJson, base64UrlDecode } from '../utils/crypto';
+import { verifySignature, signJson, base64UrlDecode, generateSigningKeyPair } from '../utils/crypto';
 import { discoverServer, buildServerUrl } from './server-discovery';
 
 export interface ServerKeyResponse {
@@ -435,17 +435,44 @@ export interface SigningKey {
  * Get the current server signing key for outgoing requests
  */
 export async function getServerSigningKey(db: D1Database): Promise<SigningKey | null> {
-  const key = await db.prepare(
+  let key = await db.prepare(
     `SELECT key_id, private_key_jwk FROM server_keys WHERE is_current = 1 AND key_version = 2`
   ).first<{ key_id: string; private_key_jwk: string | null }>();
 
   if (!key || !key.private_key_jwk) {
+    const generated = await generateSigningKeyPair();
+    const validFrom = Date.now();
+    const validUntil = validFrom + 365 * 24 * 60 * 60 * 1000;
+
+    await db.prepare(`UPDATE server_keys SET is_current = 0`).run();
+    await db.prepare(
+      `INSERT INTO server_keys (key_id, public_key, private_key, private_key_jwk, key_version, valid_from, valid_until, is_current)
+       VALUES (?, ?, ?, ?, 2, ?, ?, 1)`
+    )
+      .bind(
+        generated.keyId,
+        generated.publicKey,
+        JSON.stringify(generated.privateKeyJwk),
+        JSON.stringify(generated.privateKeyJwk),
+        validFrom,
+        validUntil
+      )
+      .run();
+
+    key = {
+      key_id: generated.keyId,
+      private_key_jwk: JSON.stringify(generated.privateKeyJwk),
+    };
+  }
+
+  const privateKeyJwk = key.private_key_jwk;
+  if (!privateKeyJwk) {
     return null;
   }
 
   return {
     keyId: key.key_id,
-    privateKeyJwk: JSON.parse(key.private_key_jwk),
+    privateKeyJwk: JSON.parse(privateKeyJwk),
   };
 }
 

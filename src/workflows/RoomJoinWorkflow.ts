@@ -9,6 +9,7 @@
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import type { Env } from '../types';
 import { generateEventId } from '../utils/ids';
+import { federationGet, federationPut } from '../services/federation-keys';
 import {
   storeEvent,
   updateMembership,
@@ -148,14 +149,13 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
   ): Promise<{ room_version: string; event: any }> {
     console.log('[RoomJoinWorkflow] Making make_join request', { remoteServer, roomId, userId });
 
-    const url = `https://${remoteServer}/_matrix/federation/v1/make_join/${encodeURIComponent(roomId)}/${encodeURIComponent(userId)}`;
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    const response = await federationGet(
+      remoteServer,
+      `/_matrix/federation/v1/make_join/${encodeURIComponent(roomId)}/${encodeURIComponent(userId)}`,
+      this.env.SERVER_NAME,
+      this.env.DB,
+      this.env.CACHE
+    );
 
     if (!response.ok) {
       const error = await response.text();
@@ -243,15 +243,14 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
   ): Promise<any> {
     console.log('[RoomJoinWorkflow] Sending send_join request', { remoteServer, roomId, eventId: joinEvent.event_id });
 
-    const url = `https://${remoteServer}/_matrix/federation/v1/send_join/${encodeURIComponent(roomId)}/${encodeURIComponent(joinEvent.event_id)}`;
-
-    const response = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(joinEvent),
-    });
+    const response = await federationPut(
+      remoteServer,
+      `/_matrix/federation/v1/send_join/${encodeURIComponent(roomId)}/${encodeURIComponent(joinEvent.event_id)}`,
+      joinEvent,
+      this.env.SERVER_NAME,
+      this.env.DB,
+      this.env.CACHE
+    );
 
     if (!response.ok) {
       const error = await response.text();
