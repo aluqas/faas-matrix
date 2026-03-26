@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-26T07:05:25.843Z",
+  "generatedAt": "2026-03-26T20:33:09.218Z",
   "sourceRoot": ".saqula/matrix-spec/data/api",
   "units": [
     {
@@ -11,7 +11,7 @@
       "title": "account-data"
     },
     {
-      "id": "client-server-account-data-put",
+      "id": "client-server-account-data-put-user-userid-account-data-type",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/account-data.yaml",
@@ -19,10 +19,11 @@
       "path": "/user/{userId}/account_data/{type}",
       "method": "put",
       "operationId": "setAccountData",
+      "operationKey": "PUT /user/{userId}/account_data/{type}",
       "title": "setAccountData"
     },
     {
-      "id": "client-server-account-data-get",
+      "id": "client-server-account-data-get-user-userid-account-data-type",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/account-data.yaml",
@@ -30,10 +31,11 @@
       "path": "/user/{userId}/account_data/{type}",
       "method": "get",
       "operationId": "getAccountData",
+      "operationKey": "GET /user/{userId}/account_data/{type}",
       "title": "getAccountData"
     },
     {
-      "id": "client-server-account-data-put",
+      "id": "client-server-account-data-put-user-userid-rooms-roomid-account-data-type",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/account-data.yaml",
@@ -41,10 +43,11 @@
       "path": "/user/{userId}/rooms/{roomId}/account_data/{type}",
       "method": "put",
       "operationId": "setAccountDataPerRoom",
+      "operationKey": "PUT /user/{userId}/rooms/{roomId}/account_data/{type}",
       "title": "setAccountDataPerRoom"
     },
     {
-      "id": "client-server-account-data-get",
+      "id": "client-server-account-data-get-user-userid-rooms-roomid-account-data-type",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/account-data.yaml",
@@ -52,6 +55,7 @@
       "path": "/user/{userId}/rooms/{roomId}/account_data/{type}",
       "method": "get",
       "operationId": "getAccountDataPerRoom",
+      "operationKey": "GET /user/{userId}/rooms/{roomId}/account_data/{type}",
       "title": "getAccountDataPerRoom"
     },
     {
@@ -63,7 +67,7 @@
       "title": "account_deactivation"
     },
     {
-      "id": "client-server-account_deactivation-post",
+      "id": "client-server-account_deactivation-post-account-deactivate",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/account_deactivation.yaml",
@@ -71,6 +75,7 @@
       "path": "/account/deactivate",
       "method": "post",
       "operationId": "deactivateAccount",
+      "operationKey": "POST /account/deactivate",
       "title": "deactivateAccount"
     },
     {
@@ -82,7 +87,7 @@
       "title": "admin"
     },
     {
-      "id": "client-server-admin-get",
+      "id": "client-server-admin-get-v3-admin-whois-userid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/admin.yaml",
@@ -90,10 +95,11 @@
       "path": "/v3/admin/whois/{userId}",
       "method": "get",
       "operationId": "getWhoIs",
+      "operationKey": "GET /v3/admin/whois/{userId}",
       "title": "getWhoIs"
     },
     {
-      "id": "client-server-admin-get",
+      "id": "client-server-admin-get-v1-admin-suspend-userid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/admin.yaml",
@@ -101,10 +107,11 @@
       "path": "/v1/admin/suspend/{userId}",
       "method": "get",
       "operationId": "getAdminSuspendUser",
+      "operationKey": "GET /v1/admin/suspend/{userId}",
       "title": "getAdminSuspendUser"
     },
     {
-      "id": "client-server-admin-put",
+      "id": "client-server-admin-put-v1-admin-suspend-userid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/admin.yaml",
@@ -112,10 +119,11 @@
       "path": "/v1/admin/suspend/{userId}",
       "method": "put",
       "operationId": "setAdminSuspendUser",
+      "operationKey": "PUT /v1/admin/suspend/{userId}",
       "title": "setAdminSuspendUser"
     },
     {
-      "id": "client-server-admin-get",
+      "id": "client-server-admin-get-v1-admin-lock-userid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/admin.yaml",
@@ -123,10 +131,11 @@
       "path": "/v1/admin/lock/{userId}",
       "method": "get",
       "operationId": "getAdminLockUser",
+      "operationKey": "GET /v1/admin/lock/{userId}",
       "title": "getAdminLockUser"
     },
     {
-      "id": "client-server-admin-put",
+      "id": "client-server-admin-put-v1-admin-lock-userid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/admin.yaml",
@@ -134,6 +143,7 @@
       "path": "/v1/admin/lock/{userId}",
       "method": "put",
       "operationId": "setAdminLockUser",
+      "operationKey": "PUT /v1/admin/lock/{userId}",
       "title": "setAdminLockUser"
     },
     {
@@ -145,7 +155,7 @@
       "title": "administrative_contact"
     },
     {
-      "id": "client-server-administrative_contact-get",
+      "id": "client-server-administrative_contact-get-account-3pid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/administrative_contact.yaml",
@@ -153,10 +163,11 @@
       "path": "/account/3pid",
       "method": "get",
       "operationId": "getAccount3PIDs",
+      "operationKey": "GET /account/3pid",
       "title": "getAccount3PIDs"
     },
     {
-      "id": "client-server-administrative_contact-post",
+      "id": "client-server-administrative_contact-post-account-3pid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/administrative_contact.yaml",
@@ -164,10 +175,11 @@
       "path": "/account/3pid",
       "method": "post",
       "operationId": "post3PIDs",
+      "operationKey": "POST /account/3pid",
       "title": "post3PIDs"
     },
     {
-      "id": "client-server-administrative_contact-post",
+      "id": "client-server-administrative_contact-post-account-3pid-add",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/administrative_contact.yaml",
@@ -175,10 +187,11 @@
       "path": "/account/3pid/add",
       "method": "post",
       "operationId": "add3PID",
+      "operationKey": "POST /account/3pid/add",
       "title": "add3PID"
     },
     {
-      "id": "client-server-administrative_contact-post",
+      "id": "client-server-administrative_contact-post-account-3pid-bind",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/administrative_contact.yaml",
@@ -186,10 +199,11 @@
       "path": "/account/3pid/bind",
       "method": "post",
       "operationId": "bind3PID",
+      "operationKey": "POST /account/3pid/bind",
       "title": "bind3PID"
     },
     {
-      "id": "client-server-administrative_contact-post",
+      "id": "client-server-administrative_contact-post-account-3pid-delete",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/administrative_contact.yaml",
@@ -197,10 +211,11 @@
       "path": "/account/3pid/delete",
       "method": "post",
       "operationId": "delete3pidFromAccount",
+      "operationKey": "POST /account/3pid/delete",
       "title": "delete3pidFromAccount"
     },
     {
-      "id": "client-server-administrative_contact-post",
+      "id": "client-server-administrative_contact-post-account-3pid-unbind",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/administrative_contact.yaml",
@@ -208,10 +223,11 @@
       "path": "/account/3pid/unbind",
       "method": "post",
       "operationId": "unbind3pidFromAccount",
+      "operationKey": "POST /account/3pid/unbind",
       "title": "unbind3pidFromAccount"
     },
     {
-      "id": "client-server-administrative_contact-post",
+      "id": "client-server-administrative_contact-post-account-3pid-email-requesttoken",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/administrative_contact.yaml",
@@ -219,10 +235,11 @@
       "path": "/account/3pid/email/requestToken",
       "method": "post",
       "operationId": "requestTokenTo3PIDEmail",
+      "operationKey": "POST /account/3pid/email/requestToken",
       "title": "requestTokenTo3PIDEmail"
     },
     {
-      "id": "client-server-administrative_contact-post",
+      "id": "client-server-administrative_contact-post-account-3pid-msisdn-requesttoken",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/administrative_contact.yaml",
@@ -230,6 +247,7 @@
       "path": "/account/3pid/msisdn/requestToken",
       "method": "post",
       "operationId": "requestTokenTo3PIDMSISDN",
+      "operationKey": "POST /account/3pid/msisdn/requestToken",
       "title": "requestTokenTo3PIDMSISDN"
     },
     {
@@ -241,7 +259,7 @@
       "title": "appservice_ping"
     },
     {
-      "id": "client-server-appservice_ping-post",
+      "id": "client-server-appservice_ping-post-appservice-appserviceid-ping",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/appservice_ping.yaml",
@@ -249,6 +267,7 @@
       "path": "/appservice/{appserviceId}/ping",
       "method": "post",
       "operationId": "pingAppservice",
+      "operationKey": "POST /appservice/{appserviceId}/ping",
       "title": "pingAppservice"
     },
     {
@@ -260,7 +279,7 @@
       "title": "appservice_room_directory"
     },
     {
-      "id": "client-server-appservice_room_directory-put",
+      "id": "client-server-appservice_room_directory-put-directory-list-appservice-networkid-roomid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/appservice_room_directory.yaml",
@@ -268,6 +287,7 @@
       "path": "/directory/list/appservice/{networkId}/{roomId}",
       "method": "put",
       "operationId": "updateAppserviceRoomDirectoryVisibility",
+      "operationKey": "PUT /directory/list/appservice/{networkId}/{roomId}",
       "title": "updateAppserviceRoomDirectoryVisibility"
     },
     {
@@ -279,7 +299,7 @@
       "title": "authed-content-repo"
     },
     {
-      "id": "client-server-authed-content-repo-get",
+      "id": "client-server-authed-content-repo-get-media-download-servername-mediaid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/authed-content-repo.yaml",
@@ -287,10 +307,11 @@
       "path": "/media/download/{serverName}/{mediaId}",
       "method": "get",
       "operationId": "getContentAuthed",
+      "operationKey": "GET /media/download/{serverName}/{mediaId}",
       "title": "getContentAuthed"
     },
     {
-      "id": "client-server-authed-content-repo-get",
+      "id": "client-server-authed-content-repo-get-media-download-servername-mediaid-filename",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/authed-content-repo.yaml",
@@ -298,10 +319,11 @@
       "path": "/media/download/{serverName}/{mediaId}/{fileName}",
       "method": "get",
       "operationId": "getContentOverrideNameAuthed",
+      "operationKey": "GET /media/download/{serverName}/{mediaId}/{fileName}",
       "title": "getContentOverrideNameAuthed"
     },
     {
-      "id": "client-server-authed-content-repo-get",
+      "id": "client-server-authed-content-repo-get-media-thumbnail-servername-mediaid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/authed-content-repo.yaml",
@@ -309,10 +331,11 @@
       "path": "/media/thumbnail/{serverName}/{mediaId}",
       "method": "get",
       "operationId": "getContentThumbnailAuthed",
+      "operationKey": "GET /media/thumbnail/{serverName}/{mediaId}",
       "title": "getContentThumbnailAuthed"
     },
     {
-      "id": "client-server-authed-content-repo-get",
+      "id": "client-server-authed-content-repo-get-media-preview-url",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/authed-content-repo.yaml",
@@ -320,10 +343,11 @@
       "path": "/media/preview_url",
       "method": "get",
       "operationId": "getUrlPreviewAuthed",
+      "operationKey": "GET /media/preview_url",
       "title": "getUrlPreviewAuthed"
     },
     {
-      "id": "client-server-authed-content-repo-get",
+      "id": "client-server-authed-content-repo-get-media-config",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/authed-content-repo.yaml",
@@ -331,6 +355,7 @@
       "path": "/media/config",
       "method": "get",
       "operationId": "getConfigAuthed",
+      "operationKey": "GET /media/config",
       "title": "getConfigAuthed"
     },
     {
@@ -342,7 +367,7 @@
       "title": "banning"
     },
     {
-      "id": "client-server-banning-post",
+      "id": "client-server-banning-post-rooms-roomid-ban",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/banning.yaml",
@@ -350,10 +375,11 @@
       "path": "/rooms/{roomId}/ban",
       "method": "post",
       "operationId": "ban",
+      "operationKey": "POST /rooms/{roomId}/ban",
       "title": "ban"
     },
     {
-      "id": "client-server-banning-post",
+      "id": "client-server-banning-post-rooms-roomid-unban",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/banning.yaml",
@@ -361,6 +387,7 @@
       "path": "/rooms/{roomId}/unban",
       "method": "post",
       "operationId": "unban",
+      "operationKey": "POST /rooms/{roomId}/unban",
       "title": "unban"
     },
     {
@@ -372,7 +399,7 @@
       "title": "capabilities"
     },
     {
-      "id": "client-server-capabilities-get",
+      "id": "client-server-capabilities-get-capabilities",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/capabilities.yaml",
@@ -380,6 +407,7 @@
       "path": "/capabilities",
       "method": "get",
       "operationId": "getCapabilities",
+      "operationKey": "GET /capabilities",
       "title": "getCapabilities"
     },
     {
@@ -391,7 +419,7 @@
       "title": "content-repo"
     },
     {
-      "id": "client-server-content-repo-post",
+      "id": "client-server-content-repo-post-media-v3-upload",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/content-repo.yaml",
@@ -399,10 +427,11 @@
       "path": "/media/v3/upload",
       "method": "post",
       "operationId": "uploadContent",
+      "operationKey": "POST /media/v3/upload",
       "title": "uploadContent"
     },
     {
-      "id": "client-server-content-repo-put",
+      "id": "client-server-content-repo-put-media-v3-upload-servername-mediaid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/content-repo.yaml",
@@ -410,10 +439,11 @@
       "path": "/media/v3/upload/{serverName}/{mediaId}",
       "method": "put",
       "operationId": "uploadContentToMXC",
+      "operationKey": "PUT /media/v3/upload/{serverName}/{mediaId}",
       "title": "uploadContentToMXC"
     },
     {
-      "id": "client-server-content-repo-post",
+      "id": "client-server-content-repo-post-media-v1-create",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/content-repo.yaml",
@@ -421,10 +451,11 @@
       "path": "/media/v1/create",
       "method": "post",
       "operationId": "createContent",
+      "operationKey": "POST /media/v1/create",
       "title": "createContent"
     },
     {
-      "id": "client-server-content-repo-get",
+      "id": "client-server-content-repo-get-media-v3-download-servername-mediaid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/content-repo.yaml",
@@ -432,10 +463,11 @@
       "path": "/media/v3/download/{serverName}/{mediaId}",
       "method": "get",
       "operationId": "getContent",
+      "operationKey": "GET /media/v3/download/{serverName}/{mediaId}",
       "title": "getContent"
     },
     {
-      "id": "client-server-content-repo-get",
+      "id": "client-server-content-repo-get-media-v3-download-servername-mediaid-filename",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/content-repo.yaml",
@@ -443,10 +475,11 @@
       "path": "/media/v3/download/{serverName}/{mediaId}/{fileName}",
       "method": "get",
       "operationId": "getContentOverrideName",
+      "operationKey": "GET /media/v3/download/{serverName}/{mediaId}/{fileName}",
       "title": "getContentOverrideName"
     },
     {
-      "id": "client-server-content-repo-get",
+      "id": "client-server-content-repo-get-media-v3-thumbnail-servername-mediaid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/content-repo.yaml",
@@ -454,10 +487,11 @@
       "path": "/media/v3/thumbnail/{serverName}/{mediaId}",
       "method": "get",
       "operationId": "getContentThumbnail",
+      "operationKey": "GET /media/v3/thumbnail/{serverName}/{mediaId}",
       "title": "getContentThumbnail"
     },
     {
-      "id": "client-server-content-repo-get",
+      "id": "client-server-content-repo-get-media-v3-preview-url",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/content-repo.yaml",
@@ -465,10 +499,11 @@
       "path": "/media/v3/preview_url",
       "method": "get",
       "operationId": "getUrlPreview",
+      "operationKey": "GET /media/v3/preview_url",
       "title": "getUrlPreview"
     },
     {
-      "id": "client-server-content-repo-get",
+      "id": "client-server-content-repo-get-media-v3-config",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/content-repo.yaml",
@@ -476,6 +511,7 @@
       "path": "/media/v3/config",
       "method": "get",
       "operationId": "getConfig",
+      "operationKey": "GET /media/v3/config",
       "title": "getConfig"
     },
     {
@@ -487,7 +523,7 @@
       "title": "create_room"
     },
     {
-      "id": "client-server-create_room-post",
+      "id": "client-server-create_room-post-createroom",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/create_room.yaml",
@@ -495,6 +531,7 @@
       "path": "/createRoom",
       "method": "post",
       "operationId": "createRoom",
+      "operationKey": "POST /createRoom",
       "title": "createRoom"
     },
     {
@@ -506,7 +543,7 @@
       "title": "cross_signing"
     },
     {
-      "id": "client-server-cross_signing-post",
+      "id": "client-server-cross_signing-post-keys-device-signing-upload",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/cross_signing.yaml",
@@ -514,10 +551,11 @@
       "path": "/keys/device_signing/upload",
       "method": "post",
       "operationId": "uploadCrossSigningKeys",
+      "operationKey": "POST /keys/device_signing/upload",
       "title": "uploadCrossSigningKeys"
     },
     {
-      "id": "client-server-cross_signing-post",
+      "id": "client-server-cross_signing-post-keys-signatures-upload",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/cross_signing.yaml",
@@ -525,6 +563,7 @@
       "path": "/keys/signatures/upload",
       "method": "post",
       "operationId": "uploadCrossSigningSignatures",
+      "operationKey": "POST /keys/signatures/upload",
       "title": "uploadCrossSigningSignatures"
     },
     {
@@ -536,7 +575,7 @@
       "title": "device_management"
     },
     {
-      "id": "client-server-device_management-get",
+      "id": "client-server-device_management-get-devices",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/device_management.yaml",
@@ -544,10 +583,11 @@
       "path": "/devices",
       "method": "get",
       "operationId": "getDevices",
+      "operationKey": "GET /devices",
       "title": "getDevices"
     },
     {
-      "id": "client-server-device_management-get",
+      "id": "client-server-device_management-get-devices-deviceid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/device_management.yaml",
@@ -555,10 +595,11 @@
       "path": "/devices/{deviceId}",
       "method": "get",
       "operationId": "getDevice",
+      "operationKey": "GET /devices/{deviceId}",
       "title": "getDevice"
     },
     {
-      "id": "client-server-device_management-put",
+      "id": "client-server-device_management-put-devices-deviceid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/device_management.yaml",
@@ -566,10 +607,11 @@
       "path": "/devices/{deviceId}",
       "method": "put",
       "operationId": "updateDevice",
+      "operationKey": "PUT /devices/{deviceId}",
       "title": "updateDevice"
     },
     {
-      "id": "client-server-device_management-delete",
+      "id": "client-server-device_management-delete-devices-deviceid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/device_management.yaml",
@@ -577,10 +619,11 @@
       "path": "/devices/{deviceId}",
       "method": "delete",
       "operationId": "deleteDevice",
+      "operationKey": "DELETE /devices/{deviceId}",
       "title": "deleteDevice"
     },
     {
-      "id": "client-server-device_management-post",
+      "id": "client-server-device_management-post-delete-devices",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/device_management.yaml",
@@ -588,6 +631,7 @@
       "path": "/delete_devices",
       "method": "post",
       "operationId": "deleteDevices",
+      "operationKey": "POST /delete_devices",
       "title": "deleteDevices"
     },
     {
@@ -599,7 +643,7 @@
       "title": "directory"
     },
     {
-      "id": "client-server-directory-put",
+      "id": "client-server-directory-put-directory-room-roomalias",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/directory.yaml",
@@ -607,10 +651,11 @@
       "path": "/directory/room/{roomAlias}",
       "method": "put",
       "operationId": "setRoomAlias",
+      "operationKey": "PUT /directory/room/{roomAlias}",
       "title": "setRoomAlias"
     },
     {
-      "id": "client-server-directory-get",
+      "id": "client-server-directory-get-directory-room-roomalias",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/directory.yaml",
@@ -618,10 +663,11 @@
       "path": "/directory/room/{roomAlias}",
       "method": "get",
       "operationId": "getRoomIdByAlias",
+      "operationKey": "GET /directory/room/{roomAlias}",
       "title": "getRoomIdByAlias"
     },
     {
-      "id": "client-server-directory-delete",
+      "id": "client-server-directory-delete-directory-room-roomalias",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/directory.yaml",
@@ -629,10 +675,11 @@
       "path": "/directory/room/{roomAlias}",
       "method": "delete",
       "operationId": "deleteRoomAlias",
+      "operationKey": "DELETE /directory/room/{roomAlias}",
       "title": "deleteRoomAlias"
     },
     {
-      "id": "client-server-directory-get",
+      "id": "client-server-directory-get-rooms-roomid-aliases",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/directory.yaml",
@@ -640,6 +687,7 @@
       "path": "/rooms/{roomId}/aliases",
       "method": "get",
       "operationId": "getLocalAliases",
+      "operationKey": "GET /rooms/{roomId}/aliases",
       "title": "getLocalAliases"
     },
     {
@@ -651,7 +699,7 @@
       "title": "event_context"
     },
     {
-      "id": "client-server-event_context-get",
+      "id": "client-server-event_context-get-rooms-roomid-context-eventid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/event_context.yaml",
@@ -659,6 +707,7 @@
       "path": "/rooms/{roomId}/context/{eventId}",
       "method": "get",
       "operationId": "getEventContext",
+      "operationKey": "GET /rooms/{roomId}/context/{eventId}",
       "title": "getEventContext"
     },
     {
@@ -670,7 +719,7 @@
       "title": "filter"
     },
     {
-      "id": "client-server-filter-post",
+      "id": "client-server-filter-post-user-userid-filter",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/filter.yaml",
@@ -678,10 +727,11 @@
       "path": "/user/{userId}/filter",
       "method": "post",
       "operationId": "defineFilter",
+      "operationKey": "POST /user/{userId}/filter",
       "title": "defineFilter"
     },
     {
-      "id": "client-server-filter-get",
+      "id": "client-server-filter-get-user-userid-filter-filterid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/filter.yaml",
@@ -689,6 +739,7 @@
       "path": "/user/{userId}/filter/{filterId}",
       "method": "get",
       "operationId": "getFilter",
+      "operationKey": "GET /user/{userId}/filter/{filterId}",
       "title": "getFilter"
     },
     {
@@ -700,7 +751,7 @@
       "title": "inviting"
     },
     {
-      "id": "client-server-inviting-post",
+      "id": "client-server-inviting-post-rooms-roomid-invite",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/inviting.yaml",
@@ -708,6 +759,7 @@
       "path": "/rooms/{roomId}/invite ",
       "method": "post",
       "operationId": "inviteUser",
+      "operationKey": "POST /rooms/{roomId}/invite ",
       "title": "inviteUser"
     },
     {
@@ -719,7 +771,7 @@
       "title": "joining"
     },
     {
-      "id": "client-server-joining-post",
+      "id": "client-server-joining-post-rooms-roomid-join",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/joining.yaml",
@@ -727,10 +779,11 @@
       "path": "/rooms/{roomId}/join",
       "method": "post",
       "operationId": "joinRoomById",
+      "operationKey": "POST /rooms/{roomId}/join",
       "title": "joinRoomById"
     },
     {
-      "id": "client-server-joining-post",
+      "id": "client-server-joining-post-join-roomidoralias",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/joining.yaml",
@@ -738,6 +791,7 @@
       "path": "/join/{roomIdOrAlias}",
       "method": "post",
       "operationId": "joinRoom",
+      "operationKey": "POST /join/{roomIdOrAlias}",
       "title": "joinRoom"
     },
     {
@@ -749,7 +803,7 @@
       "title": "key_backup"
     },
     {
-      "id": "client-server-key_backup-post",
+      "id": "client-server-key_backup-post-room-keys-version",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -757,10 +811,11 @@
       "path": "/room_keys/version",
       "method": "post",
       "operationId": "postRoomKeysVersion",
+      "operationKey": "POST /room_keys/version",
       "title": "postRoomKeysVersion"
     },
     {
-      "id": "client-server-key_backup-get",
+      "id": "client-server-key_backup-get-room-keys-version",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -768,10 +823,11 @@
       "path": "/room_keys/version",
       "method": "get",
       "operationId": "getRoomKeysVersionCurrent",
+      "operationKey": "GET /room_keys/version",
       "title": "getRoomKeysVersionCurrent"
     },
     {
-      "id": "client-server-key_backup-get",
+      "id": "client-server-key_backup-get-room-keys-version-version",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -779,10 +835,11 @@
       "path": "/room_keys/version/{version}",
       "method": "get",
       "operationId": "getRoomKeysVersion",
+      "operationKey": "GET /room_keys/version/{version}",
       "title": "getRoomKeysVersion"
     },
     {
-      "id": "client-server-key_backup-put",
+      "id": "client-server-key_backup-put-room-keys-version-version",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -790,10 +847,11 @@
       "path": "/room_keys/version/{version}",
       "method": "put",
       "operationId": "putRoomKeysVersion",
+      "operationKey": "PUT /room_keys/version/{version}",
       "title": "putRoomKeysVersion"
     },
     {
-      "id": "client-server-key_backup-delete",
+      "id": "client-server-key_backup-delete-room-keys-version-version",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -801,10 +859,11 @@
       "path": "/room_keys/version/{version}",
       "method": "delete",
       "operationId": "deleteRoomKeysVersion",
+      "operationKey": "DELETE /room_keys/version/{version}",
       "title": "deleteRoomKeysVersion"
     },
     {
-      "id": "client-server-key_backup-put",
+      "id": "client-server-key_backup-put-room-keys-keys-roomid-sessionid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -812,10 +871,11 @@
       "path": "/room_keys/keys/{roomId}/{sessionId}",
       "method": "put",
       "operationId": "putRoomKeyBySessionId",
+      "operationKey": "PUT /room_keys/keys/{roomId}/{sessionId}",
       "title": "putRoomKeyBySessionId"
     },
     {
-      "id": "client-server-key_backup-get",
+      "id": "client-server-key_backup-get-room-keys-keys-roomid-sessionid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -823,10 +883,11 @@
       "path": "/room_keys/keys/{roomId}/{sessionId}",
       "method": "get",
       "operationId": "getRoomKeyBySessionId",
+      "operationKey": "GET /room_keys/keys/{roomId}/{sessionId}",
       "title": "getRoomKeyBySessionId"
     },
     {
-      "id": "client-server-key_backup-delete",
+      "id": "client-server-key_backup-delete-room-keys-keys-roomid-sessionid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -834,10 +895,11 @@
       "path": "/room_keys/keys/{roomId}/{sessionId}",
       "method": "delete",
       "operationId": "deleteRoomKeyBySessionId",
+      "operationKey": "DELETE /room_keys/keys/{roomId}/{sessionId}",
       "title": "deleteRoomKeyBySessionId"
     },
     {
-      "id": "client-server-key_backup-put",
+      "id": "client-server-key_backup-put-room-keys-keys-roomid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -845,10 +907,11 @@
       "path": "/room_keys/keys/{roomId}",
       "method": "put",
       "operationId": "putRoomKeysByRoomId",
+      "operationKey": "PUT /room_keys/keys/{roomId}",
       "title": "putRoomKeysByRoomId"
     },
     {
-      "id": "client-server-key_backup-get",
+      "id": "client-server-key_backup-get-room-keys-keys-roomid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -856,10 +919,11 @@
       "path": "/room_keys/keys/{roomId}",
       "method": "get",
       "operationId": "getRoomKeysByRoomId",
+      "operationKey": "GET /room_keys/keys/{roomId}",
       "title": "getRoomKeysByRoomId"
     },
     {
-      "id": "client-server-key_backup-delete",
+      "id": "client-server-key_backup-delete-room-keys-keys-roomid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -867,10 +931,11 @@
       "path": "/room_keys/keys/{roomId}",
       "method": "delete",
       "operationId": "deleteRoomKeysByRoomId",
+      "operationKey": "DELETE /room_keys/keys/{roomId}",
       "title": "deleteRoomKeysByRoomId"
     },
     {
-      "id": "client-server-key_backup-put",
+      "id": "client-server-key_backup-put-room-keys-keys",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -878,10 +943,11 @@
       "path": "/room_keys/keys",
       "method": "put",
       "operationId": "putRoomKeys",
+      "operationKey": "PUT /room_keys/keys",
       "title": "putRoomKeys"
     },
     {
-      "id": "client-server-key_backup-get",
+      "id": "client-server-key_backup-get-room-keys-keys",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -889,10 +955,11 @@
       "path": "/room_keys/keys",
       "method": "get",
       "operationId": "getRoomKeys",
+      "operationKey": "GET /room_keys/keys",
       "title": "getRoomKeys"
     },
     {
-      "id": "client-server-key_backup-delete",
+      "id": "client-server-key_backup-delete-room-keys-keys",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/key_backup.yaml",
@@ -900,6 +967,7 @@
       "path": "/room_keys/keys",
       "method": "delete",
       "operationId": "deleteRoomKeys",
+      "operationKey": "DELETE /room_keys/keys",
       "title": "deleteRoomKeys"
     },
     {
@@ -911,7 +979,7 @@
       "title": "keys"
     },
     {
-      "id": "client-server-keys-post",
+      "id": "client-server-keys-post-keys-upload",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/keys.yaml",
@@ -919,10 +987,11 @@
       "path": "/keys/upload",
       "method": "post",
       "operationId": "uploadKeys",
+      "operationKey": "POST /keys/upload",
       "title": "uploadKeys"
     },
     {
-      "id": "client-server-keys-post",
+      "id": "client-server-keys-post-keys-query",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/keys.yaml",
@@ -930,10 +999,11 @@
       "path": "/keys/query",
       "method": "post",
       "operationId": "queryKeys",
+      "operationKey": "POST /keys/query",
       "title": "queryKeys"
     },
     {
-      "id": "client-server-keys-post",
+      "id": "client-server-keys-post-keys-claim",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/keys.yaml",
@@ -941,10 +1011,11 @@
       "path": "/keys/claim",
       "method": "post",
       "operationId": "claimKeys",
+      "operationKey": "POST /keys/claim",
       "title": "claimKeys"
     },
     {
-      "id": "client-server-keys-get",
+      "id": "client-server-keys-get-keys-changes",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/keys.yaml",
@@ -952,6 +1023,7 @@
       "path": "/keys/changes",
       "method": "get",
       "operationId": "getKeysChanges",
+      "operationKey": "GET /keys/changes",
       "title": "getKeysChanges"
     },
     {
@@ -963,7 +1035,7 @@
       "title": "kicking"
     },
     {
-      "id": "client-server-kicking-post",
+      "id": "client-server-kicking-post-rooms-roomid-kick",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/kicking.yaml",
@@ -971,6 +1043,7 @@
       "path": "/rooms/{roomId}/kick",
       "method": "post",
       "operationId": "kick",
+      "operationKey": "POST /rooms/{roomId}/kick",
       "title": "kick"
     },
     {
@@ -982,7 +1055,7 @@
       "title": "knocking"
     },
     {
-      "id": "client-server-knocking-post",
+      "id": "client-server-knocking-post-knock-roomidoralias",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/knocking.yaml",
@@ -990,6 +1063,7 @@
       "path": "/knock/{roomIdOrAlias}",
       "method": "post",
       "operationId": "knockRoom",
+      "operationKey": "POST /knock/{roomIdOrAlias}",
       "title": "knockRoom"
     },
     {
@@ -1001,7 +1075,7 @@
       "title": "leaving"
     },
     {
-      "id": "client-server-leaving-post",
+      "id": "client-server-leaving-post-rooms-roomid-leave",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/leaving.yaml",
@@ -1009,10 +1083,11 @@
       "path": "/rooms/{roomId}/leave",
       "method": "post",
       "operationId": "leaveRoom",
+      "operationKey": "POST /rooms/{roomId}/leave",
       "title": "leaveRoom"
     },
     {
-      "id": "client-server-leaving-post",
+      "id": "client-server-leaving-post-rooms-roomid-forget",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/leaving.yaml",
@@ -1020,6 +1095,7 @@
       "path": "/rooms/{roomId}/forget",
       "method": "post",
       "operationId": "forgetRoom",
+      "operationKey": "POST /rooms/{roomId}/forget",
       "title": "forgetRoom"
     },
     {
@@ -1031,7 +1107,7 @@
       "title": "list_joined_rooms"
     },
     {
-      "id": "client-server-list_joined_rooms-get",
+      "id": "client-server-list_joined_rooms-get-joined-rooms",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/list_joined_rooms.yaml",
@@ -1039,6 +1115,7 @@
       "path": "/joined_rooms",
       "method": "get",
       "operationId": "getJoinedRooms",
+      "operationKey": "GET /joined_rooms",
       "title": "getJoinedRooms"
     },
     {
@@ -1050,7 +1127,7 @@
       "title": "list_public_rooms"
     },
     {
-      "id": "client-server-list_public_rooms-get",
+      "id": "client-server-list_public_rooms-get-directory-list-room-roomid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/list_public_rooms.yaml",
@@ -1058,10 +1135,11 @@
       "path": "/directory/list/room/{roomId}",
       "method": "get",
       "operationId": "getRoomVisibilityOnDirectory",
+      "operationKey": "GET /directory/list/room/{roomId}",
       "title": "getRoomVisibilityOnDirectory"
     },
     {
-      "id": "client-server-list_public_rooms-put",
+      "id": "client-server-list_public_rooms-put-directory-list-room-roomid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/list_public_rooms.yaml",
@@ -1069,10 +1147,11 @@
       "path": "/directory/list/room/{roomId}",
       "method": "put",
       "operationId": "setRoomVisibilityOnDirectory",
+      "operationKey": "PUT /directory/list/room/{roomId}",
       "title": "setRoomVisibilityOnDirectory"
     },
     {
-      "id": "client-server-list_public_rooms-get",
+      "id": "client-server-list_public_rooms-get-publicrooms",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/list_public_rooms.yaml",
@@ -1080,10 +1159,11 @@
       "path": "/publicRooms",
       "method": "get",
       "operationId": "getPublicRooms",
+      "operationKey": "GET /publicRooms",
       "title": "getPublicRooms"
     },
     {
-      "id": "client-server-list_public_rooms-post",
+      "id": "client-server-list_public_rooms-post-publicrooms",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/list_public_rooms.yaml",
@@ -1091,6 +1171,7 @@
       "path": "/publicRooms",
       "method": "post",
       "operationId": "queryPublicRooms",
+      "operationKey": "POST /publicRooms",
       "title": "queryPublicRooms"
     },
     {
@@ -1102,7 +1183,7 @@
       "title": "login"
     },
     {
-      "id": "client-server-login-get",
+      "id": "client-server-login-get-login",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/login.yaml",
@@ -1110,10 +1191,11 @@
       "path": "/login",
       "method": "get",
       "operationId": "getLoginFlows",
+      "operationKey": "GET /login",
       "title": "getLoginFlows"
     },
     {
-      "id": "client-server-login-post",
+      "id": "client-server-login-post-login",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/login.yaml",
@@ -1121,6 +1203,7 @@
       "path": "/login",
       "method": "post",
       "operationId": "login",
+      "operationKey": "POST /login",
       "title": "login"
     },
     {
@@ -1132,7 +1215,7 @@
       "title": "login_token"
     },
     {
-      "id": "client-server-login_token-post",
+      "id": "client-server-login_token-post-login-get-token",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/login_token.yaml",
@@ -1140,6 +1223,7 @@
       "path": "/login/get_token",
       "method": "post",
       "operationId": "generateLoginToken",
+      "operationKey": "POST /login/get_token",
       "title": "generateLoginToken"
     },
     {
@@ -1151,7 +1235,7 @@
       "title": "logout"
     },
     {
-      "id": "client-server-logout-post",
+      "id": "client-server-logout-post-logout",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/logout.yaml",
@@ -1159,10 +1243,11 @@
       "path": "/logout",
       "method": "post",
       "operationId": "logout",
+      "operationKey": "POST /logout",
       "title": "logout"
     },
     {
-      "id": "client-server-logout-post",
+      "id": "client-server-logout-post-logout-all",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/logout.yaml",
@@ -1170,6 +1255,7 @@
       "path": "/logout/all",
       "method": "post",
       "operationId": "logout_all",
+      "operationKey": "POST /logout/all",
       "title": "logout_all"
     },
     {
@@ -1181,7 +1267,7 @@
       "title": "message_pagination"
     },
     {
-      "id": "client-server-message_pagination-get",
+      "id": "client-server-message_pagination-get-rooms-roomid-messages",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/message_pagination.yaml",
@@ -1189,6 +1275,7 @@
       "path": "/rooms/{roomId}/messages",
       "method": "get",
       "operationId": "getRoomEvents",
+      "operationKey": "GET /rooms/{roomId}/messages",
       "title": "getRoomEvents"
     },
     {
@@ -1200,7 +1287,7 @@
       "title": "notifications"
     },
     {
-      "id": "client-server-notifications-get",
+      "id": "client-server-notifications-get-notifications",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/notifications.yaml",
@@ -1208,6 +1295,7 @@
       "path": "/notifications",
       "method": "get",
       "operationId": "getNotifications",
+      "operationKey": "GET /notifications",
       "title": "getNotifications"
     },
     {
@@ -1219,7 +1307,7 @@
       "title": "oauth_server_metadata"
     },
     {
-      "id": "client-server-oauth_server_metadata-get",
+      "id": "client-server-oauth_server_metadata-get-auth-metadata",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/oauth_server_metadata.yaml",
@@ -1227,6 +1315,7 @@
       "path": "/auth_metadata",
       "method": "get",
       "operationId": "getAuthMetadata",
+      "operationKey": "GET /auth_metadata",
       "title": "getAuthMetadata"
     },
     {
@@ -1238,7 +1327,7 @@
       "title": "old_sync"
     },
     {
-      "id": "client-server-old_sync-get",
+      "id": "client-server-old_sync-get-events",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/old_sync.yaml",
@@ -1246,10 +1335,11 @@
       "path": "/events",
       "method": "get",
       "operationId": "getEvents",
+      "operationKey": "GET /events",
       "title": "getEvents"
     },
     {
-      "id": "client-server-old_sync-get",
+      "id": "client-server-old_sync-get-initialsync",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/old_sync.yaml",
@@ -1257,10 +1347,11 @@
       "path": "/initialSync",
       "method": "get",
       "operationId": "initialSync",
+      "operationKey": "GET /initialSync",
       "title": "initialSync"
     },
     {
-      "id": "client-server-old_sync-get",
+      "id": "client-server-old_sync-get-events-eventid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/old_sync.yaml",
@@ -1268,6 +1359,7 @@
       "path": "/events/{eventId}",
       "method": "get",
       "operationId": "getOneEvent",
+      "operationKey": "GET /events/{eventId}",
       "title": "getOneEvent"
     },
     {
@@ -1279,7 +1371,7 @@
       "title": "openid"
     },
     {
-      "id": "client-server-openid-post",
+      "id": "client-server-openid-post-user-userid-openid-request-token",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/openid.yaml",
@@ -1287,6 +1379,7 @@
       "path": "/user/{userId}/openid/request_token",
       "method": "post",
       "operationId": "requestOpenIdToken",
+      "operationKey": "POST /user/{userId}/openid/request_token",
       "title": "requestOpenIdToken"
     },
     {
@@ -1298,7 +1391,7 @@
       "title": "password_management"
     },
     {
-      "id": "client-server-password_management-post",
+      "id": "client-server-password_management-post-account-password",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/password_management.yaml",
@@ -1306,10 +1399,11 @@
       "path": "/account/password",
       "method": "post",
       "operationId": "changePassword",
+      "operationKey": "POST /account/password",
       "title": "changePassword"
     },
     {
-      "id": "client-server-password_management-post",
+      "id": "client-server-password_management-post-account-password-email-requesttoken",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/password_management.yaml",
@@ -1317,10 +1411,11 @@
       "path": "/account/password/email/requestToken",
       "method": "post",
       "operationId": "requestTokenToResetPasswordEmail",
+      "operationKey": "POST /account/password/email/requestToken",
       "title": "requestTokenToResetPasswordEmail"
     },
     {
-      "id": "client-server-password_management-post",
+      "id": "client-server-password_management-post-account-password-msisdn-requesttoken",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/password_management.yaml",
@@ -1328,6 +1423,7 @@
       "path": "/account/password/msisdn/requestToken",
       "method": "post",
       "operationId": "requestTokenToResetPasswordMSISDN",
+      "operationKey": "POST /account/password/msisdn/requestToken",
       "title": "requestTokenToResetPasswordMSISDN"
     },
     {
@@ -1339,7 +1435,7 @@
       "title": "peeking_events"
     },
     {
-      "id": "client-server-peeking_events-get",
+      "id": "client-server-peeking_events-get-events",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/peeking_events.yaml",
@@ -1347,6 +1443,7 @@
       "path": "/events ",
       "method": "get",
       "operationId": "peekEvents",
+      "operationKey": "GET /events ",
       "title": "peekEvents"
     },
     {
@@ -1358,7 +1455,7 @@
       "title": "policy_server"
     },
     {
-      "id": "client-server-policy_server-get",
+      "id": "client-server-policy_server-get-matrix-policy-server",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/policy_server.yaml",
@@ -1366,6 +1463,7 @@
       "path": "/matrix/policy_server",
       "method": "get",
       "operationId": "getWellknownPolicy",
+      "operationKey": "GET /matrix/policy_server",
       "title": "getWellknownPolicy"
     },
     {
@@ -1377,7 +1475,7 @@
       "title": "presence"
     },
     {
-      "id": "client-server-presence-put",
+      "id": "client-server-presence-put-presence-userid-status",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/presence.yaml",
@@ -1385,10 +1483,11 @@
       "path": "/presence/{userId}/status",
       "method": "put",
       "operationId": "setPresence",
+      "operationKey": "PUT /presence/{userId}/status",
       "title": "setPresence"
     },
     {
-      "id": "client-server-presence-get",
+      "id": "client-server-presence-get-presence-userid-status",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/presence.yaml",
@@ -1396,6 +1495,7 @@
       "path": "/presence/{userId}/status",
       "method": "get",
       "operationId": "getPresence",
+      "operationKey": "GET /presence/{userId}/status",
       "title": "getPresence"
     },
     {
@@ -1407,7 +1507,7 @@
       "title": "profile"
     },
     {
-      "id": "client-server-profile-put",
+      "id": "client-server-profile-put-profile-userid-keyname",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/profile.yaml",
@@ -1415,10 +1515,11 @@
       "path": "/profile/{userId}/{keyName}",
       "method": "put",
       "operationId": "setProfileField",
+      "operationKey": "PUT /profile/{userId}/{keyName}",
       "title": "setProfileField"
     },
     {
-      "id": "client-server-profile-get",
+      "id": "client-server-profile-get-profile-userid-keyname",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/profile.yaml",
@@ -1426,10 +1527,11 @@
       "path": "/profile/{userId}/{keyName}",
       "method": "get",
       "operationId": "getProfileField",
+      "operationKey": "GET /profile/{userId}/{keyName}",
       "title": "getProfileField"
     },
     {
-      "id": "client-server-profile-delete",
+      "id": "client-server-profile-delete-profile-userid-keyname",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/profile.yaml",
@@ -1437,10 +1539,11 @@
       "path": "/profile/{userId}/{keyName}",
       "method": "delete",
       "operationId": "deleteProfileField",
+      "operationKey": "DELETE /profile/{userId}/{keyName}",
       "title": "deleteProfileField"
     },
     {
-      "id": "client-server-profile-get",
+      "id": "client-server-profile-get-profile-userid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/profile.yaml",
@@ -1448,6 +1551,7 @@
       "path": "/profile/{userId}",
       "method": "get",
       "operationId": "getUserProfile",
+      "operationKey": "GET /profile/{userId}",
       "title": "getUserProfile"
     },
     {
@@ -1459,7 +1563,7 @@
       "title": "pusher"
     },
     {
-      "id": "client-server-pusher-get",
+      "id": "client-server-pusher-get-pushers",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/pusher.yaml",
@@ -1467,10 +1571,11 @@
       "path": "/pushers",
       "method": "get",
       "operationId": "getPushers",
+      "operationKey": "GET /pushers",
       "title": "getPushers"
     },
     {
-      "id": "client-server-pusher-post",
+      "id": "client-server-pusher-post-pushers-set",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/pusher.yaml",
@@ -1478,6 +1583,7 @@
       "path": "/pushers/set",
       "method": "post",
       "operationId": "postPusher",
+      "operationKey": "POST /pushers/set",
       "title": "postPusher"
     },
     {
@@ -1489,7 +1595,7 @@
       "title": "pushrules"
     },
     {
-      "id": "client-server-pushrules-get",
+      "id": "client-server-pushrules-get-pushrules",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/pushrules.yaml",
@@ -1497,10 +1603,11 @@
       "path": "/pushrules/",
       "method": "get",
       "operationId": "getPushRules",
+      "operationKey": "GET /pushrules/",
       "title": "getPushRules"
     },
     {
-      "id": "client-server-pushrules-get",
+      "id": "client-server-pushrules-get-pushrules-global",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/pushrules.yaml",
@@ -1508,10 +1615,11 @@
       "path": "/pushrules/global/",
       "method": "get",
       "operationId": "getPushRulesGlobal",
+      "operationKey": "GET /pushrules/global/",
       "title": "getPushRulesGlobal"
     },
     {
-      "id": "client-server-pushrules-get",
+      "id": "client-server-pushrules-get-pushrules-global-kind-ruleid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/pushrules.yaml",
@@ -1519,10 +1627,11 @@
       "path": "/pushrules/global/{kind}/{ruleId}",
       "method": "get",
       "operationId": "getPushRule",
+      "operationKey": "GET /pushrules/global/{kind}/{ruleId}",
       "title": "getPushRule"
     },
     {
-      "id": "client-server-pushrules-delete",
+      "id": "client-server-pushrules-delete-pushrules-global-kind-ruleid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/pushrules.yaml",
@@ -1530,10 +1639,11 @@
       "path": "/pushrules/global/{kind}/{ruleId}",
       "method": "delete",
       "operationId": "deletePushRule",
+      "operationKey": "DELETE /pushrules/global/{kind}/{ruleId}",
       "title": "deletePushRule"
     },
     {
-      "id": "client-server-pushrules-put",
+      "id": "client-server-pushrules-put-pushrules-global-kind-ruleid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/pushrules.yaml",
@@ -1541,10 +1651,11 @@
       "path": "/pushrules/global/{kind}/{ruleId}",
       "method": "put",
       "operationId": "setPushRule",
+      "operationKey": "PUT /pushrules/global/{kind}/{ruleId}",
       "title": "setPushRule"
     },
     {
-      "id": "client-server-pushrules-get",
+      "id": "client-server-pushrules-get-pushrules-global-kind-ruleid-enabled",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/pushrules.yaml",
@@ -1552,10 +1663,11 @@
       "path": "/pushrules/global/{kind}/{ruleId}/enabled",
       "method": "get",
       "operationId": "isPushRuleEnabled",
+      "operationKey": "GET /pushrules/global/{kind}/{ruleId}/enabled",
       "title": "isPushRuleEnabled"
     },
     {
-      "id": "client-server-pushrules-put",
+      "id": "client-server-pushrules-put-pushrules-global-kind-ruleid-enabled",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/pushrules.yaml",
@@ -1563,10 +1675,11 @@
       "path": "/pushrules/global/{kind}/{ruleId}/enabled",
       "method": "put",
       "operationId": "setPushRuleEnabled",
+      "operationKey": "PUT /pushrules/global/{kind}/{ruleId}/enabled",
       "title": "setPushRuleEnabled"
     },
     {
-      "id": "client-server-pushrules-get",
+      "id": "client-server-pushrules-get-pushrules-global-kind-ruleid-actions",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/pushrules.yaml",
@@ -1574,10 +1687,11 @@
       "path": "/pushrules/global/{kind}/{ruleId}/actions",
       "method": "get",
       "operationId": "getPushRuleActions",
+      "operationKey": "GET /pushrules/global/{kind}/{ruleId}/actions",
       "title": "getPushRuleActions"
     },
     {
-      "id": "client-server-pushrules-put",
+      "id": "client-server-pushrules-put-pushrules-global-kind-ruleid-actions",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/pushrules.yaml",
@@ -1585,6 +1699,7 @@
       "path": "/pushrules/global/{kind}/{ruleId}/actions",
       "method": "put",
       "operationId": "setPushRuleActions",
+      "operationKey": "PUT /pushrules/global/{kind}/{ruleId}/actions",
       "title": "setPushRuleActions"
     },
     {
@@ -1596,7 +1711,7 @@
       "title": "read_markers"
     },
     {
-      "id": "client-server-read_markers-post",
+      "id": "client-server-read_markers-post-rooms-roomid-read-markers",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/read_markers.yaml",
@@ -1604,6 +1719,7 @@
       "path": "/rooms/{roomId}/read_markers",
       "method": "post",
       "operationId": "setReadMarker",
+      "operationKey": "POST /rooms/{roomId}/read_markers",
       "title": "setReadMarker"
     },
     {
@@ -1615,7 +1731,7 @@
       "title": "receipts"
     },
     {
-      "id": "client-server-receipts-post",
+      "id": "client-server-receipts-post-rooms-roomid-receipt-receipttype-eventid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/receipts.yaml",
@@ -1623,6 +1739,7 @@
       "path": "/rooms/{roomId}/receipt/{receiptType}/{eventId}",
       "method": "post",
       "operationId": "postReceipt",
+      "operationKey": "POST /rooms/{roomId}/receipt/{receiptType}/{eventId}",
       "title": "postReceipt"
     },
     {
@@ -1634,7 +1751,7 @@
       "title": "redaction"
     },
     {
-      "id": "client-server-redaction-put",
+      "id": "client-server-redaction-put-rooms-roomid-redact-eventid-txnid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/redaction.yaml",
@@ -1642,6 +1759,7 @@
       "path": "/rooms/{roomId}/redact/{eventId}/{txnId}",
       "method": "put",
       "operationId": "redactEvent",
+      "operationKey": "PUT /rooms/{roomId}/redact/{eventId}/{txnId}",
       "title": "redactEvent"
     },
     {
@@ -1653,7 +1771,7 @@
       "title": "refresh"
     },
     {
-      "id": "client-server-refresh-post",
+      "id": "client-server-refresh-post-refresh",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/refresh.yaml",
@@ -1661,6 +1779,7 @@
       "path": "/refresh",
       "method": "post",
       "operationId": "refresh",
+      "operationKey": "POST /refresh",
       "title": "refresh"
     },
     {
@@ -1672,7 +1791,7 @@
       "title": "registration"
     },
     {
-      "id": "client-server-registration-post",
+      "id": "client-server-registration-post-register",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/registration.yaml",
@@ -1680,10 +1799,11 @@
       "path": "/register",
       "method": "post",
       "operationId": "register",
+      "operationKey": "POST /register",
       "title": "register"
     },
     {
-      "id": "client-server-registration-post",
+      "id": "client-server-registration-post-register-email-requesttoken",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/registration.yaml",
@@ -1691,10 +1811,11 @@
       "path": "/register/email/requestToken",
       "method": "post",
       "operationId": "requestTokenToRegisterEmail",
+      "operationKey": "POST /register/email/requestToken",
       "title": "requestTokenToRegisterEmail"
     },
     {
-      "id": "client-server-registration-post",
+      "id": "client-server-registration-post-register-msisdn-requesttoken",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/registration.yaml",
@@ -1702,10 +1823,11 @@
       "path": "/register/msisdn/requestToken",
       "method": "post",
       "operationId": "requestTokenToRegisterMSISDN",
+      "operationKey": "POST /register/msisdn/requestToken",
       "title": "requestTokenToRegisterMSISDN"
     },
     {
-      "id": "client-server-registration-get",
+      "id": "client-server-registration-get-register-available",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/registration.yaml",
@@ -1713,6 +1835,7 @@
       "path": "/register/available",
       "method": "get",
       "operationId": "checkUsernameAvailability",
+      "operationKey": "GET /register/available",
       "title": "checkUsernameAvailability"
     },
     {
@@ -1724,7 +1847,7 @@
       "title": "registration_tokens"
     },
     {
-      "id": "client-server-registration_tokens-get",
+      "id": "client-server-registration_tokens-get-register-m-login-registration-token-validity",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/registration_tokens.yaml",
@@ -1732,6 +1855,7 @@
       "path": "/register/m.login.registration_token/validity",
       "method": "get",
       "operationId": "registrationTokenValidity",
+      "operationKey": "GET /register/m.login.registration_token/validity",
       "title": "registrationTokenValidity"
     },
     {
@@ -1743,7 +1867,7 @@
       "title": "relations"
     },
     {
-      "id": "client-server-relations-get",
+      "id": "client-server-relations-get-rooms-roomid-relations-eventid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/relations.yaml",
@@ -1751,10 +1875,11 @@
       "path": "/rooms/{roomId}/relations/{eventId}",
       "method": "get",
       "operationId": "getRelatingEvents",
+      "operationKey": "GET /rooms/{roomId}/relations/{eventId}",
       "title": "getRelatingEvents"
     },
     {
-      "id": "client-server-relations-get",
+      "id": "client-server-relations-get-rooms-roomid-relations-eventid-reltype",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/relations.yaml",
@@ -1762,10 +1887,11 @@
       "path": "/rooms/{roomId}/relations/{eventId}/{relType}",
       "method": "get",
       "operationId": "getRelatingEventsWithRelType",
+      "operationKey": "GET /rooms/{roomId}/relations/{eventId}/{relType}",
       "title": "getRelatingEventsWithRelType"
     },
     {
-      "id": "client-server-relations-get",
+      "id": "client-server-relations-get-rooms-roomid-relations-eventid-reltype-eventtype",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/relations.yaml",
@@ -1773,6 +1899,7 @@
       "path": "/rooms/{roomId}/relations/{eventId}/{relType}/{eventType}",
       "method": "get",
       "operationId": "getRelatingEventsWithRelTypeAndEventType",
+      "operationKey": "GET /rooms/{roomId}/relations/{eventId}/{relType}/{eventType}",
       "title": "getRelatingEventsWithRelTypeAndEventType"
     },
     {
@@ -1784,7 +1911,7 @@
       "title": "report_content"
     },
     {
-      "id": "client-server-report_content-post",
+      "id": "client-server-report_content-post-rooms-roomid-report",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/report_content.yaml",
@@ -1792,10 +1919,11 @@
       "path": "/rooms/{roomId}/report",
       "method": "post",
       "operationId": "reportRoom",
+      "operationKey": "POST /rooms/{roomId}/report",
       "title": "reportRoom"
     },
     {
-      "id": "client-server-report_content-post",
+      "id": "client-server-report_content-post-rooms-roomid-report-eventid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/report_content.yaml",
@@ -1803,10 +1931,11 @@
       "path": "/rooms/{roomId}/report/{eventId}",
       "method": "post",
       "operationId": "reportEvent",
+      "operationKey": "POST /rooms/{roomId}/report/{eventId}",
       "title": "reportEvent"
     },
     {
-      "id": "client-server-report_content-post",
+      "id": "client-server-report_content-post-users-userid-report",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/report_content.yaml",
@@ -1814,6 +1943,7 @@
       "path": "/users/{userId}/report",
       "method": "post",
       "operationId": "reportUser",
+      "operationKey": "POST /users/{userId}/report",
       "title": "reportUser"
     },
     {
@@ -1825,7 +1955,7 @@
       "title": "room_event_by_timestamp"
     },
     {
-      "id": "client-server-room_event_by_timestamp-get",
+      "id": "client-server-room_event_by_timestamp-get-rooms-roomid-timestamp-to-event",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/room_event_by_timestamp.yaml",
@@ -1833,6 +1963,7 @@
       "path": "/rooms/{roomId}/timestamp_to_event",
       "method": "get",
       "operationId": "getEventByTimestamp",
+      "operationKey": "GET /rooms/{roomId}/timestamp_to_event",
       "title": "getEventByTimestamp"
     },
     {
@@ -1844,7 +1975,7 @@
       "title": "room_initial_sync"
     },
     {
-      "id": "client-server-room_initial_sync-get",
+      "id": "client-server-room_initial_sync-get-rooms-roomid-initialsync",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/room_initial_sync.yaml",
@@ -1852,6 +1983,7 @@
       "path": "/rooms/{roomId}/initialSync",
       "method": "get",
       "operationId": "roomInitialSync",
+      "operationKey": "GET /rooms/{roomId}/initialSync",
       "title": "roomInitialSync"
     },
     {
@@ -1863,7 +1995,7 @@
       "title": "room_send"
     },
     {
-      "id": "client-server-room_send-put",
+      "id": "client-server-room_send-put-rooms-roomid-send-eventtype-txnid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/room_send.yaml",
@@ -1871,6 +2003,7 @@
       "path": "/rooms/{roomId}/send/{eventType}/{txnId}",
       "method": "put",
       "operationId": "sendMessage",
+      "operationKey": "PUT /rooms/{roomId}/send/{eventType}/{txnId}",
       "title": "sendMessage"
     },
     {
@@ -1882,7 +2015,7 @@
       "title": "room_state"
     },
     {
-      "id": "client-server-room_state-put",
+      "id": "client-server-room_state-put-rooms-roomid-state-eventtype-statekey",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/room_state.yaml",
@@ -1890,6 +2023,7 @@
       "path": "/rooms/{roomId}/state/{eventType}/{stateKey}",
       "method": "put",
       "operationId": "setRoomStateWithKey",
+      "operationKey": "PUT /rooms/{roomId}/state/{eventType}/{stateKey}",
       "title": "setRoomStateWithKey"
     },
     {
@@ -1901,7 +2035,7 @@
       "title": "room_summary"
     },
     {
-      "id": "client-server-room_summary-get",
+      "id": "client-server-room_summary-get-room-summary-roomidoralias",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/room_summary.yaml",
@@ -1909,6 +2043,7 @@
       "path": "/room_summary/{roomIdOrAlias}",
       "method": "get",
       "operationId": "getRoomSummary",
+      "operationKey": "GET /room_summary/{roomIdOrAlias}",
       "title": "getRoomSummary"
     },
     {
@@ -1920,7 +2055,7 @@
       "title": "room_upgrades"
     },
     {
-      "id": "client-server-room_upgrades-post",
+      "id": "client-server-room_upgrades-post-rooms-roomid-upgrade",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/room_upgrades.yaml",
@@ -1928,6 +2063,7 @@
       "path": "/rooms/{roomId}/upgrade",
       "method": "post",
       "operationId": "upgradeRoom",
+      "operationKey": "POST /rooms/{roomId}/upgrade",
       "title": "upgradeRoom"
     },
     {
@@ -1939,7 +2075,7 @@
       "title": "rooms"
     },
     {
-      "id": "client-server-rooms-get",
+      "id": "client-server-rooms-get-rooms-roomid-event-eventid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/rooms.yaml",
@@ -1947,10 +2083,11 @@
       "path": "/rooms/{roomId}/event/{eventId}",
       "method": "get",
       "operationId": "getOneRoomEvent",
+      "operationKey": "GET /rooms/{roomId}/event/{eventId}",
       "title": "getOneRoomEvent"
     },
     {
-      "id": "client-server-rooms-get",
+      "id": "client-server-rooms-get-rooms-roomid-state-eventtype-statekey",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/rooms.yaml",
@@ -1958,10 +2095,11 @@
       "path": "/rooms/{roomId}/state/{eventType}/{stateKey}",
       "method": "get",
       "operationId": "getRoomStateWithKey",
+      "operationKey": "GET /rooms/{roomId}/state/{eventType}/{stateKey}",
       "title": "getRoomStateWithKey"
     },
     {
-      "id": "client-server-rooms-get",
+      "id": "client-server-rooms-get-rooms-roomid-state",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/rooms.yaml",
@@ -1969,10 +2107,11 @@
       "path": "/rooms/{roomId}/state",
       "method": "get",
       "operationId": "getRoomState",
+      "operationKey": "GET /rooms/{roomId}/state",
       "title": "getRoomState"
     },
     {
-      "id": "client-server-rooms-get",
+      "id": "client-server-rooms-get-rooms-roomid-members",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/rooms.yaml",
@@ -1980,10 +2119,11 @@
       "path": "/rooms/{roomId}/members",
       "method": "get",
       "operationId": "getMembersByRoom",
+      "operationKey": "GET /rooms/{roomId}/members",
       "title": "getMembersByRoom"
     },
     {
-      "id": "client-server-rooms-get",
+      "id": "client-server-rooms-get-rooms-roomid-joined-members",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/rooms.yaml",
@@ -1991,6 +2131,7 @@
       "path": "/rooms/{roomId}/joined_members",
       "method": "get",
       "operationId": "getJoinedMembersByRoom",
+      "operationKey": "GET /rooms/{roomId}/joined_members",
       "title": "getJoinedMembersByRoom"
     },
     {
@@ -2002,7 +2143,7 @@
       "title": "search"
     },
     {
-      "id": "client-server-search-post",
+      "id": "client-server-search-post-search",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/search.yaml",
@@ -2010,6 +2151,7 @@
       "path": "/search",
       "method": "post",
       "operationId": "search",
+      "operationKey": "POST /search",
       "title": "search"
     },
     {
@@ -2021,7 +2163,7 @@
       "title": "space_hierarchy"
     },
     {
-      "id": "client-server-space_hierarchy-get",
+      "id": "client-server-space_hierarchy-get-rooms-roomid-hierarchy",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/space_hierarchy.yaml",
@@ -2029,6 +2171,7 @@
       "path": "/rooms/{roomId}/hierarchy",
       "method": "get",
       "operationId": "getSpaceHierarchy",
+      "operationKey": "GET /rooms/{roomId}/hierarchy",
       "title": "getSpaceHierarchy"
     },
     {
@@ -2040,7 +2183,7 @@
       "title": "sso_login_redirect"
     },
     {
-      "id": "client-server-sso_login_redirect-get",
+      "id": "client-server-sso_login_redirect-get-login-sso-redirect",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/sso_login_redirect.yaml",
@@ -2048,10 +2191,11 @@
       "path": "/login/sso/redirect",
       "method": "get",
       "operationId": "redirectToSSO",
+      "operationKey": "GET /login/sso/redirect",
       "title": "redirectToSSO"
     },
     {
-      "id": "client-server-sso_login_redirect-get",
+      "id": "client-server-sso_login_redirect-get-login-sso-redirect-idpid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/sso_login_redirect.yaml",
@@ -2059,6 +2203,7 @@
       "path": "/login/sso/redirect/{idpId}",
       "method": "get",
       "operationId": "redirectToIdP",
+      "operationKey": "GET /login/sso/redirect/{idpId}",
       "title": "redirectToIdP"
     },
     {
@@ -2070,7 +2215,7 @@
       "title": "support"
     },
     {
-      "id": "client-server-support-get",
+      "id": "client-server-support-get-matrix-support",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/support.yaml",
@@ -2078,6 +2223,7 @@
       "path": "/matrix/support",
       "method": "get",
       "operationId": "getWellknownSupport",
+      "operationKey": "GET /matrix/support",
       "title": "getWellknownSupport"
     },
     {
@@ -2089,7 +2235,7 @@
       "title": "sync"
     },
     {
-      "id": "client-server-sync-get",
+      "id": "client-server-sync-get-sync",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/sync.yaml",
@@ -2097,6 +2243,7 @@
       "path": "/sync",
       "method": "get",
       "operationId": "sync",
+      "operationKey": "GET /sync",
       "title": "sync"
     },
     {
@@ -2108,7 +2255,7 @@
       "title": "tags"
     },
     {
-      "id": "client-server-tags-get",
+      "id": "client-server-tags-get-user-userid-rooms-roomid-tags",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/tags.yaml",
@@ -2116,10 +2263,11 @@
       "path": "/user/{userId}/rooms/{roomId}/tags",
       "method": "get",
       "operationId": "getRoomTags",
+      "operationKey": "GET /user/{userId}/rooms/{roomId}/tags",
       "title": "getRoomTags"
     },
     {
-      "id": "client-server-tags-put",
+      "id": "client-server-tags-put-user-userid-rooms-roomid-tags-tag",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/tags.yaml",
@@ -2127,10 +2275,11 @@
       "path": "/user/{userId}/rooms/{roomId}/tags/{tag}",
       "method": "put",
       "operationId": "setRoomTag",
+      "operationKey": "PUT /user/{userId}/rooms/{roomId}/tags/{tag}",
       "title": "setRoomTag"
     },
     {
-      "id": "client-server-tags-delete",
+      "id": "client-server-tags-delete-user-userid-rooms-roomid-tags-tag",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/tags.yaml",
@@ -2138,6 +2287,7 @@
       "path": "/user/{userId}/rooms/{roomId}/tags/{tag}",
       "method": "delete",
       "operationId": "deleteRoomTag",
+      "operationKey": "DELETE /user/{userId}/rooms/{roomId}/tags/{tag}",
       "title": "deleteRoomTag"
     },
     {
@@ -2149,7 +2299,7 @@
       "title": "third_party_lookup"
     },
     {
-      "id": "client-server-third_party_lookup-get",
+      "id": "client-server-third_party_lookup-get-thirdparty-protocols",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/third_party_lookup.yaml",
@@ -2157,10 +2307,11 @@
       "path": "/thirdparty/protocols",
       "method": "get",
       "operationId": "getProtocols",
+      "operationKey": "GET /thirdparty/protocols",
       "title": "getProtocols"
     },
     {
-      "id": "client-server-third_party_lookup-get",
+      "id": "client-server-third_party_lookup-get-thirdparty-protocol-protocol",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/third_party_lookup.yaml",
@@ -2168,10 +2319,11 @@
       "path": "/thirdparty/protocol/{protocol}",
       "method": "get",
       "operationId": "getProtocolMetadata",
+      "operationKey": "GET /thirdparty/protocol/{protocol}",
       "title": "getProtocolMetadata"
     },
     {
-      "id": "client-server-third_party_lookup-get",
+      "id": "client-server-third_party_lookup-get-thirdparty-location-protocol",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/third_party_lookup.yaml",
@@ -2179,10 +2331,11 @@
       "path": "/thirdparty/location/{protocol}",
       "method": "get",
       "operationId": "queryLocationByProtocol",
+      "operationKey": "GET /thirdparty/location/{protocol}",
       "title": "queryLocationByProtocol"
     },
     {
-      "id": "client-server-third_party_lookup-get",
+      "id": "client-server-third_party_lookup-get-thirdparty-user-protocol",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/third_party_lookup.yaml",
@@ -2190,10 +2343,11 @@
       "path": "/thirdparty/user/{protocol}",
       "method": "get",
       "operationId": "queryUserByProtocol",
+      "operationKey": "GET /thirdparty/user/{protocol}",
       "title": "queryUserByProtocol"
     },
     {
-      "id": "client-server-third_party_lookup-get",
+      "id": "client-server-third_party_lookup-get-thirdparty-location",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/third_party_lookup.yaml",
@@ -2201,10 +2355,11 @@
       "path": "/thirdparty/location",
       "method": "get",
       "operationId": "queryLocationByAlias",
+      "operationKey": "GET /thirdparty/location",
       "title": "queryLocationByAlias"
     },
     {
-      "id": "client-server-third_party_lookup-get",
+      "id": "client-server-third_party_lookup-get-thirdparty-user",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/third_party_lookup.yaml",
@@ -2212,6 +2367,7 @@
       "path": "/thirdparty/user",
       "method": "get",
       "operationId": "queryUserByID",
+      "operationKey": "GET /thirdparty/user",
       "title": "queryUserByID"
     },
     {
@@ -2223,7 +2379,7 @@
       "title": "third_party_membership"
     },
     {
-      "id": "client-server-third_party_membership-post",
+      "id": "client-server-third_party_membership-post-rooms-roomid-invite",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/third_party_membership.yaml",
@@ -2231,6 +2387,7 @@
       "path": "/rooms/{roomId}/invite",
       "method": "post",
       "operationId": "inviteBy3PID",
+      "operationKey": "POST /rooms/{roomId}/invite",
       "title": "inviteBy3PID"
     },
     {
@@ -2242,7 +2399,7 @@
       "title": "threads_list"
     },
     {
-      "id": "client-server-threads_list-get",
+      "id": "client-server-threads_list-get-rooms-roomid-threads",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/threads_list.yaml",
@@ -2250,6 +2407,7 @@
       "path": "/rooms/{roomId}/threads",
       "method": "get",
       "operationId": "getThreadRoots",
+      "operationKey": "GET /rooms/{roomId}/threads",
       "title": "getThreadRoots"
     },
     {
@@ -2261,7 +2419,7 @@
       "title": "to_device"
     },
     {
-      "id": "client-server-to_device-put",
+      "id": "client-server-to_device-put-sendtodevice-eventtype-txnid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/to_device.yaml",
@@ -2269,6 +2427,7 @@
       "path": "/sendToDevice/{eventType}/{txnId}",
       "method": "put",
       "operationId": "sendToDevice",
+      "operationKey": "PUT /sendToDevice/{eventType}/{txnId}",
       "title": "sendToDevice"
     },
     {
@@ -2280,7 +2439,7 @@
       "title": "typing"
     },
     {
-      "id": "client-server-typing-put",
+      "id": "client-server-typing-put-rooms-roomid-typing-userid",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/typing.yaml",
@@ -2288,6 +2447,7 @@
       "path": "/rooms/{roomId}/typing/{userId}",
       "method": "put",
       "operationId": "setTyping",
+      "operationKey": "PUT /rooms/{roomId}/typing/{userId}",
       "title": "setTyping"
     },
     {
@@ -2299,7 +2459,7 @@
       "title": "users"
     },
     {
-      "id": "client-server-users-post",
+      "id": "client-server-users-post-user-directory-search",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/users.yaml",
@@ -2307,6 +2467,7 @@
       "path": "/user_directory/search",
       "method": "post",
       "operationId": "searchUserDirectory",
+      "operationKey": "POST /user_directory/search",
       "title": "searchUserDirectory"
     },
     {
@@ -2318,7 +2479,7 @@
       "title": "versions"
     },
     {
-      "id": "client-server-versions-get",
+      "id": "client-server-versions-get-versions",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/versions.yaml",
@@ -2326,6 +2487,7 @@
       "path": "/versions",
       "method": "get",
       "operationId": "getVersions",
+      "operationKey": "GET /versions",
       "title": "getVersions"
     },
     {
@@ -2337,7 +2499,7 @@
       "title": "voip"
     },
     {
-      "id": "client-server-voip-get",
+      "id": "client-server-voip-get-voip-turnserver",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/voip.yaml",
@@ -2345,6 +2507,7 @@
       "path": "/voip/turnServer",
       "method": "get",
       "operationId": "getTurnServer",
+      "operationKey": "GET /voip/turnServer",
       "title": "getTurnServer"
     },
     {
@@ -2356,7 +2519,7 @@
       "title": "wellknown"
     },
     {
-      "id": "client-server-wellknown-get",
+      "id": "client-server-wellknown-get-matrix-client",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/wellknown.yaml",
@@ -2364,6 +2527,7 @@
       "path": "/matrix/client",
       "method": "get",
       "operationId": "getWellknown",
+      "operationKey": "GET /matrix/client",
       "title": "getWellknown"
     },
     {
@@ -2375,7 +2539,7 @@
       "title": "whoami"
     },
     {
-      "id": "client-server-whoami-get",
+      "id": "client-server-whoami-get-account-whoami",
       "kind": "operation",
       "spec": "client-server",
       "source": "data/api/client-server/whoami.yaml",
@@ -2383,6 +2547,7 @@
       "path": "/account/whoami",
       "method": "get",
       "operationId": "getTokenOwner",
+      "operationKey": "GET /account/whoami",
       "title": "getTokenOwner"
     },
     {
@@ -2394,7 +2559,7 @@
       "title": "backfill"
     },
     {
-      "id": "server-server-backfill-get",
+      "id": "server-server-backfill-get-backfill-roomid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/backfill.yaml",
@@ -2402,10 +2567,11 @@
       "path": "/backfill/{roomId}",
       "method": "get",
       "operationId": "backfillRoom",
+      "operationKey": "GET /backfill/{roomId}",
       "title": "backfillRoom"
     },
     {
-      "id": "server-server-backfill-post",
+      "id": "server-server-backfill-post-get-missing-events-roomid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/backfill.yaml",
@@ -2413,6 +2579,7 @@
       "path": "/get_missing_events/{roomId}",
       "method": "post",
       "operationId": "getMissingPreviousEvents",
+      "operationKey": "POST /get_missing_events/{roomId}",
       "title": "getMissingPreviousEvents"
     },
     {
@@ -2424,7 +2591,7 @@
       "title": "content_repository"
     },
     {
-      "id": "server-server-content_repository-get",
+      "id": "server-server-content_repository-get-media-download-mediaid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/content_repository.yaml",
@@ -2432,10 +2599,11 @@
       "path": "/media/download/{mediaId}",
       "method": "get",
       "operationId": "getContent",
+      "operationKey": "GET /media/download/{mediaId}",
       "title": "getContent"
     },
     {
-      "id": "server-server-content_repository-get",
+      "id": "server-server-content_repository-get-media-thumbnail-mediaid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/content_repository.yaml",
@@ -2443,6 +2611,7 @@
       "path": "/media/thumbnail/{mediaId}",
       "method": "get",
       "operationId": "getContentThumbnail",
+      "operationKey": "GET /media/thumbnail/{mediaId}",
       "title": "getContentThumbnail"
     },
     {
@@ -2454,7 +2623,7 @@
       "title": "event_auth"
     },
     {
-      "id": "server-server-event_auth-get",
+      "id": "server-server-event_auth-get-event-auth-roomid-eventid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/event_auth.yaml",
@@ -2462,6 +2631,7 @@
       "path": "/event_auth/{roomId}/{eventId}",
       "method": "get",
       "operationId": "getEventAuth",
+      "operationKey": "GET /event_auth/{roomId}/{eventId}",
       "title": "getEventAuth"
     },
     {
@@ -2473,7 +2643,7 @@
       "title": "events"
     },
     {
-      "id": "server-server-events-get",
+      "id": "server-server-events-get-state-roomid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/events.yaml",
@@ -2481,10 +2651,11 @@
       "path": "/state/{roomId}",
       "method": "get",
       "operationId": "getRoomState",
+      "operationKey": "GET /state/{roomId}",
       "title": "getRoomState"
     },
     {
-      "id": "server-server-events-get",
+      "id": "server-server-events-get-state-ids-roomid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/events.yaml",
@@ -2492,10 +2663,11 @@
       "path": "/state_ids/{roomId}",
       "method": "get",
       "operationId": "getRoomStateIds",
+      "operationKey": "GET /state_ids/{roomId}",
       "title": "getRoomStateIds"
     },
     {
-      "id": "server-server-events-get",
+      "id": "server-server-events-get-event-eventid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/events.yaml",
@@ -2503,10 +2675,11 @@
       "path": "/event/{eventId}",
       "method": "get",
       "operationId": "getEvent",
+      "operationKey": "GET /event/{eventId}",
       "title": "getEvent"
     },
     {
-      "id": "server-server-events-get",
+      "id": "server-server-events-get-timestamp-to-event-roomid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/events.yaml",
@@ -2514,6 +2687,7 @@
       "path": "/timestamp_to_event/{roomId}",
       "method": "get",
       "operationId": "getEventByTimestamp",
+      "operationKey": "GET /timestamp_to_event/{roomId}",
       "title": "getEventByTimestamp"
     },
     {
@@ -2525,7 +2699,7 @@
       "title": "invites-v1"
     },
     {
-      "id": "server-server-invites-v1-put",
+      "id": "server-server-invites-v1-put-invite-roomid-eventid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/invites-v1.yaml",
@@ -2533,6 +2707,7 @@
       "path": "/invite/{roomId}/{eventId}",
       "method": "put",
       "operationId": "sendInviteV1",
+      "operationKey": "PUT /invite/{roomId}/{eventId}",
       "title": "sendInviteV1"
     },
     {
@@ -2544,7 +2719,7 @@
       "title": "invites-v2"
     },
     {
-      "id": "server-server-invites-v2-put",
+      "id": "server-server-invites-v2-put-invite-roomid-eventid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/invites-v2.yaml",
@@ -2552,6 +2727,7 @@
       "path": "/invite/{roomId}/{eventId}",
       "method": "put",
       "operationId": "sendInviteV2",
+      "operationKey": "PUT /invite/{roomId}/{eventId}",
       "title": "sendInviteV2"
     },
     {
@@ -2563,7 +2739,7 @@
       "title": "joins-v1"
     },
     {
-      "id": "server-server-joins-v1-get",
+      "id": "server-server-joins-v1-get-make-join-roomid-userid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/joins-v1.yaml",
@@ -2571,6 +2747,7 @@
       "path": "/make_join/{roomId}/{userId}",
       "method": "get",
       "operationId": "makeJoin",
+      "operationKey": "GET /make_join/{roomId}/{userId}",
       "title": "makeJoin"
     },
     {
@@ -2582,7 +2759,7 @@
       "title": "joins-v2"
     },
     {
-      "id": "server-server-joins-v2-put",
+      "id": "server-server-joins-v2-put-send-join-roomid-eventid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/joins-v2.yaml",
@@ -2590,6 +2767,7 @@
       "path": "/send_join/{roomId}/{eventId}",
       "method": "put",
       "operationId": "sendJoinV2",
+      "operationKey": "PUT /send_join/{roomId}/{eventId}",
       "title": "sendJoinV2"
     },
     {
@@ -2601,7 +2779,7 @@
       "title": "keys_query"
     },
     {
-      "id": "server-server-keys_query-get",
+      "id": "server-server-keys_query-get-query-servername",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/keys_query.yaml",
@@ -2609,10 +2787,11 @@
       "path": "/query/{serverName}",
       "method": "get",
       "operationId": "perspectivesKeyQuery",
+      "operationKey": "GET /query/{serverName}",
       "title": "perspectivesKeyQuery"
     },
     {
-      "id": "server-server-keys_query-post",
+      "id": "server-server-keys_query-post-query",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/keys_query.yaml",
@@ -2620,6 +2799,7 @@
       "path": "/query",
       "method": "post",
       "operationId": "bulkPerspectivesKeyQuery",
+      "operationKey": "POST /query",
       "title": "bulkPerspectivesKeyQuery"
     },
     {
@@ -2631,7 +2811,7 @@
       "title": "keys_server"
     },
     {
-      "id": "server-server-keys_server-get",
+      "id": "server-server-keys_server-get-server",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/keys_server.yaml",
@@ -2639,6 +2819,7 @@
       "path": "/server",
       "method": "get",
       "operationId": "getServerKey",
+      "operationKey": "GET /server",
       "title": "getServerKey"
     },
     {
@@ -2650,7 +2831,7 @@
       "title": "knocks"
     },
     {
-      "id": "server-server-knocks-get",
+      "id": "server-server-knocks-get-make-knock-roomid-userid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/knocks.yaml",
@@ -2658,10 +2839,11 @@
       "path": "/make_knock/{roomId}/{userId}",
       "method": "get",
       "operationId": "makeKnock",
+      "operationKey": "GET /make_knock/{roomId}/{userId}",
       "title": "makeKnock"
     },
     {
-      "id": "server-server-knocks-put",
+      "id": "server-server-knocks-put-send-knock-roomid-eventid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/knocks.yaml",
@@ -2669,6 +2851,7 @@
       "path": "/send_knock/{roomId}/{eventId}",
       "method": "put",
       "operationId": "sendKnock",
+      "operationKey": "PUT /send_knock/{roomId}/{eventId}",
       "title": "sendKnock"
     },
     {
@@ -2680,7 +2863,7 @@
       "title": "leaving-v1"
     },
     {
-      "id": "server-server-leaving-v1-get",
+      "id": "server-server-leaving-v1-get-make-leave-roomid-userid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/leaving-v1.yaml",
@@ -2688,6 +2871,7 @@
       "path": "/make_leave/{roomId}/{userId}",
       "method": "get",
       "operationId": "makeLeave",
+      "operationKey": "GET /make_leave/{roomId}/{userId}",
       "title": "makeLeave"
     },
     {
@@ -2699,7 +2883,7 @@
       "title": "leaving-v2"
     },
     {
-      "id": "server-server-leaving-v2-put",
+      "id": "server-server-leaving-v2-put-send-leave-roomid-eventid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/leaving-v2.yaml",
@@ -2707,6 +2891,7 @@
       "path": "/send_leave/{roomId}/{eventId}",
       "method": "put",
       "operationId": "sendLeaveV2",
+      "operationKey": "PUT /send_leave/{roomId}/{eventId}",
       "title": "sendLeaveV2"
     },
     {
@@ -2718,7 +2903,7 @@
       "title": "openid"
     },
     {
-      "id": "server-server-openid-get",
+      "id": "server-server-openid-get-openid-userinfo",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/openid.yaml",
@@ -2726,6 +2911,7 @@
       "path": "/openid/userinfo",
       "method": "get",
       "operationId": "exchangeOpenIdToken",
+      "operationKey": "GET /openid/userinfo",
       "title": "exchangeOpenIdToken"
     },
     {
@@ -2737,7 +2923,7 @@
       "title": "public_rooms"
     },
     {
-      "id": "server-server-public_rooms-get",
+      "id": "server-server-public_rooms-get-publicrooms",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/public_rooms.yaml",
@@ -2745,10 +2931,11 @@
       "path": "/publicRooms",
       "method": "get",
       "operationId": "getPublicRooms",
+      "operationKey": "GET /publicRooms",
       "title": "getPublicRooms"
     },
     {
-      "id": "server-server-public_rooms-post",
+      "id": "server-server-public_rooms-post-publicrooms",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/public_rooms.yaml",
@@ -2756,6 +2943,7 @@
       "path": "/publicRooms",
       "method": "post",
       "operationId": "queryPublicRooms",
+      "operationKey": "POST /publicRooms",
       "title": "queryPublicRooms"
     },
     {
@@ -2767,7 +2955,7 @@
       "title": "query"
     },
     {
-      "id": "server-server-query-get",
+      "id": "server-server-query-get-query-querytype",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/query.yaml",
@@ -2775,10 +2963,11 @@
       "path": "/query/{queryType}",
       "method": "get",
       "operationId": "queryInfo",
+      "operationKey": "GET /query/{queryType}",
       "title": "queryInfo"
     },
     {
-      "id": "server-server-query-get",
+      "id": "server-server-query-get-query-directory",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/query.yaml",
@@ -2786,10 +2975,11 @@
       "path": "/query/directory",
       "method": "get",
       "operationId": "queryRoomDirectory",
+      "operationKey": "GET /query/directory",
       "title": "queryRoomDirectory"
     },
     {
-      "id": "server-server-query-get",
+      "id": "server-server-query-get-query-profile",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/query.yaml",
@@ -2797,6 +2987,7 @@
       "path": "/query/profile",
       "method": "get",
       "operationId": "queryProfile",
+      "operationKey": "GET /query/profile",
       "title": "queryProfile"
     },
     {
@@ -2808,7 +2999,7 @@
       "title": "room_policy"
     },
     {
-      "id": "server-server-room_policy-post",
+      "id": "server-server-room_policy-post-sign",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/room_policy.yaml",
@@ -2816,6 +3007,7 @@
       "path": "/sign",
       "method": "post",
       "operationId": "askPolicyServerToSign",
+      "operationKey": "POST /sign",
       "title": "askPolicyServerToSign"
     },
     {
@@ -2827,7 +3019,7 @@
       "title": "space_hierarchy"
     },
     {
-      "id": "server-server-space_hierarchy-get",
+      "id": "server-server-space_hierarchy-get-hierarchy-roomid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/space_hierarchy.yaml",
@@ -2835,6 +3027,7 @@
       "path": "/hierarchy/{roomId}",
       "method": "get",
       "operationId": "getSpaceHierarchy",
+      "operationKey": "GET /hierarchy/{roomId}",
       "title": "getSpaceHierarchy"
     },
     {
@@ -2846,7 +3039,7 @@
       "title": "third_party_invite"
     },
     {
-      "id": "server-server-third_party_invite-put",
+      "id": "server-server-third_party_invite-put-exchange-third-party-invite-roomid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/third_party_invite.yaml",
@@ -2854,10 +3047,11 @@
       "path": "/exchange_third_party_invite/{roomId}",
       "method": "put",
       "operationId": "exchangeThirdPartyInvite",
+      "operationKey": "PUT /exchange_third_party_invite/{roomId}",
       "title": "exchangeThirdPartyInvite"
     },
     {
-      "id": "server-server-third_party_invite-put",
+      "id": "server-server-third_party_invite-put-3pid-onbind",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/third_party_invite.yaml",
@@ -2865,6 +3059,7 @@
       "path": "/3pid/onbind",
       "method": "put",
       "operationId": "onBindThirdPartyIdentifier",
+      "operationKey": "PUT /3pid/onbind",
       "title": "onBindThirdPartyIdentifier"
     },
     {
@@ -2876,7 +3071,7 @@
       "title": "transactions"
     },
     {
-      "id": "server-server-transactions-put",
+      "id": "server-server-transactions-put-send-txnid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/transactions.yaml",
@@ -2884,6 +3079,7 @@
       "path": "/send/{txnId}",
       "method": "put",
       "operationId": "sendTransaction",
+      "operationKey": "PUT /send/{txnId}",
       "title": "sendTransaction"
     },
     {
@@ -2895,7 +3091,7 @@
       "title": "user_devices"
     },
     {
-      "id": "server-server-user_devices-get",
+      "id": "server-server-user_devices-get-user-devices-userid",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/user_devices.yaml",
@@ -2903,6 +3099,7 @@
       "path": "/user/devices/{userId}",
       "method": "get",
       "operationId": "getUserDevices",
+      "operationKey": "GET /user/devices/{userId}",
       "title": "getUserDevices"
     },
     {
@@ -2914,7 +3111,7 @@
       "title": "user_keys"
     },
     {
-      "id": "server-server-user_keys-post",
+      "id": "server-server-user_keys-post-user-keys-claim",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/user_keys.yaml",
@@ -2922,10 +3119,11 @@
       "path": "/user/keys/claim",
       "method": "post",
       "operationId": "claimUserEncryptionKeys",
+      "operationKey": "POST /user/keys/claim",
       "title": "claimUserEncryptionKeys"
     },
     {
-      "id": "server-server-user_keys-post",
+      "id": "server-server-user_keys-post-user-keys-query",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/user_keys.yaml",
@@ -2933,6 +3131,7 @@
       "path": "/user/keys/query",
       "method": "post",
       "operationId": "queryUserEncryptionKeys",
+      "operationKey": "POST /user/keys/query",
       "title": "queryUserEncryptionKeys"
     },
     {
@@ -2944,7 +3143,7 @@
       "title": "version"
     },
     {
-      "id": "server-server-version-get",
+      "id": "server-server-version-get-version",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/version.yaml",
@@ -2952,6 +3151,7 @@
       "path": "/version",
       "method": "get",
       "operationId": "getVersion",
+      "operationKey": "GET /version",
       "title": "getVersion"
     },
     {
@@ -2963,7 +3163,7 @@
       "title": "wellknown"
     },
     {
-      "id": "server-server-wellknown-get",
+      "id": "server-server-wellknown-get-matrix-server",
       "kind": "operation",
       "spec": "server-server",
       "source": "data/api/server-server/wellknown.yaml",
@@ -2971,6 +3171,7 @@
       "path": "/matrix/server",
       "method": "get",
       "operationId": "getWellKnown",
+      "operationKey": "GET /matrix/server",
       "title": "getWellKnown"
     }
   ]

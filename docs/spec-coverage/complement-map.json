@@ -20,20 +20,60 @@
       ]
     },
     "Server discovery": {
-      "status": "planned",
-      "tests": []
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/apidoc_version_test.go",
+          "why": "Covers /_matrix/client/versions response shape and advertised version values."
+        }
+      ]
     },
     "Client authentication": {
-      "status": "planned",
-      "tests": []
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/apidoc_login_test.go",
+          "why": "Covers password login behavior and /whoami after login."
+        },
+        {
+          "file": "tests/csapi/apidoc_logout_test.go",
+          "why": "Covers logout semantics."
+        },
+        {
+          "file": "tests/csapi/account_change_password_test.go",
+          "why": "Covers password change behavior."
+        },
+        {
+          "file": "tests/csapi/account_deactivate_test.go",
+          "why": "Covers account deactivation behavior."
+        },
+        {
+          "file": "tests/csapi/txnid_test.go",
+          "why": "Covers refresh-token use via the client transaction ID flow."
+        }
+      ]
     },
     "Capabilities negotiation": {
-      "status": "planned",
-      "tests": []
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/csapi/apidoc_server_capabilities_test.go",
+          "why": "Directly covers the /capabilities endpoint shape and auth requirements."
+        }
+      ]
     },
     "Filtering": {
-      "status": "planned",
-      "tests": []
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/sync_filter_test.go",
+          "why": "Covers filter creation and sync filter application."
+        },
+        {
+          "file": "tests/federation_sync_test.go",
+          "why": "Exercises a filtered sync edge case involving state changes."
+        }
+      ]
     },
     "Events": {
       "status": "partial",
@@ -105,8 +145,13 @@
       ]
     },
     "Ignoring users": {
-      "status": "planned",
-      "tests": []
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/csapi/ignored_users_test.go",
+          "why": "Directly covers m.ignored_user_list behavior and invite suppression in /sync."
+        }
+      ]
     },
     "Instant messaging": {
       "status": "planned",
@@ -126,8 +171,17 @@
       "tests": []
     },
     "Receipts": {
-      "status": "planned",
-      "tests": []
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/apidoc_room_receipts_test.go",
+          "why": "Covers read receipts and receipt propagation."
+        },
+        {
+          "file": "tests/csapi/thread_notifications_test.go",
+          "why": "Covers threaded receipt semantics in sync."
+        }
+      ]
     },
     "Room history visibility": {
       "status": "partial",
@@ -167,6 +221,10 @@
       "status": "partial",
       "tests": [
         {
+          "file": "tests/csapi/account_data_test.go",
+          "why": "Covers generic account-data persistence and retrieval behavior."
+        },
+        {
           "file": "tests/direct_messaging_test.go",
           "why": "Exercises account-data-backed client config behavior for m.direct."
         }
@@ -180,6 +238,10 @@
       "status": "partial",
       "tests": [
         {
+          "file": "tests/csapi/apidoc_device_management_test.go",
+          "why": "Covers client device list, update, and delete flows."
+        },
+        {
           "file": "tests/federation_device_list_update_test.go",
           "why": "Covers device list updates over federation."
         }
@@ -188,6 +250,14 @@
     "End-to-end encryption": {
       "status": "partial",
       "tests": [
+        {
+          "file": "tests/csapi/upload_keys_test.go",
+          "why": "Covers device key upload, claim ordering, and idempotency."
+        },
+        {
+          "file": "tests/csapi/e2e_key_backup_test.go",
+          "why": "Covers key backup semantics."
+        },
         {
           "file": "tests/federation_keys_test.go",
           "why": "Covers federation key retrieval behavior."
@@ -219,8 +289,13 @@
       "tests": []
     },
     "Read and unread markers": {
-      "status": "planned",
-      "tests": []
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/csapi/apidoc_room_receipts_test.go",
+          "why": "Directly covers m.fully_read and read marker semantics."
+        }
+      ]
     },
     "Guest access": {
       "status": "planned",
@@ -239,8 +314,13 @@
       "tests": []
     },
     "Notifications": {
-      "status": "planned",
-      "tests": []
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/thread_notifications_test.go",
+          "why": "Covers unread_notifications and unread_thread_notifications behavior."
+        }
+      ]
     },
     "Old sync and legacy endpoints": {
       "status": "planned",
@@ -267,8 +347,13 @@
       "tests": []
     },
     "Room previews": {
-      "status": "planned",
-      "tests": []
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/sync_test.go",
+          "why": "Covers room summary behavior, which is the closest current Complement evidence for room preview semantics."
+        }
+      ]
     },
     "Room tagging": {
       "status": "planned",
@@ -301,16 +386,31 @@
       ]
     },
     "Server administration": {
-      "status": "planned",
-      "tests": []
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/admin_test.go",
+          "why": "Covers admin registration bootstrap behavior."
+        }
+      ]
     },
     "Server notices": {
-      "status": "planned",
-      "tests": []
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/csapi/admin_test.go",
+          "why": "Directly covers server notices delivery and invite flow."
+        }
+      ]
     },
     "Server side search": {
-      "status": "planned",
-      "tests": []
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/csapi/apidoc_search_test.go",
+          "why": "Directly covers the /search endpoint, context, and pagination."
+        }
+      ]
     },
     "Spaces": {
       "status": "partial",
@@ -334,8 +434,21 @@
       "tests": []
     },
     "Threading": {
-      "status": "planned",
-      "tests": []
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/csapi/room_threads_test.go",
+          "why": "Covers the /threads endpoint and ordering semantics."
+        },
+        {
+          "file": "tests/csapi/thread_notifications_test.go",
+          "why": "Covers thread receipts and notification counts."
+        },
+        {
+          "file": "tests/msc4306/thread_subscriptions_test.go",
+          "why": "Covers thread subscription behavior in MSC4306 flows."
+        }
+      ]
     },
     "Invite permission": {
       "status": "planned",
@@ -374,6 +487,10 @@
         {
           "file": "tests/federation_room_send_test.go",
           "why": "Exercises outbound /send transaction behavior."
+        },
+        {
+          "file": "tests/federation_sync_test.go",
+          "why": "Covers transaction ordering implications through federation sync behavior."
         }
       ]
     },
@@ -447,6 +564,10 @@
         {
           "file": "tests/federation_room_event_auth_test.go",
           "why": "Covers room event auth retrieval."
+        },
+        {
+          "file": "tests/federation_room_get_missing_events_test.go",
+          "why": "Touches event retrieval paths used to repair missing-event gaps."
         }
       ]
     },
@@ -504,6 +625,10 @@
         {
           "file": "tests/federation_room_alias_test.go",
           "why": "Covers alias/query-directory behavior."
+        },
+        {
+          "file": "tests/csapi/public_rooms_test.go",
+          "why": "Covers public room directory listing and search on the client-facing side."
         }
       ]
     },

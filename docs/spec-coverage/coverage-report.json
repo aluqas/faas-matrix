@@ -1,8 +1,91 @@
 {
-  "generatedAt": "2026-03-26T07:05:25.787Z",
+  "generatedAt": "2026-03-26T20:33:50.493Z",
   "checklist": "docs/matrix/speccheck-matrix-v2.md",
   "primaryUnitCount": 85,
   "coveredCount": 85,
   "missingCount": 0,
-  "missing": []
+  "aliasOnlyCount": 6,
+  "titleFallbackCount": 0,
+  "ambiguousCount": 0,
+  "orphanCount": 5,
+  "rowsMissingIdCount": 0,
+  "invalidAliasRefCount": 0,
+  "duplicateRowIdCount": 0,
+  "missing": [],
+  "aliasOnly": [
+    {
+      "unitId": "ss-subsection-authentication-request-authentication",
+      "title": "Request Authentication",
+      "rowId": "ss-core-authentication",
+      "rowTitle": "Authentication",
+      "reason": "spec-unit-alias"
+    },
+    {
+      "unitId": "ss-subsection-authentication-response-authentication",
+      "title": "Response Authentication",
+      "rowId": "ss-core-authentication",
+      "rowTitle": "Authentication",
+      "reason": "spec-unit-alias"
+    },
+    {
+      "unitId": "ss-subsection-authentication-client-tls-certificates",
+      "title": "Client TLS Certificates",
+      "rowId": "ss-core-authentication",
+      "rowTitle": "Authentication",
+      "reason": "spec-unit-alias"
+    },
+    {
+      "unitId": "ss-core-typing-notifications",
+      "title": "Typing Notifications",
+      "rowId": "ss-core-typing-presence-receipts",
+      "rowTitle": "Typing / Presence / Receipts",
+      "reason": "spec-unit-alias"
+    },
+    {
+      "unitId": "ss-core-presence",
+      "title": "Presence",
+      "rowId": "ss-core-typing-presence-receipts",
+      "rowTitle": "Typing / Presence / Receipts",
+      "reason": "spec-unit-alias"
+    },
+    {
+      "unitId": "ss-core-receipts",
+      "title": "Receipts",
+      "rowId": "ss-core-typing-presence-receipts",
+      "rowTitle": "Typing / Presence / Receipts",
+      "reason": "spec-unit-alias"
+    }
+  ],
+  "titleFallbacks": [],
+  "ambiguous": [],
+  "orphanRows": [
+    {
+      "rowId": "cs-core-support-information",
+      "section": "Client-Server Core",
+      "title": "Support information"
+    },
+    {
+      "rowId": "cs-module-application-service-adjunct-endpoints",
+      "section": "Client-Server Modules",
+      "title": "Application service adjunct endpoints"
+    },
+    {
+      "rowId": "cs-module-notifications",
+      "section": "Client-Server Modules",
+      "title": "Notifications"
+    },
+    {
+      "rowId": "cs-module-old-sync-and-legacy-endpoints",
+      "section": "Client-Server Modules",
+      "title": "Old sync and legacy endpoints"
+    },
+    {
+      "rowId": "cs-module-peeking-events",
+      "section": "Client-Server Modules",
+      "title": "Peeking events"
+    }
+  ],
+  "rowsMissingId": [],
+  "invalidAliasRefs": [],
+  "duplicateRowIds": []
 }

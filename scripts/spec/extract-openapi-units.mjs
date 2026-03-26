@@ -13,6 +13,14 @@ function leadingSpaces(line) {
   return match ? match[0].length : 0;
 }
 
+function slugifyPath(value) {
+  return value
+    .toLowerCase()
+    .replace(/[{}]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 async function extractSpec(specName) {
   const dirPath = path.join(specRoot, specName);
   const files = (await readdir(dirPath)).filter((entry) => entry.endsWith(".yaml")).sort();
@@ -41,8 +49,9 @@ async function extractSpec(specName) {
 
     const flushOperation = () => {
       if (!currentPath || !currentMethod) return;
+      const operationKey = `${currentMethod.toUpperCase()} ${currentPath}`;
       specUnits.push({
-        id: `${specName}-${entry.replace(/\.yaml$/, "")}-${currentMethod}`,
+        id: `${specName}-${entry.replace(/\.yaml$/, "")}-${currentMethod}-${slugifyPath(currentPath)}`,
         kind: "operation",
         spec: specName,
         source,
@@ -50,7 +59,8 @@ async function extractSpec(specName) {
         path: currentPath,
         method: currentMethod,
         operationId: currentOperationId,
-        title: currentOperationId || `${currentMethod.toUpperCase()} ${currentPath}`,
+        operationKey,
+        title: currentOperationId || operationKey,
       });
     };
 

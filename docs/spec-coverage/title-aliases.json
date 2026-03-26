@@ -1,74 +1,38 @@
 [
   {
-    "specTitle": "Client Authentication",
-    "checklistTitle": "Client authentication"
-  },
-  {
-    "specTitle": "User Data",
-    "checklistTitle": "User data"
-  },
-  {
-    "specTitle": "Room History Visibility",
-    "checklistTitle": "Room history visibility"
-  },
-  {
-    "specTitle": "End-to-End Encryption",
-    "checklistTitle": "End-to-end encryption"
-  },
-  {
-    "specTitle": "Read and unread markers",
-    "checklistTitle": "Read and unread markers"
-  },
-  {
-    "specTitle": "Server Side Search",
-    "checklistTitle": "Server side search"
-  },
-  {
-    "specTitle": "Backfilling and retrieving missing events",
-    "checklistTitle": "Backfill / missing events"
-  },
-  {
+    "specUnitId": "ss-subsection-authentication-request-authentication",
+    "rowId": "ss-core-authentication",
     "specTitle": "Request Authentication",
     "checklistTitle": "Authentication"
   },
   {
+    "specUnitId": "ss-subsection-authentication-response-authentication",
+    "rowId": "ss-core-authentication",
     "specTitle": "Response Authentication",
     "checklistTitle": "Authentication"
   },
   {
+    "specUnitId": "ss-subsection-authentication-client-tls-certificates",
+    "rowId": "ss-core-authentication",
     "specTitle": "Client TLS Certificates",
     "checklistTitle": "Authentication"
   },
   {
+    "specUnitId": "ss-core-typing-notifications",
+    "rowId": "ss-core-typing-presence-receipts",
     "specTitle": "Typing Notifications",
     "checklistTitle": "Typing / Presence / Receipts"
   },
   {
+    "specUnitId": "ss-core-presence",
+    "rowId": "ss-core-typing-presence-receipts",
     "specTitle": "Presence",
     "checklistTitle": "Typing / Presence / Receipts"
   },
   {
+    "specUnitId": "ss-core-receipts",
+    "rowId": "ss-core-typing-presence-receipts",
     "specTitle": "Receipts",
     "checklistTitle": "Typing / Presence / Receipts"
-  },
-  {
-    "specTitle": "Server Access Control Lists (ACLs) for rooms",
-    "checklistTitle": "Server ACLs"
-  },
-  {
-    "specTitle": "Knocking upon a room",
-    "checklistTitle": "Knocking"
-  },
-  {
-    "specTitle": "Inviting to a room",
-    "checklistTitle": "Inviting"
-  },
-  {
-    "specTitle": "Leaving Rooms (Rejecting Invites)",
-    "checklistTitle": "Leaving rooms"
-  },
-  {
-    "specTitle": "Server Access Control Lists (ACLs)",
-    "checklistTitle": "Server ACLs"
   }
 ]

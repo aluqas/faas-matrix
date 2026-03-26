@@ -32,10 +32,12 @@ This split is deliberate:
   - Generated OpenAPI file and operation inventory.
 - `openapi-row-map.json`
   - Maps OpenAPI files to rows in `docs/matrix/speccheck-matrix-v2.md`.
+  - `rowIds` is the stable machine-readable link to checklist rows.
+  - Legacy `rows` titles may remain during migration, but should not be the long-term source of truth.
 - `complement-map.json`
   - Maps rows in `docs/matrix/speccheck-matrix-v2.md` to Complement test files which can serve as black-box evidence.
 - `title-aliases.json`
-  - Normalization map from spec titles to checklist row titles when the names differ.
+  - Transitional map from spec unit IDs to checklist `row_id` values for cases where one checklist row intentionally collapses multiple spec units.
 - `coverage-report.json`
   - Generated output from the coverage check.
 - `openapi-coverage-report.json`
@@ -58,6 +60,26 @@ bun run spec:coverage:openapi
 `spec:coverage` runs both the Markdown structure coverage check and the OpenAPI coverage check.
 
 `spec:coverage:openapi` checks whether every OpenAPI file is explicitly accounted for in `docs/matrix/speccheck-matrix-v2.md` through `openapi-row-map.json`.
+
+## Checklist Contract
+
+Coverage automation reads only these sections in `docs/matrix/speccheck-matrix-v2.md`:
+
+- `Client-Server Core`
+- `Client-Server Modules`
+- `Server-Server Core`
+
+The following sections are intentionally excluded from coverage target extraction:
+
+- `Cross-Cutting Evidence Rows`
+- `Complement Evidence Summary`
+
+Within the primary sections:
+
+- `row_id` is the stable checklist key.
+- Row labels are allowed to change as long as `row_id` remains stable.
+- Rows without a matching Markdown spec unit may still exist, but they will be reported as `orphanRows`.
+- OpenAPI operation-level mappings are optional during migration; missing ones are reported as `unmappedOperations`.
 
 ## Limits
 
