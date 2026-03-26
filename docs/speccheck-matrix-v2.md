@@ -42,6 +42,7 @@ The intent is to stop treating `route exists` as equivalent to `spec implemented
 | Events | `src/api/rooms.ts`, `src/api/relations.ts`, `src/api/sync.ts` | Event format, size limits, event context, relations, sync semantics, timeline semantics |
 | Rooms | `src/api/rooms.ts`, `src/api/aliases.ts`, `src/api/spaces.ts` | Creation, aliases, permissions, membership, public room directory, summaries |
 | User data | `src/api/profile.ts`, `src/api/account-data.ts`, `src/api/tags.ts`, `src/api/search.ts` | User directory, profiles, account data rules |
+| Support information | no explicit tracking | Support endpoint surface and published support metadata |
 
 ## Client-Server Modules
 
@@ -61,6 +62,7 @@ The intent is to stop treating `route exists` as equivalent to `spec implemented
 | User and room mentions | no dedicated route/module; push/events surface exists | `m.mentions`, encrypted-event handling, push integration |
 | Voice over IP | `src/api/voip.ts`, `src/api/calls.ts`, `src/api/rtc.ts` | call event semantics, party identifiers, interoperability scope |
 | Client config | `src/api/account-data.ts` | full account-data semantics including reserved event types |
+| Application service adjunct endpoints | `src/api/appservice.ts` | appservice-related client-server auxiliary endpoints and compatibility scope |
 | Device management | `src/api/devices.ts`, login/auth/device binding logic | device lifecycle, delete/update semantics, security considerations |
 | End-to-end encryption | `src/api/keys.ts`, `src/api/key-backups.ts`, `src/api/to-device.ts`, `src/durable-objects/UserKeysDurableObject.ts` | device keys, cross-signing, secret storage, verification, backup, device list updates |
 | Event annotations and reactions | `src/api/relations.ts` | aggregation semantics, ignored-user behavior |
@@ -71,6 +73,9 @@ The intent is to stop treating `route exists` as equivalent to `spec implemented
 | Moderation policy lists | no obvious dedicated module | policy list events and client behavior |
 | Policy servers | no obvious dedicated module | currently missing from both docs; impacts federation and event validation |
 | OpenID | likely federation OpenID only; no clear client-server row | client OpenID token issuance and usage |
+| Notifications | partial via sync/push surface | notifications endpoint semantics and unread/notification count alignment |
+| Old sync and legacy endpoints | no explicit tracking | legacy sync and room initial sync semantics, if exposed |
+| Peeking events | no explicit tracking | peek/event stream semantics and compatibility stance |
 | Recently used emoji | no obvious dedicated module | account-data behavior |
 | Reference relations | `src/api/relations.ts` | server-side aggregation correctness |
 | Reporting content | `src/api/report.ts` | report semantics, server behavior |

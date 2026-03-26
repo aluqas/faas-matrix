@@ -11,6 +11,8 @@ Tuwunel is a Matrix homeserver (spec v1.17) running entirely on Cloudflare Worke
 ```bash
 npm run dev              # Local dev server (wrangler dev)
 npm run deploy           # Deploy to Cloudflare
+npm run spec:extract     # Refresh Markdown and OpenAPI spec coverage inventories from local matrix-spec clone
+npm run spec:coverage    # Run Markdown and OpenAPI coverage checks against speccheck-matrix-v2
 npm run typecheck        # TypeScript type checking (tsc --noEmit)
 npm run lint             # ESLint on src/
 npm run test             # Vitest
@@ -53,6 +55,22 @@ npm run db:migrate:local # Run D1 migrations (local)
 - Passwords hashed with PBKDF2-SHA256 (100,000 iterations).
 
 **TypeScript config:** Strict mode, ES2022 target, `@/*` path alias maps to `src/*`, `@cloudflare/workers-types`.
+
+## Spec Coverage Workflow
+
+- The local spec clone lives under `.saqula/matrix-spec`.
+- Primary checklist coverage should be derived from Markdown spec structure in:
+  - `content/client-server-api/_index.md`
+  - `content/client-server-api/modules/*.md`
+  - `content/server-server-api.md`
+- OpenAPI files under `data/api/client-server` and `data/api/server-server` are the primary endpoint coverage inventory.
+- `matrix-org/complement` is an evidence source for interoperability and black-box compliance testing, not the primary checklist coverage source.
+- When editing `docs/speccheck-matrix-v2.md` or related coverage docs:
+  - cite exact spec section/module titles where possible
+  - keep coverage rows aligned with extracted Markdown units
+  - use OpenAPI filenames as the endpoint coverage backbone
+  - keep `docs/spec-coverage/openapi-row-map.json` aligned with the rows in `docs/speccheck-matrix-v2.md`
+  - treat Complement as evidence for implementation claims, not as a substitute for checklist completeness
 
 ## Git Commit Rules
 
