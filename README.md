@@ -20,6 +20,8 @@ The goal of the current phase is architectural separation, not feature removal.
 - [Feature Profiles](./docs/feature-profiles.md)
 - [Runtime Capability Mapping](./docs/runtime-capability-mapping.md)
 - [Matrix Spec Checklist](./docs/speccheck-matrix.md)
+- [Matrix Spec Check v2](./docs/speccheck-matrix-v2.md)
+- [Matrix Compatibility Checklist](./docs/checklist-matrix-compat.md)
 
 ## Development
 
