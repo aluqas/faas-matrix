@@ -1,15 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "matrix-worker",
+  "name": "matrix-worker-complement",
   "main": "src/index.ts",
   "compatibility_date": "2024-11-01",
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "observability": {
-    "enabled": true
-  },
-  // D1 Database for relational data (users, rooms, events, memberships)
   "d1_databases": [
     {
       "binding": "DB",
@@ -17,7 +13,6 @@
       "database_id": "36b31035-03de-40ed-8940-753d325bae27"
     }
   ],
-  // KV Namespaces for fast lookups
   "kv_namespaces": [
     {
       "binding": "SESSIONS",
@@ -44,14 +39,12 @@
       "id": "c3739acd328748f5a966c3b7ff2a6352"
     }
   ],
-  // R2 Bucket for media storage
   "r2_buckets": [
     {
       "binding": "MEDIA",
       "bucket_name": "tuwunel-media"
     }
   ],
-  // Durable Objects for real-time sync and room coordination
   "durable_objects": {
     "bindings": [
       {
@@ -128,56 +121,14 @@
       ]
     }
   ],
-  // Environment variables
   "vars": {
-    "SERVER_NAME": "m.easydemo.org",
-    "SERVER_VERSION": "0.1.0",
-    "TURN_KEY_ID": "42586a3b6b8415d1e69e825f169f3108",
+    "SERVER_NAME": "hs1",
+    "SERVER_VERSION": "0.1.0-complement",
+    "MATRIX_FEATURE_PROFILE": "core",
+    "TURN_KEY_ID": "complement-turn-key",
     "LIVEKIT_API_KEY": "devkey",
-    "LIVEKIT_URL": "wss://livekit.easydemo.org"
+    "LIVEKIT_URL": "wss://invalid.local"
   },
-  // Secrets should be set using:
-  // npx wrangler secret put TURN_API_TOKEN
-  // npx wrangler secret put CALLS_APP_ID
-  // npx wrangler secret put CALLS_APP_SECRET
-  // npx wrangler secret put LIVEKIT_API_SECRET
-  //
-  // For email verification (3PID) via Cloudflare Email Service:
-  // npx wrangler secret put EMAIL_FROM       # From address (e.g., "noreply@m.easydemo.org")
-  //
-  // For direct APNs push notifications (optional - bypasses Sygnal):
-  // npx wrangler secret put APNS_KEY_ID      # Key ID from Apple Developer Portal
-  // npx wrangler secret put APNS_TEAM_ID     # Apple Developer Team ID
-  // npx wrangler secret put APNS_PRIVATE_KEY # Contents of .p8 file
-  // npx wrangler secret put APNS_ENVIRONMENT # "production" or "sandbox" (default: production)
-  //
-  // To create a Cloudflare Realtime SFU app:
-  // 1. Go to https://dash.cloudflare.com/?to=/:account/calls
-  // 2. Create a new Realtime App
-  // 3. Copy the App ID and App Secret
-  // Or use the API: https://developers.cloudflare.com/api/resources/calls/subresources/sfu/methods/create/
-  // Custom domain routing
-  "routes": [
-    {
-      "pattern": "m.easydemo.org",
-      "custom_domain": true
-    }
-  ],
-  // Workers VPC for LiveKit connectivity
-  /* "vpc_services": [
-    {
-      "binding": "LIVEKIT_API",
-      "service_id": "019b6a8b-4d9e-7751-bef5-7d9a3f1807a9"
-    }
-  ], */
-  // Cloudflare Email Service for 3PID email verification
-  "send_email": [
-    {
-      "name": "EMAIL",
-      "remote": true
-    }
-  ],
-  // Cloudflare Workflows for durable multi-step operations
   "workflows": [
     {
       "name": "room-join-workflow",

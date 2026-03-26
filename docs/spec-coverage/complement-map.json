@@ -1,0 +1,550 @@
+{
+  "source": {
+    "repo": ".saqula/complement",
+    "upstream": "https://github.com/matrix-org/complement"
+  },
+  "purpose": "Map rows in docs/matrix/speccheck-matrix-v2.md to Complement black-box test evidence.",
+  "notes": [
+    "Complement is the primary behavior and interoperability evidence source, not the primary checklist completeness source.",
+    "Out-of-repo Complement supports client-server and multi-homeserver tests directly.",
+    "Mock federation server support is not generally available out-of-repo, so some federation-heavy evidence may require an adapter image, a local fork, or upstream integration work."
+  ],
+  "rows": {
+    "API standards": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/unknown_endpoints_test.go",
+          "why": "Covers 404 for unknown endpoints and 405 for unsupported methods."
+        }
+      ]
+    },
+    "Server discovery": {
+      "status": "planned",
+      "tests": []
+    },
+    "Client authentication": {
+      "status": "planned",
+      "tests": []
+    },
+    "Capabilities negotiation": {
+      "status": "planned",
+      "tests": []
+    },
+    "Filtering": {
+      "status": "planned",
+      "tests": []
+    },
+    "Events": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_sync_test.go",
+          "why": "Exercises sync/timeline behavior under a state-change edge case."
+        },
+        {
+          "file": "tests/room_timestamp_to_event_test.go",
+          "why": "Covers timestamp-to-event retrieval behavior."
+        }
+      ]
+    },
+    "Rooms": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/restricted_rooms_test.go",
+          "why": "Covers restricted join room semantics."
+        },
+        {
+          "file": "tests/knock_restricted_test.go",
+          "why": "Covers knock behavior on restricted rooms."
+        }
+      ]
+    },
+    "User data": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/direct_messaging_test.go",
+          "why": "Covers account data updates for m.direct."
+        }
+      ]
+    },
+    "Support information": {
+      "status": "planned",
+      "tests": []
+    },
+    "Content repository": {
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/media_thumbnail_test.go",
+          "why": "Covers local and remote thumbnail behavior."
+        },
+        {
+          "file": "tests/media_filename_test.go",
+          "why": "Covers media download filename behavior."
+        },
+        {
+          "file": "tests/media_nofilename_test.go",
+          "why": "Covers media behavior without a filename."
+        },
+        {
+          "file": "tests/federation_media_content_test.go",
+          "why": "Covers federation media retrieval."
+        }
+      ]
+    },
+    "Direct messaging": {
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/direct_messaging_test.go",
+          "why": "Covers m.direct account data and is_direct invite propagation."
+        }
+      ]
+    },
+    "Ignoring users": {
+      "status": "planned",
+      "tests": []
+    },
+    "Instant messaging": {
+      "status": "planned",
+      "tests": []
+    },
+    "Presence": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_presence_test.go",
+          "why": "Covers federation presence behavior."
+        }
+      ]
+    },
+    "Push notifications": {
+      "status": "planned",
+      "tests": []
+    },
+    "Receipts": {
+      "status": "planned",
+      "tests": []
+    },
+    "Room history visibility": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_room_get_missing_events_test.go",
+          "why": "Touches history visibility constraints when backfilling missing events."
+        }
+      ]
+    },
+    "Room upgrades": {
+      "status": "planned",
+      "tests": []
+    },
+    "Third-party invites": {
+      "status": "planned",
+      "tests": []
+    },
+    "Typing notifications": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_room_typing_test.go",
+          "why": "Covers typing notification behavior over federation."
+        }
+      ]
+    },
+    "User and room mentions": {
+      "status": "planned",
+      "tests": []
+    },
+    "Voice over IP": {
+      "status": "planned",
+      "tests": []
+    },
+    "Client config": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/direct_messaging_test.go",
+          "why": "Exercises account-data-backed client config behavior for m.direct."
+        }
+      ]
+    },
+    "Application service adjunct endpoints": {
+      "status": "planned",
+      "tests": []
+    },
+    "Device management": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_device_list_update_test.go",
+          "why": "Covers device list updates over federation."
+        }
+      ]
+    },
+    "End-to-end encryption": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_keys_test.go",
+          "why": "Covers federation key retrieval behavior."
+        },
+        {
+          "file": "tests/federation_upload_keys_test.go",
+          "why": "Covers cross-server upload/query key behavior."
+        },
+        {
+          "file": "tests/federation_device_list_update_test.go",
+          "why": "Covers device list update semantics."
+        },
+        {
+          "file": "tests/federation_to_device_test.go",
+          "why": "Covers federation to-device delivery."
+        }
+      ]
+    },
+    "Event annotations and reactions": {
+      "status": "planned",
+      "tests": []
+    },
+    "Event context": {
+      "status": "planned",
+      "tests": []
+    },
+    "Event replacements": {
+      "status": "planned",
+      "tests": []
+    },
+    "Read and unread markers": {
+      "status": "planned",
+      "tests": []
+    },
+    "Guest access": {
+      "status": "planned",
+      "tests": []
+    },
+    "Moderation policy lists": {
+      "status": "planned",
+      "tests": []
+    },
+    "Policy servers": {
+      "status": "planned",
+      "tests": []
+    },
+    "OpenID": {
+      "status": "planned",
+      "tests": []
+    },
+    "Notifications": {
+      "status": "planned",
+      "tests": []
+    },
+    "Old sync and legacy endpoints": {
+      "status": "planned",
+      "tests": []
+    },
+    "Peeking events": {
+      "status": "planned",
+      "tests": []
+    },
+    "Recently used emoji": {
+      "status": "planned",
+      "tests": []
+    },
+    "Reference relations": {
+      "status": "planned",
+      "tests": []
+    },
+    "Reporting content": {
+      "status": "planned",
+      "tests": []
+    },
+    "Rich replies": {
+      "status": "planned",
+      "tests": []
+    },
+    "Room previews": {
+      "status": "planned",
+      "tests": []
+    },
+    "Room tagging": {
+      "status": "planned",
+      "tests": []
+    },
+    "SSO client login/authentication": {
+      "status": "planned",
+      "tests": []
+    },
+    "Secrets": {
+      "status": "planned",
+      "tests": []
+    },
+    "Send-to-device messaging": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_to_device_test.go",
+          "why": "Covers to-device behavior over federation."
+        }
+      ]
+    },
+    "Server ACLs": {
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/federation_acl_test.go",
+          "why": "Directly covers ACL enforcement behavior."
+        }
+      ]
+    },
+    "Server administration": {
+      "status": "planned",
+      "tests": []
+    },
+    "Server notices": {
+      "status": "planned",
+      "tests": []
+    },
+    "Server side search": {
+      "status": "planned",
+      "tests": []
+    },
+    "Spaces": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/room_hierarchy_test.go",
+          "why": "Covers space hierarchy behavior."
+        },
+        {
+          "file": "tests/restricted_room_hierarchy_test.go",
+          "why": "Covers restricted hierarchy behavior."
+        }
+      ]
+    },
+    "Sticker messages": {
+      "status": "planned",
+      "tests": []
+    },
+    "Third-party networks": {
+      "status": "planned",
+      "tests": []
+    },
+    "Threading": {
+      "status": "planned",
+      "tests": []
+    },
+    "Invite permission": {
+      "status": "planned",
+      "tests": []
+    },
+    "TLS": {
+      "status": "indirect",
+      "tests": [
+        {
+          "file": "README.md",
+          "why": "Complement requires HTTPS federation on port 8448 with trusted Complement PKI; this is an environmental precondition rather than a direct assertion test."
+        }
+      ]
+    },
+    "Unsupported endpoints": {
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/unknown_endpoints_test.go",
+          "why": "Directly covers 404 and 405 behavior."
+        }
+      ]
+    },
+    "Authentication": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_keys_test.go",
+          "why": "Covers server key retrieval used in signed federation authentication."
+        }
+      ]
+    },
+    "Transactions": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_room_send_test.go",
+          "why": "Exercises outbound /send transaction behavior."
+        }
+      ]
+    },
+    "PDUs": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_room_send_test.go",
+          "why": "Covers event delivery via PDU transactions."
+        },
+        {
+          "file": "tests/federation_event_auth_test.go",
+          "why": "Covers event auth chain behavior."
+        },
+        {
+          "file": "tests/federation_redaction_test.go",
+          "why": "Covers redaction behavior over federation."
+        },
+        {
+          "file": "tests/federation_room_event_auth_test.go",
+          "why": "Covers event-auth-specific federation behavior."
+        }
+      ]
+    },
+    "EDUs": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_presence_test.go",
+          "why": "Covers presence EDUs."
+        },
+        {
+          "file": "tests/federation_room_typing_test.go",
+          "why": "Covers typing EDUs."
+        },
+        {
+          "file": "tests/federation_to_device_test.go",
+          "why": "Covers to-device EDU-like behavior."
+        }
+      ]
+    },
+    "Room state resolution": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_sync_test.go",
+          "why": "Covers a graph fork/merge sync edge case."
+        },
+        {
+          "file": "tests/v12_test.go",
+          "why": "Touches room-version-specific behavior in newer room versions."
+        }
+      ]
+    },
+    "Backfill / missing events": {
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/federation_room_get_missing_events_test.go",
+          "why": "Directly covers get_missing_events behavior."
+        }
+      ]
+    },
+    "Retrieving events": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_event_auth_test.go",
+          "why": "Covers /event_auth behavior."
+        },
+        {
+          "file": "tests/federation_room_event_auth_test.go",
+          "why": "Covers room event auth retrieval."
+        }
+      ]
+    },
+    "Joining rooms": {
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/federation_room_join_test.go",
+          "why": "Directly covers remote join behavior."
+        },
+        {
+          "file": "tests/restricted_rooms_test.go",
+          "why": "Covers restricted-room join behavior."
+        }
+      ]
+    },
+    "Knocking": {
+      "status": "direct",
+      "tests": [
+        {
+          "file": "tests/knocking_test.go",
+          "why": "Directly covers knocking flows."
+        },
+        {
+          "file": "tests/knock_restricted_test.go",
+          "why": "Covers restricted knock behavior."
+        }
+      ]
+    },
+    "Inviting": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_room_invite_test.go",
+          "why": "Covers federation invite behavior."
+        },
+        {
+          "file": "tests/federation_rooms_invite_test.go",
+          "why": "Covers additional invite path behavior across rooms."
+        }
+      ]
+    },
+    "Leaving rooms": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_unreject_rejected_test.go",
+          "why": "Covers reject/unreject style federation membership edge cases."
+        }
+      ]
+    },
+    "Published room directory": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_room_alias_test.go",
+          "why": "Covers alias/query-directory behavior."
+        }
+      ]
+    },
+    "Typing / Presence / Receipts": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_room_typing_test.go",
+          "why": "Covers typing EDU behavior."
+        },
+        {
+          "file": "tests/federation_presence_test.go",
+          "why": "Covers presence EDU behavior."
+        }
+      ]
+    },
+    "Querying for information": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/federation_query_profile_test.go",
+          "why": "Covers profile query behavior."
+        },
+        {
+          "file": "tests/federation_room_alias_test.go",
+          "why": "Covers directory query behavior."
+        }
+      ]
+    },
+    "Security considerations": {
+      "status": "partial",
+      "tests": [
+        {
+          "file": "tests/unknown_endpoints_test.go",
+          "why": "Covers unsupported endpoint behavior expected by the spec."
+        },
+        {
+          "file": "tests/federation_acl_test.go",
+          "why": "Covers server ACL safety behavior."
+        }
+      ]
+    }
+  }
+}

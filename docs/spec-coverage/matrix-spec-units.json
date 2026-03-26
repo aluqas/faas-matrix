@@ -1,0 +1,1371 @@
+{
+  "generatedAt": "2026-03-26T07:05:25.799Z",
+  "specRoot": ".saqula/matrix-spec",
+  "coverageModel": {
+    "primary": "Markdown section/module units",
+    "supplemental": "OpenAPI inventory",
+    "evidence": "Complement and local interop runs"
+  },
+  "primaryUnits": [
+    {
+      "id": "cs-core-api-standards",
+      "title": "API Standards",
+      "family": "client-server-core",
+      "level": 2,
+      "source": "content/client-server-api/_index.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-core-web-browser-clients",
+      "title": "Web Browser Clients",
+      "family": "client-server-core",
+      "level": 2,
+      "source": "content/client-server-api/_index.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-core-server-discovery",
+      "title": "Server Discovery",
+      "family": "client-server-core",
+      "level": 2,
+      "source": "content/client-server-api/_index.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-core-client-authentication",
+      "title": "Client Authentication",
+      "family": "client-server-core",
+      "level": 2,
+      "source": "content/client-server-api/_index.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-core-capabilities-negotiation",
+      "title": "Capabilities negotiation",
+      "family": "client-server-core",
+      "level": 2,
+      "source": "content/client-server-api/_index.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-core-filtering",
+      "title": "Filtering",
+      "family": "client-server-core",
+      "level": 2,
+      "source": "content/client-server-api/_index.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-core-events",
+      "title": "Events",
+      "family": "client-server-core",
+      "level": 2,
+      "source": "content/client-server-api/_index.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-core-rooms",
+      "title": "Rooms",
+      "family": "client-server-core",
+      "level": 2,
+      "source": "content/client-server-api/_index.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-core-user-data",
+      "title": "User Data",
+      "family": "client-server-core",
+      "level": 2,
+      "source": "content/client-server-api/_index.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-client-config",
+      "title": "Client Config",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/account_data.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-server-administration",
+      "title": "Server Administration",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/admin.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-content-repository",
+      "title": "Content repository",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/content_repo.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-device-management",
+      "title": "Device Management",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/device_management.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-direct-messaging",
+      "title": "Direct Messaging",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/dm.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-end-to-end-encryption",
+      "title": "End-to-End Encryption",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/end_to_end_encryption.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-event-annotations-and-reactions",
+      "title": "Event annotations and reactions",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/event_annotations.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-event-context",
+      "title": "Event Context",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/event_context.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-event-replacements",
+      "title": "Event replacements",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/event_replacements.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-guest-access",
+      "title": "Guest Access",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/guest_access.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-room-history-visibility",
+      "title": "Room History Visibility",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/history_visibility.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-ignoring-users",
+      "title": "Ignoring Users",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/ignore_users.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-instant-messaging",
+      "title": "Instant Messaging",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/instant_messaging.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-invite-permission",
+      "title": "Invite permission",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/invite_permission.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-user-and-room-mentions",
+      "title": "User and room mentions",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/mentions.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-moderation-policy-lists",
+      "title": "Moderation policy lists",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/moderation_policies.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-openid",
+      "title": "OpenID",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/openid.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-policy-servers",
+      "title": "Policy Servers",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/policy_servers.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-presence",
+      "title": "Presence",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/presence.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-push-notifications",
+      "title": "Push Notifications",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/push.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-read-and-unread-markers",
+      "title": "Read and unread markers",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/read_markers.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-receipts",
+      "title": "Receipts",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/receipts.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-recently-used-emoji",
+      "title": "Recently used emoji",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/recent_emoji.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-reference-relations",
+      "title": "Reference relations",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/reference_relations.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-reporting-content",
+      "title": "Reporting Content",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/report_content.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-rich-replies",
+      "title": "Rich replies",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/rich_replies.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-room-previews",
+      "title": "Room Previews",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/room_previews.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-room-upgrades",
+      "title": "Room Upgrades",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/room_upgrades.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-server-side-search",
+      "title": "Server Side Search",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/search.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-secrets",
+      "title": "Secrets",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/secrets.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-send-to-device-messaging",
+      "title": "Send-to-Device messaging",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/send_to_device.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-server-access-control-lists-acls-for-rooms",
+      "title": "Server Access Control Lists (ACLs) for rooms",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/server_acls.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-server-notices",
+      "title": "Server Notices",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/server_notices.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-spaces",
+      "title": "Spaces",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/spaces.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-sso-client-login-authentication",
+      "title": "SSO client login/authentication",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/sso_login.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-sticker-messages",
+      "title": "Sticker Messages",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/stickers.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-room-tagging",
+      "title": "Room Tagging",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/tags.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-third-party-invites",
+      "title": "Third-party invites",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/third_party_invites.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-third-party-networks",
+      "title": "Third-party Networks",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/third_party_networks.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-threading",
+      "title": "Threading",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/threading.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-typing-notifications",
+      "title": "Typing Notifications",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/typing_notifications.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "cs-module-voice-over-ip",
+      "title": "Voice over IP",
+      "family": "client-server-module",
+      "level": 3,
+      "source": "content/client-server-api/modules/voip_events.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-api-standards",
+      "title": "API standards",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-subsection-api-standards-tls",
+      "title": "TLS",
+      "parent": "API standards",
+      "family": "server-server-subsection",
+      "level": 3,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-subsection-api-standards-unsupported-endpoints",
+      "title": "Unsupported endpoints",
+      "parent": "API standards",
+      "family": "server-server-subsection",
+      "level": 3,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-server-discovery",
+      "title": "Server discovery",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-authentication",
+      "title": "Authentication",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-subsection-authentication-request-authentication",
+      "title": "Request Authentication",
+      "parent": "Authentication",
+      "family": "server-server-subsection",
+      "level": 3,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-subsection-authentication-response-authentication",
+      "title": "Response Authentication",
+      "parent": "Authentication",
+      "family": "server-server-subsection",
+      "level": 3,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-subsection-authentication-client-tls-certificates",
+      "title": "Client TLS Certificates",
+      "parent": "Authentication",
+      "family": "server-server-subsection",
+      "level": 3,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-transactions",
+      "title": "Transactions",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-pdus",
+      "title": "PDUs",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-edus",
+      "title": "EDUs",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-room-state-resolution",
+      "title": "Room State Resolution",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-backfilling-and-retrieving-missing-events",
+      "title": "Backfilling and retrieving missing events",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-retrieving-events",
+      "title": "Retrieving events",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-joining-rooms",
+      "title": "Joining Rooms",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-knocking-upon-a-room",
+      "title": "Knocking upon a room",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-inviting-to-a-room",
+      "title": "Inviting to a room",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-leaving-rooms-rejecting-invites",
+      "title": "Leaving Rooms (Rejecting Invites)",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-third-party-invites",
+      "title": "Third-party invites",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-published-room-directory",
+      "title": "Published Room Directory",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-spaces",
+      "title": "Spaces",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-typing-notifications",
+      "title": "Typing Notifications",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-presence",
+      "title": "Presence",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-receipts",
+      "title": "Receipts",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-querying-for-information",
+      "title": "Querying for information",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-openid",
+      "title": "OpenID",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-device-management",
+      "title": "Device Management",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-end-to-end-encryption",
+      "title": "End-to-End Encryption",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-send-to-device-messaging",
+      "title": "Send-to-device messaging",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-content-repository",
+      "title": "Content Repository",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-server-access-control-lists-acls",
+      "title": "Server Access Control Lists (ACLs)",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-policy-servers",
+      "title": "Policy Servers",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-signing-events",
+      "title": "Signing Events",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    },
+    {
+      "id": "ss-core-security-considerations",
+      "title": "Security considerations",
+      "family": "server-server-core",
+      "level": 2,
+      "source": "content/server-server-api.md",
+      "coverageRole": "primary"
+    }
+  ],
+  "supplementalUnits": [
+    {
+      "id": "client-server-account-data",
+      "title": "account-data",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/account-data.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-account_deactivation",
+      "title": "account_deactivation",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/account_deactivation.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-admin",
+      "title": "admin",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/admin.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-administrative_contact",
+      "title": "administrative_contact",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/administrative_contact.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-appservice_ping",
+      "title": "appservice_ping",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/appservice_ping.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-appservice_room_directory",
+      "title": "appservice_room_directory",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/appservice_room_directory.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-authed-content-repo",
+      "title": "authed-content-repo",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/authed-content-repo.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-banning",
+      "title": "banning",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/banning.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-capabilities",
+      "title": "capabilities",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/capabilities.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-content-repo",
+      "title": "content-repo",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/content-repo.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-create_room",
+      "title": "create_room",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/create_room.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-cross_signing",
+      "title": "cross_signing",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/cross_signing.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-device_management",
+      "title": "device_management",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/device_management.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-directory",
+      "title": "directory",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/directory.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-event_context",
+      "title": "event_context",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/event_context.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-filter",
+      "title": "filter",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/filter.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-inviting",
+      "title": "inviting",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/inviting.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-joining",
+      "title": "joining",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/joining.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-key_backup",
+      "title": "key_backup",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/key_backup.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-keys",
+      "title": "keys",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/keys.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-kicking",
+      "title": "kicking",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/kicking.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-knocking",
+      "title": "knocking",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/knocking.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-leaving",
+      "title": "leaving",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/leaving.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-list_joined_rooms",
+      "title": "list_joined_rooms",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/list_joined_rooms.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-list_public_rooms",
+      "title": "list_public_rooms",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/list_public_rooms.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-login",
+      "title": "login",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/login.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-login_token",
+      "title": "login_token",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/login_token.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-logout",
+      "title": "logout",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/logout.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-message_pagination",
+      "title": "message_pagination",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/message_pagination.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-notifications",
+      "title": "notifications",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/notifications.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-oauth_server_metadata",
+      "title": "oauth_server_metadata",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/oauth_server_metadata.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-old_sync",
+      "title": "old_sync",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/old_sync.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-openid",
+      "title": "openid",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/openid.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-password_management",
+      "title": "password_management",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/password_management.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-peeking_events",
+      "title": "peeking_events",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/peeking_events.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-policy_server",
+      "title": "policy_server",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/policy_server.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-presence",
+      "title": "presence",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/presence.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-profile",
+      "title": "profile",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/profile.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-pusher",
+      "title": "pusher",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/pusher.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-pushrules",
+      "title": "pushrules",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/pushrules.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-read_markers",
+      "title": "read_markers",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/read_markers.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-receipts",
+      "title": "receipts",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/receipts.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-redaction",
+      "title": "redaction",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/redaction.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-refresh",
+      "title": "refresh",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/refresh.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-registration",
+      "title": "registration",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/registration.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-registration_tokens",
+      "title": "registration_tokens",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/registration_tokens.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-relations",
+      "title": "relations",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/relations.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-report_content",
+      "title": "report_content",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/report_content.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-room_event_by_timestamp",
+      "title": "room_event_by_timestamp",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/room_event_by_timestamp.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-room_initial_sync",
+      "title": "room_initial_sync",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/room_initial_sync.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-room_send",
+      "title": "room_send",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/room_send.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-room_state",
+      "title": "room_state",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/room_state.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-room_summary",
+      "title": "room_summary",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/room_summary.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-room_upgrades",
+      "title": "room_upgrades",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/room_upgrades.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-rooms",
+      "title": "rooms",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/rooms.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-search",
+      "title": "search",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/search.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-space_hierarchy",
+      "title": "space_hierarchy",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/space_hierarchy.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-sso_login_redirect",
+      "title": "sso_login_redirect",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/sso_login_redirect.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-support",
+      "title": "support",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/support.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-sync",
+      "title": "sync",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/sync.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-tags",
+      "title": "tags",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/tags.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-third_party_lookup",
+      "title": "third_party_lookup",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/third_party_lookup.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-third_party_membership",
+      "title": "third_party_membership",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/third_party_membership.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-threads_list",
+      "title": "threads_list",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/threads_list.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-to_device",
+      "title": "to_device",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/to_device.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-typing",
+      "title": "typing",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/typing.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-users",
+      "title": "users",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/users.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-versions",
+      "title": "versions",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/versions.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-voip",
+      "title": "voip",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/voip.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-wellknown",
+      "title": "wellknown",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/wellknown.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "client-server-whoami",
+      "title": "whoami",
+      "family": "client-server-openapi",
+      "source": "data/api/client-server/whoami.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-backfill",
+      "title": "backfill",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/backfill.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-content_repository",
+      "title": "content_repository",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/content_repository.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-event_auth",
+      "title": "event_auth",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/event_auth.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-events",
+      "title": "events",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/events.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-invites-v1",
+      "title": "invites-v1",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/invites-v1.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-invites-v2",
+      "title": "invites-v2",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/invites-v2.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-joins-v1",
+      "title": "joins-v1",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/joins-v1.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-joins-v2",
+      "title": "joins-v2",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/joins-v2.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-keys_query",
+      "title": "keys_query",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/keys_query.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-keys_server",
+      "title": "keys_server",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/keys_server.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-knocks",
+      "title": "knocks",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/knocks.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-leaving-v1",
+      "title": "leaving-v1",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/leaving-v1.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-leaving-v2",
+      "title": "leaving-v2",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/leaving-v2.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-openid",
+      "title": "openid",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/openid.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-public_rooms",
+      "title": "public_rooms",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/public_rooms.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-query",
+      "title": "query",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/query.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-room_policy",
+      "title": "room_policy",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/room_policy.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-space_hierarchy",
+      "title": "space_hierarchy",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/space_hierarchy.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-third_party_invite",
+      "title": "third_party_invite",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/third_party_invite.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-transactions",
+      "title": "transactions",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/transactions.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-user_devices",
+      "title": "user_devices",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/user_devices.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-user_keys",
+      "title": "user_keys",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/user_keys.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-version",
+      "title": "version",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/version.yaml",
+      "coverageRole": "supplemental"
+    },
+    {
+      "id": "server-server-wellknown",
+      "title": "wellknown",
+      "family": "server-server-openapi",
+      "source": "data/api/server-server/wellknown.yaml",
+      "coverageRole": "supplemental"
+    }
+  ],
+  "evidenceSources": [
+    {
+      "id": "complement",
+      "title": "matrix-org/complement",
+      "source": "https://github.com/matrix-org/complement",
+      "role": "black-box integration evidence"
+    }
+  ]
+}

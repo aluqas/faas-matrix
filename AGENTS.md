@@ -9,13 +9,15 @@ Tuwunel is a Matrix homeserver (spec v1.17) running entirely on Cloudflare Worke
 ## Development Commands
 
 ```bash
-npm run dev              # Local dev server (wrangler dev)
-npm run deploy           # Deploy to Cloudflare
-npm run typecheck        # TypeScript type checking (tsc --noEmit)
-npm run lint             # ESLint on src/
-npm run test             # Vitest
-npm run db:migrate       # Run D1 migrations (remote)
-npm run db:migrate:local # Run D1 migrations (local)
+bun run dev              # Local dev server (wrangler dev)
+bun run deploy           # Deploy to Cloudflare
+bun run spec:extract     # Refresh Markdown and OpenAPI spec coverage inventories from local matrix-spec clone
+bun run spec:coverage    # Run Markdown and OpenAPI coverage checks against docs/matrix/speccheck-matrix-v2.md
+bun run typecheck        # TypeScript type checking (tsc --noEmit)
+bun run lint             # oxlint on src/
+bun run test             # Vitest
+bun run db:migrate       # Run D1 migrations (remote)
+bun run db:migrate:local # Run D1 migrations (local)
 ```
 
 ## Architecture
@@ -53,6 +55,22 @@ npm run db:migrate:local # Run D1 migrations (local)
 - Passwords hashed with PBKDF2-SHA256 (100,000 iterations).
 
 **TypeScript config:** Strict mode, ES2022 target, `@/*` path alias maps to `src/*`, `@cloudflare/workers-types`.
+
+## Spec Coverage Workflow
+
+- The local spec clone lives under `.saqula/matrix-spec`.
+- Primary checklist coverage should be derived from Markdown spec structure in:
+  - `content/client-server-api/_index.md`
+  - `content/client-server-api/modules/*.md`
+  - `content/server-server-api.md`
+- OpenAPI files under `data/api/client-server` and `data/api/server-server` are the primary endpoint coverage inventory.
+- `matrix-org/complement` is an evidence source for interoperability and black-box compliance testing, not the primary checklist coverage source.
+- When editing `docs/matrix/speccheck-matrix-v2.md` or related coverage docs:
+  - cite exact spec section/module titles where possible
+  - keep coverage rows aligned with extracted Markdown units
+  - use OpenAPI filenames as the endpoint coverage backbone
+  - keep `docs/spec-coverage/openapi-row-map.json` aligned with the rows in `docs/matrix/speccheck-matrix-v2.md`
+  - treat Complement as evidence for implementation claims, not as a substitute for checklist completeness
 
 ## Git Commit Rules
 

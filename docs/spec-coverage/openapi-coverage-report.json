@@ -1,0 +1,776 @@
+{
+  "generatedAt": "2026-03-26T07:05:25.818Z",
+  "checklist": "docs/matrix/speccheck-matrix-v2.md",
+  "openApiFileCount": 95,
+  "coveredCount": 95,
+  "missingCount": 0,
+  "invalidRowCount": 0,
+  "missing": [],
+  "invalidRows": [],
+  "covered": [
+    {
+      "key": "client-server/account-data.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client config"
+      ],
+      "operationCount": 4
+    },
+    {
+      "key": "client-server/account_deactivation.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client authentication"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/admin.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Server administration"
+      ],
+      "operationCount": 5
+    },
+    {
+      "key": "client-server/administrative_contact.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client authentication"
+      ],
+      "operationCount": 8
+    },
+    {
+      "key": "client-server/appservice_ping.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Application service adjunct endpoints"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/appservice_room_directory.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Application service adjunct endpoints"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/authed-content-repo.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Content repository"
+      ],
+      "operationCount": 5
+    },
+    {
+      "key": "client-server/banning.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "client-server/capabilities.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Capabilities negotiation"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/content-repo.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Content repository"
+      ],
+      "operationCount": 8
+    },
+    {
+      "key": "client-server/create_room.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/cross_signing.yaml",
+      "scope": "tracked",
+      "rows": [
+        "End-to-end encryption"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "client-server/device_management.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Device management"
+      ],
+      "operationCount": 5
+    },
+    {
+      "key": "client-server/directory.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 4
+    },
+    {
+      "key": "client-server/event_context.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Event context"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/filter.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Filtering"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "client-server/inviting.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/joining.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "client-server/key_backup.yaml",
+      "scope": "tracked",
+      "rows": [
+        "End-to-end encryption"
+      ],
+      "operationCount": 14
+    },
+    {
+      "key": "client-server/keys.yaml",
+      "scope": "tracked",
+      "rows": [
+        "End-to-end encryption"
+      ],
+      "operationCount": 4
+    },
+    {
+      "key": "client-server/kicking.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/knocking.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/leaving.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "client-server/list_joined_rooms.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/list_public_rooms.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 4
+    },
+    {
+      "key": "client-server/login.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client authentication"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "client-server/login_token.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client authentication"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/logout.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client authentication"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "client-server/message_pagination.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Events"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/notifications.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Notifications"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/oauth_server_metadata.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client authentication"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/old_sync.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Old sync and legacy endpoints"
+      ],
+      "operationCount": 3
+    },
+    {
+      "key": "client-server/openid.yaml",
+      "scope": "tracked",
+      "rows": [
+        "OpenID"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/password_management.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client authentication"
+      ],
+      "operationCount": 3
+    },
+    {
+      "key": "client-server/peeking_events.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Peeking events"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/policy_server.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Policy servers"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/presence.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Presence"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "client-server/profile.yaml",
+      "scope": "tracked",
+      "rows": [
+        "User data"
+      ],
+      "operationCount": 4
+    },
+    {
+      "key": "client-server/pusher.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Push notifications"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "client-server/pushrules.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Push notifications"
+      ],
+      "operationCount": 9
+    },
+    {
+      "key": "client-server/read_markers.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Read and unread markers"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/receipts.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Receipts"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/redaction.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Events"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/refresh.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client authentication"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/registration.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client authentication"
+      ],
+      "operationCount": 4
+    },
+    {
+      "key": "client-server/registration_tokens.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client authentication"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/relations.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Event annotations and reactions",
+        "Reference relations",
+        "Rich replies",
+        "Threading",
+        "Event replacements"
+      ],
+      "operationCount": 3
+    },
+    {
+      "key": "client-server/report_content.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Reporting content"
+      ],
+      "operationCount": 3
+    },
+    {
+      "key": "client-server/room_event_by_timestamp.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Events"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/room_initial_sync.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Old sync and legacy endpoints"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/room_send.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Events"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/room_state.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/room_summary.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Room previews"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/room_upgrades.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Room upgrades"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/rooms.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Rooms"
+      ],
+      "operationCount": 5
+    },
+    {
+      "key": "client-server/search.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Server side search"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/space_hierarchy.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Spaces"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/sso_login_redirect.yaml",
+      "scope": "tracked",
+      "rows": [
+        "SSO client login/authentication"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "client-server/support.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Support information"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/sync.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Events"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/tags.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Room tagging"
+      ],
+      "operationCount": 3
+    },
+    {
+      "key": "client-server/third_party_lookup.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Third-party networks"
+      ],
+      "operationCount": 6
+    },
+    {
+      "key": "client-server/third_party_membership.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Third-party invites"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/threads_list.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Threading"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/to_device.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Send-to-device messaging"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/typing.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Typing notifications"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/users.yaml",
+      "scope": "tracked",
+      "rows": [
+        "User data"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/versions.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Server discovery"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/voip.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Voice over IP"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/wellknown.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Server discovery"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "client-server/whoami.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Client authentication"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/backfill.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Backfill / missing events"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "server-server/content_repository.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Content repository"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "server-server/event_auth.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Retrieving events"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/events.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Retrieving events"
+      ],
+      "operationCount": 4
+    },
+    {
+      "key": "server-server/invites-v1.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Inviting"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/invites-v2.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Inviting"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/joins-v1.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Joining rooms"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/joins-v2.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Joining rooms"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/keys_query.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Authentication"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "server-server/keys_server.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Authentication"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/knocks.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Knocking"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "server-server/leaving-v1.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Leaving rooms"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/leaving-v2.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Leaving rooms"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/openid.yaml",
+      "scope": "tracked",
+      "rows": [
+        "OpenID"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/public_rooms.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Published room directory"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "server-server/query.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Querying for information"
+      ],
+      "operationCount": 3
+    },
+    {
+      "key": "server-server/room_policy.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Policy servers"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/space_hierarchy.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Spaces"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/third_party_invite.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Third-party invites"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "server-server/transactions.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Transactions"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/user_devices.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Device management"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/user_keys.yaml",
+      "scope": "tracked",
+      "rows": [
+        "End-to-end encryption"
+      ],
+      "operationCount": 2
+    },
+    {
+      "key": "server-server/version.yaml",
+      "scope": "tracked",
+      "rows": [
+        "API standards"
+      ],
+      "operationCount": 1
+    },
+    {
+      "key": "server-server/wellknown.yaml",
+      "scope": "tracked",
+      "rows": [
+        "Server discovery"
+      ],
+      "operationCount": 1
+    }
+  ]
+}

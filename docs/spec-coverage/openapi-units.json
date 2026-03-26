@@ -1,0 +1,2977 @@
+{
+  "generatedAt": "2026-03-26T07:05:25.843Z",
+  "sourceRoot": ".saqula/matrix-spec/data/api",
+  "units": [
+    {
+      "id": "client-server-account-data",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/account-data.yaml",
+      "file": "account-data.yaml",
+      "title": "account-data"
+    },
+    {
+      "id": "client-server-account-data-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/account-data.yaml",
+      "file": "account-data.yaml",
+      "path": "/user/{userId}/account_data/{type}",
+      "method": "put",
+      "operationId": "setAccountData",
+      "title": "setAccountData"
+    },
+    {
+      "id": "client-server-account-data-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/account-data.yaml",
+      "file": "account-data.yaml",
+      "path": "/user/{userId}/account_data/{type}",
+      "method": "get",
+      "operationId": "getAccountData",
+      "title": "getAccountData"
+    },
+    {
+      "id": "client-server-account-data-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/account-data.yaml",
+      "file": "account-data.yaml",
+      "path": "/user/{userId}/rooms/{roomId}/account_data/{type}",
+      "method": "put",
+      "operationId": "setAccountDataPerRoom",
+      "title": "setAccountDataPerRoom"
+    },
+    {
+      "id": "client-server-account-data-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/account-data.yaml",
+      "file": "account-data.yaml",
+      "path": "/user/{userId}/rooms/{roomId}/account_data/{type}",
+      "method": "get",
+      "operationId": "getAccountDataPerRoom",
+      "title": "getAccountDataPerRoom"
+    },
+    {
+      "id": "client-server-account_deactivation",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/account_deactivation.yaml",
+      "file": "account_deactivation.yaml",
+      "title": "account_deactivation"
+    },
+    {
+      "id": "client-server-account_deactivation-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/account_deactivation.yaml",
+      "file": "account_deactivation.yaml",
+      "path": "/account/deactivate",
+      "method": "post",
+      "operationId": "deactivateAccount",
+      "title": "deactivateAccount"
+    },
+    {
+      "id": "client-server-admin",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/admin.yaml",
+      "file": "admin.yaml",
+      "title": "admin"
+    },
+    {
+      "id": "client-server-admin-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/admin.yaml",
+      "file": "admin.yaml",
+      "path": "/v3/admin/whois/{userId}",
+      "method": "get",
+      "operationId": "getWhoIs",
+      "title": "getWhoIs"
+    },
+    {
+      "id": "client-server-admin-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/admin.yaml",
+      "file": "admin.yaml",
+      "path": "/v1/admin/suspend/{userId}",
+      "method": "get",
+      "operationId": "getAdminSuspendUser",
+      "title": "getAdminSuspendUser"
+    },
+    {
+      "id": "client-server-admin-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/admin.yaml",
+      "file": "admin.yaml",
+      "path": "/v1/admin/suspend/{userId}",
+      "method": "put",
+      "operationId": "setAdminSuspendUser",
+      "title": "setAdminSuspendUser"
+    },
+    {
+      "id": "client-server-admin-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/admin.yaml",
+      "file": "admin.yaml",
+      "path": "/v1/admin/lock/{userId}",
+      "method": "get",
+      "operationId": "getAdminLockUser",
+      "title": "getAdminLockUser"
+    },
+    {
+      "id": "client-server-admin-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/admin.yaml",
+      "file": "admin.yaml",
+      "path": "/v1/admin/lock/{userId}",
+      "method": "put",
+      "operationId": "setAdminLockUser",
+      "title": "setAdminLockUser"
+    },
+    {
+      "id": "client-server-administrative_contact",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/administrative_contact.yaml",
+      "file": "administrative_contact.yaml",
+      "title": "administrative_contact"
+    },
+    {
+      "id": "client-server-administrative_contact-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/administrative_contact.yaml",
+      "file": "administrative_contact.yaml",
+      "path": "/account/3pid",
+      "method": "get",
+      "operationId": "getAccount3PIDs",
+      "title": "getAccount3PIDs"
+    },
+    {
+      "id": "client-server-administrative_contact-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/administrative_contact.yaml",
+      "file": "administrative_contact.yaml",
+      "path": "/account/3pid",
+      "method": "post",
+      "operationId": "post3PIDs",
+      "title": "post3PIDs"
+    },
+    {
+      "id": "client-server-administrative_contact-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/administrative_contact.yaml",
+      "file": "administrative_contact.yaml",
+      "path": "/account/3pid/add",
+      "method": "post",
+      "operationId": "add3PID",
+      "title": "add3PID"
+    },
+    {
+      "id": "client-server-administrative_contact-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/administrative_contact.yaml",
+      "file": "administrative_contact.yaml",
+      "path": "/account/3pid/bind",
+      "method": "post",
+      "operationId": "bind3PID",
+      "title": "bind3PID"
+    },
+    {
+      "id": "client-server-administrative_contact-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/administrative_contact.yaml",
+      "file": "administrative_contact.yaml",
+      "path": "/account/3pid/delete",
+      "method": "post",
+      "operationId": "delete3pidFromAccount",
+      "title": "delete3pidFromAccount"
+    },
+    {
+      "id": "client-server-administrative_contact-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/administrative_contact.yaml",
+      "file": "administrative_contact.yaml",
+      "path": "/account/3pid/unbind",
+      "method": "post",
+      "operationId": "unbind3pidFromAccount",
+      "title": "unbind3pidFromAccount"
+    },
+    {
+      "id": "client-server-administrative_contact-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/administrative_contact.yaml",
+      "file": "administrative_contact.yaml",
+      "path": "/account/3pid/email/requestToken",
+      "method": "post",
+      "operationId": "requestTokenTo3PIDEmail",
+      "title": "requestTokenTo3PIDEmail"
+    },
+    {
+      "id": "client-server-administrative_contact-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/administrative_contact.yaml",
+      "file": "administrative_contact.yaml",
+      "path": "/account/3pid/msisdn/requestToken",
+      "method": "post",
+      "operationId": "requestTokenTo3PIDMSISDN",
+      "title": "requestTokenTo3PIDMSISDN"
+    },
+    {
+      "id": "client-server-appservice_ping",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/appservice_ping.yaml",
+      "file": "appservice_ping.yaml",
+      "title": "appservice_ping"
+    },
+    {
+      "id": "client-server-appservice_ping-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/appservice_ping.yaml",
+      "file": "appservice_ping.yaml",
+      "path": "/appservice/{appserviceId}/ping",
+      "method": "post",
+      "operationId": "pingAppservice",
+      "title": "pingAppservice"
+    },
+    {
+      "id": "client-server-appservice_room_directory",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/appservice_room_directory.yaml",
+      "file": "appservice_room_directory.yaml",
+      "title": "appservice_room_directory"
+    },
+    {
+      "id": "client-server-appservice_room_directory-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/appservice_room_directory.yaml",
+      "file": "appservice_room_directory.yaml",
+      "path": "/directory/list/appservice/{networkId}/{roomId}",
+      "method": "put",
+      "operationId": "updateAppserviceRoomDirectoryVisibility",
+      "title": "updateAppserviceRoomDirectoryVisibility"
+    },
+    {
+      "id": "client-server-authed-content-repo",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/authed-content-repo.yaml",
+      "file": "authed-content-repo.yaml",
+      "title": "authed-content-repo"
+    },
+    {
+      "id": "client-server-authed-content-repo-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/authed-content-repo.yaml",
+      "file": "authed-content-repo.yaml",
+      "path": "/media/download/{serverName}/{mediaId}",
+      "method": "get",
+      "operationId": "getContentAuthed",
+      "title": "getContentAuthed"
+    },
+    {
+      "id": "client-server-authed-content-repo-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/authed-content-repo.yaml",
+      "file": "authed-content-repo.yaml",
+      "path": "/media/download/{serverName}/{mediaId}/{fileName}",
+      "method": "get",
+      "operationId": "getContentOverrideNameAuthed",
+      "title": "getContentOverrideNameAuthed"
+    },
+    {
+      "id": "client-server-authed-content-repo-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/authed-content-repo.yaml",
+      "file": "authed-content-repo.yaml",
+      "path": "/media/thumbnail/{serverName}/{mediaId}",
+      "method": "get",
+      "operationId": "getContentThumbnailAuthed",
+      "title": "getContentThumbnailAuthed"
+    },
+    {
+      "id": "client-server-authed-content-repo-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/authed-content-repo.yaml",
+      "file": "authed-content-repo.yaml",
+      "path": "/media/preview_url",
+      "method": "get",
+      "operationId": "getUrlPreviewAuthed",
+      "title": "getUrlPreviewAuthed"
+    },
+    {
+      "id": "client-server-authed-content-repo-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/authed-content-repo.yaml",
+      "file": "authed-content-repo.yaml",
+      "path": "/media/config",
+      "method": "get",
+      "operationId": "getConfigAuthed",
+      "title": "getConfigAuthed"
+    },
+    {
+      "id": "client-server-banning",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/banning.yaml",
+      "file": "banning.yaml",
+      "title": "banning"
+    },
+    {
+      "id": "client-server-banning-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/banning.yaml",
+      "file": "banning.yaml",
+      "path": "/rooms/{roomId}/ban",
+      "method": "post",
+      "operationId": "ban",
+      "title": "ban"
+    },
+    {
+      "id": "client-server-banning-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/banning.yaml",
+      "file": "banning.yaml",
+      "path": "/rooms/{roomId}/unban",
+      "method": "post",
+      "operationId": "unban",
+      "title": "unban"
+    },
+    {
+      "id": "client-server-capabilities",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/capabilities.yaml",
+      "file": "capabilities.yaml",
+      "title": "capabilities"
+    },
+    {
+      "id": "client-server-capabilities-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/capabilities.yaml",
+      "file": "capabilities.yaml",
+      "path": "/capabilities",
+      "method": "get",
+      "operationId": "getCapabilities",
+      "title": "getCapabilities"
+    },
+    {
+      "id": "client-server-content-repo",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/content-repo.yaml",
+      "file": "content-repo.yaml",
+      "title": "content-repo"
+    },
+    {
+      "id": "client-server-content-repo-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/content-repo.yaml",
+      "file": "content-repo.yaml",
+      "path": "/media/v3/upload",
+      "method": "post",
+      "operationId": "uploadContent",
+      "title": "uploadContent"
+    },
+    {
+      "id": "client-server-content-repo-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/content-repo.yaml",
+      "file": "content-repo.yaml",
+      "path": "/media/v3/upload/{serverName}/{mediaId}",
+      "method": "put",
+      "operationId": "uploadContentToMXC",
+      "title": "uploadContentToMXC"
+    },
+    {
+      "id": "client-server-content-repo-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/content-repo.yaml",
+      "file": "content-repo.yaml",
+      "path": "/media/v1/create",
+      "method": "post",
+      "operationId": "createContent",
+      "title": "createContent"
+    },
+    {
+      "id": "client-server-content-repo-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/content-repo.yaml",
+      "file": "content-repo.yaml",
+      "path": "/media/v3/download/{serverName}/{mediaId}",
+      "method": "get",
+      "operationId": "getContent",
+      "title": "getContent"
+    },
+    {
+      "id": "client-server-content-repo-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/content-repo.yaml",
+      "file": "content-repo.yaml",
+      "path": "/media/v3/download/{serverName}/{mediaId}/{fileName}",
+      "method": "get",
+      "operationId": "getContentOverrideName",
+      "title": "getContentOverrideName"
+    },
+    {
+      "id": "client-server-content-repo-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/content-repo.yaml",
+      "file": "content-repo.yaml",
+      "path": "/media/v3/thumbnail/{serverName}/{mediaId}",
+      "method": "get",
+      "operationId": "getContentThumbnail",
+      "title": "getContentThumbnail"
+    },
+    {
+      "id": "client-server-content-repo-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/content-repo.yaml",
+      "file": "content-repo.yaml",
+      "path": "/media/v3/preview_url",
+      "method": "get",
+      "operationId": "getUrlPreview",
+      "title": "getUrlPreview"
+    },
+    {
+      "id": "client-server-content-repo-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/content-repo.yaml",
+      "file": "content-repo.yaml",
+      "path": "/media/v3/config",
+      "method": "get",
+      "operationId": "getConfig",
+      "title": "getConfig"
+    },
+    {
+      "id": "client-server-create_room",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/create_room.yaml",
+      "file": "create_room.yaml",
+      "title": "create_room"
+    },
+    {
+      "id": "client-server-create_room-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/create_room.yaml",
+      "file": "create_room.yaml",
+      "path": "/createRoom",
+      "method": "post",
+      "operationId": "createRoom",
+      "title": "createRoom"
+    },
+    {
+      "id": "client-server-cross_signing",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/cross_signing.yaml",
+      "file": "cross_signing.yaml",
+      "title": "cross_signing"
+    },
+    {
+      "id": "client-server-cross_signing-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/cross_signing.yaml",
+      "file": "cross_signing.yaml",
+      "path": "/keys/device_signing/upload",
+      "method": "post",
+      "operationId": "uploadCrossSigningKeys",
+      "title": "uploadCrossSigningKeys"
+    },
+    {
+      "id": "client-server-cross_signing-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/cross_signing.yaml",
+      "file": "cross_signing.yaml",
+      "path": "/keys/signatures/upload",
+      "method": "post",
+      "operationId": "uploadCrossSigningSignatures",
+      "title": "uploadCrossSigningSignatures"
+    },
+    {
+      "id": "client-server-device_management",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/device_management.yaml",
+      "file": "device_management.yaml",
+      "title": "device_management"
+    },
+    {
+      "id": "client-server-device_management-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/device_management.yaml",
+      "file": "device_management.yaml",
+      "path": "/devices",
+      "method": "get",
+      "operationId": "getDevices",
+      "title": "getDevices"
+    },
+    {
+      "id": "client-server-device_management-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/device_management.yaml",
+      "file": "device_management.yaml",
+      "path": "/devices/{deviceId}",
+      "method": "get",
+      "operationId": "getDevice",
+      "title": "getDevice"
+    },
+    {
+      "id": "client-server-device_management-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/device_management.yaml",
+      "file": "device_management.yaml",
+      "path": "/devices/{deviceId}",
+      "method": "put",
+      "operationId": "updateDevice",
+      "title": "updateDevice"
+    },
+    {
+      "id": "client-server-device_management-delete",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/device_management.yaml",
+      "file": "device_management.yaml",
+      "path": "/devices/{deviceId}",
+      "method": "delete",
+      "operationId": "deleteDevice",
+      "title": "deleteDevice"
+    },
+    {
+      "id": "client-server-device_management-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/device_management.yaml",
+      "file": "device_management.yaml",
+      "path": "/delete_devices",
+      "method": "post",
+      "operationId": "deleteDevices",
+      "title": "deleteDevices"
+    },
+    {
+      "id": "client-server-directory",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/directory.yaml",
+      "file": "directory.yaml",
+      "title": "directory"
+    },
+    {
+      "id": "client-server-directory-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/directory.yaml",
+      "file": "directory.yaml",
+      "path": "/directory/room/{roomAlias}",
+      "method": "put",
+      "operationId": "setRoomAlias",
+      "title": "setRoomAlias"
+    },
+    {
+      "id": "client-server-directory-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/directory.yaml",
+      "file": "directory.yaml",
+      "path": "/directory/room/{roomAlias}",
+      "method": "get",
+      "operationId": "getRoomIdByAlias",
+      "title": "getRoomIdByAlias"
+    },
+    {
+      "id": "client-server-directory-delete",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/directory.yaml",
+      "file": "directory.yaml",
+      "path": "/directory/room/{roomAlias}",
+      "method": "delete",
+      "operationId": "deleteRoomAlias",
+      "title": "deleteRoomAlias"
+    },
+    {
+      "id": "client-server-directory-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/directory.yaml",
+      "file": "directory.yaml",
+      "path": "/rooms/{roomId}/aliases",
+      "method": "get",
+      "operationId": "getLocalAliases",
+      "title": "getLocalAliases"
+    },
+    {
+      "id": "client-server-event_context",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/event_context.yaml",
+      "file": "event_context.yaml",
+      "title": "event_context"
+    },
+    {
+      "id": "client-server-event_context-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/event_context.yaml",
+      "file": "event_context.yaml",
+      "path": "/rooms/{roomId}/context/{eventId}",
+      "method": "get",
+      "operationId": "getEventContext",
+      "title": "getEventContext"
+    },
+    {
+      "id": "client-server-filter",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/filter.yaml",
+      "file": "filter.yaml",
+      "title": "filter"
+    },
+    {
+      "id": "client-server-filter-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/filter.yaml",
+      "file": "filter.yaml",
+      "path": "/user/{userId}/filter",
+      "method": "post",
+      "operationId": "defineFilter",
+      "title": "defineFilter"
+    },
+    {
+      "id": "client-server-filter-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/filter.yaml",
+      "file": "filter.yaml",
+      "path": "/user/{userId}/filter/{filterId}",
+      "method": "get",
+      "operationId": "getFilter",
+      "title": "getFilter"
+    },
+    {
+      "id": "client-server-inviting",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/inviting.yaml",
+      "file": "inviting.yaml",
+      "title": "inviting"
+    },
+    {
+      "id": "client-server-inviting-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/inviting.yaml",
+      "file": "inviting.yaml",
+      "path": "/rooms/{roomId}/invite ",
+      "method": "post",
+      "operationId": "inviteUser",
+      "title": "inviteUser"
+    },
+    {
+      "id": "client-server-joining",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/joining.yaml",
+      "file": "joining.yaml",
+      "title": "joining"
+    },
+    {
+      "id": "client-server-joining-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/joining.yaml",
+      "file": "joining.yaml",
+      "path": "/rooms/{roomId}/join",
+      "method": "post",
+      "operationId": "joinRoomById",
+      "title": "joinRoomById"
+    },
+    {
+      "id": "client-server-joining-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/joining.yaml",
+      "file": "joining.yaml",
+      "path": "/join/{roomIdOrAlias}",
+      "method": "post",
+      "operationId": "joinRoom",
+      "title": "joinRoom"
+    },
+    {
+      "id": "client-server-key_backup",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "title": "key_backup"
+    },
+    {
+      "id": "client-server-key_backup-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/version",
+      "method": "post",
+      "operationId": "postRoomKeysVersion",
+      "title": "postRoomKeysVersion"
+    },
+    {
+      "id": "client-server-key_backup-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/version",
+      "method": "get",
+      "operationId": "getRoomKeysVersionCurrent",
+      "title": "getRoomKeysVersionCurrent"
+    },
+    {
+      "id": "client-server-key_backup-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/version/{version}",
+      "method": "get",
+      "operationId": "getRoomKeysVersion",
+      "title": "getRoomKeysVersion"
+    },
+    {
+      "id": "client-server-key_backup-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/version/{version}",
+      "method": "put",
+      "operationId": "putRoomKeysVersion",
+      "title": "putRoomKeysVersion"
+    },
+    {
+      "id": "client-server-key_backup-delete",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/version/{version}",
+      "method": "delete",
+      "operationId": "deleteRoomKeysVersion",
+      "title": "deleteRoomKeysVersion"
+    },
+    {
+      "id": "client-server-key_backup-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/keys/{roomId}/{sessionId}",
+      "method": "put",
+      "operationId": "putRoomKeyBySessionId",
+      "title": "putRoomKeyBySessionId"
+    },
+    {
+      "id": "client-server-key_backup-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/keys/{roomId}/{sessionId}",
+      "method": "get",
+      "operationId": "getRoomKeyBySessionId",
+      "title": "getRoomKeyBySessionId"
+    },
+    {
+      "id": "client-server-key_backup-delete",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/keys/{roomId}/{sessionId}",
+      "method": "delete",
+      "operationId": "deleteRoomKeyBySessionId",
+      "title": "deleteRoomKeyBySessionId"
+    },
+    {
+      "id": "client-server-key_backup-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/keys/{roomId}",
+      "method": "put",
+      "operationId": "putRoomKeysByRoomId",
+      "title": "putRoomKeysByRoomId"
+    },
+    {
+      "id": "client-server-key_backup-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/keys/{roomId}",
+      "method": "get",
+      "operationId": "getRoomKeysByRoomId",
+      "title": "getRoomKeysByRoomId"
+    },
+    {
+      "id": "client-server-key_backup-delete",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/keys/{roomId}",
+      "method": "delete",
+      "operationId": "deleteRoomKeysByRoomId",
+      "title": "deleteRoomKeysByRoomId"
+    },
+    {
+      "id": "client-server-key_backup-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/keys",
+      "method": "put",
+      "operationId": "putRoomKeys",
+      "title": "putRoomKeys"
+    },
+    {
+      "id": "client-server-key_backup-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/keys",
+      "method": "get",
+      "operationId": "getRoomKeys",
+      "title": "getRoomKeys"
+    },
+    {
+      "id": "client-server-key_backup-delete",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/key_backup.yaml",
+      "file": "key_backup.yaml",
+      "path": "/room_keys/keys",
+      "method": "delete",
+      "operationId": "deleteRoomKeys",
+      "title": "deleteRoomKeys"
+    },
+    {
+      "id": "client-server-keys",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/keys.yaml",
+      "file": "keys.yaml",
+      "title": "keys"
+    },
+    {
+      "id": "client-server-keys-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/keys.yaml",
+      "file": "keys.yaml",
+      "path": "/keys/upload",
+      "method": "post",
+      "operationId": "uploadKeys",
+      "title": "uploadKeys"
+    },
+    {
+      "id": "client-server-keys-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/keys.yaml",
+      "file": "keys.yaml",
+      "path": "/keys/query",
+      "method": "post",
+      "operationId": "queryKeys",
+      "title": "queryKeys"
+    },
+    {
+      "id": "client-server-keys-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/keys.yaml",
+      "file": "keys.yaml",
+      "path": "/keys/claim",
+      "method": "post",
+      "operationId": "claimKeys",
+      "title": "claimKeys"
+    },
+    {
+      "id": "client-server-keys-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/keys.yaml",
+      "file": "keys.yaml",
+      "path": "/keys/changes",
+      "method": "get",
+      "operationId": "getKeysChanges",
+      "title": "getKeysChanges"
+    },
+    {
+      "id": "client-server-kicking",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/kicking.yaml",
+      "file": "kicking.yaml",
+      "title": "kicking"
+    },
+    {
+      "id": "client-server-kicking-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/kicking.yaml",
+      "file": "kicking.yaml",
+      "path": "/rooms/{roomId}/kick",
+      "method": "post",
+      "operationId": "kick",
+      "title": "kick"
+    },
+    {
+      "id": "client-server-knocking",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/knocking.yaml",
+      "file": "knocking.yaml",
+      "title": "knocking"
+    },
+    {
+      "id": "client-server-knocking-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/knocking.yaml",
+      "file": "knocking.yaml",
+      "path": "/knock/{roomIdOrAlias}",
+      "method": "post",
+      "operationId": "knockRoom",
+      "title": "knockRoom"
+    },
+    {
+      "id": "client-server-leaving",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/leaving.yaml",
+      "file": "leaving.yaml",
+      "title": "leaving"
+    },
+    {
+      "id": "client-server-leaving-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/leaving.yaml",
+      "file": "leaving.yaml",
+      "path": "/rooms/{roomId}/leave",
+      "method": "post",
+      "operationId": "leaveRoom",
+      "title": "leaveRoom"
+    },
+    {
+      "id": "client-server-leaving-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/leaving.yaml",
+      "file": "leaving.yaml",
+      "path": "/rooms/{roomId}/forget",
+      "method": "post",
+      "operationId": "forgetRoom",
+      "title": "forgetRoom"
+    },
+    {
+      "id": "client-server-list_joined_rooms",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/list_joined_rooms.yaml",
+      "file": "list_joined_rooms.yaml",
+      "title": "list_joined_rooms"
+    },
+    {
+      "id": "client-server-list_joined_rooms-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/list_joined_rooms.yaml",
+      "file": "list_joined_rooms.yaml",
+      "path": "/joined_rooms",
+      "method": "get",
+      "operationId": "getJoinedRooms",
+      "title": "getJoinedRooms"
+    },
+    {
+      "id": "client-server-list_public_rooms",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/list_public_rooms.yaml",
+      "file": "list_public_rooms.yaml",
+      "title": "list_public_rooms"
+    },
+    {
+      "id": "client-server-list_public_rooms-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/list_public_rooms.yaml",
+      "file": "list_public_rooms.yaml",
+      "path": "/directory/list/room/{roomId}",
+      "method": "get",
+      "operationId": "getRoomVisibilityOnDirectory",
+      "title": "getRoomVisibilityOnDirectory"
+    },
+    {
+      "id": "client-server-list_public_rooms-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/list_public_rooms.yaml",
+      "file": "list_public_rooms.yaml",
+      "path": "/directory/list/room/{roomId}",
+      "method": "put",
+      "operationId": "setRoomVisibilityOnDirectory",
+      "title": "setRoomVisibilityOnDirectory"
+    },
+    {
+      "id": "client-server-list_public_rooms-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/list_public_rooms.yaml",
+      "file": "list_public_rooms.yaml",
+      "path": "/publicRooms",
+      "method": "get",
+      "operationId": "getPublicRooms",
+      "title": "getPublicRooms"
+    },
+    {
+      "id": "client-server-list_public_rooms-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/list_public_rooms.yaml",
+      "file": "list_public_rooms.yaml",
+      "path": "/publicRooms",
+      "method": "post",
+      "operationId": "queryPublicRooms",
+      "title": "queryPublicRooms"
+    },
+    {
+      "id": "client-server-login",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/login.yaml",
+      "file": "login.yaml",
+      "title": "login"
+    },
+    {
+      "id": "client-server-login-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/login.yaml",
+      "file": "login.yaml",
+      "path": "/login",
+      "method": "get",
+      "operationId": "getLoginFlows",
+      "title": "getLoginFlows"
+    },
+    {
+      "id": "client-server-login-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/login.yaml",
+      "file": "login.yaml",
+      "path": "/login",
+      "method": "post",
+      "operationId": "login",
+      "title": "login"
+    },
+    {
+      "id": "client-server-login_token",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/login_token.yaml",
+      "file": "login_token.yaml",
+      "title": "login_token"
+    },
+    {
+      "id": "client-server-login_token-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/login_token.yaml",
+      "file": "login_token.yaml",
+      "path": "/login/get_token",
+      "method": "post",
+      "operationId": "generateLoginToken",
+      "title": "generateLoginToken"
+    },
+    {
+      "id": "client-server-logout",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/logout.yaml",
+      "file": "logout.yaml",
+      "title": "logout"
+    },
+    {
+      "id": "client-server-logout-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/logout.yaml",
+      "file": "logout.yaml",
+      "path": "/logout",
+      "method": "post",
+      "operationId": "logout",
+      "title": "logout"
+    },
+    {
+      "id": "client-server-logout-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/logout.yaml",
+      "file": "logout.yaml",
+      "path": "/logout/all",
+      "method": "post",
+      "operationId": "logout_all",
+      "title": "logout_all"
+    },
+    {
+      "id": "client-server-message_pagination",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/message_pagination.yaml",
+      "file": "message_pagination.yaml",
+      "title": "message_pagination"
+    },
+    {
+      "id": "client-server-message_pagination-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/message_pagination.yaml",
+      "file": "message_pagination.yaml",
+      "path": "/rooms/{roomId}/messages",
+      "method": "get",
+      "operationId": "getRoomEvents",
+      "title": "getRoomEvents"
+    },
+    {
+      "id": "client-server-notifications",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/notifications.yaml",
+      "file": "notifications.yaml",
+      "title": "notifications"
+    },
+    {
+      "id": "client-server-notifications-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/notifications.yaml",
+      "file": "notifications.yaml",
+      "path": "/notifications",
+      "method": "get",
+      "operationId": "getNotifications",
+      "title": "getNotifications"
+    },
+    {
+      "id": "client-server-oauth_server_metadata",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/oauth_server_metadata.yaml",
+      "file": "oauth_server_metadata.yaml",
+      "title": "oauth_server_metadata"
+    },
+    {
+      "id": "client-server-oauth_server_metadata-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/oauth_server_metadata.yaml",
+      "file": "oauth_server_metadata.yaml",
+      "path": "/auth_metadata",
+      "method": "get",
+      "operationId": "getAuthMetadata",
+      "title": "getAuthMetadata"
+    },
+    {
+      "id": "client-server-old_sync",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/old_sync.yaml",
+      "file": "old_sync.yaml",
+      "title": "old_sync"
+    },
+    {
+      "id": "client-server-old_sync-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/old_sync.yaml",
+      "file": "old_sync.yaml",
+      "path": "/events",
+      "method": "get",
+      "operationId": "getEvents",
+      "title": "getEvents"
+    },
+    {
+      "id": "client-server-old_sync-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/old_sync.yaml",
+      "file": "old_sync.yaml",
+      "path": "/initialSync",
+      "method": "get",
+      "operationId": "initialSync",
+      "title": "initialSync"
+    },
+    {
+      "id": "client-server-old_sync-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/old_sync.yaml",
+      "file": "old_sync.yaml",
+      "path": "/events/{eventId}",
+      "method": "get",
+      "operationId": "getOneEvent",
+      "title": "getOneEvent"
+    },
+    {
+      "id": "client-server-openid",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/openid.yaml",
+      "file": "openid.yaml",
+      "title": "openid"
+    },
+    {
+      "id": "client-server-openid-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/openid.yaml",
+      "file": "openid.yaml",
+      "path": "/user/{userId}/openid/request_token",
+      "method": "post",
+      "operationId": "requestOpenIdToken",
+      "title": "requestOpenIdToken"
+    },
+    {
+      "id": "client-server-password_management",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/password_management.yaml",
+      "file": "password_management.yaml",
+      "title": "password_management"
+    },
+    {
+      "id": "client-server-password_management-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/password_management.yaml",
+      "file": "password_management.yaml",
+      "path": "/account/password",
+      "method": "post",
+      "operationId": "changePassword",
+      "title": "changePassword"
+    },
+    {
+      "id": "client-server-password_management-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/password_management.yaml",
+      "file": "password_management.yaml",
+      "path": "/account/password/email/requestToken",
+      "method": "post",
+      "operationId": "requestTokenToResetPasswordEmail",
+      "title": "requestTokenToResetPasswordEmail"
+    },
+    {
+      "id": "client-server-password_management-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/password_management.yaml",
+      "file": "password_management.yaml",
+      "path": "/account/password/msisdn/requestToken",
+      "method": "post",
+      "operationId": "requestTokenToResetPasswordMSISDN",
+      "title": "requestTokenToResetPasswordMSISDN"
+    },
+    {
+      "id": "client-server-peeking_events",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/peeking_events.yaml",
+      "file": "peeking_events.yaml",
+      "title": "peeking_events"
+    },
+    {
+      "id": "client-server-peeking_events-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/peeking_events.yaml",
+      "file": "peeking_events.yaml",
+      "path": "/events ",
+      "method": "get",
+      "operationId": "peekEvents",
+      "title": "peekEvents"
+    },
+    {
+      "id": "client-server-policy_server",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/policy_server.yaml",
+      "file": "policy_server.yaml",
+      "title": "policy_server"
+    },
+    {
+      "id": "client-server-policy_server-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/policy_server.yaml",
+      "file": "policy_server.yaml",
+      "path": "/matrix/policy_server",
+      "method": "get",
+      "operationId": "getWellknownPolicy",
+      "title": "getWellknownPolicy"
+    },
+    {
+      "id": "client-server-presence",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/presence.yaml",
+      "file": "presence.yaml",
+      "title": "presence"
+    },
+    {
+      "id": "client-server-presence-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/presence.yaml",
+      "file": "presence.yaml",
+      "path": "/presence/{userId}/status",
+      "method": "put",
+      "operationId": "setPresence",
+      "title": "setPresence"
+    },
+    {
+      "id": "client-server-presence-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/presence.yaml",
+      "file": "presence.yaml",
+      "path": "/presence/{userId}/status",
+      "method": "get",
+      "operationId": "getPresence",
+      "title": "getPresence"
+    },
+    {
+      "id": "client-server-profile",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/profile.yaml",
+      "file": "profile.yaml",
+      "title": "profile"
+    },
+    {
+      "id": "client-server-profile-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/profile.yaml",
+      "file": "profile.yaml",
+      "path": "/profile/{userId}/{keyName}",
+      "method": "put",
+      "operationId": "setProfileField",
+      "title": "setProfileField"
+    },
+    {
+      "id": "client-server-profile-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/profile.yaml",
+      "file": "profile.yaml",
+      "path": "/profile/{userId}/{keyName}",
+      "method": "get",
+      "operationId": "getProfileField",
+      "title": "getProfileField"
+    },
+    {
+      "id": "client-server-profile-delete",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/profile.yaml",
+      "file": "profile.yaml",
+      "path": "/profile/{userId}/{keyName}",
+      "method": "delete",
+      "operationId": "deleteProfileField",
+      "title": "deleteProfileField"
+    },
+    {
+      "id": "client-server-profile-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/profile.yaml",
+      "file": "profile.yaml",
+      "path": "/profile/{userId}",
+      "method": "get",
+      "operationId": "getUserProfile",
+      "title": "getUserProfile"
+    },
+    {
+      "id": "client-server-pusher",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/pusher.yaml",
+      "file": "pusher.yaml",
+      "title": "pusher"
+    },
+    {
+      "id": "client-server-pusher-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/pusher.yaml",
+      "file": "pusher.yaml",
+      "path": "/pushers",
+      "method": "get",
+      "operationId": "getPushers",
+      "title": "getPushers"
+    },
+    {
+      "id": "client-server-pusher-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/pusher.yaml",
+      "file": "pusher.yaml",
+      "path": "/pushers/set",
+      "method": "post",
+      "operationId": "postPusher",
+      "title": "postPusher"
+    },
+    {
+      "id": "client-server-pushrules",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/pushrules.yaml",
+      "file": "pushrules.yaml",
+      "title": "pushrules"
+    },
+    {
+      "id": "client-server-pushrules-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/pushrules.yaml",
+      "file": "pushrules.yaml",
+      "path": "/pushrules/",
+      "method": "get",
+      "operationId": "getPushRules",
+      "title": "getPushRules"
+    },
+    {
+      "id": "client-server-pushrules-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/pushrules.yaml",
+      "file": "pushrules.yaml",
+      "path": "/pushrules/global/",
+      "method": "get",
+      "operationId": "getPushRulesGlobal",
+      "title": "getPushRulesGlobal"
+    },
+    {
+      "id": "client-server-pushrules-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/pushrules.yaml",
+      "file": "pushrules.yaml",
+      "path": "/pushrules/global/{kind}/{ruleId}",
+      "method": "get",
+      "operationId": "getPushRule",
+      "title": "getPushRule"
+    },
+    {
+      "id": "client-server-pushrules-delete",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/pushrules.yaml",
+      "file": "pushrules.yaml",
+      "path": "/pushrules/global/{kind}/{ruleId}",
+      "method": "delete",
+      "operationId": "deletePushRule",
+      "title": "deletePushRule"
+    },
+    {
+      "id": "client-server-pushrules-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/pushrules.yaml",
+      "file": "pushrules.yaml",
+      "path": "/pushrules/global/{kind}/{ruleId}",
+      "method": "put",
+      "operationId": "setPushRule",
+      "title": "setPushRule"
+    },
+    {
+      "id": "client-server-pushrules-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/pushrules.yaml",
+      "file": "pushrules.yaml",
+      "path": "/pushrules/global/{kind}/{ruleId}/enabled",
+      "method": "get",
+      "operationId": "isPushRuleEnabled",
+      "title": "isPushRuleEnabled"
+    },
+    {
+      "id": "client-server-pushrules-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/pushrules.yaml",
+      "file": "pushrules.yaml",
+      "path": "/pushrules/global/{kind}/{ruleId}/enabled",
+      "method": "put",
+      "operationId": "setPushRuleEnabled",
+      "title": "setPushRuleEnabled"
+    },
+    {
+      "id": "client-server-pushrules-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/pushrules.yaml",
+      "file": "pushrules.yaml",
+      "path": "/pushrules/global/{kind}/{ruleId}/actions",
+      "method": "get",
+      "operationId": "getPushRuleActions",
+      "title": "getPushRuleActions"
+    },
+    {
+      "id": "client-server-pushrules-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/pushrules.yaml",
+      "file": "pushrules.yaml",
+      "path": "/pushrules/global/{kind}/{ruleId}/actions",
+      "method": "put",
+      "operationId": "setPushRuleActions",
+      "title": "setPushRuleActions"
+    },
+    {
+      "id": "client-server-read_markers",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/read_markers.yaml",
+      "file": "read_markers.yaml",
+      "title": "read_markers"
+    },
+    {
+      "id": "client-server-read_markers-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/read_markers.yaml",
+      "file": "read_markers.yaml",
+      "path": "/rooms/{roomId}/read_markers",
+      "method": "post",
+      "operationId": "setReadMarker",
+      "title": "setReadMarker"
+    },
+    {
+      "id": "client-server-receipts",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/receipts.yaml",
+      "file": "receipts.yaml",
+      "title": "receipts"
+    },
+    {
+      "id": "client-server-receipts-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/receipts.yaml",
+      "file": "receipts.yaml",
+      "path": "/rooms/{roomId}/receipt/{receiptType}/{eventId}",
+      "method": "post",
+      "operationId": "postReceipt",
+      "title": "postReceipt"
+    },
+    {
+      "id": "client-server-redaction",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/redaction.yaml",
+      "file": "redaction.yaml",
+      "title": "redaction"
+    },
+    {
+      "id": "client-server-redaction-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/redaction.yaml",
+      "file": "redaction.yaml",
+      "path": "/rooms/{roomId}/redact/{eventId}/{txnId}",
+      "method": "put",
+      "operationId": "redactEvent",
+      "title": "redactEvent"
+    },
+    {
+      "id": "client-server-refresh",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/refresh.yaml",
+      "file": "refresh.yaml",
+      "title": "refresh"
+    },
+    {
+      "id": "client-server-refresh-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/refresh.yaml",
+      "file": "refresh.yaml",
+      "path": "/refresh",
+      "method": "post",
+      "operationId": "refresh",
+      "title": "refresh"
+    },
+    {
+      "id": "client-server-registration",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/registration.yaml",
+      "file": "registration.yaml",
+      "title": "registration"
+    },
+    {
+      "id": "client-server-registration-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/registration.yaml",
+      "file": "registration.yaml",
+      "path": "/register",
+      "method": "post",
+      "operationId": "register",
+      "title": "register"
+    },
+    {
+      "id": "client-server-registration-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/registration.yaml",
+      "file": "registration.yaml",
+      "path": "/register/email/requestToken",
+      "method": "post",
+      "operationId": "requestTokenToRegisterEmail",
+      "title": "requestTokenToRegisterEmail"
+    },
+    {
+      "id": "client-server-registration-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/registration.yaml",
+      "file": "registration.yaml",
+      "path": "/register/msisdn/requestToken",
+      "method": "post",
+      "operationId": "requestTokenToRegisterMSISDN",
+      "title": "requestTokenToRegisterMSISDN"
+    },
+    {
+      "id": "client-server-registration-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/registration.yaml",
+      "file": "registration.yaml",
+      "path": "/register/available",
+      "method": "get",
+      "operationId": "checkUsernameAvailability",
+      "title": "checkUsernameAvailability"
+    },
+    {
+      "id": "client-server-registration_tokens",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/registration_tokens.yaml",
+      "file": "registration_tokens.yaml",
+      "title": "registration_tokens"
+    },
+    {
+      "id": "client-server-registration_tokens-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/registration_tokens.yaml",
+      "file": "registration_tokens.yaml",
+      "path": "/register/m.login.registration_token/validity",
+      "method": "get",
+      "operationId": "registrationTokenValidity",
+      "title": "registrationTokenValidity"
+    },
+    {
+      "id": "client-server-relations",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/relations.yaml",
+      "file": "relations.yaml",
+      "title": "relations"
+    },
+    {
+      "id": "client-server-relations-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/relations.yaml",
+      "file": "relations.yaml",
+      "path": "/rooms/{roomId}/relations/{eventId}",
+      "method": "get",
+      "operationId": "getRelatingEvents",
+      "title": "getRelatingEvents"
+    },
+    {
+      "id": "client-server-relations-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/relations.yaml",
+      "file": "relations.yaml",
+      "path": "/rooms/{roomId}/relations/{eventId}/{relType}",
+      "method": "get",
+      "operationId": "getRelatingEventsWithRelType",
+      "title": "getRelatingEventsWithRelType"
+    },
+    {
+      "id": "client-server-relations-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/relations.yaml",
+      "file": "relations.yaml",
+      "path": "/rooms/{roomId}/relations/{eventId}/{relType}/{eventType}",
+      "method": "get",
+      "operationId": "getRelatingEventsWithRelTypeAndEventType",
+      "title": "getRelatingEventsWithRelTypeAndEventType"
+    },
+    {
+      "id": "client-server-report_content",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/report_content.yaml",
+      "file": "report_content.yaml",
+      "title": "report_content"
+    },
+    {
+      "id": "client-server-report_content-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/report_content.yaml",
+      "file": "report_content.yaml",
+      "path": "/rooms/{roomId}/report",
+      "method": "post",
+      "operationId": "reportRoom",
+      "title": "reportRoom"
+    },
+    {
+      "id": "client-server-report_content-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/report_content.yaml",
+      "file": "report_content.yaml",
+      "path": "/rooms/{roomId}/report/{eventId}",
+      "method": "post",
+      "operationId": "reportEvent",
+      "title": "reportEvent"
+    },
+    {
+      "id": "client-server-report_content-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/report_content.yaml",
+      "file": "report_content.yaml",
+      "path": "/users/{userId}/report",
+      "method": "post",
+      "operationId": "reportUser",
+      "title": "reportUser"
+    },
+    {
+      "id": "client-server-room_event_by_timestamp",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_event_by_timestamp.yaml",
+      "file": "room_event_by_timestamp.yaml",
+      "title": "room_event_by_timestamp"
+    },
+    {
+      "id": "client-server-room_event_by_timestamp-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_event_by_timestamp.yaml",
+      "file": "room_event_by_timestamp.yaml",
+      "path": "/rooms/{roomId}/timestamp_to_event",
+      "method": "get",
+      "operationId": "getEventByTimestamp",
+      "title": "getEventByTimestamp"
+    },
+    {
+      "id": "client-server-room_initial_sync",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_initial_sync.yaml",
+      "file": "room_initial_sync.yaml",
+      "title": "room_initial_sync"
+    },
+    {
+      "id": "client-server-room_initial_sync-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_initial_sync.yaml",
+      "file": "room_initial_sync.yaml",
+      "path": "/rooms/{roomId}/initialSync",
+      "method": "get",
+      "operationId": "roomInitialSync",
+      "title": "roomInitialSync"
+    },
+    {
+      "id": "client-server-room_send",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_send.yaml",
+      "file": "room_send.yaml",
+      "title": "room_send"
+    },
+    {
+      "id": "client-server-room_send-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_send.yaml",
+      "file": "room_send.yaml",
+      "path": "/rooms/{roomId}/send/{eventType}/{txnId}",
+      "method": "put",
+      "operationId": "sendMessage",
+      "title": "sendMessage"
+    },
+    {
+      "id": "client-server-room_state",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_state.yaml",
+      "file": "room_state.yaml",
+      "title": "room_state"
+    },
+    {
+      "id": "client-server-room_state-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_state.yaml",
+      "file": "room_state.yaml",
+      "path": "/rooms/{roomId}/state/{eventType}/{stateKey}",
+      "method": "put",
+      "operationId": "setRoomStateWithKey",
+      "title": "setRoomStateWithKey"
+    },
+    {
+      "id": "client-server-room_summary",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_summary.yaml",
+      "file": "room_summary.yaml",
+      "title": "room_summary"
+    },
+    {
+      "id": "client-server-room_summary-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_summary.yaml",
+      "file": "room_summary.yaml",
+      "path": "/room_summary/{roomIdOrAlias}",
+      "method": "get",
+      "operationId": "getRoomSummary",
+      "title": "getRoomSummary"
+    },
+    {
+      "id": "client-server-room_upgrades",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_upgrades.yaml",
+      "file": "room_upgrades.yaml",
+      "title": "room_upgrades"
+    },
+    {
+      "id": "client-server-room_upgrades-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/room_upgrades.yaml",
+      "file": "room_upgrades.yaml",
+      "path": "/rooms/{roomId}/upgrade",
+      "method": "post",
+      "operationId": "upgradeRoom",
+      "title": "upgradeRoom"
+    },
+    {
+      "id": "client-server-rooms",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/rooms.yaml",
+      "file": "rooms.yaml",
+      "title": "rooms"
+    },
+    {
+      "id": "client-server-rooms-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/rooms.yaml",
+      "file": "rooms.yaml",
+      "path": "/rooms/{roomId}/event/{eventId}",
+      "method": "get",
+      "operationId": "getOneRoomEvent",
+      "title": "getOneRoomEvent"
+    },
+    {
+      "id": "client-server-rooms-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/rooms.yaml",
+      "file": "rooms.yaml",
+      "path": "/rooms/{roomId}/state/{eventType}/{stateKey}",
+      "method": "get",
+      "operationId": "getRoomStateWithKey",
+      "title": "getRoomStateWithKey"
+    },
+    {
+      "id": "client-server-rooms-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/rooms.yaml",
+      "file": "rooms.yaml",
+      "path": "/rooms/{roomId}/state",
+      "method": "get",
+      "operationId": "getRoomState",
+      "title": "getRoomState"
+    },
+    {
+      "id": "client-server-rooms-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/rooms.yaml",
+      "file": "rooms.yaml",
+      "path": "/rooms/{roomId}/members",
+      "method": "get",
+      "operationId": "getMembersByRoom",
+      "title": "getMembersByRoom"
+    },
+    {
+      "id": "client-server-rooms-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/rooms.yaml",
+      "file": "rooms.yaml",
+      "path": "/rooms/{roomId}/joined_members",
+      "method": "get",
+      "operationId": "getJoinedMembersByRoom",
+      "title": "getJoinedMembersByRoom"
+    },
+    {
+      "id": "client-server-search",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/search.yaml",
+      "file": "search.yaml",
+      "title": "search"
+    },
+    {
+      "id": "client-server-search-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/search.yaml",
+      "file": "search.yaml",
+      "path": "/search",
+      "method": "post",
+      "operationId": "search",
+      "title": "search"
+    },
+    {
+      "id": "client-server-space_hierarchy",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/space_hierarchy.yaml",
+      "file": "space_hierarchy.yaml",
+      "title": "space_hierarchy"
+    },
+    {
+      "id": "client-server-space_hierarchy-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/space_hierarchy.yaml",
+      "file": "space_hierarchy.yaml",
+      "path": "/rooms/{roomId}/hierarchy",
+      "method": "get",
+      "operationId": "getSpaceHierarchy",
+      "title": "getSpaceHierarchy"
+    },
+    {
+      "id": "client-server-sso_login_redirect",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/sso_login_redirect.yaml",
+      "file": "sso_login_redirect.yaml",
+      "title": "sso_login_redirect"
+    },
+    {
+      "id": "client-server-sso_login_redirect-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/sso_login_redirect.yaml",
+      "file": "sso_login_redirect.yaml",
+      "path": "/login/sso/redirect",
+      "method": "get",
+      "operationId": "redirectToSSO",
+      "title": "redirectToSSO"
+    },
+    {
+      "id": "client-server-sso_login_redirect-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/sso_login_redirect.yaml",
+      "file": "sso_login_redirect.yaml",
+      "path": "/login/sso/redirect/{idpId}",
+      "method": "get",
+      "operationId": "redirectToIdP",
+      "title": "redirectToIdP"
+    },
+    {
+      "id": "client-server-support",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/support.yaml",
+      "file": "support.yaml",
+      "title": "support"
+    },
+    {
+      "id": "client-server-support-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/support.yaml",
+      "file": "support.yaml",
+      "path": "/matrix/support",
+      "method": "get",
+      "operationId": "getWellknownSupport",
+      "title": "getWellknownSupport"
+    },
+    {
+      "id": "client-server-sync",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/sync.yaml",
+      "file": "sync.yaml",
+      "title": "sync"
+    },
+    {
+      "id": "client-server-sync-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/sync.yaml",
+      "file": "sync.yaml",
+      "path": "/sync",
+      "method": "get",
+      "operationId": "sync",
+      "title": "sync"
+    },
+    {
+      "id": "client-server-tags",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/tags.yaml",
+      "file": "tags.yaml",
+      "title": "tags"
+    },
+    {
+      "id": "client-server-tags-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/tags.yaml",
+      "file": "tags.yaml",
+      "path": "/user/{userId}/rooms/{roomId}/tags",
+      "method": "get",
+      "operationId": "getRoomTags",
+      "title": "getRoomTags"
+    },
+    {
+      "id": "client-server-tags-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/tags.yaml",
+      "file": "tags.yaml",
+      "path": "/user/{userId}/rooms/{roomId}/tags/{tag}",
+      "method": "put",
+      "operationId": "setRoomTag",
+      "title": "setRoomTag"
+    },
+    {
+      "id": "client-server-tags-delete",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/tags.yaml",
+      "file": "tags.yaml",
+      "path": "/user/{userId}/rooms/{roomId}/tags/{tag}",
+      "method": "delete",
+      "operationId": "deleteRoomTag",
+      "title": "deleteRoomTag"
+    },
+    {
+      "id": "client-server-third_party_lookup",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/third_party_lookup.yaml",
+      "file": "third_party_lookup.yaml",
+      "title": "third_party_lookup"
+    },
+    {
+      "id": "client-server-third_party_lookup-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/third_party_lookup.yaml",
+      "file": "third_party_lookup.yaml",
+      "path": "/thirdparty/protocols",
+      "method": "get",
+      "operationId": "getProtocols",
+      "title": "getProtocols"
+    },
+    {
+      "id": "client-server-third_party_lookup-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/third_party_lookup.yaml",
+      "file": "third_party_lookup.yaml",
+      "path": "/thirdparty/protocol/{protocol}",
+      "method": "get",
+      "operationId": "getProtocolMetadata",
+      "title": "getProtocolMetadata"
+    },
+    {
+      "id": "client-server-third_party_lookup-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/third_party_lookup.yaml",
+      "file": "third_party_lookup.yaml",
+      "path": "/thirdparty/location/{protocol}",
+      "method": "get",
+      "operationId": "queryLocationByProtocol",
+      "title": "queryLocationByProtocol"
+    },
+    {
+      "id": "client-server-third_party_lookup-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/third_party_lookup.yaml",
+      "file": "third_party_lookup.yaml",
+      "path": "/thirdparty/user/{protocol}",
+      "method": "get",
+      "operationId": "queryUserByProtocol",
+      "title": "queryUserByProtocol"
+    },
+    {
+      "id": "client-server-third_party_lookup-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/third_party_lookup.yaml",
+      "file": "third_party_lookup.yaml",
+      "path": "/thirdparty/location",
+      "method": "get",
+      "operationId": "queryLocationByAlias",
+      "title": "queryLocationByAlias"
+    },
+    {
+      "id": "client-server-third_party_lookup-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/third_party_lookup.yaml",
+      "file": "third_party_lookup.yaml",
+      "path": "/thirdparty/user",
+      "method": "get",
+      "operationId": "queryUserByID",
+      "title": "queryUserByID"
+    },
+    {
+      "id": "client-server-third_party_membership",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/third_party_membership.yaml",
+      "file": "third_party_membership.yaml",
+      "title": "third_party_membership"
+    },
+    {
+      "id": "client-server-third_party_membership-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/third_party_membership.yaml",
+      "file": "third_party_membership.yaml",
+      "path": "/rooms/{roomId}/invite",
+      "method": "post",
+      "operationId": "inviteBy3PID",
+      "title": "inviteBy3PID"
+    },
+    {
+      "id": "client-server-threads_list",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/threads_list.yaml",
+      "file": "threads_list.yaml",
+      "title": "threads_list"
+    },
+    {
+      "id": "client-server-threads_list-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/threads_list.yaml",
+      "file": "threads_list.yaml",
+      "path": "/rooms/{roomId}/threads",
+      "method": "get",
+      "operationId": "getThreadRoots",
+      "title": "getThreadRoots"
+    },
+    {
+      "id": "client-server-to_device",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/to_device.yaml",
+      "file": "to_device.yaml",
+      "title": "to_device"
+    },
+    {
+      "id": "client-server-to_device-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/to_device.yaml",
+      "file": "to_device.yaml",
+      "path": "/sendToDevice/{eventType}/{txnId}",
+      "method": "put",
+      "operationId": "sendToDevice",
+      "title": "sendToDevice"
+    },
+    {
+      "id": "client-server-typing",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/typing.yaml",
+      "file": "typing.yaml",
+      "title": "typing"
+    },
+    {
+      "id": "client-server-typing-put",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/typing.yaml",
+      "file": "typing.yaml",
+      "path": "/rooms/{roomId}/typing/{userId}",
+      "method": "put",
+      "operationId": "setTyping",
+      "title": "setTyping"
+    },
+    {
+      "id": "client-server-users",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/users.yaml",
+      "file": "users.yaml",
+      "title": "users"
+    },
+    {
+      "id": "client-server-users-post",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/users.yaml",
+      "file": "users.yaml",
+      "path": "/user_directory/search",
+      "method": "post",
+      "operationId": "searchUserDirectory",
+      "title": "searchUserDirectory"
+    },
+    {
+      "id": "client-server-versions",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/versions.yaml",
+      "file": "versions.yaml",
+      "title": "versions"
+    },
+    {
+      "id": "client-server-versions-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/versions.yaml",
+      "file": "versions.yaml",
+      "path": "/versions",
+      "method": "get",
+      "operationId": "getVersions",
+      "title": "getVersions"
+    },
+    {
+      "id": "client-server-voip",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/voip.yaml",
+      "file": "voip.yaml",
+      "title": "voip"
+    },
+    {
+      "id": "client-server-voip-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/voip.yaml",
+      "file": "voip.yaml",
+      "path": "/voip/turnServer",
+      "method": "get",
+      "operationId": "getTurnServer",
+      "title": "getTurnServer"
+    },
+    {
+      "id": "client-server-wellknown",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/wellknown.yaml",
+      "file": "wellknown.yaml",
+      "title": "wellknown"
+    },
+    {
+      "id": "client-server-wellknown-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/wellknown.yaml",
+      "file": "wellknown.yaml",
+      "path": "/matrix/client",
+      "method": "get",
+      "operationId": "getWellknown",
+      "title": "getWellknown"
+    },
+    {
+      "id": "client-server-whoami",
+      "kind": "file",
+      "spec": "client-server",
+      "source": "data/api/client-server/whoami.yaml",
+      "file": "whoami.yaml",
+      "title": "whoami"
+    },
+    {
+      "id": "client-server-whoami-get",
+      "kind": "operation",
+      "spec": "client-server",
+      "source": "data/api/client-server/whoami.yaml",
+      "file": "whoami.yaml",
+      "path": "/account/whoami",
+      "method": "get",
+      "operationId": "getTokenOwner",
+      "title": "getTokenOwner"
+    },
+    {
+      "id": "server-server-backfill",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/backfill.yaml",
+      "file": "backfill.yaml",
+      "title": "backfill"
+    },
+    {
+      "id": "server-server-backfill-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/backfill.yaml",
+      "file": "backfill.yaml",
+      "path": "/backfill/{roomId}",
+      "method": "get",
+      "operationId": "backfillRoom",
+      "title": "backfillRoom"
+    },
+    {
+      "id": "server-server-backfill-post",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/backfill.yaml",
+      "file": "backfill.yaml",
+      "path": "/get_missing_events/{roomId}",
+      "method": "post",
+      "operationId": "getMissingPreviousEvents",
+      "title": "getMissingPreviousEvents"
+    },
+    {
+      "id": "server-server-content_repository",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/content_repository.yaml",
+      "file": "content_repository.yaml",
+      "title": "content_repository"
+    },
+    {
+      "id": "server-server-content_repository-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/content_repository.yaml",
+      "file": "content_repository.yaml",
+      "path": "/media/download/{mediaId}",
+      "method": "get",
+      "operationId": "getContent",
+      "title": "getContent"
+    },
+    {
+      "id": "server-server-content_repository-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/content_repository.yaml",
+      "file": "content_repository.yaml",
+      "path": "/media/thumbnail/{mediaId}",
+      "method": "get",
+      "operationId": "getContentThumbnail",
+      "title": "getContentThumbnail"
+    },
+    {
+      "id": "server-server-event_auth",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/event_auth.yaml",
+      "file": "event_auth.yaml",
+      "title": "event_auth"
+    },
+    {
+      "id": "server-server-event_auth-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/event_auth.yaml",
+      "file": "event_auth.yaml",
+      "path": "/event_auth/{roomId}/{eventId}",
+      "method": "get",
+      "operationId": "getEventAuth",
+      "title": "getEventAuth"
+    },
+    {
+      "id": "server-server-events",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/events.yaml",
+      "file": "events.yaml",
+      "title": "events"
+    },
+    {
+      "id": "server-server-events-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/events.yaml",
+      "file": "events.yaml",
+      "path": "/state/{roomId}",
+      "method": "get",
+      "operationId": "getRoomState",
+      "title": "getRoomState"
+    },
+    {
+      "id": "server-server-events-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/events.yaml",
+      "file": "events.yaml",
+      "path": "/state_ids/{roomId}",
+      "method": "get",
+      "operationId": "getRoomStateIds",
+      "title": "getRoomStateIds"
+    },
+    {
+      "id": "server-server-events-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/events.yaml",
+      "file": "events.yaml",
+      "path": "/event/{eventId}",
+      "method": "get",
+      "operationId": "getEvent",
+      "title": "getEvent"
+    },
+    {
+      "id": "server-server-events-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/events.yaml",
+      "file": "events.yaml",
+      "path": "/timestamp_to_event/{roomId}",
+      "method": "get",
+      "operationId": "getEventByTimestamp",
+      "title": "getEventByTimestamp"
+    },
+    {
+      "id": "server-server-invites-v1",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/invites-v1.yaml",
+      "file": "invites-v1.yaml",
+      "title": "invites-v1"
+    },
+    {
+      "id": "server-server-invites-v1-put",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/invites-v1.yaml",
+      "file": "invites-v1.yaml",
+      "path": "/invite/{roomId}/{eventId}",
+      "method": "put",
+      "operationId": "sendInviteV1",
+      "title": "sendInviteV1"
+    },
+    {
+      "id": "server-server-invites-v2",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/invites-v2.yaml",
+      "file": "invites-v2.yaml",
+      "title": "invites-v2"
+    },
+    {
+      "id": "server-server-invites-v2-put",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/invites-v2.yaml",
+      "file": "invites-v2.yaml",
+      "path": "/invite/{roomId}/{eventId}",
+      "method": "put",
+      "operationId": "sendInviteV2",
+      "title": "sendInviteV2"
+    },
+    {
+      "id": "server-server-joins-v1",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/joins-v1.yaml",
+      "file": "joins-v1.yaml",
+      "title": "joins-v1"
+    },
+    {
+      "id": "server-server-joins-v1-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/joins-v1.yaml",
+      "file": "joins-v1.yaml",
+      "path": "/make_join/{roomId}/{userId}",
+      "method": "get",
+      "operationId": "makeJoin",
+      "title": "makeJoin"
+    },
+    {
+      "id": "server-server-joins-v2",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/joins-v2.yaml",
+      "file": "joins-v2.yaml",
+      "title": "joins-v2"
+    },
+    {
+      "id": "server-server-joins-v2-put",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/joins-v2.yaml",
+      "file": "joins-v2.yaml",
+      "path": "/send_join/{roomId}/{eventId}",
+      "method": "put",
+      "operationId": "sendJoinV2",
+      "title": "sendJoinV2"
+    },
+    {
+      "id": "server-server-keys_query",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/keys_query.yaml",
+      "file": "keys_query.yaml",
+      "title": "keys_query"
+    },
+    {
+      "id": "server-server-keys_query-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/keys_query.yaml",
+      "file": "keys_query.yaml",
+      "path": "/query/{serverName}",
+      "method": "get",
+      "operationId": "perspectivesKeyQuery",
+      "title": "perspectivesKeyQuery"
+    },
+    {
+      "id": "server-server-keys_query-post",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/keys_query.yaml",
+      "file": "keys_query.yaml",
+      "path": "/query",
+      "method": "post",
+      "operationId": "bulkPerspectivesKeyQuery",
+      "title": "bulkPerspectivesKeyQuery"
+    },
+    {
+      "id": "server-server-keys_server",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/keys_server.yaml",
+      "file": "keys_server.yaml",
+      "title": "keys_server"
+    },
+    {
+      "id": "server-server-keys_server-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/keys_server.yaml",
+      "file": "keys_server.yaml",
+      "path": "/server",
+      "method": "get",
+      "operationId": "getServerKey",
+      "title": "getServerKey"
+    },
+    {
+      "id": "server-server-knocks",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/knocks.yaml",
+      "file": "knocks.yaml",
+      "title": "knocks"
+    },
+    {
+      "id": "server-server-knocks-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/knocks.yaml",
+      "file": "knocks.yaml",
+      "path": "/make_knock/{roomId}/{userId}",
+      "method": "get",
+      "operationId": "makeKnock",
+      "title": "makeKnock"
+    },
+    {
+      "id": "server-server-knocks-put",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/knocks.yaml",
+      "file": "knocks.yaml",
+      "path": "/send_knock/{roomId}/{eventId}",
+      "method": "put",
+      "operationId": "sendKnock",
+      "title": "sendKnock"
+    },
+    {
+      "id": "server-server-leaving-v1",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/leaving-v1.yaml",
+      "file": "leaving-v1.yaml",
+      "title": "leaving-v1"
+    },
+    {
+      "id": "server-server-leaving-v1-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/leaving-v1.yaml",
+      "file": "leaving-v1.yaml",
+      "path": "/make_leave/{roomId}/{userId}",
+      "method": "get",
+      "operationId": "makeLeave",
+      "title": "makeLeave"
+    },
+    {
+      "id": "server-server-leaving-v2",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/leaving-v2.yaml",
+      "file": "leaving-v2.yaml",
+      "title": "leaving-v2"
+    },
+    {
+      "id": "server-server-leaving-v2-put",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/leaving-v2.yaml",
+      "file": "leaving-v2.yaml",
+      "path": "/send_leave/{roomId}/{eventId}",
+      "method": "put",
+      "operationId": "sendLeaveV2",
+      "title": "sendLeaveV2"
+    },
+    {
+      "id": "server-server-openid",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/openid.yaml",
+      "file": "openid.yaml",
+      "title": "openid"
+    },
+    {
+      "id": "server-server-openid-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/openid.yaml",
+      "file": "openid.yaml",
+      "path": "/openid/userinfo",
+      "method": "get",
+      "operationId": "exchangeOpenIdToken",
+      "title": "exchangeOpenIdToken"
+    },
+    {
+      "id": "server-server-public_rooms",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/public_rooms.yaml",
+      "file": "public_rooms.yaml",
+      "title": "public_rooms"
+    },
+    {
+      "id": "server-server-public_rooms-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/public_rooms.yaml",
+      "file": "public_rooms.yaml",
+      "path": "/publicRooms",
+      "method": "get",
+      "operationId": "getPublicRooms",
+      "title": "getPublicRooms"
+    },
+    {
+      "id": "server-server-public_rooms-post",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/public_rooms.yaml",
+      "file": "public_rooms.yaml",
+      "path": "/publicRooms",
+      "method": "post",
+      "operationId": "queryPublicRooms",
+      "title": "queryPublicRooms"
+    },
+    {
+      "id": "server-server-query",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/query.yaml",
+      "file": "query.yaml",
+      "title": "query"
+    },
+    {
+      "id": "server-server-query-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/query.yaml",
+      "file": "query.yaml",
+      "path": "/query/{queryType}",
+      "method": "get",
+      "operationId": "queryInfo",
+      "title": "queryInfo"
+    },
+    {
+      "id": "server-server-query-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/query.yaml",
+      "file": "query.yaml",
+      "path": "/query/directory",
+      "method": "get",
+      "operationId": "queryRoomDirectory",
+      "title": "queryRoomDirectory"
+    },
+    {
+      "id": "server-server-query-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/query.yaml",
+      "file": "query.yaml",
+      "path": "/query/profile",
+      "method": "get",
+      "operationId": "queryProfile",
+      "title": "queryProfile"
+    },
+    {
+      "id": "server-server-room_policy",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/room_policy.yaml",
+      "file": "room_policy.yaml",
+      "title": "room_policy"
+    },
+    {
+      "id": "server-server-room_policy-post",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/room_policy.yaml",
+      "file": "room_policy.yaml",
+      "path": "/sign",
+      "method": "post",
+      "operationId": "askPolicyServerToSign",
+      "title": "askPolicyServerToSign"
+    },
+    {
+      "id": "server-server-space_hierarchy",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/space_hierarchy.yaml",
+      "file": "space_hierarchy.yaml",
+      "title": "space_hierarchy"
+    },
+    {
+      "id": "server-server-space_hierarchy-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/space_hierarchy.yaml",
+      "file": "space_hierarchy.yaml",
+      "path": "/hierarchy/{roomId}",
+      "method": "get",
+      "operationId": "getSpaceHierarchy",
+      "title": "getSpaceHierarchy"
+    },
+    {
+      "id": "server-server-third_party_invite",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/third_party_invite.yaml",
+      "file": "third_party_invite.yaml",
+      "title": "third_party_invite"
+    },
+    {
+      "id": "server-server-third_party_invite-put",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/third_party_invite.yaml",
+      "file": "third_party_invite.yaml",
+      "path": "/exchange_third_party_invite/{roomId}",
+      "method": "put",
+      "operationId": "exchangeThirdPartyInvite",
+      "title": "exchangeThirdPartyInvite"
+    },
+    {
+      "id": "server-server-third_party_invite-put",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/third_party_invite.yaml",
+      "file": "third_party_invite.yaml",
+      "path": "/3pid/onbind",
+      "method": "put",
+      "operationId": "onBindThirdPartyIdentifier",
+      "title": "onBindThirdPartyIdentifier"
+    },
+    {
+      "id": "server-server-transactions",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/transactions.yaml",
+      "file": "transactions.yaml",
+      "title": "transactions"
+    },
+    {
+      "id": "server-server-transactions-put",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/transactions.yaml",
+      "file": "transactions.yaml",
+      "path": "/send/{txnId}",
+      "method": "put",
+      "operationId": "sendTransaction",
+      "title": "sendTransaction"
+    },
+    {
+      "id": "server-server-user_devices",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/user_devices.yaml",
+      "file": "user_devices.yaml",
+      "title": "user_devices"
+    },
+    {
+      "id": "server-server-user_devices-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/user_devices.yaml",
+      "file": "user_devices.yaml",
+      "path": "/user/devices/{userId}",
+      "method": "get",
+      "operationId": "getUserDevices",
+      "title": "getUserDevices"
+    },
+    {
+      "id": "server-server-user_keys",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/user_keys.yaml",
+      "file": "user_keys.yaml",
+      "title": "user_keys"
+    },
+    {
+      "id": "server-server-user_keys-post",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/user_keys.yaml",
+      "file": "user_keys.yaml",
+      "path": "/user/keys/claim",
+      "method": "post",
+      "operationId": "claimUserEncryptionKeys",
+      "title": "claimUserEncryptionKeys"
+    },
+    {
+      "id": "server-server-user_keys-post",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/user_keys.yaml",
+      "file": "user_keys.yaml",
+      "path": "/user/keys/query",
+      "method": "post",
+      "operationId": "queryUserEncryptionKeys",
+      "title": "queryUserEncryptionKeys"
+    },
+    {
+      "id": "server-server-version",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/version.yaml",
+      "file": "version.yaml",
+      "title": "version"
+    },
+    {
+      "id": "server-server-version-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/version.yaml",
+      "file": "version.yaml",
+      "path": "/version",
+      "method": "get",
+      "operationId": "getVersion",
+      "title": "getVersion"
+    },
+    {
+      "id": "server-server-wellknown",
+      "kind": "file",
+      "spec": "server-server",
+      "source": "data/api/server-server/wellknown.yaml",
+      "file": "wellknown.yaml",
+      "title": "wellknown"
+    },
+    {
+      "id": "server-server-wellknown-get",
+      "kind": "operation",
+      "spec": "server-server",
+      "source": "data/api/server-server/wellknown.yaml",
+      "file": "wellknown.yaml",
+      "path": "/matrix/server",
+      "method": "get",
+      "operationId": "getWellKnown",
+      "title": "getWellKnown"
+    }
+  ]
+}
