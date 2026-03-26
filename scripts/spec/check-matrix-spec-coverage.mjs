@@ -1,11 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-
-const repoRoot = process.cwd();
-const unitsPath = path.join(repoRoot, "docs", "spec-coverage", "matrix-spec-units.json");
-const aliasesPath = path.join(repoRoot, "docs", "spec-coverage", "title-aliases.json");
-const reportPath = path.join(repoRoot, "docs", "spec-coverage", "coverage-report.json");
-const checklistPath = path.join(repoRoot, "docs", "speccheck-matrix-v2.md");
+import {
+  checklistPath,
+  checklistRepoPath,
+  coverageReportPath,
+  matrixSpecUnitsPath,
+  titleAliasesPath,
+} from "./paths.mjs";
 
 function normalize(value) {
   return value
@@ -34,8 +34,8 @@ function extractChecklistRows(markdown) {
 }
 
 async function main() {
-  const units = JSON.parse(await readFile(unitsPath, "utf8"));
-  const aliases = JSON.parse(await readFile(aliasesPath, "utf8"));
+  const units = JSON.parse(await readFile(matrixSpecUnitsPath, "utf8"));
+  const aliases = JSON.parse(await readFile(titleAliasesPath, "utf8"));
   const checklist = await readFile(checklistPath, "utf8");
 
   const rowTitles = extractChecklistRows(checklist);
@@ -59,14 +59,14 @@ async function main() {
 
   const report = {
     generatedAt: new Date().toISOString(),
-    checklist: "docs/speccheck-matrix-v2.md",
+    checklist: checklistRepoPath,
     primaryUnitCount: units.primaryUnits.length,
     coveredCount: covered.length,
     missingCount: missing.length,
     missing,
   };
 
-  await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await writeFile(coverageReportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
   console.log(`Primary units: ${report.primaryUnitCount}`);
   console.log(`Covered: ${report.coveredCount}`);

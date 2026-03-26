@@ -1,9 +1,8 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { openApiUnitsPath, repoRoot } from "./paths.mjs";
 
-const repoRoot = process.cwd();
 const specRoot = path.join(repoRoot, ".saqula", "matrix-spec", "data", "api");
-const outputPath = path.join(repoRoot, "docs", "spec-coverage", "openapi-units.json");
 
 function normalizePathKey(rawPath) {
   return rawPath.replace(/^["']|["']$/g, "");
@@ -106,11 +105,11 @@ async function main() {
     units: [...clientServer, ...serverServer],
   };
 
-  await writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  await writeFile(openApiUnitsPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 
   const fileCount = payload.units.filter((unit) => unit.kind === "file").length;
   const operationCount = payload.units.filter((unit) => unit.kind === "operation").length;
-  console.log(`Wrote ${path.relative(repoRoot, outputPath)}`);
+  console.log(`Wrote ${path.relative(repoRoot, openApiUnitsPath)}`);
   console.log(`Files: ${fileCount}`);
   console.log(`Operations: ${operationCount}`);
 }

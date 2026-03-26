@@ -15,14 +15,14 @@ The goal of the current phase is architectural separation, not feature removal.
 
 ## Docs
 
-- [Architecture](./docs/architecture.md)
-- [Event Pipeline](./docs/event-pipeline.md)
-- [Feature Profiles](./docs/feature-profiles.md)
-- [Runtime Capability Mapping](./docs/runtime-capability-mapping.md)
-- [Matrix Spec Checklist](./docs/speccheck-matrix.md)
-- [Matrix Spec Check v2](./docs/speccheck-matrix-v2.md)
-- [Matrix Compatibility Checklist](./docs/checklist-matrix-compat.md)
-- [Complement Wrapper](./docs/complement-wrapper.md)
+- [Architecture Overview](./docs/architecture/overview.md)
+- [Event Pipeline](./docs/architecture/event-pipeline.md)
+- [Feature Profiles](./docs/architecture/feature-profiles.md)
+- [Runtime Capability Mapping](./docs/architecture/runtime-capability-mapping.md)
+- [Matrix Spec Checklist](./docs/matrix/speccheck-matrix.md)
+- [Matrix Spec Check v2](./docs/matrix/speccheck-matrix-v2.md)
+- [Matrix Compatibility Checklist](./docs/matrix/checklist-matrix-compat.md)
+- [Complement Wrapper](./docs/testing/complement-wrapper.md)
 
 ## Development
 

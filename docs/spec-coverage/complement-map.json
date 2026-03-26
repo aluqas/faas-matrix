@@ -3,7 +3,7 @@
     "repo": ".saqula/complement",
     "upstream": "https://github.com/matrix-org/complement"
   },
-  "purpose": "Map rows in docs/speccheck-matrix-v2.md to Complement black-box test evidence.",
+  "purpose": "Map rows in docs/matrix/speccheck-matrix-v2.md to Complement black-box test evidence.",
   "notes": [
     "Complement is the primary behavior and interoperability evidence source, not the primary checklist completeness source.",
     "Out-of-repo Complement supports client-server and multi-homeserver tests directly.",

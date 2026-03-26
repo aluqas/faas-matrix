@@ -1,9 +1,8 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { matrixSpecUnitsPath, repoRoot } from "./paths.mjs";
 
-const repoRoot = process.cwd();
 const specRoot = path.join(repoRoot, ".saqula", "matrix-spec");
-const outputPath = path.join(repoRoot, "docs", "spec-coverage", "matrix-spec-units.json");
 
 function slugify(value) {
   return value
@@ -165,8 +164,8 @@ async function main() {
     ],
   };
 
-  await writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-  console.log(`Wrote ${path.relative(repoRoot, outputPath)}`);
+  await writeFile(matrixSpecUnitsPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  console.log(`Wrote ${path.relative(repoRoot, matrixSpecUnitsPath)}`);
   console.log(`Primary units: ${payload.primaryUnits.length}`);
   console.log(`Supplemental units: ${payload.supplementalUnits.length}`);
 }

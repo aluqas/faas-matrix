@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-03-26T05:37:02.412Z",
-  "checklist": "docs/speccheck-matrix-v2.md",
+  "generatedAt": "2026-03-26T07:05:25.787Z",
+  "checklist": "docs/matrix/speccheck-matrix-v2.md",
   "primaryUnitCount": 85,
   "coveredCount": 85,
   "missingCount": 0,

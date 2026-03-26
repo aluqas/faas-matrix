@@ -8,7 +8,7 @@ The wrapper is intentionally narrow:
 - it exposes `8008` for client-server traffic over HTTP
 - it exposes `8448` for federation traffic over HTTPS
 - it generates a `SERVER_NAME` certificate from Complement's mounted CA when available
-- it runs the local D1 schema migration before starting the worker
+- it runs the full local D1 migration set before starting the worker
 
 This is meant for early Complement and out-of-repo CSAPI coverage. It is not a faithful reproduction of Cloudflare production runtime behavior.
 
@@ -45,7 +45,7 @@ If the CA files are absent, the container falls back to a self-signed certificat
 
 - The entrypoint writes `.dev.vars` at container start so `SERVER_NAME` and the feature profile can be injected into `wrangler dev`.
 - Local state is stored under `/data/wrangler`.
-- `schema.sql` is applied on every start with `wrangler d1 execute --local`; the schema uses `IF NOT EXISTS`, so this is repeatable.
+- The wrapper applies `migrations/schema.sql` and then the numbered files under `migrations/` on every start with `wrangler d1 execute --local`.
 - The wrapper image uses Node.js to execute Wrangler even though the repository itself uses `bun`, because Wrangler's local runtime path is not supported under Bun.
 - Optional integrations such as email, LiveKit VPC service, and Cloudflare remote-only bindings are intentionally left out of the Complement config.
 

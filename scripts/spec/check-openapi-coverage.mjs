@@ -1,11 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-
-const repoRoot = process.cwd();
-const unitsPath = path.join(repoRoot, "docs", "spec-coverage", "openapi-units.json");
-const mapPath = path.join(repoRoot, "docs", "spec-coverage", "openapi-row-map.json");
-const checklistPath = path.join(repoRoot, "docs", "speccheck-matrix-v2.md");
-const reportPath = path.join(repoRoot, "docs", "spec-coverage", "openapi-coverage-report.json");
+import {
+  checklistPath,
+  checklistRepoPath,
+  openApiCoverageReportPath,
+  openApiRowMapPath,
+  openApiUnitsPath,
+} from "./paths.mjs";
 
 function normalize(value) {
   return value
@@ -32,8 +32,8 @@ function extractChecklistRows(markdown) {
 }
 
 async function main() {
-  const units = JSON.parse(await readFile(unitsPath, "utf8"));
-  const coverageMap = JSON.parse(await readFile(mapPath, "utf8"));
+  const units = JSON.parse(await readFile(openApiUnitsPath, "utf8"));
+  const coverageMap = JSON.parse(await readFile(openApiRowMapPath, "utf8"));
   const checklist = await readFile(checklistPath, "utf8");
 
   const checklistRows = new Set(extractChecklistRows(checklist).map(normalize));
@@ -75,7 +75,7 @@ async function main() {
 
   const report = {
     generatedAt: new Date().toISOString(),
-    checklist: "docs/speccheck-matrix-v2.md",
+    checklist: checklistRepoPath,
     openApiFileCount: fileUnits.length,
     coveredCount: covered.length,
     missingCount: missing.length,
@@ -85,7 +85,7 @@ async function main() {
     covered,
   };
 
-  await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await writeFile(openApiCoverageReportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
   console.log(`OpenAPI files: ${report.openApiFileCount}`);
   console.log(`Covered: ${report.coveredCount}`);

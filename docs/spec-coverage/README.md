@@ -31,9 +31,9 @@ This split is deliberate:
 - `openapi-units.json`
   - Generated OpenAPI file and operation inventory.
 - `openapi-row-map.json`
-  - Maps OpenAPI files to rows in `docs/speccheck-matrix-v2.md`.
+  - Maps OpenAPI files to rows in `docs/matrix/speccheck-matrix-v2.md`.
 - `complement-map.json`
-  - Maps rows in `docs/speccheck-matrix-v2.md` to Complement test files which can serve as black-box evidence.
+  - Maps rows in `docs/matrix/speccheck-matrix-v2.md` to Complement test files which can serve as black-box evidence.
 - `title-aliases.json`
   - Normalization map from spec titles to checklist row titles when the names differ.
 - `coverage-report.json`
@@ -57,7 +57,7 @@ bun run spec:coverage:openapi
 
 `spec:coverage` runs both the Markdown structure coverage check and the OpenAPI coverage check.
 
-`spec:coverage:openapi` checks whether every OpenAPI file is explicitly accounted for in `docs/speccheck-matrix-v2.md` through `openapi-row-map.json`.
+`spec:coverage:openapi` checks whether every OpenAPI file is explicitly accounted for in `docs/matrix/speccheck-matrix-v2.md` through `openapi-row-map.json`.
 
 ## Limits
 
