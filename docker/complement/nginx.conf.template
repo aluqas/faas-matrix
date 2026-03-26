@@ -13,22 +13,7 @@ http {
   access_log /dev/stdout;
   error_log /dev/stderr warn;
 
-  server {
-    listen __CLIENT_PORT__;
-    server_name __SERVER_NAME__;
-    client_max_body_size 100m;
-
-    location / {
-      proxy_http_version 1.1;
-      proxy_set_header Host $host;
-      proxy_set_header X-Forwarded-Proto http;
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection $connection_upgrade;
-      proxy_pass http://127.0.0.1:__WRANGLER_PORT__;
-    }
-  }
-
+  # Federation port only — client traffic goes directly to wrangler on __CLIENT_PORT__
   server {
     listen __FEDERATION_PORT__ ssl;
     server_name __SERVER_NAME__;
@@ -45,7 +30,7 @@ http {
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection $connection_upgrade;
-      proxy_pass http://127.0.0.1:__WRANGLER_PORT__;
+      proxy_pass http://127.0.0.1:__CLIENT_PORT__;
     }
   }
 }

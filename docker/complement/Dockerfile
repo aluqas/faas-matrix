@@ -12,6 +12,14 @@ RUN npm install --no-fund --no-audit
 COPY src ./src
 COPY migrations ./migrations
 COPY wrangler.complement.jsonc ./wrangler.complement.jsonc
+
+# Pre-compile TypeScript bundle so wrangler dev can skip compilation at container start
+RUN node_modules/.bin/wrangler deploy \
+      --dry-run \
+      --outdir /app/dist \
+      --config wrangler.complement.jsonc \
+  && sed -i 's|"main": "src/index.ts"|"main": "dist/index.js"|' wrangler.complement.jsonc
+
 COPY docker/complement/entrypoint.sh /usr/local/bin/complement-entrypoint
 COPY docker/complement/nginx.conf.template /etc/faas-matrix/complement-nginx.conf.template
 
