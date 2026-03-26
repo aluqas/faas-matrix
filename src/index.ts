@@ -45,6 +45,7 @@ import { adminDashboardHtml } from './admin/dashboard';
 import { rateLimitMiddleware } from './middleware/rate-limit';
 import { requireAuth } from './middleware/auth';
 import { analyticsMiddleware } from './middleware/analytics';
+import { appContextMiddleware } from './runtime/cloudflare/app-context';
 
 // Import Durable Objects
 export { RoomDurableObject, SyncDurableObject, FederationDurableObject, CallRoomDurableObject, AdminDurableObject, UserKeysDurableObject, PushDurableObject, RateLimitDurableObject } from './durable-objects';
@@ -68,6 +69,7 @@ app.use('*', cors({
 // Global middleware
 app.use('*', logger());
 app.use('*', analyticsMiddleware());
+app.use('*', appContextMiddleware());
 
 // Rate limiting for Matrix API endpoints
 app.use('/_matrix/*', rateLimitMiddleware);

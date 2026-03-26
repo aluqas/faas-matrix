@@ -30,7 +30,7 @@ export function analyticsMiddleware() {
             path.split('/').slice(0, 5).join('/'), // index1: path prefix for grouping
           ],
         });
-      } catch (err) {
+      } catch {
         // Don't fail requests if analytics fails
       }
     }

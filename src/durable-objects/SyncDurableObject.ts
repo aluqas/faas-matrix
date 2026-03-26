@@ -211,7 +211,7 @@ export class SyncDurableObject extends DurableObject<Env> {
     for (const ws of webSockets) {
       try {
         ws.send(message);
-      } catch (e) {
+      } catch {
         // WebSocket may be closed
       }
     }
@@ -325,8 +325,8 @@ export class SyncDurableObject extends DurableObject<Env> {
         default:
           break;
       }
-    } catch (e) {
-      console.error('Error handling sync message:', e);
+    } catch (error) {
+      console.error('Error handling sync message:', error);
     }
   }
 

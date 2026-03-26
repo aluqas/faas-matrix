@@ -88,7 +88,7 @@ export function requireAuth() {
             accessToken: token,
           };
         }
-      } catch (asErr) {
+      } catch {
         // Ignore AS token lookup errors
       }
     }

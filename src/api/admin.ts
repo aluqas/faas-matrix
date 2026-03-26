@@ -430,7 +430,7 @@ app.get('/admin/api/federation/status', requireAuth(), requireAdmin, async (c) =
       const parsed = JSON.parse(keyData);
       signingKeyId = parsed.keyId || `ed25519:${serverName.split('.')[0]}`;
     }
-  } catch (e) {
+  } catch {
     // Key might not be cached
   }
 

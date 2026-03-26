@@ -1,0 +1,325 @@
+import type { AppContext } from '../../foundation/app-context';
+import { withIdempotency, type IdempotencyStore } from '../../foundation/idempotency';
+import { Errors, MatrixApiError } from '../../utils/errors';
+import { isRoomVersionSupported, getDefaultRoomVersion } from '../../services/room-versions';
+import type { PDU } from '../../types';
+import type { EventPipeline } from '../domain/event-pipeline';
+import type { RoomRepository } from '../repositories/interfaces';
+import {
+  createInitialRoomEvents,
+  createMembershipEvent,
+  getServerFromRoomId,
+  validateStateEvent,
+} from './rooms-support';
+
+export interface CreateRoomInput {
+  userId: string;
+  body: Record<string, any>;
+}
+
+export interface JoinRoomInput {
+  userId: string;
+  roomId: string;
+}
+
+export interface SendEventInput {
+  userId: string;
+  roomId: string;
+  eventType: string;
+  txnId: string;
+  content: Record<string, unknown>;
+}
+
+type TransactionResponse = Record<string, unknown>;
+
+export class MatrixRoomService {
+  constructor(
+    private readonly appContext: AppContext,
+    private readonly repository: RoomRepository,
+    private readonly eventPipeline: EventPipeline,
+    private readonly idempotencyStore: IdempotencyStore<TransactionResponse>
+  ) {}
+
+  async createRoom(input: CreateRoomInput): Promise<{ room_id: string; room_alias?: string }> {
+    const {
+      room_alias_local_part,
+      name,
+      topic,
+      invite,
+      room_version,
+      initial_state,
+      preset,
+      is_direct,
+      visibility,
+    } = input.body;
+
+    if (room_alias_local_part) {
+      const alias = this.appContext.capabilities.id.formatRoomAlias(
+        room_alias_local_part,
+        this.appContext.capabilities.config.serverName
+      );
+      const existingRoom = await this.repository.getRoomByAlias(alias);
+      if (existingRoom) {
+        throw Errors.roomInUse();
+      }
+    }
+
+    if (initial_state !== undefined) {
+      if (!Array.isArray(initial_state)) {
+        throw Errors.invalidParam('initial_state', 'initial_state must be an array');
+      }
+
+      const encryptionEvents = initial_state.filter(
+        (state: { type?: string }) => state.type === 'm.room.encryption'
+      );
+      if (encryptionEvents.length > 1) {
+        throw Errors.invalidParam(
+          'initial_state',
+          'Cannot specify multiple m.room.encryption events in initial_state'
+        );
+      }
+
+      for (let i = 0; i < initial_state.length; i++) {
+        const validation = validateStateEvent(initial_state[i], i);
+        if (!validation.valid) {
+          throw Errors.invalidParam('initial_state', validation.error);
+        }
+      }
+    }
+
+    const version = room_version || getDefaultRoomVersion();
+    if (!isRoomVersionSupported(version)) {
+      throw Errors.unsupportedRoomVersion(`Room version '${version}' is not supported`);
+    }
+
+    const roomId = await this.appContext.capabilities.id.generateRoomId(
+      this.appContext.capabilities.config.serverName
+    );
+    const isPublic = visibility === 'public';
+    await this.repository.createRoom(roomId, version, input.userId, isPublic);
+
+    const createEventId = await createInitialRoomEvents(
+      this.repository,
+      this.appContext.capabilities.config.serverName,
+      roomId,
+      version,
+      input.userId,
+      {
+        name,
+        topic,
+        preset,
+        is_direct,
+        initial_state,
+        invite,
+        room_alias_local_part,
+      },
+      this.appContext.capabilities.id.generateEventId,
+      this.appContext.capabilities.clock.now
+    );
+
+    await this.repository.upsertRoomAccountData(
+      input.userId,
+      roomId,
+      'm.fully_read',
+      { event_id: createEventId }
+    );
+
+    let roomAlias: string | undefined;
+    if (room_alias_local_part) {
+      roomAlias = this.appContext.capabilities.id.formatRoomAlias(
+        room_alias_local_part,
+        this.appContext.capabilities.config.serverName
+      );
+      await this.repository.createRoomAlias(roomAlias, roomId, input.userId);
+    }
+
+    await this.repository.notifyUsersOfEvent(roomId, roomId, 'm.room.create');
+
+    return {
+      room_id: roomId,
+      room_alias: roomAlias,
+    };
+  }
+
+  async joinRoom(input: JoinRoomInput): Promise<{ room_id: string }> {
+    const roomServer = getServerFromRoomId(input.roomId);
+    const isRemoteRoom =
+      roomServer && roomServer !== this.appContext.capabilities.config.serverName;
+    const room = await this.repository.getRoom(input.roomId);
+
+    if (!room && isRemoteRoom && roomServer) {
+      const instance = await this.appContext.capabilities.workflow.createRoomJoin({
+        roomId: input.roomId,
+        userId: input.userId,
+        isRemote: true,
+        remoteServer: roomServer,
+      });
+
+      const status = (await instance) as
+        | { status?: string; output?: { success?: boolean } }
+        | undefined;
+
+      if (!status || status.status === 'running' || status.status === 'queued') {
+        return { room_id: input.roomId };
+      }
+
+      if (status.status === 'complete' && status.output?.success) {
+        return { room_id: input.roomId };
+      }
+
+      throw Errors.unknown('Failed to join remote room');
+    }
+
+    if (!room) {
+      throw Errors.notFound('Room not found');
+    }
+
+    await this.eventPipeline.execute({
+      input,
+      validate: () => undefined,
+      resolveAuth: async () => ({ userId: input.userId, roomVersion: room.room_version }),
+      authorize: async (_pipelineInput, auth) => {
+        const currentMembership = await this.repository.getMembership(input.roomId, auth.userId);
+        const joinRulesEvent = await this.repository.getStateEvent(input.roomId, 'm.room.join_rules');
+        const joinRule = (joinRulesEvent?.content as { join_rule?: string } | undefined)?.join_rule || 'invite';
+
+        const canJoin =
+          joinRule === 'public' ||
+          currentMembership?.membership === 'invite' ||
+          currentMembership?.membership === 'join';
+
+        if (currentMembership?.membership === 'join') {
+          return;
+        }
+
+        if (!canJoin) {
+          throw Errors.forbidden('Cannot join room');
+        }
+      },
+      buildEvent: async (_pipelineInput, auth) => {
+        const currentMembership = await this.repository.getMembership(input.roomId, auth.userId);
+        if (currentMembership?.membership === 'join') {
+          return null;
+        }
+
+        const joinRulesEvent = await this.repository.getStateEvent(input.roomId, 'm.room.join_rules');
+        const createEvent = await this.repository.getStateEvent(input.roomId, 'm.room.create');
+        const powerLevelsEvent = await this.repository.getStateEvent(input.roomId, 'm.room.power_levels');
+        const latestEvents = await this.repository.getLatestRoomEvents(input.roomId, 1);
+
+        return createMembershipEvent({
+          roomId: input.roomId,
+          userId: auth.userId,
+          sender: auth.userId,
+          membership: 'join',
+          serverName: this.appContext.capabilities.config.serverName,
+          generateEventId: this.appContext.capabilities.id.generateEventId,
+          now: this.appContext.capabilities.clock.now,
+          roomVersion: auth.roomVersion,
+          currentMembershipEventId: currentMembership?.eventId,
+          joinRulesEventId: joinRulesEvent?.event_id,
+          powerLevelsEventId: powerLevelsEvent?.event_id,
+          createEventId: createEvent?.event_id,
+          prevEventIds: latestEvents.map((event) => event.event_id),
+          depth: (latestEvents[0]?.depth ?? 0) + 1,
+        });
+      },
+      persist: async (_pipelineInput, auth, event) => {
+        if (!event) {
+          return { alreadyJoined: true };
+        }
+
+        await this.repository.storeEvent(event);
+        await this.repository.updateMembership(input.roomId, auth.userId, 'join', event.event_id);
+        return { eventId: event.event_id, alreadyJoined: false };
+      },
+      fanout: async (_pipelineInput, _auth, event, persisted) => {
+        if (!event || persisted.alreadyJoined) {
+          return;
+        }
+        await this.repository.notifyUsersOfEvent(input.roomId, event.event_id, 'm.room.member');
+      },
+    });
+
+    return { room_id: input.roomId };
+  }
+
+  async sendEvent(input: SendEventInput): Promise<{ event_id: string }> {
+    const response = await withIdempotency(this.idempotencyStore, input.userId, input.txnId, async () => {
+      const result = await this.eventPipeline.execute({
+        input,
+        validate: () => {
+          if (!input.eventType) {
+            throw Errors.missingParam('eventType');
+          }
+        },
+        resolveAuth: async () => ({ userId: input.userId }),
+        authorize: async (_pipelineInput, auth) => {
+          const membership = await this.repository.getMembership(input.roomId, auth.userId);
+          if (!membership || membership.membership !== 'join') {
+            throw Errors.forbidden('Not a member of this room');
+          }
+        },
+        buildEvent: async (_pipelineInput, auth) => {
+          const membership = await this.repository.getMembership(input.roomId, auth.userId);
+          const createEvent = await this.repository.getStateEvent(input.roomId, 'm.room.create');
+          const powerLevelsEvent = await this.repository.getStateEvent(input.roomId, 'm.room.power_levels');
+          const latestEvents = await this.repository.getLatestRoomEvents(input.roomId, 1);
+
+          const authEvents: string[] = [];
+          if (createEvent) authEvents.push(createEvent.event_id);
+          if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
+          if (membership) authEvents.push(membership.eventId);
+
+          const event: PDU = {
+            event_id: await this.appContext.capabilities.id.generateEventId(
+              this.appContext.capabilities.config.serverName
+            ),
+            room_id: input.roomId,
+            sender: auth.userId,
+            type: input.eventType,
+            content: input.content,
+            origin_server_ts: this.appContext.capabilities.clock.now(),
+            unsigned: { transaction_id: input.txnId },
+            depth: (latestEvents[0]?.depth ?? 0) + 1,
+            auth_events: authEvents,
+            prev_events: latestEvents.map((eventRecord) => eventRecord.event_id),
+          };
+
+          return event;
+        },
+        persist: async (_pipelineInput, _auth, event) => {
+          await this.repository.storeEvent(event);
+          return { eventId: event.event_id };
+        },
+        fanout: async (_pipelineInput, _auth, event) => {
+          await this.repository.notifyUsersOfEvent(input.roomId, event.event_id, input.eventType);
+        },
+        notifyFederation: async (_pipelineInput, _auth, event) => {
+          if (
+            this.appContext.profile.features.pushNotifications &&
+            (input.eventType === 'm.room.message' || input.eventType === 'm.room.encrypted')
+          ) {
+            this.appContext.defer(
+              this.appContext.capabilities.workflow.createPushNotification({
+                eventId: event.event_id,
+                roomId: input.roomId,
+                eventType: input.eventType,
+                sender: input.userId,
+                content: input.content,
+                originServerTs: event.origin_server_ts,
+              }).then(() => undefined)
+            );
+          }
+        },
+      });
+
+      const eventId = result.persisted.eventId;
+      if (typeof eventId !== 'string') {
+        throw new MatrixApiError('M_UNKNOWN', 'Event persistence failed', 500);
+      }
+      return { event_id: eventId };
+    });
+    return response as { event_id: string };
+  }
+}

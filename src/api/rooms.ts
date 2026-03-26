@@ -4,10 +4,8 @@ import { Hono } from 'hono';
 import type { AppEnv, RoomCreateContent, RoomMemberContent, PDU } from '../types';
 import { Errors } from '../utils/errors';
 import { requireAuth } from '../middleware/auth';
-import { generateRoomId, generateEventId, formatRoomAlias } from '../utils/ids';
+import { generateRoomId, generateEventId } from '../utils/ids';
 import { invalidateRoomCache } from '../services/room-cache';
-import { isRoomVersionSupported, getDefaultRoomVersion } from '../services/room-versions';
-import { calculateContentHash } from '../utils/crypto';
 import {
   createRoom,
   getRoom,
@@ -25,339 +23,26 @@ import {
   getEvent,
   notifyUsersOfEvent,
 } from '../services/database';
-import type { JoinResult } from '../workflows';
-
 const app = new Hono<AppEnv>();
-
-// Validation for initial_state events
-interface StateEventValidation {
-  valid: boolean;
-  error?: string;
-}
-
-function validateStateEvent(event: any, index: number): StateEventValidation {
-  // Must be an object
-  if (!event || typeof event !== 'object') {
-    return { valid: false, error: `initial_state[${index}]: must be an object` };
-  }
-
-  // Must have a type property that is a non-empty string
-  if (!event.type || typeof event.type !== 'string' || event.type.trim() === '') {
-    return { valid: false, error: `initial_state[${index}]: missing or invalid 'type' property` };
-  }
-
-  // state_key must be a string if provided (can be empty string)
-  if (event.state_key !== undefined && typeof event.state_key !== 'string') {
-    return { valid: false, error: `initial_state[${index}]: 'state_key' must be a string` };
-  }
-
-  // content must be an object
-  if (!event.content || typeof event.content !== 'object' || Array.isArray(event.content)) {
-    return { valid: false, error: `initial_state[${index}]: missing or invalid 'content' property` };
-  }
-
-  // Disallow certain event types that are created automatically
-  const disallowedTypes = ['m.room.create', 'm.room.member', 'm.room.power_levels'];
-  if (disallowedTypes.includes(event.type)) {
-    return { valid: false, error: `initial_state[${index}]: '${event.type}' cannot be set via initial_state` };
-  }
-
-  // Validate m.room.encryption content
-  if (event.type === 'm.room.encryption') {
-    if (!event.content.algorithm || typeof event.content.algorithm !== 'string') {
-      return { valid: false, error: `initial_state[${index}]: m.room.encryption requires 'algorithm'` };
-    }
-    // Only m.megolm.v1.aes-sha2 is widely supported
-    const supportedAlgorithms = ['m.megolm.v1.aes-sha2'];
-    if (!supportedAlgorithms.includes(event.content.algorithm)) {
-      return { valid: false, error: `initial_state[${index}]: unsupported algorithm '${event.content.algorithm}'` };
-    }
-  }
-
-  return { valid: true };
-}
-
-// Helper to create initial room events
-// Returns the create event ID for use in initializing m.fully_read
-async function createInitialRoomEvents(
-  db: D1Database,
-  serverName: string,
-  roomId: string,
-  roomVersion: string,
-  creatorId: string,
-  options: {
-    name?: string;
-    topic?: string;
-    preset?: string;
-    is_direct?: boolean;
-    initial_state?: Array<{ type: string; state_key?: string; content: any }>;
-    invite?: string[];
-    room_alias_local_part?: string;
-  }
-): Promise<string> {
-  const now = Date.now();
-  let depth = 0;
-  const authEvents: string[] = [];
-  const prevEvents: string[] = [];
-
-  // Helper to create and store an event
-  async function createEvent(
-    type: string,
-    content: any,
-    stateKey?: string
-  ): Promise<string> {
-    const eventId = await generateEventId(serverName, roomVersion);
-    const event: PDU = {
-      event_id: eventId,
-      room_id: roomId,
-      sender: creatorId,
-      type,
-      state_key: stateKey,
-      content,
-      origin_server_ts: now,
-      depth: depth++,
-      auth_events: [...authEvents],
-      prev_events: [...prevEvents],
-    };
-
-    // Calculate and attach content hash
-    const hash = await calculateContentHash(event as unknown as Record<string, unknown>);
-    event.hashes = { sha256: hash };
-
-    await storeEvent(db, event);
-
-    // Update auth/prev events for next event
-    if (stateKey !== undefined) {
-      authEvents.push(eventId);
-    }
-    prevEvents.length = 0;
-    prevEvents.push(eventId);
-
-    return eventId;
-  }
-
-  // 1. m.room.create
-  const createContent: RoomCreateContent = {
-    creator: creatorId,
-    room_version: roomVersion,
-  };
-  const createEventId = await createEvent('m.room.create', createContent, '');
-
-  // 2. m.room.member (creator joins)
-  const memberContent: RoomMemberContent = {
-    membership: 'join',
-  };
-  const joinEventId = await createEvent('m.room.member', memberContent, creatorId);
-  await updateMembership(db, roomId, creatorId, 'join', joinEventId);
-
-  // 3. m.room.power_levels
-  const preset = options.preset || 'private_chat';
-  const powerLevelsContent = {
-    ban: 50,
-    events: {
-      'm.room.avatar': 50,
-      'm.room.canonical_alias': 50,
-      'm.room.encryption': 100,
-      'm.room.history_visibility': 100,
-      'm.room.name': 50,
-      'm.room.power_levels': 100,
-      'm.room.server_acl': 100,
-      'm.room.tombstone': 100,
-    },
-    events_default: 0,
-    invite: preset === 'public_chat' ? 0 : 50,
-    kick: 50,
-    notifications: { room: 50 },
-    redact: 50,
-    state_default: 50,
-    users: { [creatorId]: 100 },
-    users_default: 0,
-  };
-  await createEvent('m.room.power_levels', powerLevelsContent, '');
-
-  // 4. m.room.join_rules
-  let joinRule = 'invite';
-  if (preset === 'public_chat') joinRule = 'public';
-  else if (preset === 'trusted_private_chat') joinRule = 'invite';
-  await createEvent('m.room.join_rules', { join_rule: joinRule }, '');
-
-  // 5. m.room.history_visibility
-  let historyVisibility = 'shared';
-  if (preset === 'public_chat') historyVisibility = 'shared';
-  await createEvent('m.room.history_visibility', { history_visibility: historyVisibility }, '');
-
-  // 6. m.room.guest_access
-  let guestAccess = 'forbidden';
-  if (preset === 'public_chat') guestAccess = 'can_join';
-  await createEvent('m.room.guest_access', { guest_access: guestAccess }, '');
-
-  // Optional: m.room.name
-  if (options.name) {
-    await createEvent('m.room.name', { name: options.name }, '');
-  }
-
-  // Optional: m.room.topic
-  if (options.topic) {
-    await createEvent('m.room.topic', { topic: options.topic }, '');
-  }
-
-  // Process initial_state
-  if (options.initial_state) {
-    for (const state of options.initial_state) {
-      await createEvent(state.type, state.content, state.state_key ?? '');
-    }
-  }
-
-  // Process invites with individual error handling (best-effort invites)
-  // If one invite fails, we continue with the rest - the room is still valid
-  if (options.invite) {
-    const failedInvites: string[] = [];
-    for (const invitee of options.invite) {
-      try {
-        const inviteContent: RoomMemberContent = {
-          membership: 'invite',
-          is_direct: options.is_direct,
-        };
-        const inviteEventId = await createEvent('m.room.member', inviteContent, invitee);
-        await updateMembership(db, roomId, invitee, 'invite', inviteEventId);
-      } catch (err) {
-        console.error(`[createRoom] Failed to invite ${invitee}:`, err);
-        failedInvites.push(invitee);
-      }
-    }
-    if (failedInvites.length > 0) {
-      console.warn(`[createRoom] Failed invites for room ${roomId}:`, failedInvites);
-    }
-  }
-
-  // Return the create event ID for m.fully_read initialization
-  return createEventId;
-}
 
 // POST /_matrix/client/v3/createRoom - Create a new room
 app.post('/_matrix/client/v3/createRoom', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-
-  let body: any;
   try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
-  }
-
-  const {
-    room_alias_local_part,
-    name,
-    topic,
-    invite,
-    room_version,
-    initial_state,
-    preset,
-    is_direct,
-    visibility,
-  } = body;
-  // Note: invite_3pid and creation_content are reserved for future use
-  void body.invite_3pid;
-  void body.creation_content;
-
-  // Validate room alias if provided
-  if (room_alias_local_part) {
-    const alias = formatRoomAlias(room_alias_local_part, c.env.SERVER_NAME);
-    const existingRoom = await getRoomByAlias(c.env.DB, alias);
-    if (existingRoom) {
-      return Errors.roomInUse().toResponse();
-    }
-  }
-
-  // Validate initial_state if provided
-  if (initial_state !== undefined) {
-    if (!Array.isArray(initial_state)) {
-      return c.json({
-        errcode: 'M_INVALID_PARAM',
-        error: 'initial_state must be an array',
-      }, 400);
-    }
-
-    // Check for duplicate encryption events
-    const encryptionEvents = initial_state.filter((s: any) => s.type === 'm.room.encryption');
-    if (encryptionEvents.length > 1) {
-      return c.json({
-        errcode: 'M_INVALID_PARAM',
-        error: 'Cannot specify multiple m.room.encryption events in initial_state',
-      }, 400);
-    }
-
-    // Validate each state event
-    for (let i = 0; i < initial_state.length; i++) {
-      const validation = validateStateEvent(initial_state[i], i);
-      if (!validation.valid) {
-        return c.json({
-          errcode: 'M_INVALID_PARAM',
-          error: validation.error,
-        }, 400);
-      }
-    }
-  }
-
-  // Validate room version
-  const version = room_version || getDefaultRoomVersion();
-  if (!isRoomVersionSupported(version)) {
-    return Errors.unsupportedRoomVersion(`Room version '${version}' is not supported`).toResponse();
-  }
-
-  // Generate room ID
-  const roomId = await generateRoomId(c.env.SERVER_NAME);
-
-  console.log('[createRoom] Creating room:', roomId, 'for user:', userId);
-
-  // Create room in database
-  const isPublic = visibility === 'public';
-  await createRoom(c.env.DB, roomId, version, userId, isPublic);
-  console.log('[createRoom] Room record created in DB');
-
-  // Create initial room events
-  let createEventId: string | undefined;
-  try {
-    createEventId = await createInitialRoomEvents(c.env.DB, c.env.SERVER_NAME, roomId, version, userId, {
-      name,
-      topic,
-      preset,
-      is_direct,
-      initial_state,
-      invite,
-      room_alias_local_part,
+    const body = await c.req.json();
+    const response = await c.get('appContext').services.rooms.createRoom({
+      userId: c.get('userId'),
+      body,
     });
-    console.log('[createRoom] Initial room events created successfully');
-
-    // Initialize m.fully_read marker for the room creator
-    // This ensures the room doesn't show all messages as unread
-    await c.env.DB.prepare(`
-      INSERT INTO account_data (user_id, room_id, event_type, content)
-      VALUES (?, ?, 'm.fully_read', ?)
-      ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET content = excluded.content
-    `).bind(userId, roomId, JSON.stringify({ event_id: createEventId })).run();
-    console.log('[createRoom] Initialized m.fully_read marker for creator');
-  } catch (err) {
-    console.error('[createRoom] Failed to create initial room events:', err);
-    // Still return success since room was created, but log the error
-    // In production, we should probably roll back or return an error
+    return c.json(response);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return Errors.badJson().toResponse();
+    }
+    if (error instanceof Error && 'toResponse' in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
   }
-
-  // Create room alias if provided
-  if (room_alias_local_part) {
-    const alias = formatRoomAlias(room_alias_local_part, c.env.SERVER_NAME);
-    await createRoomAlias(c.env.DB, alias, roomId, userId);
-  }
-
-  // Notify the creator's sync that the room was created
-  await notifyUsersOfEvent(c.env, roomId, roomId, 'm.room.create');
-
-  return c.json({
-    room_id: roomId,
-    room_alias: room_alias_local_part
-      ? formatRoomAlias(room_alias_local_part, c.env.SERVER_NAME)
-      : undefined,
-  });
 });
 
 // GET /_matrix/client/v3/joined_rooms - List joined rooms
@@ -367,134 +52,20 @@ app.get('/_matrix/client/v3/joined_rooms', requireAuth(), async (c) => {
   return c.json({ joined_rooms: rooms });
 });
 
-// Helper to extract server name from room ID (!localpart:server)
-function getServerFromRoomId(roomId: string): string | null {
-  const match = roomId.match(/^!.+:(.+)$/);
-  return match ? match[1] : null;
-}
-
 // POST /_matrix/client/v3/rooms/:roomId/join - Join a room
 app.post('/_matrix/client/v3/rooms/:roomId/join', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-
-  // Extract server from room ID to check if it's a remote room
-  const roomServer = getServerFromRoomId(roomId);
-  const isRemoteRoom = roomServer && roomServer !== c.env.SERVER_NAME;
-
-  // Check if room exists locally
-  const room = await getRoom(c.env.DB, roomId);
-
-  // For remote rooms that don't exist locally, use the workflow for federation
-  if (!room && isRemoteRoom && roomServer) {
-    console.log('[rooms] Remote room join via workflow', { roomId, roomServer, userId });
-
-    // Trigger the RoomJoinWorkflow for durable federation handling
-    const instance = await c.env.ROOM_JOIN_WORKFLOW.create({
-      params: {
-        roomId,
-        userId,
-        isRemote: true,
-        remoteServer: roomServer,
-      },
+  try {
+    const response = await c.get('appContext').services.rooms.joinRoom({
+      userId: c.get('userId'),
+      roomId: c.req.param('roomId'),
     });
-
-    // Wait for the workflow to complete (with timeout)
-    // The workflow handles retries internally
-    try {
-      const status = await instance.status();
-      console.log('[rooms] Workflow status', { roomId, status });
-
-      // If workflow is still running, return accepted
-      if (status.status === 'running' || status.status === 'queued') {
-        // Return success - the join is in progress
-        // Client will see the room appear in sync when complete
-        return c.json({ room_id: roomId });
-      }
-
-      // Check if workflow completed successfully
-      const output = status.output as JoinResult | undefined;
-      if (status.status === 'complete' && output?.success) {
-        return c.json({ room_id: roomId });
-      }
-
-      // Workflow failed
-      console.error('[rooms] Workflow failed', { roomId, status });
-      return Errors.unknown('Failed to join remote room').toResponse();
-    } catch (err) {
-      console.error('[rooms] Workflow error', { roomId, error: err });
-      return Errors.unknown('Failed to join remote room').toResponse();
+    return c.json(response);
+  } catch (error) {
+    if (error instanceof Error && 'toResponse' in error) {
+      return (error as { toResponse(): Response }).toResponse();
     }
+    throw error;
   }
-
-  // Local room handling (existing code)
-  if (!room) {
-    return Errors.notFound('Room not found').toResponse();
-  }
-
-  // Check current membership
-  const currentMembership = await getMembership(c.env.DB, roomId, userId);
-
-  // Check join rules
-  const joinRulesEvent = await getStateEvent(c.env.DB, roomId, 'm.room.join_rules');
-  const joinRule = (joinRulesEvent?.content as any)?.join_rule || 'invite';
-
-  // Determine if user can join
-  let canJoin = false;
-  if (joinRule === 'public') {
-    canJoin = true;
-  } else if (currentMembership?.membership === 'invite') {
-    canJoin = true;
-  } else if (currentMembership?.membership === 'join') {
-    // Already joined
-    return c.json({ room_id: roomId });
-  }
-
-  if (!canJoin) {
-    return Errors.forbidden('Cannot join room').toResponse();
-  }
-
-  // Create join event
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  // Get current state for auth events
-  const createEvent = await getStateEvent(c.env.DB, roomId, 'm.room.create');
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, 'm.room.power_levels');
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (joinRulesEvent) authEvents.push(joinRulesEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (currentMembership) authEvents.push(currentMembership.eventId);
-
-  // Get prev events (latest events in room)
-  const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
-
-  const memberContent: RoomMemberContent = {
-    membership: 'join',
-  };
-
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: 'm.room.member',
-    state_key: userId,
-    content: memberContent,
-    origin_server_ts: Date.now(),
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
-
-  await storeEvent(c.env.DB, event);
-  await updateMembership(c.env.DB, roomId, userId, 'join', eventId);
-
-  // Notify room members about the join
-  await notifyUsersOfEvent(c.env, roomId, eventId, 'm.room.member');
-
-  return c.json({ room_id: roomId });
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/leave - Leave a room
@@ -960,75 +531,25 @@ app.get('/_matrix/client/v3/rooms/:roomId/event/:eventId', requireAuth(), async 
 
 // PUT /_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId - Send message
 app.put('/_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-  const eventType = c.req.param('eventType');
-  const txnId = c.req.param('txnId');
-
-  // Check membership
-  const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
-  }
-
-  let content: any;
   try {
-    content = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+    const content = await c.req.json();
+    const response = await c.get('appContext').services.rooms.sendEvent({
+      userId: c.get('userId'),
+      roomId: c.req.param('roomId'),
+      eventType: c.req.param('eventType'),
+      txnId: c.req.param('txnId'),
+      content,
+    });
+    return c.json(response);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return Errors.badJson().toResponse();
+    }
+    if (error instanceof Error && 'toResponse' in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
   }
-
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  const createEvent = await getStateEvent(c.env.DB, roomId, 'm.room.create');
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, 'm.room.power_levels');
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (membership) authEvents.push(membership.eventId);
-
-  const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
-
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: eventType,
-    content,
-    origin_server_ts: Date.now(),
-    unsigned: { transaction_id: txnId },
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
-
-  await storeEvent(c.env.DB, event);
-
-  // Notify all room members that a new message was sent (wakes up long-polling syncs)
-  await notifyUsersOfEvent(c.env, roomId, eventId, eventType);
-
-  // Send push notifications via durable workflow (fire and forget)
-  // Only for message and encrypted event types
-  if (eventType === 'm.room.message' || eventType === 'm.room.encrypted') {
-    c.executionCtx.waitUntil(
-      c.env.PUSH_NOTIFICATION_WORKFLOW.create({
-        params: {
-          eventId,
-          roomId,
-          eventType,
-          sender: userId,
-          content,
-          originServerTs: event.origin_server_ts,
-        },
-      }).catch(err => {
-        console.error('[rooms] Push notification workflow error:', err);
-      })
-    );
-  }
-
-  return c.json({ event_id: eventId });
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/invite - Invite a user

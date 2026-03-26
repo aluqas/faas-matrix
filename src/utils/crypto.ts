@@ -188,14 +188,17 @@ export async function signJson(
   const signatureB64 = base64UrlEncode(new Uint8Array(signatureBytes));
 
   // Merge with existing signatures if present
-  const existingSignatures = (obj.signatures as Record<string, Record<string, string>>) || {};
+  const existingSignatures =
+    (obj.signatures as Record<string, Record<string, string>>) ?? {};
+  const serverSignatures = existingSignatures[serverName];
+  const normalizedServerSignatures = serverSignatures || {};
 
   return {
     ...obj,
     signatures: {
       ...existingSignatures,
       [serverName]: {
-        ...(existingSignatures[serverName] || {}),
+        ...normalizedServerSignatures,
         [keyId]: signatureB64,
       },
     },

@@ -1,5 +1,8 @@
 // Cloudflare Workers Environment Types
 
+import type { AppContext } from '../foundation/app-context';
+import type { MatrixServiceRegistry } from '../matrix/services';
+
 export interface Env {
   // D1 Database
   DB: D1Database;
@@ -27,6 +30,7 @@ export interface Env {
   // Environment variables
   SERVER_NAME: string;
   SERVER_VERSION: string;
+  MATRIX_FEATURE_PROFILE?: string;
 
   // Support contact info (optional)
   ADMIN_CONTACT_EMAIL?: string;
@@ -89,6 +93,7 @@ export type Variables = {
   userId: string;
   deviceId: string | null;
   accessToken: string;
+  appContext: AppContext<MatrixServiceRegistry>;
   auth: {
     userId: string;
     deviceId: string | null;

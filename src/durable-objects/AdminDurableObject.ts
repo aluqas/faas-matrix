@@ -228,7 +228,7 @@ export class AdminDurableObject extends DurableObject<Env> {
     for (const ws of webSockets) {
       try {
         ws.send(messageStr);
-      } catch (e) {
+      } catch {
         // WebSocket may be closed
       }
     }
@@ -258,8 +258,8 @@ export class AdminDurableObject extends DurableObject<Env> {
         default:
           break;
       }
-    } catch (e) {
-      console.error('Error handling admin WebSocket message:', e);
+    } catch (error) {
+      console.error('Error handling admin WebSocket message:', error);
     }
   }
 

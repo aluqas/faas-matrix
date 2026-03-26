@@ -395,7 +395,7 @@ function decodeHtmlEntities(text: string): string {
   // Use a proper HTML entity decoder that handles all entities correctly
   // and prevents double-decoding by checking if the text is already decoded
   const decoded = text
-    .replace(/&amp;/g, '\x00AMP\x00')  // Temporarily replace to prevent double-decode
+    .replace(/&amp;/g, '__AMP__')  // Temporarily replace to prevent double-decode
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
@@ -403,7 +403,7 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&#x27;/g, "'")
     .replace(/&#x2F;/g, '/')
     .replace(/&nbsp;/g, ' ')
-    .replace(/\x00AMP\x00/g, '&');  // Restore ampersands last
+    .replace(/__AMP__/g, '&');  // Restore ampersands last
   return decoded;
 }
 

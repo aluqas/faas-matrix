@@ -200,8 +200,8 @@ export class FederationDurableObject extends DurableObject<Env> {
           headers: { 'Content-Type': 'application/json' },
         });
       }
-    } catch (e) {
-      console.error(`Failed to fetch keys from ${serverName}:`, e);
+    } catch (error) {
+      console.error(`Failed to fetch keys from ${serverName}:`, error);
     }
 
     return new Response(JSON.stringify({
@@ -301,8 +301,8 @@ export class FederationDurableObject extends DurableObject<Env> {
         // Schedule retry
         await this.scheduleRetry(destination, events);
       }
-    } catch (e) {
-      console.error(`Federation send to ${destination} failed:`, e);
+    } catch (error) {
+      console.error(`Federation send to ${destination} failed:`, error);
       await this.scheduleRetry(destination, events);
     }
   }

@@ -303,7 +303,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     for (const ws of webSockets) {
       try {
         ws.send(JSON.stringify(message));
-      } catch (e) {
+      } catch {
         // WebSocket may be closed
       }
     }
@@ -361,8 +361,8 @@ export class RoomDurableObject extends DurableObject<Env> {
           // Unknown message type
           break;
       }
-    } catch (e) {
-      console.error('Error handling WebSocket message:', e);
+    } catch (error) {
+      console.error('Error handling WebSocket message:', error);
     }
   }
 
@@ -380,7 +380,7 @@ export class RoomDurableObject extends DurableObject<Env> {
               type: 'user_disconnected',
               user_id: session.userId,
             }));
-          } catch (e) {
+          } catch {
             // WebSocket may be closed
           }
         }
@@ -412,7 +412,7 @@ export class RoomDurableObject extends DurableObject<Env> {
       if (session && session.userId !== userId) {
         try {
           ws.send(message);
-        } catch (e) {
+        } catch {
           // WebSocket may be closed
         }
       }
@@ -456,7 +456,7 @@ export class RoomDurableObject extends DurableObject<Env> {
       if (session && session.userId !== userId) {
         try {
           ws.send(message);
-        } catch (e) {
+        } catch {
           // WebSocket may be closed
         }
       }
