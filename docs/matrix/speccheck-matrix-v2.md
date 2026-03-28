@@ -26,8 +26,34 @@ This is intentionally stricter than the current v1 checklist:
 - **`evidence_status`**（チェックリストとしての妥当性およびここまでのstatusに対する根拠）
   - `tests`: ユニットテストや回帰テストが実装されている
   - `interop`: 他クライアント・サーバーとの相互接続性が確認されている
-  - `complement`: Complementテストにより網羅的に証明されている
+  - `complement`: Complement がこの row に対する証拠ソースとして結び付いている
   - `none`: 客観的な証拠（テストや検証ログ）がない
+
+### Status Assignment Rules
+
+運用上の最低ルールを以下に固定します：
+
+- `surface_status`
+  - `present`: 主要な route / service / state handling が揃っており、OpenAPI または spec surface に対して大きな欠落が見えていない。
+  - `partial`: 一部 endpoint / flow / room version / federation branch が欠けている。
+  - `none`: 実装 surface を確認できない。
+
+- `behavior_status`
+  - `audited`: 少なくとも spec semantics, edge cases, security considerations まで見たうえで、既知の重大な未解決差分がない。
+  - `partial`: Complement fail, interop failure, known bug, known semantic gap のいずれかがある場合の下限値。未監査でも既知差分があるなら `not-audited` ではなく `partial` を使う。
+  - `not-audited`: 実装 surface はあるが、spec semantics に対する評価材料がほぼない。既知差分がある場合には使わない。
+
+- `evidence_status`
+  - `none`: row に紐づく unit / regression / interop / Complement evidence がない。
+  - `tests`: row に直接結びつく unit / regression test がある。
+  - `interop`: row に対する client / federation interop の実施記録がある。
+  - `complement`: `complement-map.json` で row_id に証拠ソースが結び付いていることを意味する。`pass` を意味しない。結果の良否は `docs/matrix/speccheck-matrix-v2-complement.md` の `Evidence` 列で別に読む。
+
+- Complement summary
+  - `complement:pass`: 少なくとも 1 つの relevant test / subtest が通っている。
+  - `complement:partial`: pass と fail / gap が混在する。
+  - `complement:fail`: relevant test は到達しているが失敗している。
+  - `complement:gap`: relevant test が未接続、または今回の run 群では到達していない。
 
 The intent is to stop treating `route exists` as equivalent to `spec implemented`.
 
@@ -37,6 +63,7 @@ Automation note:
 - `Cross-Cutting Evidence Rows` and `Complement Evidence Summary` are evidence/reporting sections, not coverage targets.
 - `docs/matrix/speccheck-matrix-v2-endpoint.md` is a “導線” view generated from OpenAPI operation mappings, and is not a coverage target.
 - `row_id` is the stable machine identifier. Display labels may change without breaking coverage as long as `row_id` stays stable.
+- `orphanRows` are allowed, but they should be treated as explicit non-spec helper rows. If a row is neither a spec unit nor intentionally extra, it should not remain orphaned.
 
 ## Client-Server Core
 
@@ -143,6 +170,54 @@ Automation note:
 | Signing events | crypto utils and federation code | content hash, reference hash, signature generation and verification | `partial` | `not-audited` | `none` | `ss-core-signing-events` |
 | Security considerations | spread across middleware/services | explicit threat-model and failure-mode checklist | `partial` | `not-audited` | `complement` | `ss-core-security-considerations` |
 
+## Application Service API
+
+> Rows in this section are outside the automated `spec:coverage` extraction target (which covers Client-Server Core, Client-Server Modules, and Server-Server Core only). These rows track compliance with the separate [Application Service API](https://spec.matrix.org/v1.17/application-service-api/) spec document.
+
+| Area | Current repo surface | What to track | surface_status | behavior_status | evidence_status | row_id |
+|------|----------------------|---------------|----------------|-----------------|-----------------|--------|
+| Registration | config-file schema only; `getAppServiceByToken` in `src/services/appservice.ts` | Registration YAML format, namespace regex semantics, exclusive namespace enforcement, `hs_token`/`as_token` header verification on inbound AS requests | `partial` | `not-audited` | `none` | `as-registration` |
+| HS → AS protocol | `src/api/appservice.ts` (user/room query handling only) | Transaction push (`PUT /_matrix/app/v1/transactions/{txnId}`), event queries (user/room/alias), ping (`POST /_matrix/app/v1/ping`), authorization header, unknown route 404 behavior, legacy route support | `partial` | `not-audited` | `none` | `as-hs-to-as-protocol` |
+| CS API extensions | `src/api/appservice.ts` | `user_id` query-param identity assertion, timestamp massaging, server admin style permissions, AS-scoped device management and cross-signing | `partial` | `not-audited` | `none` | `as-cs-api-extensions` |
+| Third-party networks | no dedicated module | Protocol metadata/location/user lookup endpoints (`/_matrix/app/v1/thirdparty/...`), referencing third-party messages in rooms | `none` | `not-audited` | `none` | `as-third-party-networks` |
+
+## Identity Service API
+
+> Rows in this section are outside the automated `spec:coverage` extraction target. These rows track compliance with the separate [Identity Service API](https://spec.matrix.org/v1.17/identity-service-api/) spec document. Tuwunel implements a minimal stub IS; full IS API compliance is not a stated goal.
+
+| Area | Current repo surface | What to track | surface_status | behavior_status | evidence_status | row_id |
+|------|----------------------|---------------|----------------|-----------------|-----------------|--------|
+| API standards and authentication | `src/api/identity.ts` (status check, account register/logout) | `/_matrix/identity/v2` versioning endpoint, standard error format, access token authentication semantics, terms of service flow | `partial` | `not-audited` | `none` | `is-api-standards-and-auth` |
+| Association lookup | `src/api/identity.ts` (hash-details/lookup stubs) | `/_matrix/identity/v2/hash_details` + `/_matrix/identity/v2/lookup`; algorithm negotiation (sha256/none), privacy semantics, pepper rotation | `partial` | `not-audited` | `none` | `is-association-lookup` |
+| Establishing associations | no explicit module | Email/phone number validation token flow (`requestToken`/`submitToken`), 3PID ownership proof, `bind`/`unbind` semantics | `none` | `not-audited` | `none` | `is-establishing-associations` |
+| Invitation storage and signing | no explicit module | `/_matrix/identity/v2/store-invite`, ephemeral signing key management (`/_matrix/identity/v2/pubkey/ephemeral/isvalid`), invitation retrieval and signature verification | `none` | `not-audited` | `none` | `is-invitation-storage-and-signing` |
+
+## Push Gateway API
+
+> Rows in this section are outside the automated `spec:coverage` extraction target. The [Push Gateway API](https://spec.matrix.org/v1.17/push-gateway-api/) defines the protocol the homeserver uses when delivering notifications TO external push gateways. Tuwunel is the caller, not the gateway server.
+
+| Area | Current repo surface | What to track | surface_status | behavior_status | evidence_status | row_id |
+|------|----------------------|---------------|----------------|-----------------|-----------------|--------|
+| Push notification delivery | `src/workflows/PushNotificationWorkflow.ts`, `src/api/push.ts` | Correct formatting and delivery of `POST /_matrix/push/v1/notify` to external gateways; notification object shape (`notification`, `devices`, `counts`), rejected/expired device handling, timeout and retry behavior | `partial` | `not-audited` | `none` | `pg-notify` |
+
+## Room Versions
+
+> Rows in this section are outside the automated `spec:coverage` extraction target. Each row tracks whether the version-specific behaviors are correctly implemented — not just whether the version string is recognized. `surface_status` `partial` means the version is accepted but version-specific algorithm correctness (state resolution, auth rules, redaction, event ID format) has not been audited per-version. `src/services/room-versions.ts` is the central behavior registry.
+
+| Version | Key behavioral changes | Current repo surface | surface_status | behavior_status | evidence_status | row_id |
+|---------|------------------------|----------------------|----------------|-----------------|-----------------|--------|
+| v1 | State resolution v1 (non-OLAS), opaque `$opaque:domain` event IDs, baseline auth rules; known relaxed consistency | `src/services/state-resolution-v1.ts`, `src/services/room-versions.ts` | `partial` | `not-audited` | `none` | `rv-v1` |
+| v2 | State resolution switches to v2 (OLAS); event ID format unchanged from v1 | `src/services/state-resolution.ts`, `src/services/room-versions.ts` | `partial` | `not-audited` | `none` | `rv-v2` |
+| v3 | Event IDs become URL-safe base64 SHA-256 hashes (no domain component) | `src/utils/ids.ts`, `src/services/room-versions.ts` | `partial` | `not-audited` | `none` | `rv-v3` |
+| v4 | Event IDs add `$` prefix; reference hash algorithm clarified | `src/utils/ids.ts`, `src/services/room-versions.ts` | `partial` | `not-audited` | `none` | `rv-v4` |
+| v5 | Signing key validity period enforced in auth rules | `src/services/event-auth.ts`, `src/services/room-versions.ts` | `partial` | `not-audited` | `none` | `rv-v5` |
+| v6 | Redaction rules revised: only explicitly listed fields preserved; canonical JSON clarified | `src/services/room-versions.ts`, event processing | `partial` | `not-audited` | `none` | `rv-v6` |
+| v7 | `knock` join rule and `knock` membership state added | `src/services/room-versions.ts`, `src/api/federation.ts` | `partial` | `not-audited` | `none` | `rv-v7` |
+| v8 | `restricted` join rule; existing room members can authorize joins | `src/services/room-versions.ts`, `src/services/event-auth.ts` | `partial` | `not-audited` | `none` | `rv-v8` |
+| v9 | Bugfix for `restricted` join rule (private room knock behavior) | `src/services/room-versions.ts`, `src/services/event-auth.ts` | `partial` | `not-audited` | `none` | `rv-v9` |
+| v10 | Power levels must be integers; `knock_restricted` join rule added | `src/services/room-versions.ts`, `src/services/event-auth.ts` | `partial` | `not-audited` | `none` | `rv-v10` |
+| v11 | Updated redaction rules: fewer protected fields; `m.room.create` keeps full `content`; `m.room.redaction` keeps `content.redacts` | `src/services/room-versions.ts`, event processing | `partial` | `not-audited` | `none` | `rv-v11` |
+
 ## Cross-Cutting Evidence Rows
 
 These are not separate spec chapters, but v2 should track them explicitly for every area above.
@@ -178,4 +253,4 @@ Once this v2 file is accepted, the next cleanup should be:
 1. Convert `docs/matrix/speccheck-matrix.md` into a short overview only.
 2. Use this file as the detailed tracking sheet.
 3. Add one more column per row for `surface`, `behavior`, and `evidence` status values.
-4. Use `complement-gap-analysis.md` as the live evidence feed — update it after each test run batch.
+4. Use `complement-analysis.md` as the live evidence feed — update it after each test run batch.

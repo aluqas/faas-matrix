@@ -31,7 +31,7 @@ function renderComplementTable(sectionRows, firstColumnHeader) {
   for (const row of sectionRows) {
     const areaCell = row.title;
     const evidence = row.evidenceRow?.evidence ?? "`complement:gap`";
-    const notes = row.evidenceRow?.notes ?? "Not explicitly covered in complement-gap-analysis.md test runs.";
+    const notes = row.evidenceRow?.notes ?? "Not explicitly covered in complement-analysis.md test runs.";
     const surface_status = row.evidenceRow?.surface_status ?? row.surface_status;
     const behavior_status = row.evidenceRow?.behavior_status ?? row.behavior_status;
     const evidence_status = row.evidenceRow?.evidence_status ?? row.evidence_status;

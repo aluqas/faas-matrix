@@ -4483,5 +4483,157 @@
         ]
       }
     }
+  },
+  "application-service/ping.yaml": {
+    "rows": [],
+    "rowIds": ["as-hs-to-as-protocol"],
+    "unitIds": ["as-hs-to-as-protocol"],
+    "operations": {
+      "ping": {"rowIds": ["as-hs-to-as-protocol"], "unitIds": ["as-hs-to-as-protocol"]}
+    }
+  },
+  "application-service/protocols.yaml": {
+    "rows": [],
+    "rowIds": ["as-third-party-networks"],
+    "unitIds": ["as-third-party-networks"],
+    "operations": {
+      "getProtocolMetadata": {"rowIds": ["as-third-party-networks"], "unitIds": ["as-third-party-networks"]},
+      "queryUserByProtocol": {"rowIds": ["as-third-party-networks"], "unitIds": ["as-third-party-networks"]},
+      "queryLocationByProtocol": {"rowIds": ["as-third-party-networks"], "unitIds": ["as-third-party-networks"]},
+      "queryLocationByAlias": {"rowIds": ["as-third-party-networks"], "unitIds": ["as-third-party-networks"]},
+      "queryUserByID": {"rowIds": ["as-third-party-networks"], "unitIds": ["as-third-party-networks"]}
+    }
+  },
+  "application-service/query_room.yaml": {
+    "rows": [],
+    "rowIds": ["as-hs-to-as-protocol"],
+    "unitIds": ["as-hs-to-as-protocol"],
+    "operations": {
+      "queryRoomByAlias": {"rowIds": ["as-hs-to-as-protocol"], "unitIds": ["as-hs-to-as-protocol"]}
+    }
+  },
+  "application-service/query_user.yaml": {
+    "rows": [],
+    "rowIds": ["as-hs-to-as-protocol"],
+    "unitIds": ["as-hs-to-as-protocol"],
+    "operations": {
+      "queryUserById": {"rowIds": ["as-hs-to-as-protocol"], "unitIds": ["as-hs-to-as-protocol"]}
+    }
+  },
+  "application-service/transactions.yaml": {
+    "rows": [],
+    "rowIds": ["as-hs-to-as-protocol"],
+    "unitIds": ["as-hs-to-as-protocol"],
+    "operations": {
+      "sendTransaction": {"rowIds": ["as-hs-to-as-protocol"], "unitIds": ["as-hs-to-as-protocol"]}
+    }
+  },
+  "identity/v2_associations.yaml": {
+    "rows": [],
+    "rowIds": ["is-establishing-associations"],
+    "unitIds": ["is-establishing-associations"],
+    "operations": {
+      "getValidated3pidV2": {"rowIds": ["is-establishing-associations"], "unitIds": ["is-establishing-associations"]},
+      "bindV2": {"rowIds": ["is-establishing-associations"], "unitIds": ["is-establishing-associations"]},
+      "unbindV2": {"rowIds": ["is-establishing-associations"], "unitIds": ["is-establishing-associations"]}
+    }
+  },
+  "identity/v2_auth.yaml": {
+    "rows": [],
+    "rowIds": ["is-api-standards-and-auth"],
+    "unitIds": ["is-api-standards-and-auth"],
+    "operations": {
+      "registerAccount": {"rowIds": ["is-api-standards-and-auth"], "unitIds": ["is-api-standards-and-auth"]},
+      "getAccount": {"rowIds": ["is-api-standards-and-auth"], "unitIds": ["is-api-standards-and-auth"]},
+      "logout": {"rowIds": ["is-api-standards-and-auth"], "unitIds": ["is-api-standards-and-auth"]}
+    }
+  },
+  "identity/v2_email_associations.yaml": {
+    "rows": [],
+    "rowIds": ["is-establishing-associations"],
+    "unitIds": ["is-establishing-associations"],
+    "operations": {
+      "emailRequestTokenV2": {"rowIds": ["is-establishing-associations"], "unitIds": ["is-establishing-associations"]},
+      "emailSubmitTokenPostV2": {"rowIds": ["is-establishing-associations"], "unitIds": ["is-establishing-associations"]},
+      "emailSubmitTokenGetV2": {"rowIds": ["is-establishing-associations"], "unitIds": ["is-establishing-associations"]}
+    }
+  },
+  "identity/v2_invitation_signing.yaml": {
+    "rows": [],
+    "rowIds": ["is-invitation-storage-and-signing"],
+    "unitIds": ["is-invitation-storage-and-signing"],
+    "operations": {
+      "blindlySignStuffV2": {"rowIds": ["is-invitation-storage-and-signing"], "unitIds": ["is-invitation-storage-and-signing"]}
+    }
+  },
+  "identity/v2_lookup.yaml": {
+    "rows": [],
+    "rowIds": ["is-association-lookup"],
+    "unitIds": ["is-association-lookup"],
+    "operations": {
+      "getHashDetails": {"rowIds": ["is-association-lookup"], "unitIds": ["is-association-lookup"]},
+      "lookupUsersV2": {"rowIds": ["is-association-lookup"], "unitIds": ["is-association-lookup"]}
+    }
+  },
+  "identity/v2_phone_associations.yaml": {
+    "rows": [],
+    "rowIds": ["is-establishing-associations"],
+    "unitIds": ["is-establishing-associations"],
+    "operations": {
+      "msisdnRequestTokenV2": {"rowIds": ["is-establishing-associations"], "unitIds": ["is-establishing-associations"]},
+      "msisdnSubmitTokenPostV2": {"rowIds": ["is-establishing-associations"], "unitIds": ["is-establishing-associations"]},
+      "msisdnSubmitTokenGetV2": {"rowIds": ["is-establishing-associations"], "unitIds": ["is-establishing-associations"]}
+    }
+  },
+  "identity/v2_ping.yaml": {
+    "rows": [],
+    "rowIds": ["is-api-standards-and-auth"],
+    "unitIds": ["is-api-standards-and-auth"],
+    "operations": {
+      "pingV2": {"rowIds": ["is-api-standards-and-auth"], "unitIds": ["is-api-standards-and-auth"]}
+    }
+  },
+  "identity/v2_pubkey.yaml": {
+    "rows": [],
+    "rowIds": ["is-invitation-storage-and-signing"],
+    "unitIds": ["is-invitation-storage-and-signing"],
+    "operations": {
+      "getPubKeyV2": {"rowIds": ["is-invitation-storage-and-signing"], "unitIds": ["is-invitation-storage-and-signing"]},
+      "isPubKeyValidV2": {"rowIds": ["is-invitation-storage-and-signing"], "unitIds": ["is-invitation-storage-and-signing"]},
+      "isEphemeralPubKeyValidV2": {"rowIds": ["is-invitation-storage-and-signing"], "unitIds": ["is-invitation-storage-and-signing"]}
+    }
+  },
+  "identity/v2_store_invite.yaml": {
+    "rows": [],
+    "rowIds": ["is-invitation-storage-and-signing"],
+    "unitIds": ["is-invitation-storage-and-signing"],
+    "operations": {
+      "storeInviteV2": {"rowIds": ["is-invitation-storage-and-signing"], "unitIds": ["is-invitation-storage-and-signing"]}
+    }
+  },
+  "identity/v2_terms.yaml": {
+    "rows": [],
+    "rowIds": ["is-api-standards-and-auth"],
+    "unitIds": ["is-api-standards-and-auth"],
+    "operations": {
+      "getTerms": {"rowIds": ["is-api-standards-and-auth"], "unitIds": ["is-api-standards-and-auth"]},
+      "agreeToTerms": {"rowIds": ["is-api-standards-and-auth"], "unitIds": ["is-api-standards-and-auth"]}
+    }
+  },
+  "identity/versions.yaml": {
+    "rows": [],
+    "rowIds": ["is-api-standards-and-auth"],
+    "unitIds": ["is-api-standards-and-auth"],
+    "operations": {
+      "getVersions": {"rowIds": ["is-api-standards-and-auth"], "unitIds": ["is-api-standards-and-auth"]}
+    }
+  },
+  "push-gateway/push_notifier.yaml": {
+    "rows": [],
+    "rowIds": ["pg-notify"],
+    "unitIds": ["pg-notify"],
+    "operations": {
+      "notify": {"rowIds": ["pg-notify"], "unitIds": ["pg-notify"]}
+    }
   }
 }

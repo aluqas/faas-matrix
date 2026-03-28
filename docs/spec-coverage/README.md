@@ -109,9 +109,24 @@ Within the primary sections:
 - `row_id` is the stable checklist key.
 - Row labels are allowed to change as long as `row_id` remains stable.
 - Rows without a matching Markdown spec unit may still exist, but they will be reported as `orphanRows`.
+- `orphanRows` are not automatically wrong; they mean "intentional helper row unless proven otherwise". Keep them rare and document why they are not primary spec units.
 - OpenAPI operation-level mappings are required; missing ones are reported as `unmappedOperations`.
 - OpenAPI operation `rowIds` / `unitIds` must stay within the file-level `rowIds` / `unitIds`.
 - Complement evidence mappings are keyed by `row_id`; title-based matching is no longer part of the steady-state pipeline.
+
+## Status Semantics
+
+The reports validate linkage and completeness, not correctness by themselves.
+
+- `coverage-report.json`
+  - Proves that every primary Markdown spec unit has a stable checklist row.
+  - `orphanRows` means checklist rows that are outside the extracted primary spec units.
+- `openapi-coverage-report.json`
+  - Proves that every OpenAPI file is mapped and every operation is accounted for.
+  - `completely mapped` does not mean `implemented correctly`; it only means the endpoint inventory is wired to the checklist.
+- `complement-coverage-report.json`
+  - Proves that every checklist `row_id` has a Complement evidence entry.
+  - It does not mean the row is passing in Complement. Pass/fail/gap lives in `docs/matrix/speccheck-matrix-v2-complement.md`.
 
 ## Limits
 

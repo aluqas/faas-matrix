@@ -28,7 +28,7 @@ export async function loadComplementMap() {
       section: row.section,
       title: row.title,
       evidence: summary?.evidence || "`complement:gap`",
-      notes: summary?.notes || "Not explicitly covered in complement-gap-analysis.md test runs.",
+      notes: summary?.notes || "Not explicitly covered in complement-analysis.md test runs.",
       surface_status: summary?.surface_status || row.cells.surface_status,
       behavior_status: summary?.behavior_status || row.cells.behavior_status,
       evidence_status: summary?.evidence_status || row.cells.evidence_status,
