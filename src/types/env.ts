@@ -31,6 +31,8 @@ export interface Env {
   SERVER_NAME: string;
   SERVER_VERSION: string;
   MATRIX_FEATURE_PROFILE?: string;
+  // Set to '1' to disable rate limiting (e.g. in Complement test environments)
+  DISABLE_RATE_LIMIT?: string;
 
   // Support contact info (optional)
   ADMIN_CONTACT_EMAIL?: string;

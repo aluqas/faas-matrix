@@ -53,6 +53,11 @@ function getClientId(c: Context<AppEnv>): string {
 
 // Rate limiter using Durable Objects
 export async function rateLimitMiddleware(c: Context<AppEnv>, next: Next) {
+  // Allow disabling rate limiting entirely (e.g. for Complement test environments)
+  if (c.env.DISABLE_RATE_LIMIT === '1') {
+    return next();
+  }
+
   const path = c.req.path;
   const method = c.req.method;
 

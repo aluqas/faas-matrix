@@ -54,7 +54,9 @@ export { RoomDurableObject, SyncDurableObject, FederationDurableObject, CallRoom
 export { RoomJoinWorkflow, PushNotificationWorkflow, FederationCatchupWorkflow, MediaCleanupWorkflow, StateCompactionWorkflow } from './workflows';
 
 // Create the main app
-const app = new Hono<AppEnv>();
+// strict: false normalises trailing slashes so e.g. PUT /state/m.room.join_rules/
+// (empty stateKey) matches the /:stateKey? route correctly.
+const app = new Hono<AppEnv>({ strict: false });
 
 // CORS for Matrix clients - MUST BE FIRST to ensure headers are always sent
 // (even on error responses from rate limiter or other middleware)
@@ -405,12 +407,17 @@ app.get('/_matrix/client/unstable/org.matrix.msc2965/auth_metadata', async (c) =
   return c.redirect('/_matrix/client/v1/auth_metadata', 307);
 });
 
-// Fallback for unknown endpoints
+// Fallback for unknown endpoints.
+// Matrix API only uses GET, POST, PUT, DELETE, OPTIONS, HEAD.
+// Any other method (e.g. PATCH) on a /_matrix/* path → 405 per spec §API Standards.
+// Standard methods on unknown paths → 404.
 app.all('/_matrix/*', (c) => {
-  return c.json({
-    errcode: 'M_UNRECOGNIZED',
-    error: 'Unrecognized request',
-  }, 404);
+  const method = c.req.method;
+  const standardMethods = new Set(['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD']);
+  if (!standardMethods.has(method)) {
+    return c.json({ errcode: 'M_UNRECOGNIZED', error: 'Method not allowed' }, 405);
+  }
+  return c.json({ errcode: 'M_UNRECOGNIZED', error: 'Unrecognized request' }, 404);
 });
 
 // 404 handler

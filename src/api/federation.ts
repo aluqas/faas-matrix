@@ -1011,6 +1011,11 @@ app.put('/_matrix/federation/v1/send_join/:roomId/:eventId', async (c) => {
     return Errors.badJson().toResponse();
   }
 
+  // Spec: send_join MUST only accept m.room.member events with membership=join
+  if (body.type !== 'm.room.member' || body.content?.membership !== 'join') {
+    return c.json({ errcode: 'M_INVALID_PARAM', error: 'Only join membership events are accepted via send_join' }, 400);
+  }
+
   // Validate the event ID matches
   if (body.event_id && body.event_id !== eventId) {
     return c.json(
@@ -1093,6 +1098,11 @@ app.put('/_matrix/federation/v2/send_join/:roomId/:eventId', async (c) => {
     body = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
+  }
+
+  // Spec: send_join MUST only accept m.room.member events with membership=join
+  if (body.type !== 'm.room.member' || body.content?.membership !== 'join') {
+    return c.json({ errcode: 'M_INVALID_PARAM', error: 'Only join membership events are accepted via send_join' }, 400);
   }
 
   // Validate the event ID matches
