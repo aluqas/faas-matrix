@@ -104,6 +104,7 @@ export interface SyncRepository {
   getUserRooms(userId: string, membership?: Membership): Promise<string[]>;
   getEventsSince(roomId: string, sincePosition: number): Promise<PDU[]>;
   getRoomState(roomId: string): Promise<PDU[]>;
+  getInviteStrippedState(roomId: string): Promise<{ type: string; state_key: string; content: any; sender: string }[]>;
   getReceiptsForRoom(roomId: string, userId: string): Promise<ReceiptEvent>;
   getTypingUsers(roomId: string): Promise<string[]>;
   waitForUserEvents(userId: string, timeoutMs: number): Promise<{ hasEvents: boolean }>;

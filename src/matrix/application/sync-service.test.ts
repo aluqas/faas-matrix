@@ -17,6 +17,7 @@ class FakeSyncRepository implements SyncRepository {
   async getUserRooms() { return []; }
   async getEventsSince() { return []; }
   async getRoomState() { return []; }
+  async getInviteStrippedState() { return []; }
   async getReceiptsForRoom() { return { type: 'm.receipt', content: {} }; }
   async getTypingUsers() { return []; }
   async waitForUserEvents() {

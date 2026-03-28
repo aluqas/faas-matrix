@@ -244,15 +244,16 @@ export class MatrixSyncService {
         continue;
       }
 
-      const strippedState = applyEventFilter(
-        (await this.repository.getRoomState(roomId)).map((event) => ({
-          type: event.type,
-          state_key: event.state_key!,
-          content: event.content,
-          sender: event.sender,
-        })),
-        filter?.room?.state
-      );
+      const inviteStripped = await this.repository.getInviteStrippedState(roomId);
+      const stateSource = inviteStripped.length > 0
+        ? inviteStripped
+        : (await this.repository.getRoomState(roomId)).map((event) => ({
+            type: event.type,
+            state_key: event.state_key!,
+            content: event.content,
+            sender: event.sender,
+          }));
+      const strippedState = applyEventFilter(stateSource, filter?.room?.state);
 
       const invitedRoom: InvitedRoom = {
         invite_state: {

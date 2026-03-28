@@ -1444,6 +1444,29 @@ app.put('/_matrix/federation/v1/invite/:roomId/:eventId', async (c) => {
     JSON.parse(key.private_key_jwk)
   );
 
+  // Persist room stub and invite membership so FK constraints are satisfied
+  // when the send_join transaction arrives later
+  const roomId = inviteEvent.room_id;
+  const roomVersion = body.room_version || '10';
+  await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO rooms (room_id, room_version, creator_id, is_public) VALUES (?, ?, ?, 0)`
+  ).bind(roomId, roomVersion, inviteEvent.sender).run();
+
+  await c.env.DB.prepare(
+    `INSERT OR REPLACE INTO room_memberships (room_id, user_id, membership, event_id)
+     VALUES (?, ?, 'invite', ?)`
+  ).bind(roomId, stateKey, inviteEvent.event_id || eventId).run();
+
+  // Store stripped state for /sync invite_state.events
+  const strippedStateEvents: any[] = Array.isArray(body.invite_room_state) ? body.invite_room_state : [];
+  for (const ev of strippedStateEvents) {
+    if (!ev.type || ev.sender == null) continue;
+    await c.env.DB.prepare(
+      `INSERT OR REPLACE INTO invite_stripped_state (room_id, event_type, state_key, content, sender)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(roomId, ev.type, ev.state_key ?? '', JSON.stringify(ev.content ?? {}), ev.sender).run();
+  }
+
   // v1 returns the signed event directly
   return c.json([200, signedEvent]);
 });
@@ -1549,6 +1572,28 @@ app.put('/_matrix/federation/v2/invite/:roomId/:eventId', async (c) => {
     key.key_id,
     JSON.parse(key.private_key_jwk)
   );
+
+  // Persist room stub and invite membership so FK constraints are satisfied
+  // when the send_join transaction arrives later
+  const inviteRoomId = inviteEvent.room_id;
+  await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO rooms (room_id, room_version, creator_id, is_public) VALUES (?, ?, ?, 0)`
+  ).bind(inviteRoomId, roomVersion, inviteEvent.sender).run();
+
+  await c.env.DB.prepare(
+    `INSERT OR REPLACE INTO room_memberships (room_id, user_id, membership, event_id)
+     VALUES (?, ?, 'invite', ?)`
+  ).bind(inviteRoomId, stateKey, inviteEvent.event_id || eventId).run();
+
+  // Store stripped state for /sync invite_state.events
+  const strippedStateEvents: any[] = Array.isArray(body.invite_room_state) ? body.invite_room_state : [];
+  for (const ev of strippedStateEvents) {
+    if (!ev.type || ev.sender == null) continue;
+    await c.env.DB.prepare(
+      `INSERT OR REPLACE INTO invite_stripped_state (room_id, event_type, state_key, content, sender)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(inviteRoomId, ev.type, ev.state_key ?? '', JSON.stringify(ev.content ?? {}), ev.sender).run();
+  }
 
   // v2 returns { event: signedEvent }
   return c.json({ event: signedEvent });

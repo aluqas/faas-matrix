@@ -3,6 +3,7 @@ import {
   createRoom,
   createRoomAlias,
   getEventsSince,
+  getInviteStrippedState,
   getLatestStreamPosition,
   getMembership,
   getRoom,
@@ -196,6 +197,10 @@ export class CloudflareSyncRepository implements SyncRepository {
 
   getRoomState(roomId: string) {
     return getRoomState(this.env.DB, roomId);
+  }
+
+  getInviteStrippedState(roomId: string) {
+    return getInviteStrippedState(this.env.DB, roomId);
   }
 
   getReceiptsForRoom(roomId: string, userId: string): Promise<ReceiptEvent> {

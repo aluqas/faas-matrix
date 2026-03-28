@@ -513,6 +513,28 @@ export async function getMembership(
   };
 }
 
+export type StrippedStateEvent = {
+  type: string;
+  state_key: string;
+  content: any;
+  sender: string;
+};
+
+export async function getInviteStrippedState(
+  db: D1Database,
+  roomId: string
+): Promise<StrippedStateEvent[]> {
+  const result = await db.prepare(
+    `SELECT event_type, state_key, content, sender FROM invite_stripped_state WHERE room_id = ?`
+  ).bind(roomId).all<{ event_type: string; state_key: string; content: string; sender: string }>();
+  return result.results.map(r => ({
+    type: r.event_type,
+    state_key: r.state_key,
+    content: JSON.parse(r.content),
+    sender: r.sender,
+  }));
+}
+
 export async function getUserRooms(
   db: D1Database,
   userId: string,
