@@ -4,7 +4,7 @@
 // This service provides ~95% cache hit rate for active rooms,
 // reducing sync query count by 80-90%
 
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database } from "@cloudflare/workers-types";
 
 // Cached room metadata structure
 export interface RoomMetadata {
@@ -20,7 +20,7 @@ export interface RoomMetadata {
 
 // Cache configuration
 const CACHE_TTL_SECONDS = 60 * 5; // 5 minutes
-const CACHE_KEY_PREFIX = 'room-meta:';
+const CACHE_KEY_PREFIX = "room-meta:";
 
 /**
  * Get room metadata from cache or database
@@ -29,13 +29,13 @@ const CACHE_KEY_PREFIX = 'room-meta:';
 export async function getRoomMetadata(
   cache: KVNamespace,
   db: D1Database,
-  roomId: string
+  roomId: string,
 ): Promise<RoomMetadata | null> {
   const cacheKey = `${CACHE_KEY_PREFIX}${roomId}`;
 
   // Try cache first
   try {
-    const cached = await cache.get(cacheKey, 'json') as RoomMetadata | null;
+    const cached = (await cache.get(cacheKey, "json")) as RoomMetadata | null;
     if (cached && Date.now() - cached.cachedAt < CACHE_TTL_SECONDS * 1000) {
       return cached;
     }
@@ -51,10 +51,14 @@ export async function getRoomMetadata(
 
   // Cache for future requests (non-blocking)
   try {
-    await cache.put(cacheKey, JSON.stringify({
-      ...metadata,
-      cachedAt: Date.now(),
-    }), { expirationTtl: CACHE_TTL_SECONDS });
+    await cache.put(
+      cacheKey,
+      JSON.stringify({
+        ...metadata,
+        cachedAt: Date.now(),
+      }),
+      { expirationTtl: CACHE_TTL_SECONDS },
+    );
   } catch {
     // Cache write failure is non-critical
   }
@@ -69,7 +73,7 @@ export async function getRoomMetadata(
 export async function getBatchRoomMetadata(
   cache: KVNamespace,
   db: D1Database,
-  roomIds: string[]
+  roomIds: string[],
 ): Promise<Map<string, RoomMetadata>> {
   const result = new Map<string, RoomMetadata>();
   const uncachedRoomIds: string[] = [];
@@ -78,7 +82,7 @@ export async function getBatchRoomMetadata(
   const cachePromises = roomIds.map(async (roomId) => {
     const cacheKey = `${CACHE_KEY_PREFIX}${roomId}`;
     try {
-      const cached = await cache.get(cacheKey, 'json') as RoomMetadata | null;
+      const cached = (await cache.get(cacheKey, "json")) as RoomMetadata | null;
       if (cached && Date.now() - cached.cachedAt < CACHE_TTL_SECONDS * 1000) {
         return { roomId, metadata: cached };
       }
@@ -105,10 +109,16 @@ export async function getBatchRoomMetadata(
       if (metadata) {
         // Cache for future requests (non-blocking)
         const cacheKey = `${CACHE_KEY_PREFIX}${roomId}`;
-        cache.put(cacheKey, JSON.stringify({
-          ...metadata,
-          cachedAt: Date.now(),
-        }), { expirationTtl: CACHE_TTL_SECONDS }).catch(() => {});
+        cache
+          .put(
+            cacheKey,
+            JSON.stringify({
+              ...metadata,
+              cachedAt: Date.now(),
+            }),
+            { expirationTtl: CACHE_TTL_SECONDS },
+          )
+          .catch(() => {});
       }
       return { roomId, metadata };
     });
@@ -129,7 +139,7 @@ export async function getBatchRoomMetadata(
  */
 async function fetchRoomMetadataFromDB(
   db: D1Database,
-  roomId: string
+  roomId: string,
 ): Promise<RoomMetadata | null> {
   const [
     nameResult,
@@ -140,33 +150,49 @@ async function fetchRoomMetadataFromDB(
     invitedCountResult,
   ] = await db.batch([
     // Room name
-    db.prepare(`
+    db
+      .prepare(`
       SELECT e.content FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.room_id = ? AND rs.event_type = 'm.room.name'
-    `).bind(roomId),
+    `)
+      .bind(roomId),
     // Room avatar
-    db.prepare(`
+    db
+      .prepare(`
       SELECT e.content FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.room_id = ? AND rs.event_type = 'm.room.avatar'
-    `).bind(roomId),
+    `)
+      .bind(roomId),
     // Room topic
-    db.prepare(`
+    db
+      .prepare(`
       SELECT e.content FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.room_id = ? AND rs.event_type = 'm.room.topic'
-    `).bind(roomId),
+    `)
+      .bind(roomId),
     // Canonical alias
-    db.prepare(`
+    db
+      .prepare(`
       SELECT e.content FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.room_id = ? AND rs.event_type = 'm.room.canonical_alias'
-    `).bind(roomId),
+    `)
+      .bind(roomId),
     // Joined member count
-    db.prepare(`SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'join'`).bind(roomId),
+    db
+      .prepare(
+        `SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'join'`,
+      )
+      .bind(roomId),
     // Invited member count
-    db.prepare(`SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'invite'`).bind(roomId),
+    db
+      .prepare(
+        `SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'invite'`,
+      )
+      .bind(roomId),
   ]);
 
   // Extract values from batch results
@@ -179,28 +205,36 @@ async function fetchRoomMetadataFromDB(
   if (nameEvent) {
     try {
       name = JSON.parse(nameEvent.content).name;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   const avatarEvent = avatarResult.results[0] as { content: string } | undefined;
   if (avatarEvent) {
     try {
       avatar = JSON.parse(avatarEvent.content).url;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   const topicEvent = topicResult.results[0] as { content: string } | undefined;
   if (topicEvent) {
     try {
       topic = JSON.parse(topicEvent.content).topic;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   const aliasEvent = aliasResult.results[0] as { content: string } | undefined;
   if (aliasEvent) {
     try {
       canonicalAlias = JSON.parse(aliasEvent.content).alias;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   const joinedCount = (joinedCountResult.results[0] as { count: number } | undefined)?.count || 0;
@@ -222,10 +256,7 @@ async function fetchRoomMetadataFromDB(
  * Invalidate room metadata cache
  * Call this when room state changes (name, avatar, topic, membership)
  */
-export async function invalidateRoomCache(
-  cache: KVNamespace,
-  roomId: string
-): Promise<void> {
+export async function invalidateRoomCache(cache: KVNamespace, roomId: string): Promise<void> {
   const cacheKey = `${CACHE_KEY_PREFIX}${roomId}`;
   try {
     await cache.delete(cacheKey);
@@ -239,7 +270,7 @@ export async function invalidateRoomCache(
  */
 export async function invalidateBatchRoomCache(
   cache: KVNamespace,
-  roomIds: string[]
+  roomIds: string[],
 ): Promise<void> {
-  await Promise.all(roomIds.map(roomId => invalidateRoomCache(cache, roomId)));
+  await Promise.all(roomIds.map((roomId) => invalidateRoomCache(cache, roomId)));
 }

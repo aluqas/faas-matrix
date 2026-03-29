@@ -1,1 +1,1 @@
-export * from './member-transition-service';
+export * from "./member-transition-service";

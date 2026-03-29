@@ -1,4 +1,4 @@
-import { discoverServer } from '../../services/server-discovery';
+import { discoverServer } from "../../services/server-discovery";
 import {
   createRoom,
   createRoomAlias,
@@ -16,12 +16,12 @@ import {
   notifyUsersOfEvent,
   storeEvent,
   updateMembership,
-} from '../../services/database';
-import { getGlobalAccountData, getRoomAccountData } from '../../api/account-data';
-import { getReceiptsForRoom } from '../../api/receipts';
-import { getToDeviceMessages } from '../../api/to-device';
-import { getTypingUsers } from '../../api/typing';
-import type { Env, PDU, Room } from '../../types';
+} from "../../services/database";
+import { getGlobalAccountData, getRoomAccountData } from "../../api/account-data";
+import { getReceiptsForRoom } from "../../api/receipts";
+import { getToDeviceMessages } from "../../api/to-device";
+import { getTypingUsers } from "../../api/typing";
+import type { Env, PDU, Room } from "../../types";
 import type {
   FederationProcessedPdu,
   FederationRepository,
@@ -29,14 +29,14 @@ import type {
   ReceiptEvent,
   RoomRepository,
   SyncRepository,
-} from '../../matrix/repositories/interfaces';
-import { validateUrl } from '../../utils/url-validator';
+} from "../../matrix/repositories/interfaces";
+import { validateUrl } from "../../utils/url-validator";
 import type {
   DeliveryQueue,
   DiscoveryService,
   RemoteKeyCache,
   SignedTransport,
-} from '../../fedcore/contracts';
+} from "../../fedcore/contracts";
 
 export class CloudflareRoomRepository implements RoomRepository {
   constructor(private readonly env: Env) {}
@@ -45,7 +45,12 @@ export class CloudflareRoomRepository implements RoomRepository {
     return getRoomByAlias(this.env.DB, alias);
   }
 
-  createRoom(roomId: string, roomVersion: string, creatorId: string, isPublic: boolean): Promise<void> {
+  createRoom(
+    roomId: string,
+    roomVersion: string,
+    creatorId: string,
+    isPublic: boolean,
+  ): Promise<void> {
     return createRoom(this.env.DB, roomId, roomVersion, creatorId, isPublic);
   }
 
@@ -57,13 +62,15 @@ export class CloudflareRoomRepository implements RoomRepository {
     userId: string,
     roomId: string,
     eventType: string,
-    content: Record<string, unknown>
+    content: Record<string, unknown>,
   ): Promise<void> {
     await this.env.DB.prepare(
       `INSERT INTO account_data (user_id, room_id, event_type, content)
        VALUES (?, ?, ?, ?)
-       ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET content = excluded.content`
-    ).bind(userId, roomId, eventType, JSON.stringify(content)).run();
+       ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET content = excluded.content`,
+    )
+      .bind(userId, roomId, eventType, JSON.stringify(content))
+      .run();
   }
 
   storeEvent(event: PDU): Promise<void> {
@@ -73,12 +80,20 @@ export class CloudflareRoomRepository implements RoomRepository {
   updateMembership(
     roomId: string,
     userId: string,
-    membership: 'join' | 'invite' | 'leave' | 'ban' | 'knock',
+    membership: "join" | "invite" | "leave" | "ban" | "knock",
     eventId: string,
     displayName?: string,
-    avatarUrl?: string
+    avatarUrl?: string,
   ): Promise<void> {
-    return updateMembership(this.env.DB, roomId, userId, membership, eventId, displayName, avatarUrl);
+    return updateMembership(
+      this.env.DB,
+      roomId,
+      userId,
+      membership,
+      eventId,
+      displayName,
+      avatarUrl,
+    );
   }
 
   notifyUsersOfEvent(roomId: string, eventId: string, eventType: string): Promise<void> {
@@ -108,7 +123,7 @@ export class CloudflareSyncRepository implements SyncRepository {
 
   async loadFilter(userId: string, filterParam?: string): Promise<FilterDefinition | null> {
     if (!filterParam) return null;
-    if (filterParam.startsWith('{')) {
+    if (filterParam.startsWith("{")) {
       try {
         return JSON.parse(filterParam) as FilterDefinition;
       } catch {
@@ -140,7 +155,9 @@ export class CloudflareSyncRepository implements SyncRepository {
       FROM one_time_keys
       WHERE user_id = ? AND device_id = ? AND claimed = 0
       GROUP BY algorithm
-    `).bind(userId, deviceId).all<{ algorithm: string; count: number }>();
+    `)
+      .bind(userId, deviceId)
+      .all<{ algorithm: string; count: number }>();
 
     const result: Record<string, number> = {};
     for (const row of counts.results) {
@@ -154,11 +171,16 @@ export class CloudflareSyncRepository implements SyncRepository {
       SELECT DISTINCT algorithm
       FROM fallback_keys
       WHERE user_id = ? AND device_id = ? AND used = 0
-    `).bind(userId, deviceId).all<{ algorithm: string }>();
+    `)
+      .bind(userId, deviceId)
+      .all<{ algorithm: string }>();
     return keys.results.map((row) => row.algorithm);
   }
 
-  async getDeviceListChanges(userId: string, sincePosition: number): Promise<{ changed: string[]; left: string[] }> {
+  async getDeviceListChanges(
+    userId: string,
+    sincePosition: number,
+  ): Promise<{ changed: string[]; left: string[] }> {
     const changed = await this.env.DB.prepare(`
       SELECT DISTINCT user_id
       FROM remote_device_list_streams
@@ -172,7 +194,9 @@ export class CloudflareSyncRepository implements SyncRepository {
             AND rm2.membership = 'join'
             AND rm2.user_id != ?
         )
-    `).bind(sincePosition, userId, userId).all<{ user_id: string }>();
+    `)
+      .bind(sincePosition, userId, userId)
+      .all<{ user_id: string }>();
 
     return {
       changed: changed.results.map((row) => row.user_id),
@@ -188,7 +212,7 @@ export class CloudflareSyncRepository implements SyncRepository {
     return getRoomAccountData(this.env.DB, userId, roomId, since);
   }
 
-  getUserRooms(userId: string, membership?: 'join' | 'invite' | 'leave' | 'ban' | 'knock') {
+  getUserRooms(userId: string, membership?: "join" | "invite" | "leave" | "ban" | "knock") {
     return getUserRooms(this.env.DB, userId, membership);
   }
 
@@ -225,11 +249,11 @@ export class CloudflareSyncRepository implements SyncRepository {
     const doId = syncDO.idFromName(userId);
     const stub = syncDO.get(doId);
     const response = await stub.fetch(
-      new Request('http://internal/wait-for-events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      new Request("http://internal/wait-for-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ timeout: timeoutMs }),
-      })
+      }),
     );
     return response.json() as Promise<{ hasEvents: boolean }>;
   }
@@ -238,25 +262,38 @@ export class CloudflareSyncRepository implements SyncRepository {
 export class CloudflareFederationRepository implements FederationRepository {
   constructor(private readonly env: Env) {}
 
-  async getCachedTransaction(origin: string, txnId: string): Promise<Record<string, unknown> | null> {
+  async getCachedTransaction(
+    origin: string,
+    txnId: string,
+  ): Promise<Record<string, unknown> | null> {
     const result = await this.env.DB.prepare(
-      `SELECT response FROM federation_transactions WHERE origin = ? AND txn_id = ?`
-    ).bind(origin, txnId).first<{ response: string | null }>();
+      `SELECT response FROM federation_transactions WHERE origin = ? AND txn_id = ?`,
+    )
+      .bind(origin, txnId)
+      .first<{ response: string | null }>();
 
     return result?.response ? JSON.parse(result.response) : null;
   }
 
-  async storeCachedTransaction(origin: string, txnId: string, response: Record<string, unknown>): Promise<void> {
+  async storeCachedTransaction(
+    origin: string,
+    txnId: string,
+    response: Record<string, unknown>,
+  ): Promise<void> {
     await this.env.DB.prepare(
       `INSERT OR REPLACE INTO federation_transactions (txn_id, origin, received_at, response)
-       VALUES (?, ?, ?, ?)`
-    ).bind(txnId, origin, Date.now(), JSON.stringify(response)).run();
+       VALUES (?, ?, ?, ?)`,
+    )
+      .bind(txnId, origin, Date.now(), JSON.stringify(response))
+      .run();
   }
 
   async getProcessedPdu(eventId: string): Promise<FederationProcessedPdu | null> {
     const result = await this.env.DB.prepare(
-      `SELECT accepted, rejection_reason FROM processed_pdus WHERE event_id = ?`
-    ).bind(eventId).first<{ accepted: number; rejection_reason: string | null }>();
+      `SELECT accepted, rejection_reason FROM processed_pdus WHERE event_id = ?`,
+    )
+      .bind(eventId)
+      .first<{ accepted: number; rejection_reason: string | null }>();
 
     if (!result) return null;
     return {
@@ -270,15 +307,22 @@ export class CloudflareFederationRepository implements FederationRepository {
     origin: string,
     roomId: string,
     accepted: boolean,
-    rejectionReason?: string
+    rejectionReason?: string,
   ): Promise<void> {
     await this.env.DB.prepare(
       `INSERT OR REPLACE INTO processed_pdus (event_id, origin, room_id, processed_at, accepted, rejection_reason)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(eventId, origin, roomId, Date.now(), accepted ? 1 : 0, rejectionReason || null).run();
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(eventId, origin, roomId, Date.now(), accepted ? 1 : 0, rejectionReason || null)
+      .run();
   }
 
-  createRoom(roomId: string, roomVersion: string, creatorId: string, isPublic: boolean): Promise<void> {
+  createRoom(
+    roomId: string,
+    roomVersion: string,
+    creatorId: string,
+    isPublic: boolean,
+  ): Promise<void> {
     return createRoom(this.env.DB, roomId, roomVersion, creatorId, isPublic);
   }
 
@@ -295,36 +339,38 @@ export class CloudflareFederationRepository implements FederationRepository {
   }
 
   async storeIncomingEvent(event: PDU): Promise<void> {
-    const existing = await this.env.DB.prepare(
-      `SELECT event_id FROM events WHERE event_id = ?`
-    ).bind(event.event_id).first();
+    const existing = await this.env.DB.prepare(`SELECT event_id FROM events WHERE event_id = ?`)
+      .bind(event.event_id)
+      .first();
     if (existing) return;
 
     const lastOrdering = await this.env.DB.prepare(
-      `SELECT MAX(stream_ordering) as max_ordering FROM events`
+      `SELECT MAX(stream_ordering) as max_ordering FROM events`,
     ).first<{ max_ordering: number | null }>();
     const streamOrdering = (lastOrdering?.max_ordering ?? 0) + 1;
 
     await this.env.DB.prepare(
       `INSERT OR IGNORE INTO events
        (event_id, room_id, sender, event_type, state_key, content, origin_server_ts, unsigned, depth, auth_events, prev_events, hashes, signatures, stream_ordering)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      event.event_id,
-      event.room_id,
-      event.sender,
-      event.type,
-      event.state_key ?? null,
-      JSON.stringify(event.content),
-      event.origin_server_ts,
-      event.unsigned ? JSON.stringify(event.unsigned) : null,
-      event.depth || 0,
-      JSON.stringify(event.auth_events || []),
-      JSON.stringify(event.prev_events || []),
-      event.hashes ? JSON.stringify(event.hashes) : null,
-      event.signatures ? JSON.stringify(event.signatures) : null,
-      streamOrdering
-    ).run();
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        event.event_id,
+        event.room_id,
+        event.sender,
+        event.type,
+        event.state_key ?? null,
+        JSON.stringify(event.content),
+        event.origin_server_ts,
+        event.unsigned ? JSON.stringify(event.unsigned) : null,
+        event.depth || 0,
+        JSON.stringify(event.auth_events || []),
+        JSON.stringify(event.prev_events || []),
+        event.hashes ? JSON.stringify(event.hashes) : null,
+        event.signatures ? JSON.stringify(event.signatures) : null,
+        streamOrdering,
+      )
+      .run();
   }
 
   notifyUsersOfEvent(roomId: string, eventId: string, eventType: string): Promise<void> {
@@ -334,32 +380,47 @@ export class CloudflareFederationRepository implements FederationRepository {
   updateMembership(
     roomId: string,
     userId: string,
-    membership: 'join' | 'invite' | 'leave' | 'ban' | 'knock',
+    membership: "join" | "invite" | "leave" | "ban" | "knock",
     eventId: string,
     displayName?: string,
-    avatarUrl?: string
+    avatarUrl?: string,
   ): Promise<void> {
-    return updateMembership(this.env.DB, roomId, userId, membership, eventId, displayName, avatarUrl);
+    return updateMembership(
+      this.env.DB,
+      roomId,
+      userId,
+      membership,
+      eventId,
+      displayName,
+      avatarUrl,
+    );
   }
 
-  async upsertRoomState(roomId: string, eventType: string, stateKey: string, eventId: string): Promise<void> {
+  async upsertRoomState(
+    roomId: string,
+    eventType: string,
+    stateKey: string,
+    eventId: string,
+  ): Promise<void> {
     await this.env.DB.prepare(
       `INSERT OR REPLACE INTO room_state (room_id, event_type, state_key, event_id)
-       VALUES (?, ?, ?, ?)`
-    ).bind(roomId, eventType, stateKey, eventId).run();
+       VALUES (?, ?, ?, ?)`,
+    )
+      .bind(roomId, eventType, stateKey, eventId)
+      .run();
   }
 
-  async storeProcessedEdu(origin: string, eduType: string, content: Record<string, unknown>): Promise<void> {
+  async storeProcessedEdu(
+    origin: string,
+    eduType: string,
+    content: Record<string, unknown>,
+  ): Promise<void> {
     await this.env.DB.prepare(
       `INSERT OR REPLACE INTO processed_edus (edu_id, edu_type, origin, processed_at, content)
-       VALUES (?, ?, ?, ?, ?)`
-    ).bind(
-      String(content.edu_id || ''),
-      eduType,
-      origin,
-      Date.now(),
-      JSON.stringify(content)
-    ).run();
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+      .bind(String(content.edu_id || ""), eduType, origin, Date.now(), JSON.stringify(content))
+      .run();
   }
 
   async upsertPresence(
@@ -367,7 +428,7 @@ export class CloudflareFederationRepository implements FederationRepository {
     presence: string,
     statusMessage: string | null,
     lastActiveTs: number,
-    currentlyActive: boolean
+    currentlyActive: boolean,
   ): Promise<void> {
     await this.env.DB.prepare(`
       INSERT INTO presence (user_id, presence, status_msg, last_active_ts, currently_active)
@@ -377,7 +438,9 @@ export class CloudflareFederationRepository implements FederationRepository {
         status_msg = excluded.status_msg,
         last_active_ts = excluded.last_active_ts,
         currently_active = excluded.currently_active
-    `).bind(userId, presence, statusMessage, lastActiveTs, currentlyActive ? 1 : 0).run();
+    `)
+      .bind(userId, presence, statusMessage, lastActiveTs, currentlyActive ? 1 : 0)
+      .run();
   }
 
   async upsertRemoteDeviceList(
@@ -386,12 +449,14 @@ export class CloudflareFederationRepository implements FederationRepository {
     streamId: number,
     keys: Record<string, unknown> | null,
     displayName?: string,
-    deleted?: boolean
+    deleted?: boolean,
   ): Promise<void> {
     if (deleted) {
       await this.env.DB.prepare(
-        `DELETE FROM remote_device_lists WHERE user_id = ? AND device_id = ?`
-      ).bind(userId, deviceId).run();
+        `DELETE FROM remote_device_lists WHERE user_id = ? AND device_id = ?`,
+      )
+        .bind(userId, deviceId)
+        .run();
     } else {
       await this.env.DB.prepare(`
         INSERT INTO remote_device_lists (user_id, device_id, device_display_name, keys, stream_id, updated_at)
@@ -401,14 +466,16 @@ export class CloudflareFederationRepository implements FederationRepository {
           keys = excluded.keys,
           stream_id = excluded.stream_id,
           updated_at = excluded.updated_at
-      `).bind(
-        userId,
-        deviceId,
-        displayName || null,
-        keys ? JSON.stringify(keys) : null,
-        streamId,
-        Date.now()
-      ).run();
+      `)
+        .bind(
+          userId,
+          deviceId,
+          displayName || null,
+          keys ? JSON.stringify(keys) : null,
+          streamId,
+          Date.now(),
+        )
+        .run();
     }
 
     await this.env.DB.prepare(`
@@ -417,7 +484,9 @@ export class CloudflareFederationRepository implements FederationRepository {
       ON CONFLICT (user_id) DO UPDATE SET
         stream_id = MAX(remote_device_list_streams.stream_id, excluded.stream_id),
         updated_at = excluded.updated_at
-    `).bind(userId, streamId, Date.now()).run();
+    `)
+      .bind(userId, streamId, Date.now())
+      .run();
   }
 }
 
@@ -427,7 +496,11 @@ export class CloudflareSignedTransport implements SignedTransport {
   }
 }
 
-export class CloudflareDiscoveryService implements DiscoveryService<{ host: string; port: number; tlsHostname: string }> {
+export class CloudflareDiscoveryService implements DiscoveryService<{
+  host: string;
+  port: number;
+  tlsHostname: string;
+}> {
   constructor(private readonly env: Env) {}
 
   discover(serverName: string) {
@@ -458,6 +531,6 @@ export class CloudflareRemoteKeyCache implements RemoteKeyCache<{ keyId: string;
 export function assertValidMatrixServerUrl(url: string): void {
   const validation = validateUrl(url);
   if (!validation.valid) {
-    throw new Error(validation.error || 'Invalid URL');
+    throw new Error(validation.error || "Invalid URL");
   }
 }

@@ -1,5 +1,5 @@
-import type { FeatureProfile } from './config/feature-profile';
-import type { RuntimeCapabilities } from './runtime-capabilities';
+import type { FeatureProfile } from "./config/feature-profile";
+import type { RuntimeCapabilities } from "./runtime-capabilities";
 
 export interface AppContext<TServices = unknown> {
   capabilities: RuntimeCapabilities;
@@ -7,4 +7,3 @@ export interface AppContext<TServices = unknown> {
   services: TServices;
   defer(task: Promise<unknown>): void;
 }
-

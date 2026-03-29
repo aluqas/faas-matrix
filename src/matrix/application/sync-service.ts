@@ -1,11 +1,6 @@
-import type { AppContext } from '../../foundation/app-context';
-import type {
-  JoinedRoom,
-  InvitedRoom,
-  LeftRoom,
-  SyncResponse,
-} from '../../types';
-import type { FilterDefinition, SyncRepository } from '../repositories/interfaces';
+import type { AppContext } from "../../foundation/app-context";
+import type { JoinedRoom, InvitedRoom, KnockedRoom, LeftRoom, SyncResponse } from "../../types";
+import type { FilterDefinition, SyncRepository } from "../repositories/interfaces";
 
 interface EventFilter {
   types?: string[];
@@ -30,14 +25,18 @@ function applyEventFilter(events: any[], filter?: EventFilter): any[] {
   let filtered = events.filter((event) => {
     if (filter.types && filter.types.length > 0) {
       const matches = filter.types.some((pattern) =>
-        pattern.endsWith('*') ? event.type.startsWith(pattern.slice(0, -1)) : event.type === pattern
+        pattern.endsWith("*")
+          ? event.type.startsWith(pattern.slice(0, -1))
+          : event.type === pattern,
       );
       if (!matches) return false;
     }
 
     if (filter.not_types && filter.not_types.length > 0) {
       const excluded = filter.not_types.some((pattern) =>
-        pattern.endsWith('*') ? event.type.startsWith(pattern.slice(0, -1)) : event.type === pattern
+        pattern.endsWith("*")
+          ? event.type.startsWith(pattern.slice(0, -1))
+          : event.type === pattern,
       );
       if (excluded) return false;
     }
@@ -46,7 +45,11 @@ function applyEventFilter(events: any[], filter?: EventFilter): any[] {
       return false;
     }
 
-    if (filter.not_senders && filter.not_senders.length > 0 && filter.not_senders.includes(event.sender)) {
+    if (
+      filter.not_senders &&
+      filter.not_senders.length > 0 &&
+      filter.not_senders.includes(event.sender)
+    ) {
       return false;
     }
 
@@ -60,10 +63,11 @@ function applyEventFilter(events: any[], filter?: EventFilter): any[] {
   return filtered;
 }
 
-function shouldIncludeRoom(roomId: string, filter?: FilterDefinition['room']): boolean {
+function shouldIncludeRoom(roomId: string, filter?: FilterDefinition["room"]): boolean {
   if (!filter) return true;
   if (filter.rooms && filter.rooms.length > 0 && !filter.rooms.includes(roomId)) return false;
-  if (filter.not_rooms && filter.not_rooms.length > 0 && filter.not_rooms.includes(roomId)) return false;
+  if (filter.not_rooms && filter.not_rooms.length > 0 && filter.not_rooms.includes(roomId))
+    return false;
   return true;
 }
 
@@ -95,7 +99,7 @@ export function buildSyncToken(eventsPos: number, toDevicePos: number): string {
 export class MatrixSyncService {
   constructor(
     _appContext: AppContext,
-    private readonly repository: SyncRepository
+    private readonly repository: SyncRepository,
   ) {
     void _appContext;
   }
@@ -107,8 +111,8 @@ export class MatrixSyncService {
     let currentToDevicePos = sinceToDevice;
 
     const response: SyncResponse = {
-      next_batch: '',
-      rooms: { join: {}, invite: {}, leave: {} },
+      next_batch: "",
+      rooms: { join: {}, invite: {}, leave: {}, knock: {} },
       presence: { events: [] },
       account_data: { events: [] },
       to_device: { events: [] },
@@ -120,22 +124,25 @@ export class MatrixSyncService {
       const toDeviceResult = await this.repository.getToDeviceMessages(
         input.userId,
         input.deviceId,
-        String(sinceToDevice)
+        String(sinceToDevice),
       );
       response.to_device!.events = toDeviceResult.events as any[];
       currentToDevicePos = Number.parseInt(toDeviceResult.nextBatch, 10) || sinceToDevice;
       response.device_one_time_keys_count = await this.repository.getOneTimeKeyCounts(
         input.userId,
-        input.deviceId
+        input.deviceId,
       );
       response.device_unused_fallback_key_types = await this.repository.getUnusedFallbackKeyTypes(
         input.userId,
-        input.deviceId
+        input.deviceId,
       );
     }
 
     if (sincePosition > 0) {
-      const deviceListChanges = await this.repository.getDeviceListChanges(input.userId, sincePosition);
+      const deviceListChanges = await this.repository.getDeviceListChanges(
+        input.userId,
+        sincePosition,
+      );
       if (deviceListChanges.changed.length > 0 || deviceListChanges.left.length > 0) {
         response.device_lists = deviceListChanges;
       }
@@ -146,12 +153,12 @@ export class MatrixSyncService {
     response.account_data!.events = applyEventFilter(
       await this.repository.getGlobalAccountData(
         input.userId,
-        sincePosition > 0 ? sincePosition : undefined
+        sincePosition > 0 ? sincePosition : undefined,
       ),
-      filter?.account_data
+      filter?.account_data,
     );
 
-    const joinedRoomIds = await this.repository.getUserRooms(input.userId, 'join');
+    const joinedRoomIds = await this.repository.getUserRooms(input.userId, "join");
     for (const roomId of joinedRoomIds) {
       if (!shouldIncludeRoom(roomId, filter?.room)) {
         continue;
@@ -212,9 +219,9 @@ export class MatrixSyncService {
         await this.repository.getRoomAccountData(
           input.userId,
           roomId,
-          sincePosition > 0 ? sincePosition : undefined
+          sincePosition > 0 ? sincePosition : undefined,
         ),
-        filter?.room?.account_data
+        filter?.room?.account_data,
       );
 
       const receipts = await this.repository.getReceiptsForRoom(roomId, input.userId);
@@ -225,20 +232,20 @@ export class MatrixSyncService {
       const typingUsers = await this.repository.getTypingUsers(roomId);
       if (typingUsers.length > 0) {
         joinedRoom.ephemeral!.events.push({
-          type: 'm.typing',
+          type: "m.typing",
           content: { user_ids: typingUsers },
         } as any);
       }
 
       joinedRoom.ephemeral!.events = applyEventFilter(
         joinedRoom.ephemeral!.events,
-        filter?.room?.ephemeral
+        filter?.room?.ephemeral,
       );
 
       response.rooms!.join![roomId] = joinedRoom;
     }
 
-    const invitedRoomIds = await this.repository.getUserRooms(input.userId, 'invite');
+    const invitedRoomIds = await this.repository.getUserRooms(input.userId, "invite");
     for (const roomId of invitedRoomIds) {
       if (!shouldIncludeRoom(roomId, filter?.room)) {
         continue;
@@ -247,9 +254,9 @@ export class MatrixSyncService {
       const roomState = await this.repository.getRoomState(roomId);
       const currentMemberState = roomState.find(
         (event) =>
-          event.type === 'm.room.member' &&
+          event.type === "m.room.member" &&
           event.state_key === input.userId &&
-          (event.content as { membership?: string } | undefined)?.membership === 'leave'
+          (event.content as { membership?: string } | undefined)?.membership === "leave",
       );
       if (currentMemberState) {
         response.rooms!.leave![roomId] = {
@@ -271,19 +278,20 @@ export class MatrixSyncService {
       }
 
       const membership = await this.repository.getMembership(roomId, input.userId);
-      if (membership?.membership !== 'invite') {
+      if (membership?.membership !== "invite") {
         continue;
       }
 
       const inviteStripped = await this.repository.getInviteStrippedState(roomId);
-      const stateSource = inviteStripped.length > 0
-        ? inviteStripped
-        : roomState.map((event) => ({
-            type: event.type,
-            state_key: event.state_key!,
-            content: event.content,
-            sender: event.sender,
-          }));
+      const stateSource =
+        inviteStripped.length > 0
+          ? inviteStripped
+          : roomState.map((event) => ({
+              type: event.type,
+              state_key: event.state_key!,
+              content: event.content,
+              sender: event.sender,
+            }));
       const strippedState = applyEventFilter(stateSource, filter?.room?.state);
 
       const invitedRoom: InvitedRoom = {
@@ -295,9 +303,57 @@ export class MatrixSyncService {
       response.rooms!.invite![roomId] = invitedRoom;
     }
 
+    const knockedRoomIds = await this.repository.getUserRooms(input.userId, "knock");
+    for (const roomId of knockedRoomIds) {
+      if (!shouldIncludeRoom(roomId, filter?.room)) {
+        continue;
+      }
+
+      const membership = await this.repository.getMembership(roomId, input.userId);
+      if (membership?.membership !== "knock") {
+        continue;
+      }
+
+      const roomState = await this.repository.getRoomState(roomId);
+      const stripped = await this.repository.getInviteStrippedState(roomId);
+      const stateSource =
+        stripped.length > 0
+          ? stripped
+          : roomState.map((event) => ({
+              type: event.type,
+              state_key: event.state_key!,
+              content: event.content,
+              sender: event.sender,
+            }));
+      const knockEvent = await this.repository.getEvent(membership.eventId);
+      if (
+        knockEvent &&
+        knockEvent.type === "m.room.member" &&
+        knockEvent.state_key === input.userId &&
+        !stateSource.some(
+          (event) => event.type === knockEvent.type && event.state_key === knockEvent.state_key,
+        )
+      ) {
+        stateSource.push({
+          type: knockEvent.type,
+          state_key: knockEvent.state_key!,
+          content: knockEvent.content,
+          sender: knockEvent.sender,
+        });
+      }
+
+      const knockedRoom: KnockedRoom = {
+        knock_state: {
+          events: applyEventFilter(stateSource, filter?.room?.state),
+        },
+      };
+
+      response.rooms!.knock![roomId] = knockedRoom;
+    }
+
     const includeLeave = filter?.room?.include_leave ?? false;
     if (includeLeave || (sincePosition > 0 && !filter)) {
-      const leftRoomIds = await this.repository.getUserRooms(input.userId, 'leave');
+      const leftRoomIds = await this.repository.getUserRooms(input.userId, "leave");
       for (const roomId of leftRoomIds) {
         if (!shouldIncludeRoom(roomId, filter?.room)) {
           continue;
@@ -307,27 +363,27 @@ export class MatrixSyncService {
         if (sincePosition > 0) {
           leaveEvent = (await this.repository.getEventsSince(roomId, sincePosition)).find(
             (event) =>
-              event.type === 'm.room.member' &&
+              event.type === "m.room.member" &&
               event.state_key === input.userId &&
-              (event.content as { membership?: string } | undefined)?.membership === 'leave'
+              (event.content as { membership?: string } | undefined)?.membership === "leave",
           );
         }
 
         if (!leaveEvent) {
           const membership = await this.repository.getMembership(roomId, input.userId);
-          if (membership?.membership === 'leave') {
+          if (membership?.membership === "leave") {
             leaveEvent = await this.repository.getEvent(membership.eventId);
             if (
               !leaveEvent ||
-              leaveEvent.type !== 'm.room.member' ||
+              leaveEvent.type !== "m.room.member" ||
               leaveEvent.state_key !== input.userId ||
-              (leaveEvent.content as { membership?: string } | undefined)?.membership !== 'leave'
+              (leaveEvent.content as { membership?: string } | undefined)?.membership !== "leave"
             ) {
               leaveEvent = (await this.repository.getRoomState(roomId)).find(
                 (event) =>
-                  event.type === 'm.room.member' &&
+                  event.type === "m.room.member" &&
                   event.state_key === input.userId &&
-                  (event.content as { membership?: string } | undefined)?.membership === 'leave'
+                  (event.content as { membership?: string } | undefined)?.membership === "leave",
               );
             }
           }
@@ -365,7 +421,9 @@ export class MatrixSyncService {
     const hasLeaves = Object.keys(response.rooms!.leave!).length > 0;
     const hasToDevice = response.to_device!.events.length > 0;
     const hasAccountData = response.account_data!.events.length > 0;
-    const hasChanges = hasRoomChanges || hasInvites || hasLeaves || hasToDevice || hasAccountData;
+    const hasKnocks = Object.keys(response.rooms!.knock!).length > 0;
+    const hasChanges =
+      hasRoomChanges || hasInvites || hasLeaves || hasKnocks || hasToDevice || hasAccountData;
     const timeout = Math.min(input.timeout || 0, 30000);
 
     if (!hasChanges && timeout > 0 && sincePosition > 0) {

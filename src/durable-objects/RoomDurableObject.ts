@@ -1,7 +1,7 @@
 // Room Durable Object for real-time room coordination
 
-import { DurableObject } from 'cloudflare:workers';
-import type { Env } from '../types';
+import { DurableObject } from "cloudflare:workers";
+import type { Env } from "../types";
 
 interface RoomSession {
   id: string;
@@ -14,7 +14,7 @@ interface TypingState {
 }
 
 interface ReceiptData {
-  user_id: string;  // Added for proper response building
+  user_id: string; // Added for proper response building
   event_id: string;
   receipt_type: string;
   ts: number;
@@ -23,7 +23,7 @@ interface ReceiptData {
 
 export class RoomDurableObject extends DurableObject<Env> {
   private sessions: Map<WebSocket, RoomSession> = new Map();
-  private roomId: string = '';
+  private roomId: string = "";
 
   // In-memory typing state - Map of userId -> expiration timestamp
   private typingUsers: Map<string, TypingState> = new Map();
@@ -42,12 +42,12 @@ export class RoomDurableObject extends DurableObject<Env> {
   private async loadReceiptsCache(): Promise<void> {
     if (this.receiptsCacheLoaded) return;
 
-    const stored = await this.ctx.storage.list<ReceiptData>({ prefix: 'receipt:' });
+    const stored = await this.ctx.storage.list<ReceiptData>({ prefix: "receipt:" });
     for (const [key, value] of stored) {
       // Handle both old and new key formats for backwards compatibility
       // Old format: receipt:{userId}:{receiptType}
       // New format: receipt:{userId}:{receiptType}:{threadContext}
-      const keyWithoutPrefix = key.replace('receipt:', '');
+      const keyWithoutPrefix = key.replace("receipt:", "");
 
       // Check if this is new format (has user_id in data)
       if (value.user_id) {
@@ -62,7 +62,7 @@ export class RoomDurableObject extends DurableObject<Env> {
 
         if (receiptTypeIndex > 0) {
           const userId = keyWithoutPrefix.substring(0, receiptTypeIndex);
-          const threadContext = value.thread_id ?? 'unthreaded';
+          const threadContext = value.thread_id ?? "unthreaded";
           const newCacheKey = `${userId}:${receiptType}:${threadContext}`;
 
           // Backfill user_id into value
@@ -70,7 +70,7 @@ export class RoomDurableObject extends DurableObject<Env> {
           this.receiptsCache.set(newCacheKey, value);
         } else {
           // Fallback: just use the key with unthreaded suffix
-          const threadContext = value.thread_id ?? 'unthreaded';
+          const threadContext = value.thread_id ?? "unthreaded";
           this.receiptsCache.set(`${keyWithoutPrefix}:${threadContext}`, value);
         }
       }
@@ -82,46 +82,46 @@ export class RoomDurableObject extends DurableObject<Env> {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (path === '/websocket') {
+    if (path === "/websocket") {
       return this.handleWebSocket(request);
     }
 
-    if (path === '/broadcast') {
+    if (path === "/broadcast") {
       return this.handleBroadcast(request);
     }
 
-    if (path === '/state') {
+    if (path === "/state") {
       return this.handleState(request);
     }
 
     // Typing endpoints
-    if (path === '/typing') {
-      if (request.method === 'PUT') {
+    if (path === "/typing") {
+      if (request.method === "PUT") {
         return this.handleSetTyping(request);
       }
-      if (request.method === 'GET') {
+      if (request.method === "GET") {
         return this.handleGetTyping();
       }
     }
 
     // Receipt endpoints
-    if (path === '/receipt') {
-      if (request.method === 'PUT') {
+    if (path === "/receipt") {
+      if (request.method === "PUT") {
         return this.handleSetReceipt(request);
       }
     }
-    if (path === '/receipts') {
-      if (request.method === 'GET') {
+    if (path === "/receipts") {
+      if (request.method === "GET") {
         return this.handleGetReceipts();
       }
     }
 
-    return new Response('Not found', { status: 404 });
+    return new Response("Not found", { status: 404 });
   }
 
   // Set a read receipt for a user
   private async handleSetReceipt(request: Request): Promise<Response> {
-    const body = await request.json() as {
+    const body = (await request.json()) as {
       user_id: string;
       event_id: string;
       receipt_type: string;
@@ -135,7 +135,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     // - undefined/absent = "unthreaded" (room-level receipt)
     // - "main" = main timeline only
     // - event_id = specific thread
-    const threadContext = thread_id ?? 'unthreaded';
+    const threadContext = thread_id ?? "unthreaded";
 
     // Store in durable storage with thread-aware key
     const storageKey = `receipt:${user_id}:${receipt_type}:${threadContext}`;
@@ -148,7 +148,7 @@ export class RoomDurableObject extends DurableObject<Env> {
 
     // Broadcast to WebSocket clients
     const message = JSON.stringify({
-      type: 'receipt',
+      type: "receipt",
       user_id,
       event_id,
       receipt_type,
@@ -169,7 +169,7 @@ export class RoomDurableObject extends DurableObject<Env> {
       }
     }
 
-    return new Response('OK');
+    return new Response("OK");
   }
 
   // Get all receipts for this room
@@ -177,7 +177,10 @@ export class RoomDurableObject extends DurableObject<Env> {
     await this.loadReceiptsCache();
 
     // Build Matrix receipt format: { eventId: { receiptType: { userId: { ts, thread_id? } } } }
-    const receipts: Record<string, Record<string, Record<string, { ts: number; thread_id?: string }>>> = {};
+    const receipts: Record<
+      string,
+      Record<string, Record<string, { ts: number; thread_id?: string }>>
+    > = {};
 
     for (const [_key, data] of this.receiptsCache.entries()) {
       const { user_id, event_id, receipt_type, ts, thread_id } = data;
@@ -191,20 +194,20 @@ export class RoomDurableObject extends DurableObject<Env> {
 
       // Include thread_id in response if present and not 'unthreaded'
       const userData: { ts: number; thread_id?: string } = { ts };
-      if (thread_id && thread_id !== 'unthreaded') {
+      if (thread_id && thread_id !== "unthreaded") {
         userData.thread_id = thread_id;
       }
       receipts[event_id][receipt_type][user_id] = userData;
     }
 
     return new Response(JSON.stringify({ receipts }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   }
 
   // Set typing state for a user
   private async handleSetTyping(request: Request): Promise<Response> {
-    const body = await request.json() as {
+    const body = (await request.json()) as {
       user_id: string;
       typing: boolean;
       timeout?: number;
@@ -227,7 +230,7 @@ export class RoomDurableObject extends DurableObject<Env> {
       await this.broadcastTyping(user_id, false);
     }
 
-    return new Response('OK');
+    return new Response("OK");
   }
 
   // Get current typing users (with cleanup of expired entries)
@@ -245,27 +248,30 @@ export class RoomDurableObject extends DurableObject<Env> {
       }
     }
 
-    return new Response(JSON.stringify({
-      user_ids: activeTypingUsers,
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        user_ids: activeTypingUsers,
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
   private async handleWebSocket(request: Request): Promise<Response> {
-    const upgradeHeader = request.headers.get('Upgrade');
-    if (!upgradeHeader || upgradeHeader !== 'websocket') {
-      return new Response('Expected websocket upgrade', { status: 426 });
+    const upgradeHeader = request.headers.get("Upgrade");
+    if (!upgradeHeader || upgradeHeader !== "websocket") {
+      return new Response("Expected websocket upgrade", { status: 426 });
     }
 
     // Get session info from query params
     const url = new URL(request.url);
-    const userId = url.searchParams.get('user_id');
-    const deviceId = url.searchParams.get('device_id');
-    const roomId = url.searchParams.get('room_id');
+    const userId = url.searchParams.get("user_id");
+    const deviceId = url.searchParams.get("device_id");
+    const roomId = url.searchParams.get("room_id");
 
     if (!userId || !roomId) {
-      return new Response('Missing user_id or room_id', { status: 400 });
+      return new Response("Missing user_id or room_id", { status: 400 });
     }
 
     this.roomId = roomId;
@@ -308,7 +314,7 @@ export class RoomDurableObject extends DurableObject<Env> {
       }
     }
 
-    return new Response('OK');
+    return new Response("OK");
   }
 
   private async handleState(_request: Request): Promise<Response> {
@@ -323,13 +329,16 @@ export class RoomDurableObject extends DurableObject<Env> {
       }
     }
 
-    return new Response(JSON.stringify({
-      room_id: this.roomId,
-      connected_users: [...new Set(users)],
-      connection_count: webSockets.length,
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        room_id: this.roomId,
+        connected_users: [...new Set(users)],
+        connection_count: webSockets.length,
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
   // WebSocket hibernation handlers
@@ -338,23 +347,23 @@ export class RoomDurableObject extends DurableObject<Env> {
     if (!session) return;
 
     try {
-      const data = typeof message === 'string' ? JSON.parse(message) : null;
+      const data = typeof message === "string" ? JSON.parse(message) : null;
       if (!data) return;
 
       // Handle different message types
       switch (data.type) {
-        case 'typing':
+        case "typing":
           // Broadcast typing notification to other users
           await this.broadcastTyping(session.userId, data.typing);
           break;
 
-        case 'read':
+        case "read":
           // Handle read receipt
           await this.handleReadReceipt(session.userId, data.event_id);
           break;
 
-        case 'ping':
-          ws.send(JSON.stringify({ type: 'pong' }));
+        case "ping":
+          ws.send(JSON.stringify({ type: "pong" }));
           break;
 
         default:
@@ -362,11 +371,16 @@ export class RoomDurableObject extends DurableObject<Env> {
           break;
       }
     } catch (error) {
-      console.error('Error handling WebSocket message:', error);
+      console.error("Error handling WebSocket message:", error);
     }
   }
 
-  async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
+  async webSocketClose(
+    ws: WebSocket,
+    code: number,
+    reason: string,
+    _wasClean: boolean,
+  ): Promise<void> {
     const session = ws.deserializeAttachment() as RoomSession | null;
     if (session) {
       this.sessions.delete(ws);
@@ -376,10 +390,12 @@ export class RoomDurableObject extends DurableObject<Env> {
       for (const otherWs of webSockets) {
         if (otherWs !== ws) {
           try {
-            otherWs.send(JSON.stringify({
-              type: 'user_disconnected',
-              user_id: session.userId,
-            }));
+            otherWs.send(
+              JSON.stringify({
+                type: "user_disconnected",
+                user_id: session.userId,
+              }),
+            );
           } catch {
             // WebSocket may be closed
           }
@@ -391,7 +407,7 @@ export class RoomDurableObject extends DurableObject<Env> {
   }
 
   async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
-    console.error('WebSocket error:', error);
+    console.error("WebSocket error:", error);
     const session = ws.deserializeAttachment() as RoomSession | null;
     if (session) {
       this.sessions.delete(ws);
@@ -400,7 +416,7 @@ export class RoomDurableObject extends DurableObject<Env> {
 
   private async broadcastTyping(userId: string, isTyping: boolean): Promise<void> {
     const message = JSON.stringify({
-      type: 'typing',
+      type: "typing",
       user_id: userId,
       typing: isTyping,
       room_id: this.roomId,
@@ -419,10 +435,14 @@ export class RoomDurableObject extends DurableObject<Env> {
     }
   }
 
-  private async handleReadReceipt(userId: string, eventId: string, threadId?: string): Promise<void> {
+  private async handleReadReceipt(
+    userId: string,
+    eventId: string,
+    threadId?: string,
+  ): Promise<void> {
     const ts = Date.now();
-    const receiptType = 'm.read';  // Default to public read receipt
-    const threadContext = threadId ?? 'unthreaded';
+    const receiptType = "m.read"; // Default to public read receipt
+    const threadContext = threadId ?? "unthreaded";
 
     // Store read receipt in durable storage with proper key format
     const storageKey = `receipt:${userId}:${receiptType}:${threadContext}`;
@@ -441,7 +461,7 @@ export class RoomDurableObject extends DurableObject<Env> {
 
     // Broadcast to other users
     const message = JSON.stringify({
-      type: 'receipt',
+      type: "receipt",
       user_id: userId,
       event_id: eventId,
       receipt_type: receiptType,

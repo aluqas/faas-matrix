@@ -20,4 +20,3 @@ The first migrated flows are:
 - federation transaction ingestion
 
 The external HTTP surface remains unchanged. The main change is that routes now act as transports and delegate to application services.
-

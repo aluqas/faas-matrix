@@ -1,7 +1,7 @@
 // Cloudflare Workers Environment Types
 
-import type { AppContext } from '../foundation/app-context';
-import type { MatrixServiceRegistry } from '../matrix/services';
+import type { AppContext } from "../foundation/app-context";
+import type { MatrixServiceRegistry } from "../matrix/services";
 
 export interface Env {
   // D1 Database
@@ -52,8 +52,8 @@ export interface Env {
   TURN_API_TOKEN?: string;
 
   // Cloudflare Calls Configuration (native video calling)
-  CALLS_APP_ID?: string;      // Cloudflare Calls App ID
-  CALLS_APP_SECRET?: string;  // Cloudflare Calls App Secret
+  CALLS_APP_ID?: string; // Cloudflare Calls App ID
+  CALLS_APP_SECRET?: string; // Cloudflare Calls App Secret
 
   // Durable Object for call signaling
   CALL_ROOMS?: DurableObjectNamespace;
@@ -62,23 +62,23 @@ export interface Env {
   LIVEKIT_API: Fetcher;
 
   // LiveKit Configuration for MatrixRTC
-  LIVEKIT_API_KEY?: string;      // LiveKit API Key (e.g., "devkey")
-  LIVEKIT_API_SECRET?: string;   // LiveKit API Secret
-  LIVEKIT_URL?: string;          // LiveKit WebSocket URL for clients (e.g., "wss://livekit.example.com")
+  LIVEKIT_API_KEY?: string; // LiveKit API Key (e.g., "devkey")
+  LIVEKIT_API_SECRET?: string; // LiveKit API Secret
+  LIVEKIT_URL?: string; // LiveKit WebSocket URL for clients (e.g., "wss://livekit.example.com")
 
   // APNs Direct Push Configuration (optional - bypasses Sygnal)
-  APNS_KEY_ID?: string;          // Key ID from Apple Developer Portal
-  APNS_TEAM_ID?: string;         // Apple Developer Team ID
-  APNS_PRIVATE_KEY?: string;     // Contents of the .p8 private key file
-  APNS_ENVIRONMENT?: string;     // "production" or "sandbox" (default: production)
+  APNS_KEY_ID?: string; // Key ID from Apple Developer Portal
+  APNS_TEAM_ID?: string; // Apple Developer Team ID
+  APNS_PRIVATE_KEY?: string; // Contents of the .p8 private key file
+  APNS_ENVIRONMENT?: string; // "production" or "sandbox" (default: production)
 
   // Cloudflare Workflows for durable multi-step operations
   ROOM_JOIN_WORKFLOW: Workflow;
   PUSH_NOTIFICATION_WORKFLOW: Workflow;
 
   // Email Service Configuration (Cloudflare Email Service)
-  EMAIL?: SendEmail;         // Cloudflare Email Service binding
-  EMAIL_FROM?: string;       // From address for verification emails (e.g., "noreply@m.example.com")
+  EMAIL?: SendEmail; // Cloudflare Email Service binding
+  EMAIL_FROM?: string; // From address for verification emails (e.g., "noreply@m.example.com")
 
   // Browser Rendering (for URL previews of JS-rendered pages)
   BROWSER?: Fetcher;

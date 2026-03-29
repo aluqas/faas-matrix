@@ -4,12 +4,12 @@
 // This is a custom implementation that uses Cloudflare's native SFU
 // instead of LiveKit, providing a fully Cloudflare-based solution.
 
-import { Hono } from 'hono';
-import type { AppEnv } from '../types';
-import { requireAuth } from '../middleware/auth';
-import { Errors } from '../utils/errors';
-import { isCallsConfigured } from '../services/cloudflare-calls';
-import { generateOpaqueId } from '../utils/ids';
+import { Hono } from "hono";
+import type { AppEnv } from "../types";
+import { requireAuth } from "../middleware/auth";
+import { Errors } from "../utils/errors";
+import { isCallsConfigured } from "../services/cloudflare-calls";
+import { generateOpaqueId } from "../utils/ids";
 
 const app = new Hono<AppEnv>();
 
@@ -18,24 +18,30 @@ const app = new Hono<AppEnv>();
 // ============================================
 
 // GET /_matrix/client/v3/rooms/:roomId/call - Get active call in room
-app.get('/_matrix/client/v3/rooms/:roomId/call', requireAuth(), async (c) => {
-  const roomId = decodeURIComponent(c.req.param('roomId'));
+app.get("/_matrix/client/v3/rooms/:roomId/call", requireAuth(), async (c) => {
+  const roomId = decodeURIComponent(c.req.param("roomId"));
   const db = c.env.DB;
 
   // Check if Calls is configured
   if (!isCallsConfigured(c.env)) {
-    return c.json({
-      errcode: 'M_UNKNOWN',
-      error: 'Video calling not configured',
-    }, 500);
+    return c.json(
+      {
+        errcode: "M_UNKNOWN",
+        error: "Video calling not configured",
+      },
+      500,
+    );
   }
 
   // Look for active call state in the room
-  const callState = await db.prepare(`
+  const callState = await db
+    .prepare(`
     SELECT e.content FROM room_state rs
     JOIN events e ON rs.event_id = e.event_id
     WHERE rs.room_id = ? AND rs.event_type = 'm.call.state'
-  `).bind(roomId).first<{ content: string }>();
+  `)
+    .bind(roomId)
+    .first<{ content: string }>();
 
   if (!callState) {
     return c.json({
@@ -57,44 +63,56 @@ app.get('/_matrix/client/v3/rooms/:roomId/call', requireAuth(), async (c) => {
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/call/start - Start a call
-app.post('/_matrix/client/v3/rooms/:roomId/call/start', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = decodeURIComponent(c.req.param('roomId'));
+app.post("/_matrix/client/v3/rooms/:roomId/call/start", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = decodeURIComponent(c.req.param("roomId"));
   const db = c.env.DB;
 
   // Check if Calls is configured
   if (!isCallsConfigured(c.env)) {
-    return c.json({
-      errcode: 'M_UNKNOWN',
-      error: 'Video calling not configured',
-    }, 500);
+    return c.json(
+      {
+        errcode: "M_UNKNOWN",
+        error: "Video calling not configured",
+      },
+      500,
+    );
   }
 
   // Verify user is in the room
-  const membership = await db.prepare(`
+  const membership = await db
+    .prepare(`
     SELECT membership FROM room_memberships
     WHERE room_id = ? AND user_id = ?
-  `).bind(roomId, userId).first<{ membership: string }>();
+  `)
+    .bind(roomId, userId)
+    .first<{ membership: string }>();
 
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   // Check for existing active call
-  const existingCall = await db.prepare(`
+  const existingCall = await db
+    .prepare(`
     SELECT e.content FROM room_state rs
     JOIN events e ON rs.event_id = e.event_id
     WHERE rs.room_id = ? AND rs.event_type = 'm.call.state'
-  `).bind(roomId).first<{ content: string }>();
+  `)
+    .bind(roomId)
+    .first<{ content: string }>();
 
   if (existingCall) {
     try {
       const content = JSON.parse(existingCall.content);
       if (content.active) {
-        return c.json({
-          errcode: 'M_CALL_ALREADY_ACTIVE',
-          error: 'A call is already active in this room',
-        }, 400);
+        return c.json(
+          {
+            errcode: "M_CALL_ALREADY_ACTIVE",
+            error: "A call is already active in this room",
+          },
+          400,
+        );
       }
     } catch {
       // Ignore parse errors
@@ -106,23 +124,28 @@ app.post('/_matrix/client/v3/rooms/:roomId/call/start', requireAuth(), async (c)
 
   // Get the CallRoom Durable Object
   if (!c.env.CALL_ROOMS) {
-    return c.json({
-      errcode: 'M_UNKNOWN',
-      error: 'Call rooms not configured',
-    }, 500);
+    return c.json(
+      {
+        errcode: "M_UNKNOWN",
+        error: "Call rooms not configured",
+      },
+      500,
+    );
   }
 
   const callRoomId = c.env.CALL_ROOMS.idFromName(`${roomId}:${callId}`);
   const callRoom = c.env.CALL_ROOMS.get(callRoomId);
 
   // Initialize the call room
-  await callRoom.fetch(new Request('http://internal/init', {
-    method: 'POST',
-    body: JSON.stringify({
-      roomId,
-      callId,
+  await callRoom.fetch(
+    new Request("http://internal/init", {
+      method: "POST",
+      body: JSON.stringify({
+        roomId,
+        callId,
+      }),
     }),
-  }));
+  );
 
   // Store call state in room state (simplified - in production would be a proper event)
   const callStateContent = {
@@ -135,18 +158,24 @@ app.post('/_matrix/client/v3/rooms/:roomId/call/start', requireAuth(), async (c)
 
   // For now, just store in a simple way
   // In production, this would be a proper Matrix state event
-  await db.prepare(`
+  await db
+    .prepare(`
     INSERT INTO room_state (room_id, event_type, state_key, event_id)
     VALUES (?, 'm.call.state', '', ?)
     ON CONFLICT (room_id, event_type, state_key) DO UPDATE SET
       event_id = excluded.event_id
-  `).bind(roomId, `call_${callId}`).run();
+  `)
+    .bind(roomId, `call_${callId}`)
+    .run();
 
   // Create a minimal event record
-  await db.prepare(`
+  await db
+    .prepare(`
     INSERT OR REPLACE INTO events (event_id, room_id, type, sender, content, origin_server_ts)
     VALUES (?, ?, 'm.call.state', ?, ?, ?)
-  `).bind(`call_${callId}`, roomId, userId, JSON.stringify(callStateContent), Date.now()).run();
+  `)
+    .bind(`call_${callId}`, roomId, userId, JSON.stringify(callStateContent), Date.now())
+    .run();
 
   return c.json({
     callId,
@@ -155,48 +184,63 @@ app.post('/_matrix/client/v3/rooms/:roomId/call/start', requireAuth(), async (c)
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/call/end - End a call
-app.post('/_matrix/client/v3/rooms/:roomId/call/end', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = decodeURIComponent(c.req.param('roomId'));
+app.post("/_matrix/client/v3/rooms/:roomId/call/end", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = decodeURIComponent(c.req.param("roomId"));
   const db = c.env.DB;
 
   // Check if Calls is configured
   if (!isCallsConfigured(c.env)) {
-    return c.json({
-      errcode: 'M_UNKNOWN',
-      error: 'Video calling not configured',
-    }, 500);
+    return c.json(
+      {
+        errcode: "M_UNKNOWN",
+        error: "Video calling not configured",
+      },
+      500,
+    );
   }
 
   // Get current call state
-  const callState = await db.prepare(`
+  const callState = await db
+    .prepare(`
     SELECT e.content, e.event_id FROM room_state rs
     JOIN events e ON rs.event_id = e.event_id
     WHERE rs.room_id = ? AND rs.event_type = 'm.call.state'
-  `).bind(roomId).first<{ content: string; event_id: string }>();
+  `)
+    .bind(roomId)
+    .first<{ content: string; event_id: string }>();
 
   if (!callState) {
-    return c.json({
-      errcode: 'M_NOT_FOUND',
-      error: 'No active call in this room',
-    }, 404);
+    return c.json(
+      {
+        errcode: "M_NOT_FOUND",
+        error: "No active call in this room",
+      },
+      404,
+    );
   }
 
   let callContent;
   try {
     callContent = JSON.parse(callState.content);
   } catch {
-    return c.json({
-      errcode: 'M_NOT_FOUND',
-      error: 'No active call in this room',
-    }, 404);
+    return c.json(
+      {
+        errcode: "M_NOT_FOUND",
+        error: "No active call in this room",
+      },
+      404,
+    );
   }
 
   if (!callContent.active) {
-    return c.json({
-      errcode: 'M_NOT_FOUND',
-      error: 'No active call in this room',
-    }, 404);
+    return c.json(
+      {
+        errcode: "M_NOT_FOUND",
+        error: "No active call in this room",
+      },
+      404,
+    );
   }
 
   // End the call in the Durable Object
@@ -205,9 +249,11 @@ app.post('/_matrix/client/v3/rooms/:roomId/call/end', requireAuth(), async (c) =
     const callRoom = c.env.CALL_ROOMS.get(callRoomId);
 
     try {
-      await callRoom.fetch(new Request('http://internal/end', {
-        method: 'POST',
-      }));
+      await callRoom.fetch(
+        new Request("http://internal/end", {
+          method: "POST",
+        }),
+      );
     } catch {
       // Ignore errors ending the call
     }
@@ -218,9 +264,12 @@ app.post('/_matrix/client/v3/rooms/:roomId/call/end', requireAuth(), async (c) =
   callContent.ended_at = Date.now();
   callContent.ended_by = userId;
 
-  await db.prepare(`
+  await db
+    .prepare(`
     UPDATE events SET content = ? WHERE event_id = ?
-  `).bind(JSON.stringify(callContent), callState.event_id).run();
+  `)
+    .bind(JSON.stringify(callContent), callState.event_id)
+    .run();
 
   return c.json({ success: true });
 });
@@ -230,37 +279,49 @@ app.post('/_matrix/client/v3/rooms/:roomId/call/end', requireAuth(), async (c) =
 // ============================================
 
 // GET /calls/:callId/ws - WebSocket connection for call signaling
-app.get('/calls/:callId/ws', async (c) => {
-  const callId = c.req.param('callId');
+app.get("/calls/:callId/ws", async (c) => {
+  const callId = c.req.param("callId");
 
   // Check if Calls is configured
   if (!isCallsConfigured(c.env)) {
-    return c.json({
-      errcode: 'M_UNKNOWN',
-      error: 'Video calling not configured',
-    }, 500);
+    return c.json(
+      {
+        errcode: "M_UNKNOWN",
+        error: "Video calling not configured",
+      },
+      500,
+    );
   }
 
   if (!c.env.CALL_ROOMS) {
-    return c.json({
-      errcode: 'M_UNKNOWN',
-      error: 'Call rooms not configured',
-    }, 500);
+    return c.json(
+      {
+        errcode: "M_UNKNOWN",
+        error: "Call rooms not configured",
+      },
+      500,
+    );
   }
 
   // Find the call by looking through room states
   // In production, you'd have a proper mapping
   const db = c.env.DB;
-  const callEvent = await db.prepare(`
+  const callEvent = await db
+    .prepare(`
     SELECT room_id, content FROM events
     WHERE event_id = ? AND type = 'm.call.state'
-  `).bind(`call_${callId}`).first<{ room_id: string; content: string }>();
+  `)
+    .bind(`call_${callId}`)
+    .first<{ room_id: string; content: string }>();
 
   if (!callEvent) {
-    return c.json({
-      errcode: 'M_NOT_FOUND',
-      error: 'Call not found',
-    }, 404);
+    return c.json(
+      {
+        errcode: "M_NOT_FOUND",
+        error: "Call not found",
+      },
+      404,
+    );
   }
 
   const roomId = callEvent.room_id;
@@ -270,9 +331,11 @@ app.get('/calls/:callId/ws', async (c) => {
   const callRoom = c.env.CALL_ROOMS.get(callRoomId);
 
   // Proxy the WebSocket request to the Durable Object
-  return callRoom.fetch(new Request(`http://internal/ws`, {
-    headers: c.req.raw.headers,
-  }));
+  return callRoom.fetch(
+    new Request(`http://internal/ws`, {
+      headers: c.req.raw.headers,
+    }),
+  );
 });
 
 // ============================================

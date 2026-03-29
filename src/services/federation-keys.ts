@@ -2,8 +2,13 @@
 // Handles fetching, caching, and validating remote server signing keys
 // Includes notary support for key query endpoints
 
-import { verifySignature, signJson, base64UrlDecode, generateSigningKeyPair } from '../utils/crypto';
-import { discoverServer, buildServerUrl } from './server-discovery';
+import {
+  verifySignature,
+  signJson,
+  base64UrlDecode,
+  generateSigningKeyPair,
+} from "../utils/crypto";
+import { discoverServer, buildServerUrl } from "./server-discovery";
 
 export interface ServerKeyResponse {
   server_name: string;
@@ -33,7 +38,7 @@ const KEY_CACHE_TTL = 5 * 60;
 export async function fetchRemoteServerKeys(
   serverName: string,
   db: D1Database,
-  cache: KVNamespace
+  cache: KVNamespace,
 ): Promise<RemoteServerKey[]> {
   const cacheKey = `federation:keys:${serverName}`;
 
@@ -48,7 +53,7 @@ export async function fetchRemoteServerKeys(
     .prepare(
       `SELECT server_name, key_id, public_key, valid_from, valid_until, fetched_at, verified
        FROM remote_server_keys
-       WHERE server_name = ? AND (valid_until IS NULL OR valid_until > ?)`
+       WHERE server_name = ? AND (valid_until IS NULL OR valid_until > ?)`,
     )
     .bind(serverName, Date.now())
     .all<RemoteServerKey>();
@@ -70,7 +75,7 @@ export async function fetchRemoteServerKeys(
         .prepare(
           `INSERT OR REPLACE INTO remote_server_keys
            (server_name, key_id, public_key, valid_from, valid_until, fetched_at, verified)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           key.server_name,
@@ -79,7 +84,7 @@ export async function fetchRemoteServerKeys(
           key.valid_from,
           key.valid_until,
           key.fetched_at,
-          key.verified ? 1 : 0
+          key.verified ? 1 : 0,
         )
         .run();
     }
@@ -105,7 +110,7 @@ export async function fetchRemoteServerKeys(
  */
 async function fetchKeysFromRemote(
   serverName: string,
-  cache?: KVNamespace
+  cache?: KVNamespace,
 ): Promise<RemoteServerKey[]> {
   // Use the new server discovery service
   const discovery = await discoverServer(serverName, cache);
@@ -113,7 +118,7 @@ async function fetchKeysFromRemote(
 
   const response = await fetch(`${serverUrl}/_matrix/key/v2/server`, {
     headers: {
-      Accept: 'application/json',
+      Accept: "application/json",
     },
     cf: {
       // Cache at edge for 5 minutes
@@ -207,7 +212,7 @@ async function fetchKeysFromRemote(
  */
 export async function fetchRawServerKeyResponse(
   serverName: string,
-  cache?: KVNamespace
+  cache?: KVNamespace,
 ): Promise<ServerKeyResponse | null> {
   try {
     const discovery = await discoverServer(serverName, cache);
@@ -215,7 +220,7 @@ export async function fetchRawServerKeyResponse(
 
     const response = await fetch(`${serverUrl}/_matrix/key/v2/server`, {
       headers: {
-        Accept: 'application/json',
+        Accept: "application/json",
       },
       cf: {
         cacheTtl: 300,
@@ -254,18 +259,16 @@ export async function getRemoteKeysWithNotarySignature(
   cache: KVNamespace,
   notaryServerName: string,
   notaryKeyId: string,
-  notaryPrivateKey: JsonWebKey
+  notaryPrivateKey: JsonWebKey,
 ): Promise<ServerKeyResponse[]> {
   // Check cache first for keys meeting validity requirement
-  const cacheKey = `notary:keys:${serverName}:${keyId || 'all'}`;
+  const cacheKey = `notary:keys:${serverName}:${keyId || "all"}`;
   const cached = await cache.get(cacheKey);
 
   if (cached) {
     const cachedResponses: ServerKeyResponse[] = JSON.parse(cached);
     // Check if cached keys meet validity requirement
-    const validCached = cachedResponses.filter(
-      (r) => r.valid_until_ts >= minimumValidUntilTs
-    );
+    const validCached = cachedResponses.filter((r) => r.valid_until_ts >= minimumValidUntilTs);
     if (validCached.length > 0) {
       return validCached;
     }
@@ -306,7 +309,7 @@ export async function getRemoteKeysWithNotarySignature(
         response,
         notaryServerName,
         notaryKeyId,
-        notaryPrivateKey
+        notaryPrivateKey,
       )) as ServerKeyResponse;
 
       return [signed];
@@ -324,7 +327,7 @@ export async function getRemoteKeysWithNotarySignature(
           remoteResponse,
           serverName,
           verifyKeyId,
-          keyData.key
+          keyData.key,
         );
         if (verified) {
           hasValidSignature = true;
@@ -375,7 +378,7 @@ export async function getRemoteKeysWithNotarySignature(
     responseToSign,
     notaryServerName,
     notaryKeyId,
-    notaryPrivateKey
+    notaryPrivateKey,
   )) as ServerKeyResponse;
 
   // Cache the signed response
@@ -393,7 +396,7 @@ export async function getRemoteServerKey(
   serverName: string,
   keyId: string,
   db: D1Database,
-  cache: KVNamespace
+  cache: KVNamespace,
 ): Promise<RemoteServerKey | null> {
   const keys = await fetchRemoteServerKeys(serverName, db, cache);
   return keys.find((k) => k.key_id === keyId) || null;
@@ -407,7 +410,7 @@ export async function verifyRemoteSignature(
   serverName: string,
   keyId: string,
   db: D1Database,
-  cache: KVNamespace
+  cache: KVNamespace,
 ): Promise<boolean> {
   const key = await getRemoteServerKey(serverName, keyId, db, cache);
   if (!key) {
@@ -435,9 +438,11 @@ export interface SigningKey {
  * Get the current server signing key for outgoing requests
  */
 export async function getServerSigningKey(db: D1Database): Promise<SigningKey | null> {
-  let key = await db.prepare(
-    `SELECT key_id, private_key_jwk FROM server_keys WHERE is_current = 1 AND key_version = 2`
-  ).first<{ key_id: string; private_key_jwk: string | null }>();
+  let key = await db
+    .prepare(
+      `SELECT key_id, private_key_jwk FROM server_keys WHERE is_current = 1 AND key_version = 2`,
+    )
+    .first<{ key_id: string; private_key_jwk: string | null }>();
 
   if (!key || !key.private_key_jwk) {
     const generated = await generateSigningKeyPair();
@@ -445,17 +450,18 @@ export async function getServerSigningKey(db: D1Database): Promise<SigningKey | 
     const validUntil = validFrom + 365 * 24 * 60 * 60 * 1000;
 
     await db.prepare(`UPDATE server_keys SET is_current = 0`).run();
-    await db.prepare(
-      `INSERT INTO server_keys (key_id, public_key, private_key, private_key_jwk, key_version, valid_from, valid_until, is_current)
-       VALUES (?, ?, ?, ?, 2, ?, ?, 1)`
-    )
+    await db
+      .prepare(
+        `INSERT INTO server_keys (key_id, public_key, private_key, private_key_jwk, key_version, valid_from, valid_until, is_current)
+       VALUES (?, ?, ?, ?, 2, ?, ?, 1)`,
+      )
       .bind(
         generated.keyId,
         generated.publicKey,
         JSON.stringify(generated.privateKeyJwk),
         JSON.stringify(generated.privateKeyJwk),
         validFrom,
-        validUntil
+        validUntil,
       )
       .run();
 
@@ -497,7 +503,7 @@ export async function signFederationRequest(
   origin: string,
   destination: string,
   signingKey: SigningKey,
-  content?: unknown
+  content?: unknown,
 ): Promise<string> {
   // Build the request object to sign
   const requestObj: Record<string, unknown> = {
@@ -513,18 +519,15 @@ export async function signFederationRequest(
   }
 
   // Sign the request object
-  const signed = await signJson(
-    requestObj,
-    origin,
-    signingKey.keyId,
-    signingKey.privateKeyJwk
-  );
+  const signed = await signJson(requestObj, origin, signingKey.keyId, signingKey.privateKeyJwk);
 
   // Extract the signature
-  const signature = (signed.signatures as Record<string, Record<string, string>>)?.[origin]?.[signingKey.keyId];
+  const signature = (signed.signatures as Record<string, Record<string, string>>)?.[origin]?.[
+    signingKey.keyId
+  ];
 
   if (!signature) {
-    throw new Error('Failed to sign federation request');
+    throw new Error("Failed to sign federation request");
   }
 
   // Build the Authorization header
@@ -542,7 +545,7 @@ export async function makeFederationRequest(
   localServerName: string,
   signingKey: SigningKey,
   cache: KVNamespace,
-  body?: unknown
+  body?: unknown,
 ): Promise<Response> {
   // Discover the remote server's endpoint
   const discovery = await discoverServer(serverName, cache);
@@ -558,16 +561,16 @@ export async function makeFederationRequest(
     localServerName,
     serverName,
     signingKey,
-    body
+    body,
   );
 
   // Make the request
   const options: RequestInit = {
     method,
     headers: {
-      'Authorization': authHeader,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Authorization: authHeader,
+      "Content-Type": "application/json",
+      Accept: "application/json",
     },
   };
 
@@ -586,14 +589,14 @@ export async function federationGet(
   path: string,
   localServerName: string,
   db: D1Database,
-  cache: KVNamespace
+  cache: KVNamespace,
 ): Promise<Response> {
   const signingKey = await getServerSigningKey(db);
   if (!signingKey) {
-    throw new Error('Server signing key not configured');
+    throw new Error("Server signing key not configured");
   }
 
-  return makeFederationRequest('GET', serverName, path, localServerName, signingKey, cache);
+  return makeFederationRequest("GET", serverName, path, localServerName, signingKey, cache);
 }
 
 /**
@@ -605,14 +608,14 @@ export async function federationPost(
   body: unknown,
   localServerName: string,
   db: D1Database,
-  cache: KVNamespace
+  cache: KVNamespace,
 ): Promise<Response> {
   const signingKey = await getServerSigningKey(db);
   if (!signingKey) {
-    throw new Error('Server signing key not configured');
+    throw new Error("Server signing key not configured");
   }
 
-  return makeFederationRequest('POST', serverName, path, localServerName, signingKey, cache, body);
+  return makeFederationRequest("POST", serverName, path, localServerName, signingKey, cache, body);
 }
 
 /**
@@ -624,12 +627,12 @@ export async function federationPut(
   body: unknown,
   localServerName: string,
   db: D1Database,
-  cache: KVNamespace
+  cache: KVNamespace,
 ): Promise<Response> {
   const signingKey = await getServerSigningKey(db);
   if (!signingKey) {
-    throw new Error('Server signing key not configured');
+    throw new Error("Server signing key not configured");
   }
 
-  return makeFederationRequest('PUT', serverName, path, localServerName, signingKey, cache, body);
+  return makeFederationRequest("PUT", serverName, path, localServerName, signingKey, cache, body);
 }

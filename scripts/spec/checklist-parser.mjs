@@ -26,7 +26,10 @@ function isDividerLine(line) {
 }
 
 function parseTableCells(line) {
-  return line.split("|").map((part) => part.trim()).filter(Boolean);
+  return line
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 function normalizeHeader(header) {
@@ -71,7 +74,9 @@ export function extractChecklistRows(markdown) {
 
     if (isDividerLine(line)) continue;
 
-    const cellMap = Object.fromEntries(headerCells.map((header, index) => [header, cells[index] || ""]));
+    const cellMap = Object.fromEntries(
+      headerCells.map((header, index) => [header, cells[index] || ""]),
+    );
     const title = rowTitleFromCells(cellMap);
 
     rows.push({

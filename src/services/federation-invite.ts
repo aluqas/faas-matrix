@@ -1,6 +1,6 @@
-import type { PDU } from '../types';
-import { federationPut } from './federation-keys';
-import { getRoom, getRoomState } from './database';
+import type { PDU } from "../types";
+import { federationPut } from "./federation-keys";
+import { getRoom, getRoomState } from "./database";
 
 type StrippedStateEvent = {
   type: string;
@@ -13,7 +13,7 @@ type StrippedStateEvent = {
 };
 
 function getUserServerName(userId: string): string | null {
-  const colonIndex = userId.indexOf(':');
+  const colonIndex = userId.indexOf(":");
   if (colonIndex < 0 || colonIndex === userId.length - 1) {
     return null;
   }
@@ -39,9 +39,13 @@ export async function sendFederationInvite(
   cache: KVNamespace,
   localServerName: string,
   roomId: string,
-  inviteEvent: PDU
+  inviteEvent: PDU,
 ): Promise<void> {
-  if (inviteEvent.type !== 'm.room.member' || inviteEvent.content.membership !== 'invite' || !inviteEvent.state_key) {
+  if (
+    inviteEvent.type !== "m.room.member" ||
+    inviteEvent.content.membership !== "invite" ||
+    !inviteEvent.state_key
+  ) {
     return;
   }
 
@@ -68,6 +72,6 @@ export async function sendFederationInvite(
     },
     localServerName,
     db,
-    cache
+    cache,
   );
 }

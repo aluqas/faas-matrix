@@ -4,12 +4,12 @@ import {
   getRoomState,
   getStateEvent,
   updateMembership,
-} from '../../services/database';
-import type { Membership, PDU } from '../../types';
-import type { MembershipRecord } from '../repositories/interfaces';
+} from "../../services/database";
+import type { Membership, PDU } from "../../types";
+import type { MembershipRecord } from "../repositories/interfaces";
 
-export type MembershipTransitionSource = 'client' | 'federation' | 'workflow';
-export type MembershipSyncCategory = 'invite' | 'join' | 'leave' | 'knock';
+export type MembershipTransitionSource = "client" | "federation" | "workflow";
+export type MembershipSyncCategory = "invite" | "join" | "leave" | "knock";
 
 export type StrippedStateEvent = {
   type: string;
@@ -36,7 +36,7 @@ export interface MembershipTransitionContext {
 }
 
 export interface MembershipTransitionResult {
-  membershipToPersist: 'invite' | 'join' | 'leave' | 'knock' | null;
+  membershipToPersist: "invite" | "join" | "leave" | "knock" | null;
   shouldUpsertRoomState: boolean;
   shouldClearInviteStrippedState: boolean;
   shouldUpsertKnockState: boolean;
@@ -47,12 +47,12 @@ export interface MembershipTransitionResult {
 export type TransitionContextLoader = (
   db: D1Database,
   roomId: string,
-  stateKey?: string
+  stateKey?: string,
 ) => Promise<MembershipTransitionContext>;
 
 function toAuthStateFromInviteStrippedState(
   roomId: string,
-  strippedState: StrippedStateEvent[]
+  strippedState: StrippedStateEvent[],
 ): PDU[] {
   return strippedState.map((event, index) => ({
     event_id: `$invite-stripped-${index}`,
@@ -71,14 +71,14 @@ function toAuthStateFromInviteStrippedState(
 export function resolveMembershipAuthState(
   roomId: string,
   roomState: PDU[],
-  inviteStrippedState: StrippedStateEvent[]
+  inviteStrippedState: StrippedStateEvent[],
 ): PDU[] {
   if (inviteStrippedState.length === 0) {
     return roomState;
   }
 
   const hasCreate = roomState.some(
-    (event) => event.type === 'm.room.create' && event.state_key === ''
+    (event) => event.type === "m.room.create" && event.state_key === "",
   );
   if (hasCreate) {
     return roomState;
@@ -92,14 +92,14 @@ export function resolveMembershipAuthState(
   }
 
   for (const event of toAuthStateFromInviteStrippedState(roomId, inviteStrippedState)) {
-    merged.set(`${event.type}\u0000${event.state_key ?? ''}`, event);
+    merged.set(`${event.type}\u0000${event.state_key ?? ""}`, event);
   }
 
   return Array.from(merged.values());
 }
 
 function getMembershipEventMembership(event: PDU | null | undefined): Membership | null {
-  if (!event || event.type !== 'm.room.member') {
+  if (!event || event.type !== "m.room.member") {
     return null;
   }
 
@@ -112,49 +112,70 @@ function getCurrentMemberEvent(
   stateKey: string,
   roomState: PDU[],
   inviteStrippedState: StrippedStateEvent[],
-  explicitCurrentMemberEvent: PDU | null
+  explicitCurrentMemberEvent: PDU | null,
 ): PDU | null {
   if (explicitCurrentMemberEvent) {
     return explicitCurrentMemberEvent;
   }
 
   const authState = resolveMembershipAuthState(roomId, roomState, inviteStrippedState);
-  return authState.find(
-    (event) => event.type === 'm.room.member' && event.state_key === stateKey
-  ) ?? null;
+  return (
+    authState.find((event) => event.type === "m.room.member" && event.state_key === stateKey) ??
+    null
+  );
 }
 
 function toSyncCategory(membership: Membership | null | undefined): MembershipSyncCategory {
-  if (membership === 'invite' || membership === 'leave' || membership === 'knock') {
+  if (membership === "invite" || membership === "leave" || membership === "knock") {
     return membership;
   }
-  return 'join';
+  return "join";
 }
 
 async function upsertKnockRecord(
   db: D1Database,
   roomId: string,
   userId: string,
-  event: PDU
+  event: PDU,
 ): Promise<void> {
+  const user = await db
+    .prepare(`
+    SELECT user_id FROM users WHERE user_id = ?
+  `)
+    .bind(userId)
+    .first<{ user_id: string }>();
+  if (!user) {
+    return;
+  }
+
   const content = event.content as { reason?: string } | undefined;
-  await db.prepare(`
+  await db
+    .prepare(`
     INSERT OR REPLACE INTO room_knocks (room_id, user_id, reason, event_id, created_at)
     VALUES (?, ?, ?, ?, ?)
-  `).bind(roomId, userId, content?.reason ?? null, event.event_id, Date.now()).run();
+  `)
+    .bind(roomId, userId, content?.reason ?? null, event.event_id, Date.now())
+    .run();
 }
 
 async function clearKnockRecord(db: D1Database, roomId: string, userId: string): Promise<void> {
-  await db.prepare(`
+  await db
+    .prepare(`
     DELETE FROM room_knocks
     WHERE room_id = ? AND user_id = ?
-  `).bind(roomId, userId).run();
+  `)
+    .bind(roomId, userId)
+    .run();
 }
 
 export class MemberTransitionService {
   evaluate(input: MembershipTransitionInput): MembershipTransitionResult {
     const membership = (input.event.content as { membership?: Membership } | undefined)?.membership;
-    if (input.event.type !== 'm.room.member' || input.event.state_key === undefined || !membership) {
+    if (
+      input.event.type !== "m.room.member" ||
+      input.event.state_key === undefined ||
+      !membership
+    ) {
       return {
         membershipToPersist: null,
         shouldUpsertRoomState: false,
@@ -170,22 +191,22 @@ export class MemberTransitionService {
       input.event.state_key,
       input.roomState,
       input.inviteStrippedState,
-      input.currentMemberEvent
+      input.currentMemberEvent,
     );
     const previousMembership =
       input.currentMembership?.membership ?? getMembershipEventMembership(currentMemberEvent);
     const previousInviteSender =
-      previousMembership === 'invite'
-        ? currentMemberEvent?.sender ??
+      previousMembership === "invite"
+        ? (currentMemberEvent?.sender ??
           input.inviteStrippedState.find(
-            (event) => event.type === 'm.room.member' && event.state_key === input.event.state_key
-          )?.sender
+            (event) => event.type === "m.room.member" && event.state_key === input.event.state_key,
+          )?.sender)
         : undefined;
 
     if (
-      input.source === 'federation' &&
-      membership === 'leave' &&
-      previousMembership === 'invite' &&
+      input.source === "federation" &&
+      membership === "leave" &&
+      previousMembership === "invite" &&
       input.event.sender !== input.event.state_key &&
       previousInviteSender &&
       previousInviteSender !== input.event.sender
@@ -196,11 +217,11 @@ export class MemberTransitionService {
         shouldClearInviteStrippedState: false,
         shouldUpsertKnockState: false,
         shouldClearKnockState: false,
-        syncCategory: 'invite',
+        syncCategory: "invite",
       };
     }
 
-    if (!['invite', 'join', 'leave', 'knock'].includes(membership)) {
+    if (!["invite", "join", "leave", "knock"].includes(membership)) {
       return {
         membershipToPersist: null,
         shouldUpsertRoomState: false,
@@ -212,11 +233,11 @@ export class MemberTransitionService {
     }
 
     return {
-      membershipToPersist: membership as 'invite' | 'join' | 'leave' | 'knock',
+      membershipToPersist: membership as "invite" | "join" | "leave" | "knock",
       shouldUpsertRoomState: input.event.state_key !== undefined,
-      shouldClearInviteStrippedState: membership !== 'invite' && previousMembership === 'invite',
-      shouldUpsertKnockState: membership === 'knock',
-      shouldClearKnockState: membership !== 'knock' && previousMembership === 'knock',
+      shouldClearInviteStrippedState: membership !== "invite" && previousMembership === "invite",
+      shouldUpsertKnockState: membership === "knock",
+      shouldClearKnockState: membership !== "knock" && previousMembership === "knock",
       syncCategory: toSyncCategory(membership),
     };
   }
@@ -231,14 +252,12 @@ export async function applyMembershipTransitionToDatabase(
     event: PDU;
     source: MembershipTransitionSource;
     context?: MembershipTransitionContext;
-  }
+  },
 ): Promise<MembershipTransitionResult> {
   const stateKey = input.event.state_key;
-  const context = input.context ?? await loadMembershipTransitionContext(
-    db,
-    input.roomId,
-    input.event.state_key
-  );
+  const context =
+    input.context ??
+    (await loadMembershipTransitionContext(db, input.roomId, input.event.state_key));
 
   const service = new MemberTransitionService();
   const result = service.evaluate({
@@ -260,8 +279,18 @@ export async function applyMembershipTransitionToDatabase(
       result.membershipToPersist,
       input.event.event_id,
       memberContent.displayname,
-      memberContent.avatar_url
+      memberContent.avatar_url,
     );
+  }
+
+  if (stateKey && result.shouldUpsertRoomState) {
+    await db
+      .prepare(`
+      INSERT OR REPLACE INTO room_state (room_id, event_type, state_key, event_id)
+      VALUES (?, ?, ?, ?)
+    `)
+      .bind(input.roomId, input.event.type, stateKey, input.event.event_id)
+      .run();
   }
 
   if (stateKey && result.shouldUpsertKnockState) {
@@ -276,11 +305,13 @@ export async function applyMembershipTransitionToDatabase(
 export async function loadMembershipTransitionContext(
   db: D1Database,
   roomId: string,
-  stateKey?: string
+  stateKey?: string,
 ): Promise<MembershipTransitionContext> {
   return {
     currentMembership: stateKey ? await getMembership(db, roomId, stateKey) : null,
-    currentMemberEvent: stateKey ? await getStateEvent(db, roomId, 'm.room.member', stateKey) : null,
+    currentMemberEvent: stateKey
+      ? await getStateEvent(db, roomId, "m.room.member", stateKey)
+      : null,
     roomState: await getRoomState(db, roomId),
     inviteStrippedState: await getInviteStrippedState(db, roomId),
   };

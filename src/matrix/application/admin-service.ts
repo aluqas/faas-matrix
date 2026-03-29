@@ -1,4 +1,4 @@
-import type { AppContext } from '../../foundation/app-context';
+import type { AppContext } from "../../foundation/app-context";
 
 export interface AdminService {
   getStats(refresh?: boolean): Promise<Record<string, unknown>>;
@@ -23,4 +23,3 @@ export class CloudflareBackedAdminService implements AdminService {
 
   async invalidateStatsCache(): Promise<void> {}
 }
-

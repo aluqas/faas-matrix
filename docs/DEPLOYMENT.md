@@ -134,20 +134,24 @@ For more control, deploy manually using the steps below.
    - Sign up at [cloudflare.com](https://cloudflare.com)
 
 2. **Node.js 18+**
+
    ```bash
    node --version  # Should be v18.0.0 or higher
    ```
 
 3. **Wrangler CLI**
+
    ```bash
    npm install -g wrangler
    wrangler --version
    ```
 
 4. **Authenticate Wrangler**
+
    ```bash
    npx wrangler login
    ```
+
    This opens a browser to authenticate with your Cloudflare account.
 
 5. **A Domain** managed by Cloudflare (for federation to work)
@@ -185,6 +189,7 @@ npx wrangler d1 create my-matrix-db
 ```
 
 Output will include:
+
 ```
 Created D1 database 'my-matrix-db'
 database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
@@ -208,6 +213,7 @@ npx wrangler kv namespace create ONE_TIME_KEYS
 Each command outputs an ID. **Save all 6 IDs.**
 
 Example output:
+
 ```
 Add the following to your wrangler configuration file:
 kv_namespaces = [
@@ -233,8 +239,8 @@ Open `wrangler.jsonc` and replace all placeholder values with your actual IDs.
 
 ```jsonc
 {
-  "name": "my-matrix-server",           // Your worker name
-  "account_id": "YOUR_ACCOUNT_ID",      // From npx wrangler whoami
+  "name": "my-matrix-server", // Your worker name
+  "account_id": "YOUR_ACCOUNT_ID", // From npx wrangler whoami
 
   // ... rest of config
 }
@@ -367,8 +373,8 @@ The output will show your worker URL (e.g., `my-matrix-server.your-subdomain.wor
 
 If using manual DNS, add these records:
 
-| Type | Name | Content | Proxy |
-|------|------|---------|-------|
+| Type  | Name   | Content                 | Proxy   |
+| ----- | ------ | ----------------------- | ------- |
 | CNAME | matrix | your-worker.workers.dev | Proxied |
 
 ### Required: .well-known Endpoints
@@ -517,6 +523,7 @@ Ensure you've run all migrations and the database name in `wrangler.jsonc` match
 ### "M_UNKNOWN" Errors
 
 Check Cloudflare Workers logs:
+
 ```bash
 npx wrangler tail
 ```
@@ -533,6 +540,7 @@ npx wrangler d1 execute my-matrix-db --remote --command "SELECT * FROM users LIM
 ### Rate Limited
 
 The server has rate limiting. Default limits:
+
 - Login: 10 requests/minute
 - Register: 5 requests/minute
 - General API: 100 requests/minute
@@ -561,16 +569,16 @@ npx wrangler d1 execute my-matrix-db --remote --file=migrations/NEW_MIGRATION.sq
 
 Your deployed Matrix server uses:
 
-| Component | Cloudflare Service | Purpose |
-|-----------|-------------------|---------|
-| API & Routing | Workers | HTTP request handling |
-| Database | D1 | Users, rooms, events, messages |
-| Sessions | KV | Access tokens, fast lookups |
-| E2EE Keys | KV | Device keys, cross-signing |
-| Media | R2 | Images, files, avatars |
-| Real-time Sync | Durable Objects | Live updates, typing indicators |
-| Federation | Durable Objects | Server-to-server communication |
-| Background Jobs | Workflows | Room joins, push notifications |
+| Component       | Cloudflare Service | Purpose                         |
+| --------------- | ------------------ | ------------------------------- |
+| API & Routing   | Workers            | HTTP request handling           |
+| Database        | D1                 | Users, rooms, events, messages  |
+| Sessions        | KV                 | Access tokens, fast lookups     |
+| E2EE Keys       | KV                 | Device keys, cross-signing      |
+| Media           | R2                 | Images, files, avatars          |
+| Real-time Sync  | Durable Objects    | Live updates, typing indicators |
+| Federation      | Durable Objects    | Server-to-server communication  |
+| Background Jobs | Workflows          | Room joins, push notifications  |
 
 ---
 

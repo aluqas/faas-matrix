@@ -23,4 +23,3 @@ Current gates:
 - `slidingSync`
 
 Runtime selection is controlled by `MATRIX_FEATURE_PROFILE`, defaulting to `full`.
-

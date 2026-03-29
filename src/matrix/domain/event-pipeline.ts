@@ -10,12 +10,12 @@ export interface EventPipelineRequest<TInput, TAuth, TEvent, TPersisted> {
     input: TInput,
     auth: TAuth,
     event: TEvent,
-    persisted: TPersisted
+    persisted: TPersisted,
   ): Promise<void> | void;
 }
 
 export interface EventPipelinePostCommitError {
-  stage: 'fanout' | 'notifyFederation';
+  stage: "fanout" | "notifyFederation";
   error: unknown;
 }
 
@@ -29,47 +29,47 @@ export interface EventPipelineResult<TAuth, TEvent, TPersisted> {
 
 export interface EventPipeline {
   execute<TInput, TAuth, TEvent, TPersisted>(
-    request: EventPipelineRequest<TInput, TAuth, TEvent, TPersisted>
+    request: EventPipelineRequest<TInput, TAuth, TEvent, TPersisted>,
   ): Promise<EventPipelineResult<TAuth, TEvent, TPersisted>>;
 }
 
 export class DefaultEventPipeline implements EventPipeline {
   async execute<TInput, TAuth, TEvent, TPersisted>(
-    request: EventPipelineRequest<TInput, TAuth, TEvent, TPersisted>
+    request: EventPipelineRequest<TInput, TAuth, TEvent, TPersisted>,
   ): Promise<EventPipelineResult<TAuth, TEvent, TPersisted>> {
     const trace: string[] = [];
     const postCommitErrors: EventPipelinePostCommitError[] = [];
 
-    trace.push('validate');
+    trace.push("validate");
     await request.validate(request.input);
 
-    trace.push('resolveAuth');
+    trace.push("resolveAuth");
     const auth = await request.resolveAuth(request.input);
 
-    trace.push('authorize');
+    trace.push("authorize");
     await request.authorize(request.input, auth);
 
-    trace.push('buildEvent');
+    trace.push("buildEvent");
     const event = await request.buildEvent(request.input, auth);
 
-    trace.push('persist');
+    trace.push("persist");
     const persisted = await request.persist(request.input, auth, event);
 
     if (request.fanout) {
-      trace.push('fanout');
+      trace.push("fanout");
       try {
         await request.fanout(request.input, auth, event, persisted);
       } catch (error) {
-        postCommitErrors.push({ stage: 'fanout', error });
+        postCommitErrors.push({ stage: "fanout", error });
       }
     }
 
     if (request.notifyFederation) {
-      trace.push('notifyFederation');
+      trace.push("notifyFederation");
       try {
         await request.notifyFederation(request.input, auth, event, persisted);
       } catch (error) {
-        postCommitErrors.push({ stage: 'notifyFederation', error });
+        postCommitErrors.push({ stage: "notifyFederation", error });
       }
     }
 
@@ -82,4 +82,3 @@ export class DefaultEventPipeline implements EventPipeline {
     };
   }
 }
-

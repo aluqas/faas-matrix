@@ -1,4 +1,4 @@
-export * from './ids';
+export * from "./ids";
 // Export crypto utilities, but avoid re-exporting base64Url functions which come from ids
 export {
   hashPassword,
@@ -13,5 +13,5 @@ export {
   calculateContentHash,
   verifyContentHash,
   generateRandomString,
-} from './crypto';
-export * from './errors';
+} from "./crypto";
+export * from "./errors";

@@ -1,9 +1,9 @@
 // Matrix login/registration endpoints
 
-import { Hono } from 'hono';
-import type { AppEnv } from '../types';
-import { Errors } from '../utils/errors';
-import { hashPassword, verifyPassword, hashToken } from '../utils/crypto';
+import { Hono } from "hono";
+import type { AppEnv } from "../types";
+import { Errors } from "../utils/errors";
+import { hashPassword, verifyPassword, hashToken } from "../utils/crypto";
 import {
   formatUserId,
   generateDeviceId,
@@ -11,7 +11,7 @@ import {
   generateRefreshToken,
   generateOpaqueId,
   isValidLocalpart,
-} from '../utils/ids';
+} from "../utils/ids";
 import {
   createUser,
   getUserByLocalpart,
@@ -21,30 +21,30 @@ import {
   createAccessToken,
   deleteAccessToken,
   deleteAllUserTokens,
-} from '../services/database';
-import { requireAuth, extractAccessToken } from '../middleware/auth';
+} from "../services/database";
+import { requireAuth, extractAccessToken } from "../middleware/auth";
 
 const app = new Hono<AppEnv>();
 
 // GET /_matrix/client/v3/login - Get supported login flows
-app.get('/_matrix/client/v3/login', (c) => {
+app.get("/_matrix/client/v3/login", (c) => {
   return c.json({
     flows: [
       {
-        type: 'm.login.password',
+        type: "m.login.password",
       },
       {
-        type: 'm.login.token',
+        type: "m.login.token",
       },
       {
-        type: 'm.login.dummy',
+        type: "m.login.dummy",
       },
     ],
   });
 });
 
 // POST /_matrix/client/v3/login - Login
-app.post('/_matrix/client/v3/login', async (c) => {
+app.post("/_matrix/client/v3/login", async (c) => {
   let body: any;
   try {
     body = await c.req.json();
@@ -56,96 +56,95 @@ app.post('/_matrix/client/v3/login', async (c) => {
 
   let userId: string;
 
-  if (type === 'm.login.token') {
+  if (type === "m.login.token") {
     // Token-based login (for QR codes)
     if (!token) {
-      return Errors.missingParam('token').toResponse();
+      return Errors.missingParam("token").toResponse();
     }
 
     // Look up the token in KV
     const tokenHash = await hashToken(token);
-    const tokenData = await c.env.SESSIONS.get(`login_token:${tokenHash}`, 'json') as {
+    const tokenData = (await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json")) as {
       user_id: string;
       expires_at: number;
     } | null;
 
     if (!tokenData) {
-      return Errors.forbidden('Invalid or expired login token').toResponse();
+      return Errors.forbidden("Invalid or expired login token").toResponse();
     }
 
     // Check expiration
     if (Date.now() > tokenData.expires_at) {
       // Clean up expired token
       await c.env.SESSIONS.delete(`login_token:${tokenHash}`);
-      return Errors.forbidden('Login token has expired').toResponse();
+      return Errors.forbidden("Login token has expired").toResponse();
     }
 
     userId = tokenData.user_id;
 
     // Delete the token (one-time use)
     await c.env.SESSIONS.delete(`login_token:${tokenHash}`);
-
-  } else if (type === 'm.login.password') {
+  } else if (type === "m.login.password") {
     // Password-based login
     if (!identifier || !password) {
-      return Errors.missingParam('identifier or password').toResponse();
+      return Errors.missingParam("identifier or password").toResponse();
     }
 
     // Parse identifier
-    if (identifier.type === 'm.id.user') {
+    if (identifier.type === "m.id.user") {
       // Can be full user ID or just localpart
-      if (identifier.user.startsWith('@')) {
+      if (identifier.user.startsWith("@")) {
         userId = identifier.user;
       } else {
         userId = formatUserId(identifier.user, c.env.SERVER_NAME);
       }
     } else {
-      return Errors.unrecognized('Unknown identifier type').toResponse();
+      return Errors.unrecognized("Unknown identifier type").toResponse();
     }
 
     // Get stored password hash
     const storedHash = await getPasswordHash(c.env.DB, userId);
     if (!storedHash) {
-      return Errors.forbidden('Invalid username or password').toResponse();
+      return Errors.forbidden("Invalid username or password").toResponse();
     }
 
     // Verify password
     const valid = await verifyPassword(password, storedHash);
     if (!valid) {
-      return Errors.forbidden('Invalid username or password').toResponse();
+      return Errors.forbidden("Invalid username or password").toResponse();
     }
-  } else if (type === 'm.login.dummy') {
+  } else if (type === "m.login.dummy") {
     // m.login.dummy is for UIA flows - requires identifier but no password verification
     // Per Matrix spec, this "does nothing and never fails" but still needs a user identifier
     if (!identifier) {
-      return Errors.missingParam('identifier').toResponse();
+      return Errors.missingParam("identifier").toResponse();
     }
 
     // Parse identifier
-    if (identifier.type === 'm.id.user') {
-      if (identifier.user.startsWith('@')) {
+    if (identifier.type === "m.id.user") {
+      if (identifier.user.startsWith("@")) {
         userId = identifier.user;
       } else {
         userId = formatUserId(identifier.user, c.env.SERVER_NAME);
       }
     } else {
-      return Errors.unrecognized('Unknown identifier type').toResponse();
+      return Errors.unrecognized("Unknown identifier type").toResponse();
     }
   } else {
-    return Errors.unrecognized('Unknown login type').toResponse();
+    return Errors.unrecognized("Unknown login type").toResponse();
   }
 
   // Check if user is deactivated
   const user = await getUserById(c.env.DB, userId);
   if (!user) {
-    return Errors.forbidden('Invalid username or password').toResponse();
+    return Errors.forbidden("Invalid username or password").toResponse();
   }
   if (user.is_deactivated) {
     return Errors.userDeactivated().toResponse();
   }
 
   // Generate or use provided device ID
-  const deviceId = device_id || await generateDeviceId();
+  const deviceId = device_id || (await generateDeviceId());
 
   // Create device
   await createDevice(c.env.DB, userId, deviceId, initial_device_display_name);
@@ -170,7 +169,7 @@ app.post('/_matrix/client/v3/login', async (c) => {
       accessTokenId: tokenId,
       createdAt: Date.now(),
     }),
-    { expirationTtl: 7 * 24 * 60 * 60 } // 7 days
+    { expirationTtl: 7 * 24 * 60 * 60 }, // 7 days
   );
 
   // Access token expires in 1 hour (client should use refresh before this)
@@ -187,7 +186,7 @@ app.post('/_matrix/client/v3/login', async (c) => {
 });
 
 // POST /_matrix/client/v3/logout - Logout current session
-app.post('/_matrix/client/v3/logout', requireAuth(), async (c) => {
+app.post("/_matrix/client/v3/logout", requireAuth(), async (c) => {
   const token = extractAccessToken(c.req.raw);
   if (token) {
     const tokenHash = await hashToken(token);
@@ -197,8 +196,8 @@ app.post('/_matrix/client/v3/logout', requireAuth(), async (c) => {
 });
 
 // POST /_matrix/client/v3/logout/all - Logout all sessions
-app.post('/_matrix/client/v3/logout/all', requireAuth(), async (c) => {
-  const userId = c.get('userId');
+app.post("/_matrix/client/v3/logout/all", requireAuth(), async (c) => {
+  const userId = c.get("userId");
   await deleteAllUserTokens(c.env.DB, userId);
   return c.json({});
 });
@@ -206,7 +205,7 @@ app.post('/_matrix/client/v3/logout/all', requireAuth(), async (c) => {
 // POST /_matrix/client/v3/refresh - Refresh access token
 // Uses the refresh token to get a new access token + refresh token pair
 // Implements token rotation (single-use refresh tokens)
-app.post('/_matrix/client/v3/refresh', async (c) => {
+app.post("/_matrix/client/v3/refresh", async (c) => {
   let body: { refresh_token?: string };
   try {
     body = await c.req.json();
@@ -217,14 +216,14 @@ app.post('/_matrix/client/v3/refresh', async (c) => {
   const { refresh_token: refreshToken } = body;
 
   if (!refreshToken) {
-    return Errors.missingParam('refresh_token').toResponse();
+    return Errors.missingParam("refresh_token").toResponse();
   }
 
   // Hash the incoming refresh token
   const refreshTokenHash = await hashToken(refreshToken);
 
   // Look up in KV
-  const tokenData = await c.env.SESSIONS.get(`refresh:${refreshTokenHash}`, 'json') as {
+  const tokenData = (await c.env.SESSIONS.get(`refresh:${refreshTokenHash}`, "json")) as {
     userId: string;
     deviceId: string | null;
     accessTokenId: string;
@@ -232,7 +231,7 @@ app.post('/_matrix/client/v3/refresh', async (c) => {
   } | null;
 
   if (!tokenData) {
-    return Errors.unknownToken('Invalid or expired refresh token').toResponse();
+    return Errors.unknownToken("Invalid or expired refresh token").toResponse();
   }
 
   const { userId, deviceId, accessTokenId } = tokenData;
@@ -241,9 +240,7 @@ app.post('/_matrix/client/v3/refresh', async (c) => {
   await c.env.SESSIONS.delete(`refresh:${refreshTokenHash}`);
 
   // Delete old access token from D1
-  await c.env.DB.prepare(
-    `DELETE FROM access_tokens WHERE token_id = ?`
-  ).bind(accessTokenId).run();
+  await c.env.DB.prepare(`DELETE FROM access_tokens WHERE token_id = ?`).bind(accessTokenId).run();
 
   // Generate new access token
   const newAccessToken = await generateAccessToken();
@@ -265,7 +262,7 @@ app.post('/_matrix/client/v3/refresh', async (c) => {
       accessTokenId: newTokenId,
       createdAt: Date.now(),
     }),
-    { expirationTtl: 7 * 24 * 60 * 60 } // 7 days
+    { expirationTtl: 7 * 24 * 60 * 60 }, // 7 days
   );
 
   // Access token expires in 1 hour
@@ -279,15 +276,15 @@ app.post('/_matrix/client/v3/refresh', async (c) => {
 });
 
 // GET /_matrix/client/v3/register/available - Check if username is available
-app.get('/_matrix/client/v3/register/available', async (c) => {
-  const username = c.req.query('username');
+app.get("/_matrix/client/v3/register/available", async (c) => {
+  const username = c.req.query("username");
 
   if (!username) {
-    return Errors.missingParam('username').toResponse();
+    return Errors.missingParam("username").toResponse();
   }
 
   if (!isValidLocalpart(username)) {
-    return Errors.invalidUsername('Username contains invalid characters').toResponse();
+    return Errors.invalidUsername("Username contains invalid characters").toResponse();
   }
 
   const existing = await getUserByLocalpart(c.env.DB, username);
@@ -299,7 +296,7 @@ app.get('/_matrix/client/v3/register/available', async (c) => {
 });
 
 // POST /_matrix/client/v3/register - Register new user
-app.post('/_matrix/client/v3/register', async (c) => {
+app.post("/_matrix/client/v3/register", async (c) => {
   let body: any;
   try {
     body = await c.req.json();
@@ -307,46 +304,42 @@ app.post('/_matrix/client/v3/register', async (c) => {
     return Errors.badJson().toResponse();
   }
 
-  const {
-    username,
-    password,
-    device_id,
-    initial_device_display_name,
-    inhibit_login,
-    auth,
-  } = body;
+  const { username, password, device_id, initial_device_display_name, inhibit_login, auth } = body;
 
   // Check registration kind
-  const kind = c.req.query('kind') || 'user';
-  if (kind !== 'user' && kind !== 'guest') {
-    return Errors.invalidParam('kind', 'Invalid registration kind').toResponse();
+  const kind = c.req.query("kind") || "user";
+  if (kind !== "user" && kind !== "guest") {
+    return Errors.invalidParam("kind", "Invalid registration kind").toResponse();
   }
 
-  const isGuest = kind === 'guest';
+  const isGuest = kind === "guest";
 
   // For non-guests, require username and password
   if (!isGuest) {
     // Simple auth - in production, implement UIA (User-Interactive Authentication)
-    if (!auth || auth.type !== 'm.login.dummy') {
+    if (!auth || auth.type !== "m.login.dummy") {
       // Return UIA requirements
       const sessionId = await generateOpaqueId(16);
-      return c.json({
-        flows: [{ stages: ['m.login.dummy'] }],
-        params: {},
-        session: sessionId,
-      }, 401);
+      return c.json(
+        {
+          flows: [{ stages: ["m.login.dummy"] }],
+          params: {},
+          session: sessionId,
+        },
+        401,
+      );
     }
 
     if (!username) {
-      return Errors.missingParam('username').toResponse();
+      return Errors.missingParam("username").toResponse();
     }
 
     if (!isValidLocalpart(username)) {
-      return Errors.invalidUsername('Username contains invalid characters').toResponse();
+      return Errors.invalidUsername("Username contains invalid characters").toResponse();
     }
 
     if (!password) {
-      return Errors.missingParam('password').toResponse();
+      return Errors.missingParam("password").toResponse();
     }
   }
 
@@ -375,7 +368,7 @@ app.post('/_matrix/client/v3/register', async (c) => {
   }
 
   // Generate device and access token
-  const deviceId = device_id || await generateDeviceId();
+  const deviceId = device_id || (await generateDeviceId());
   await createDevice(c.env.DB, userId, deviceId, initial_device_display_name);
 
   const accessToken = await generateAccessToken();
@@ -397,7 +390,7 @@ app.post('/_matrix/client/v3/register', async (c) => {
       accessTokenId: tokenId,
       createdAt: Date.now(),
     }),
-    { expirationTtl: 7 * 24 * 60 * 60 } // 7 days
+    { expirationTtl: 7 * 24 * 60 * 60 }, // 7 days
   );
 
   // Access token expires in 1 hour
@@ -415,15 +408,15 @@ app.post('/_matrix/client/v3/register', async (c) => {
 
 // POST /_matrix/client/v1/login/get_token - Generate a login token for authenticated user
 // Per Matrix spec: generates a short-lived login token for QR code login and similar flows
-app.post('/_matrix/client/v1/login/get_token', requireAuth(), async (c) => {
-  const userId = c.get('userId');
+app.post("/_matrix/client/v1/login/get_token", requireAuth(), async (c) => {
+  const userId = c.get("userId");
 
   // Generate a login token
   const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
   const loginToken = btoa(String.fromCharCode(...tokenBytes))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
 
   // Token is valid for 2 minutes (per Matrix spec recommendation)
   const expiresInMs = 2 * 60 * 1000;
@@ -439,7 +432,7 @@ app.post('/_matrix/client/v1/login/get_token', requireAuth(), async (c) => {
     }),
     {
       expirationTtl: 120, // 2 minutes in seconds
-    }
+    },
   );
 
   return c.json({
@@ -449,9 +442,9 @@ app.post('/_matrix/client/v1/login/get_token', requireAuth(), async (c) => {
 });
 
 // GET /_matrix/client/v3/account/whoami - Get current user info
-app.get('/_matrix/client/v3/account/whoami', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const deviceId = c.get('deviceId');
+app.get("/_matrix/client/v3/account/whoami", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const deviceId = c.get("deviceId");
 
   const user = await getUserById(c.env.DB, userId);
   if (!user) {

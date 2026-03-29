@@ -2,8 +2,8 @@
 // Implements rate limiting using Durable Objects for persistence
 // Uses a sliding window algorithm with different limits for different endpoints
 
-import type { Context, Next } from 'hono';
-import type { AppEnv } from '../types';
+import type { Context, Next } from "hono";
+import type { AppEnv } from "../types";
 
 // Rate limit configurations for different endpoint types
 const RATE_LIMITS: Record<string, { requests: number; windowMs: number }> = {
@@ -21,32 +21,32 @@ const RATE_LIMITS: Record<string, { requests: number; windowMs: number }> = {
 };
 
 function getRateLimitType(path: string, method: string): string {
-  if (path.includes('/login') && method === 'POST') return 'login';
-  if (path.includes('/register') && method === 'POST') return 'register';
-  if (path.includes('/sync')) return 'sync';
-  if (path.includes('/keys/')) return 'e2ee';
-  if (path.includes('/media') || path.includes('/upload')) {
-    return method === 'POST' || method === 'PUT' ? 'media_upload' : 'media_download';
+  if (path.includes("/login") && method === "POST") return "login";
+  if (path.includes("/register") && method === "POST") return "register";
+  if (path.includes("/sync")) return "sync";
+  if (path.includes("/keys/")) return "e2ee";
+  if (path.includes("/media") || path.includes("/upload")) {
+    return method === "POST" || method === "PUT" ? "media_upload" : "media_download";
   }
-  if (path.includes('/search')) return 'search';
-  if (path.includes('/_matrix/federation') || path.includes('/_matrix/key')) return 'federation';
-  if (path.includes('/createRoom') && method === 'POST') return 'create_room';
-  if (path.match(/\/rooms\/[^/]+\/send/) && method === 'PUT') return 'send_message';
-  return 'default';
+  if (path.includes("/search")) return "search";
+  if (path.includes("/_matrix/federation") || path.includes("/_matrix/key")) return "federation";
+  if (path.includes("/createRoom") && method === "POST") return "create_room";
+  if (path.match(/\/rooms\/[^/]+\/send/) && method === "PUT") return "send_message";
+  return "default";
 }
 
 // Get client identifier (IP or user ID)
 function getClientId(c: Context<AppEnv>): string {
   // Try to get user ID first (for authenticated requests)
-  const userId = c.get('userId');
+  const userId = c.get("userId");
   if (userId) {
     return `user:${userId}`;
   }
 
   // Fall back to IP address
-  const cfConnectingIp = c.req.header('CF-Connecting-IP');
-  const xForwardedFor = c.req.header('X-Forwarded-For');
-  const ip = cfConnectingIp || xForwardedFor?.split(',')[0]?.trim() || 'unknown';
+  const cfConnectingIp = c.req.header("CF-Connecting-IP");
+  const xForwardedFor = c.req.header("X-Forwarded-For");
+  const ip = cfConnectingIp || xForwardedFor?.split(",")[0]?.trim() || "unknown";
 
   return `ip:${ip}`;
 }
@@ -54,7 +54,7 @@ function getClientId(c: Context<AppEnv>): string {
 // Rate limiter using Durable Objects
 export async function rateLimitMiddleware(c: Context<AppEnv>, next: Next) {
   // Allow disabling rate limiting entirely (e.g. for Complement test environments)
-  if (c.env.DISABLE_RATE_LIMIT === '1' || c.get('appContext')?.profile.name === 'complement') {
+  if (c.env.DISABLE_RATE_LIMIT === "1" || c.get("appContext")?.profile.name === "complement") {
     return next();
   }
 
@@ -62,13 +62,13 @@ export async function rateLimitMiddleware(c: Context<AppEnv>, next: Next) {
   const method = c.req.method;
 
   // Skip rate limiting for OPTIONS (CORS preflight)
-  if (method === 'OPTIONS') {
+  if (method === "OPTIONS") {
     return next();
   }
 
   // Skip rate limiting for sync endpoints with long timeout
   // These have natural rate limiting via the timeout parameter
-  if (path.includes('/sync')) {
+  if (path.includes("/sync")) {
     return next();
   }
 
@@ -83,16 +83,16 @@ export async function rateLimitMiddleware(c: Context<AppEnv>, next: Next) {
 
   try {
     const response = await stub.fetch(
-      new Request('https://internal/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      new Request("https://internal/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: 'check',
+          action: "check",
           clientId,
           limit: config.requests,
           windowMs: config.windowMs,
         }),
-      })
+      }),
     );
 
     const result = (await response.json()) as {
@@ -103,30 +103,30 @@ export async function rateLimitMiddleware(c: Context<AppEnv>, next: Next) {
     };
 
     // Set rate limit headers
-    c.header('X-RateLimit-Limit', String(config.requests));
-    c.header('X-RateLimit-Remaining', String(result.remaining));
+    c.header("X-RateLimit-Limit", String(config.requests));
+    c.header("X-RateLimit-Remaining", String(result.remaining));
     if (result.resetAt) {
-      c.header('X-RateLimit-Reset', String(Math.ceil(result.resetAt / 1000)));
+      c.header("X-RateLimit-Reset", String(Math.ceil(result.resetAt / 1000)));
     }
 
     if (!result.allowed) {
       // Rate limited
       const retryAfter = Math.ceil((result.retryAfterMs || config.windowMs) / 1000);
-      c.header('Retry-After', String(retryAfter));
+      c.header("Retry-After", String(retryAfter));
 
       return c.json(
         {
-          errcode: 'M_LIMIT_EXCEEDED',
-          error: 'Too many requests',
+          errcode: "M_LIMIT_EXCEEDED",
+          error: "Too many requests",
           retry_after_ms: result.retryAfterMs || config.windowMs,
         },
-        429
+        429,
       );
     }
   } catch (error) {
     // If rate limiting fails, allow the request (fail open)
     // Log the error but don't block the request
-    console.error('Rate limiting error:', error);
+    console.error("Rate limiting error:", error);
   }
 
   return next();
@@ -144,16 +144,16 @@ export function strictRateLimit(requests: number, windowMs: number) {
 
     try {
       const response = await stub.fetch(
-        new Request('https://internal/check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        new Request("https://internal/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            action: 'check',
+            action: "check",
             clientId,
             limit: requests,
             windowMs,
           }),
-        })
+        }),
       );
 
       const result = (await response.json()) as {
@@ -164,19 +164,19 @@ export function strictRateLimit(requests: number, windowMs: number) {
 
       if (!result.allowed) {
         const retryAfter = Math.ceil((result.retryAfterMs || windowMs) / 1000);
-        c.header('Retry-After', String(retryAfter));
+        c.header("Retry-After", String(retryAfter));
 
         return c.json(
           {
-            errcode: 'M_LIMIT_EXCEEDED',
-            error: 'Too many requests',
+            errcode: "M_LIMIT_EXCEEDED",
+            error: "Too many requests",
             retry_after_ms: result.retryAfterMs || windowMs,
           },
-          429
+          429,
         );
       }
     } catch (error) {
-      console.error('Strict rate limiting error:', error);
+      console.error("Strict rate limiting error:", error);
     }
 
     return next();

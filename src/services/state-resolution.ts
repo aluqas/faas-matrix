@@ -1,30 +1,27 @@
 // State Resolution Algorithm v2 (Room Versions 2+)
 // Implements the full state resolution algorithm per Matrix spec
 
-import type { PDU, RoomPowerLevelsContent } from '../types';
-import { buildStateMap, stateKey, checkEventAuth, type RoomStateMap } from './event-auth';
-import { resolveStateV1 } from './state-resolution-v1';
-import { getRoomVersion } from './room-versions';
+import type { PDU, RoomPowerLevelsContent } from "../types";
+import { buildStateMap, stateKey, checkEventAuth, type RoomStateMap } from "./event-auth";
+import { resolveStateV1 } from "./state-resolution-v1";
+import { getRoomVersion } from "./room-versions";
 
 // Auth event types used in state resolution
 const AUTH_EVENT_TYPES = new Set([
-  'm.room.create',
-  'm.room.power_levels',
-  'm.room.join_rules',
-  'm.room.member',
-  'm.room.third_party_invite',
+  "m.room.create",
+  "m.room.power_levels",
+  "m.room.join_rules",
+  "m.room.member",
+  "m.room.third_party_invite",
 ]);
 
 /**
  * Main entry point: resolve state given multiple state sets from different branches.
  * Selects the appropriate algorithm based on room version.
  */
-export function resolveState(
-  roomVersion: string,
-  stateSets: PDU[][]
-): PDU[] {
+export function resolveState(roomVersion: string, stateSets: PDU[][]): PDU[] {
   const version = getRoomVersion(roomVersion);
-  if (!version || version.stateResolution === 'v1') {
+  if (!version || version.stateResolution === "v1") {
     return resolveStateV1(stateSets);
   }
   return resolveStateV2(stateSets, roomVersion);
@@ -121,12 +118,10 @@ function separateState(stateSets: PDU[][]): {
   const conflicted = new Map<string, PDU[]>();
 
   for (const key of allKeys) {
-    const events = maps
-      .map(m => m.get(key))
-      .filter((e): e is PDU => e !== undefined);
+    const events = maps.map((m) => m.get(key)).filter((e): e is PDU => e !== undefined);
 
     // Check if all present events agree
-    const eventIds = new Set(events.map(e => e.event_id));
+    const eventIds = new Set(events.map((e) => e.event_id));
 
     if (eventIds.size === 1 && events.length === maps.length) {
       // Same event in all state sets (unconflicted)
@@ -169,7 +164,7 @@ function reverseTopologicalPowerOrder(events: PDU[]): PDU[] {
   }
 
   // Extract the power level from the events themselves or assume default
-  const powerLevelEvent = events.find(e => e.type === 'm.room.power_levels');
+  const powerLevelEvent = events.find((e) => e.type === "m.room.power_levels");
   const powerLevels: RoomPowerLevelsContent = powerLevelEvent
     ? (powerLevelEvent.content as RoomPowerLevelsContent)
     : { users: {}, users_default: 0 };

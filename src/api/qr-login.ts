@@ -1,9 +1,9 @@
 // QR Code Login Landing Page
 // When users scan a QR code, they're directed here to complete login
 
-import { Hono } from 'hono';
-import type { AppEnv } from '../types';
-import { hashToken } from '../utils/crypto';
+import { Hono } from "hono";
+import type { AppEnv } from "../types";
+import { hashToken } from "../utils/crypto";
 
 const app = new Hono<AppEnv>();
 
@@ -12,7 +12,7 @@ function generateQrLandingPage(
   serverName: string,
   token: string,
   userId: string,
-  expiresAt: number
+  expiresAt: number,
 ): string {
   const expiresInMinutes = Math.max(0, Math.ceil((expiresAt - Date.now()) / 60000));
 
@@ -263,7 +263,7 @@ function generateQrLandingPage(
     </div>
 
     <div class="expiry" id="expiry">
-      Token expires in ${expiresInMinutes} minute${expiresInMinutes !== 1 ? 's' : ''}
+      Token expires in ${expiresInMinutes} minute${expiresInMinutes !== 1 ? "s" : ""}
     </div>
 
     <button class="btn btn-primary" onclick="openInElement()">
@@ -381,76 +381,82 @@ function generateQrLandingPage(
 }
 
 // Landing page for QR code login
-app.get('/login/qr/:token', async (c) => {
-  const token = c.req.param('token');
+app.get("/login/qr/:token", async (c) => {
+  const token = c.req.param("token");
 
   // Validate token format
-  if (!token || !token.startsWith('mlt_')) {
-    return c.html(`<!DOCTYPE html>
+  if (!token || !token.startsWith("mlt_")) {
+    return c.html(
+      `<!DOCTYPE html>
 <html><head><title>Invalid Token</title>
 <style>body{font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#0f172a;color:#f1f5f9;}
 .error{text-align:center;padding:40px;background:#1e293b;border-radius:12px;border:1px solid #334155;}
 h1{color:#ef4444;}</style></head>
-<body><div class="error"><h1>Invalid Token</h1><p>This login link is invalid or has been tampered with.</p></div></body></html>`, 400);
+<body><div class="error"><h1>Invalid Token</h1><p>This login link is invalid or has been tampered with.</p></div></body></html>`,
+      400,
+    );
   }
 
   // Look up the token
   const tokenHash = await hashToken(token);
-  const tokenData = await c.env.SESSIONS.get(`login_token:${tokenHash}`, 'json') as {
+  const tokenData = (await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json")) as {
     user_id: string;
     expires_at: number;
   } | null;
 
   if (!tokenData) {
-    return c.html(`<!DOCTYPE html>
+    return c.html(
+      `<!DOCTYPE html>
 <html><head><title>Token Expired</title>
 <style>body{font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#0f172a;color:#f1f5f9;}
 .error{text-align:center;padding:40px;background:#1e293b;border-radius:12px;border:1px solid #334155;}
 h1{color:#f59e0b;}</style></head>
-<body><div class="error"><h1>Token Expired</h1><p>This login link has expired or has already been used.</p><p>Please request a new QR code from your administrator.</p></div></body></html>`, 400);
+<body><div class="error"><h1>Token Expired</h1><p>This login link has expired or has already been used.</p><p>Please request a new QR code from your administrator.</p></div></body></html>`,
+      400,
+    );
   }
 
   // Check if expired
   if (Date.now() > tokenData.expires_at) {
     // Clean up
     await c.env.SESSIONS.delete(`login_token:${tokenHash}`);
-    return c.html(`<!DOCTYPE html>
+    return c.html(
+      `<!DOCTYPE html>
 <html><head><title>Token Expired</title>
 <style>body{font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#0f172a;color:#f1f5f9;}
 .error{text-align:center;padding:40px;background:#1e293b;border-radius:12px;border:1px solid #334155;}
 h1{color:#f59e0b;}</style></head>
-<body><div class="error"><h1>Token Expired</h1><p>This login link has expired.</p><p>Please request a new QR code from your administrator.</p></div></body></html>`, 400);
+<body><div class="error"><h1>Token Expired</h1><p>This login link has expired.</p><p>Please request a new QR code from your administrator.</p></div></body></html>`,
+      400,
+    );
   }
 
   // Show the landing page
-  return c.html(generateQrLandingPage(
-    c.env.SERVER_NAME,
-    token,
-    tokenData.user_id,
-    tokenData.expires_at
-  ));
+  return c.html(
+    generateQrLandingPage(c.env.SERVER_NAME, token, tokenData.user_id, tokenData.expires_at),
+  );
 });
 
 // API endpoint to check token validity (for JS-based login)
-app.get('/login/qr/:token/check', async (c) => {
-  const token = c.req.param('token');
+app.get("/login/qr/:token/check", async (c) => {
+  const token = c.req.param("token");
 
-  if (!token || !token.startsWith('mlt_')) {
-    return c.json({ valid: false, error: 'Invalid token format' }, 400);
+  if (!token || !token.startsWith("mlt_")) {
+    return c.json({ valid: false, error: "Invalid token format" }, 400);
   }
 
   const tokenHash = await hashToken(token);
-  const tokenData = await c.env.SESSIONS.get(`login_token:${tokenHash}`, 'json') as {
+  const tokenData = (await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json")) as {
     user_id: string;
     expires_at: number;
   } | null;
 
   if (!tokenData) {
-    return c.json({ valid: false, error: 'Token not found or expired' }, 404);
+    return c.json({ valid: false, error: "Token not found or expired" }, 404);
   }
 
   if (Date.now() > tokenData.expires_at) {
-    return c.json({ valid: false, error: 'Token expired' }, 400);
+    return c.json({ valid: false, error: "Token expired" }, 400);
   }
 
   return c.json({

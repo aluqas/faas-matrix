@@ -71,4 +71,3 @@ export interface RuntimeCapabilities<
   id: IdCapability;
   config: RuntimeConfigCapability;
 }
-

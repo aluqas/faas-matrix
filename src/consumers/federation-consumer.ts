@@ -1,8 +1,8 @@
 // Federation Queue Consumer
 // Processes outbound federation transactions via Cloudflare Queues
 
-import type { Env } from '../types';
-import { signJson } from '../utils/crypto';
+import type { Env } from "../types";
+import { signJson } from "../utils/crypto";
 
 interface FederationQueueMessage {
   destination: string;
@@ -18,7 +18,7 @@ interface FederationBatch {
 
 export async function handleFederationQueue(
   batch: MessageBatch<FederationQueueMessage>,
-  env: Env
+  env: Env,
 ): Promise<void> {
   // Group messages by destination
   const byDestination = new Map<string, FederationBatch>();
@@ -37,7 +37,7 @@ export async function handleFederationQueue(
   const results = await Promise.allSettled(
     Array.from(byDestination.entries()).map(async ([destination, data]) => {
       return sendFederationTransaction(env, destination, data);
-    })
+    }),
   );
 
   // Retry failed messages
@@ -50,7 +50,7 @@ export async function handleFederationQueue(
     const destIndex = entries.indexOf(destination);
     const result = results[destIndex];
 
-    if (result.status === 'rejected' || (result.status === 'fulfilled' && !result.value)) {
+    if (result.status === "rejected" || (result.status === "fulfilled" && !result.value)) {
       // Retry with exponential backoff
       if (msg.attempts < 5) {
         msg.retry({ delaySeconds: Math.pow(2, msg.attempts) * 60 });
@@ -67,13 +67,13 @@ export async function handleFederationQueue(
 async function sendFederationTransaction(
   env: Env,
   destination: string,
-  data: FederationBatch
+  data: FederationBatch,
 ): Promise<boolean> {
   const txnId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
   // Get signing key
   const signingKey = await env.DB.prepare(
-    `SELECT key_id, private_key_jwk FROM server_keys WHERE is_current = 1 AND key_version = 2`
+    `SELECT key_id, private_key_jwk FROM server_keys WHERE is_current = 1 AND key_version = 2`,
   ).first<{ key_id: string; private_key_jwk: string | null }>();
 
   let body: Record<string, unknown> = {
@@ -89,19 +89,16 @@ async function sendFederationTransaction(
       body,
       env.SERVER_NAME,
       signingKey.key_id,
-      JSON.parse(signingKey.private_key_jwk)
+      JSON.parse(signingKey.private_key_jwk),
     );
   }
 
   try {
-    const response = await fetch(
-      `https://${destination}/_matrix/federation/v1/send/${txnId}`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }
-    );
+    const response = await fetch(`https://${destination}/_matrix/federation/v1/send/${txnId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
     return response.ok;
   } catch (err) {

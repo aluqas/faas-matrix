@@ -7,7 +7,7 @@ export async function withIdempotency<TValue>(
   store: IdempotencyStore<TValue>,
   scope: string,
   key: string,
-  producer: () => Promise<TValue>
+  producer: () => Promise<TValue>,
 ): Promise<TValue> {
   const existing = await store.get(scope, key);
   if (existing !== null) {
@@ -18,4 +18,3 @@ export async function withIdempotency<TValue>(
   await store.put(scope, key, value);
   return value;
 }
-

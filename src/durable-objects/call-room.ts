@@ -2,13 +2,8 @@
 // Manages WebRTC signaling for video/audio calls in a Matrix room
 // Uses Cloudflare Calls SFU for media routing
 
-import type { Env } from '../types';
-import {
-  createSession,
-  addTracks,
-  renegotiate,
-  closeTracks,
-} from '../services/cloudflare-calls';
+import type { Env } from "../types";
+import { createSession, addTracks, renegotiate, closeTracks } from "../services/cloudflare-calls";
 
 interface Participant {
   oderId: string; // This is the userId
@@ -21,7 +16,7 @@ interface Participant {
 
 interface TrackInfo {
   mid: string;
-  kind: 'audio' | 'video';
+  kind: "audio" | "video";
   enabled: boolean;
 }
 
@@ -32,38 +27,38 @@ interface SignalingMessage {
 
 // Messages from client to server
 interface JoinMessage {
-  type: 'join';
+  type: "join";
   userId: string;
   deviceId: string;
 }
 
 interface OfferMessage {
-  type: 'offer';
+  type: "offer";
   sdp: string;
   trackName: string;
-  kind: 'audio' | 'video';
+  kind: "audio" | "video";
 }
 
 interface AnswerMessage {
-  type: 'answer';
+  type: "answer";
   sdp: string;
   mid: string;
 }
 
 // LeaveMessage for future use (currently handled by ws.close)
 export interface LeaveMessage {
-  type: 'leave';
+  type: "leave";
 }
 
 interface MuteMessage {
-  type: 'mute';
+  type: "mute";
   trackName: string;
   muted: boolean;
 }
 
 // Messages from server to client
 interface WelcomeMessage {
-  type: 'welcome';
+  type: "welcome";
   callId: string;
   participants: Array<{
     oderId: string; // Note: This is userId, kept as oderId for API compatibility
@@ -73,19 +68,19 @@ interface WelcomeMessage {
 }
 
 interface ParticipantJoinedMessage {
-  type: 'participant_joined';
+  type: "participant_joined";
   oderId: string; // Note: This is userId
   deviceId: string;
 }
 
 interface ParticipantLeftMessage {
-  type: 'participant_left';
+  type: "participant_left";
   oderId: string; // Note: This is userId
   deviceId: string;
 }
 
 interface TrackPublishedMessage {
-  type: 'track_published';
+  type: "track_published";
   oderId: string; // Note: This is userId
   deviceId: string;
   trackName: string;
@@ -95,14 +90,14 @@ interface TrackPublishedMessage {
 
 // TrackUnpublishedMessage for future use
 export interface TrackUnpublishedMessage {
-  type: 'track_unpublished';
+  type: "track_unpublished";
   oderId: string; // Note: This is userId
   deviceId: string;
   trackName: string;
 }
 
 interface OfferResponseMessage {
-  type: 'offer_response';
+  type: "offer_response";
   sdp: string;
   trackName: string;
   mid: string;
@@ -110,7 +105,7 @@ interface OfferResponseMessage {
 
 // PullOfferMessage for future use (pull track from another participant)
 export interface PullOfferMessage {
-  type: 'pull_offer';
+  type: "pull_offer";
   sdp: string;
   trackName: string;
   mid: string;
@@ -119,7 +114,7 @@ export interface PullOfferMessage {
 }
 
 interface ErrorMessage {
-  type: 'error';
+  type: "error";
   code: string;
   message: string;
 }
@@ -137,8 +132,8 @@ export class CallRoomDurableObject implements DurableObject {
 
     // Load persisted state
     this.state.blockConcurrencyWhile(async () => {
-      this.callId = await this.state.storage.get('callId') || null;
-      this.matrixRoomId = await this.state.storage.get('matrixRoomId') || null;
+      this.callId = (await this.state.storage.get("callId")) || null;
+      this.matrixRoomId = (await this.state.storage.get("matrixRoomId")) || null;
     });
   }
 
@@ -146,36 +141,36 @@ export class CallRoomDurableObject implements DurableObject {
     const url = new URL(request.url);
 
     // Initialize call room
-    if (url.pathname === '/init' && request.method === 'POST') {
+    if (url.pathname === "/init" && request.method === "POST") {
       return this.handleInit(request);
     }
 
     // WebSocket upgrade for signaling
-    if (url.pathname === '/ws') {
+    if (url.pathname === "/ws") {
       return this.handleWebSocket(request);
     }
 
     // Get call state
-    if (url.pathname === '/state' && request.method === 'GET') {
+    if (url.pathname === "/state" && request.method === "GET") {
       return this.handleGetState();
     }
 
     // End call
-    if (url.pathname === '/end' && request.method === 'POST') {
+    if (url.pathname === "/end" && request.method === "POST") {
       return this.handleEndCall();
     }
 
-    return new Response('Not Found', { status: 404 });
+    return new Response("Not Found", { status: 404 });
   }
 
   private async handleInit(request: Request): Promise<Response> {
-    const body = await request.json() as { roomId: string; callId: string };
+    const body = (await request.json()) as { roomId: string; callId: string };
 
     this.matrixRoomId = body.roomId;
     this.callId = body.callId;
 
-    await this.state.storage.put('matrixRoomId', this.matrixRoomId);
-    await this.state.storage.put('callId', this.callId);
+    await this.state.storage.put("matrixRoomId", this.matrixRoomId);
+    await this.state.storage.put("callId", this.callId);
 
     return Response.json({
       callId: this.callId,
@@ -185,9 +180,9 @@ export class CallRoomDurableObject implements DurableObject {
 
   private async handleWebSocket(request: Request): Promise<Response> {
     // Verify WebSocket upgrade
-    const upgradeHeader = request.headers.get('Upgrade');
-    if (!upgradeHeader || upgradeHeader !== 'websocket') {
-      return new Response('Expected WebSocket', { status: 426 });
+    const upgradeHeader = request.headers.get("Upgrade");
+    if (!upgradeHeader || upgradeHeader !== "websocket") {
+      return new Response("Expected WebSocket", { status: 426 });
     }
 
     const pair = new WebSocketPair();
@@ -203,8 +198,8 @@ export class CallRoomDurableObject implements DurableObject {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    if (typeof message !== 'string') {
-      this.sendError(ws, 'INVALID_MESSAGE', 'Binary messages not supported');
+    if (typeof message !== "string") {
+      this.sendError(ws, "INVALID_MESSAGE", "Binary messages not supported");
       return;
     }
 
@@ -212,33 +207,37 @@ export class CallRoomDurableObject implements DurableObject {
     try {
       msg = JSON.parse(message);
     } catch {
-      this.sendError(ws, 'INVALID_JSON', 'Invalid JSON message');
+      this.sendError(ws, "INVALID_JSON", "Invalid JSON message");
       return;
     }
 
     try {
       switch (msg.type) {
-        case 'join':
+        case "join":
           await this.handleJoin(ws, msg as unknown as JoinMessage);
           break;
-        case 'offer':
+        case "offer":
           await this.handleOffer(ws, msg as unknown as OfferMessage);
           break;
-        case 'answer':
+        case "answer":
           await this.handleAnswer(ws, msg as unknown as AnswerMessage);
           break;
-        case 'leave':
+        case "leave":
           await this.handleLeave(ws);
           break;
-        case 'mute':
+        case "mute":
           await this.handleMute(ws, msg as unknown as MuteMessage);
           break;
         default:
-          this.sendError(ws, 'UNKNOWN_MESSAGE', `Unknown message type: ${msg.type}`);
+          this.sendError(ws, "UNKNOWN_MESSAGE", `Unknown message type: ${msg.type}`);
       }
     } catch (error) {
-      console.error('WebSocket message error:', error);
-      this.sendError(ws, 'INTERNAL_ERROR', error instanceof Error ? error.message : 'Unknown error');
+      console.error("WebSocket message error:", error);
+      this.sendError(
+        ws,
+        "INTERNAL_ERROR",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     }
   }
 
@@ -247,7 +246,7 @@ export class CallRoomDurableObject implements DurableObject {
   }
 
   async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
-    console.error('WebSocket error:', error);
+    console.error("WebSocket error:", error);
     await this.handleLeave(ws);
   }
 
@@ -256,7 +255,7 @@ export class CallRoomDurableObject implements DurableObject {
 
     // Check if already joined
     if (this.participants.has(participantKey)) {
-      this.sendError(ws, 'ALREADY_JOINED', 'Already joined this call');
+      this.sendError(ws, "ALREADY_JOINED", "Already joined this call");
       return;
     }
 
@@ -277,18 +276,18 @@ export class CallRoomDurableObject implements DurableObject {
     // Tag the WebSocket for later lookup
     this.state.setWebSocketAutoResponse(
       new WebSocketRequestResponsePair(
-        JSON.stringify({ type: 'ping' }),
-        JSON.stringify({ type: 'pong' })
-      )
+        JSON.stringify({ type: "ping" }),
+        JSON.stringify({ type: "pong" }),
+      ),
     );
 
     // Send welcome message with current participants
     const welcomeMsg: WelcomeMessage = {
-      type: 'welcome',
-      callId: this.callId || '',
+      type: "welcome",
+      callId: this.callId || "",
       participants: Array.from(this.participants.values())
-        .filter(p => p.oderId !== msg.userId || p.deviceId !== msg.deviceId)
-        .map(p => ({
+        .filter((p) => p.oderId !== msg.userId || p.deviceId !== msg.deviceId)
+        .map((p) => ({
           oderId: p.oderId,
           deviceId: p.deviceId,
           tracks: Array.from(p.tracks.entries()).map(([name, info]) => ({
@@ -301,7 +300,7 @@ export class CallRoomDurableObject implements DurableObject {
 
     // Notify other participants
     const joinedMsg: ParticipantJoinedMessage = {
-      type: 'participant_joined',
+      type: "participant_joined",
       oderId: msg.userId,
       deviceId: msg.deviceId,
     };
@@ -311,7 +310,7 @@ export class CallRoomDurableObject implements DurableObject {
   private async handleOffer(ws: WebSocket, msg: OfferMessage): Promise<void> {
     const participant = this.getParticipantBySocket(ws);
     if (!participant) {
-      this.sendError(ws, 'NOT_JOINED', 'Must join before sending offer');
+      this.sendError(ws, "NOT_JOINED", "Must join before sending offer");
       return;
     }
 
@@ -319,24 +318,24 @@ export class CallRoomDurableObject implements DurableObject {
     const response = await addTracks(this.env, participant.sessionId, {
       sessionDescription: {
         sdp: msg.sdp,
-        type: 'offer',
+        type: "offer",
       },
       tracks: [
         {
-          location: 'local',
+          location: "local",
           trackName: msg.trackName,
         },
       ],
     });
 
     if (!response.sessionDescription) {
-      this.sendError(ws, 'NO_ANSWER', 'SFU did not return answer');
+      this.sendError(ws, "NO_ANSWER", "SFU did not return answer");
       return;
     }
 
     const track = response.tracks[0];
     if (track.errorCode) {
-      this.sendError(ws, track.errorCode, track.errorDescription || 'Track error');
+      this.sendError(ws, track.errorCode, track.errorDescription || "Track error");
       return;
     }
 
@@ -349,7 +348,7 @@ export class CallRoomDurableObject implements DurableObject {
 
     // Send answer back to client
     const answerMsg: OfferResponseMessage = {
-      type: 'offer_response',
+      type: "offer_response",
       sdp: response.sessionDescription.sdp,
       trackName: msg.trackName,
       mid: track.mid,
@@ -358,7 +357,7 @@ export class CallRoomDurableObject implements DurableObject {
 
     // Notify other participants about the new track
     const publishedMsg: TrackPublishedMessage = {
-      type: 'track_published',
+      type: "track_published",
       oderId: participant.oderId,
       deviceId: participant.deviceId,
       trackName: msg.trackName,
@@ -371,7 +370,7 @@ export class CallRoomDurableObject implements DurableObject {
   private async handleAnswer(ws: WebSocket, msg: AnswerMessage): Promise<void> {
     const participant = this.getParticipantBySocket(ws);
     if (!participant) {
-      this.sendError(ws, 'NOT_JOINED', 'Must join before sending answer');
+      this.sendError(ws, "NOT_JOINED", "Must join before sending answer");
       return;
     }
 
@@ -379,7 +378,7 @@ export class CallRoomDurableObject implements DurableObject {
     await renegotiate(this.env, participant.sessionId, {
       sessionDescription: {
         sdp: msg.sdp,
-        type: 'answer',
+        type: "answer",
       },
     });
   }
@@ -392,11 +391,11 @@ export class CallRoomDurableObject implements DurableObject {
 
     // Close all tracks in the SFU session
     if (participant.tracks.size > 0) {
-      const mids = Array.from(participant.tracks.values()).map(t => t.mid);
+      const mids = Array.from(participant.tracks.values()).map((t) => t.mid);
       try {
         await closeTracks(this.env, participant.sessionId, mids, true);
       } catch (error) {
-        console.error('Error closing tracks:', error);
+        console.error("Error closing tracks:", error);
       }
     }
 
@@ -405,7 +404,7 @@ export class CallRoomDurableObject implements DurableObject {
 
     // Notify other participants
     const leftMsg: ParticipantLeftMessage = {
-      type: 'participant_left',
+      type: "participant_left",
       oderId: participant.oderId,
       deviceId: participant.deviceId,
     };
@@ -413,7 +412,7 @@ export class CallRoomDurableObject implements DurableObject {
 
     // Close WebSocket
     try {
-      ws.close(1000, 'Left call');
+      ws.close(1000, "Left call");
     } catch {
       // Already closed
     }
@@ -422,33 +421,36 @@ export class CallRoomDurableObject implements DurableObject {
   private async handleMute(ws: WebSocket, msg: MuteMessage): Promise<void> {
     const participant = this.getParticipantBySocket(ws);
     if (!participant) {
-      this.sendError(ws, 'NOT_JOINED', 'Must join before muting');
+      this.sendError(ws, "NOT_JOINED", "Must join before muting");
       return;
     }
 
     const track = participant.tracks.get(msg.trackName);
     if (!track) {
-      this.sendError(ws, 'TRACK_NOT_FOUND', 'Track not found');
+      this.sendError(ws, "TRACK_NOT_FOUND", "Track not found");
       return;
     }
 
     track.enabled = !msg.muted;
 
     // Notify other participants about mute state
-    this.broadcast({
-      type: 'mute_changed',
-      oderId: participant.oderId,
-      deviceId: participant.deviceId,
-      trackName: msg.trackName,
-      muted: msg.muted,
-    }, `${participant.oderId}|${participant.deviceId}`);
+    this.broadcast(
+      {
+        type: "mute_changed",
+        oderId: participant.oderId,
+        deviceId: participant.deviceId,
+        trackName: msg.trackName,
+        muted: msg.muted,
+      },
+      `${participant.oderId}|${participant.deviceId}`,
+    );
   }
 
   private handleGetState(): Response {
     return Response.json({
       callId: this.callId,
       roomId: this.matrixRoomId,
-      participants: Array.from(this.participants.values()).map(p => ({
+      participants: Array.from(this.participants.values()).map((p) => ({
         oderId: p.oderId,
         deviceId: p.deviceId,
         sessionId: p.sessionId,
@@ -466,7 +468,7 @@ export class CallRoomDurableObject implements DurableObject {
     // Close all participant sessions
     for (const participant of this.participants.values()) {
       if (participant.tracks.size > 0) {
-        const mids = Array.from(participant.tracks.values()).map(t => t.mid);
+        const mids = Array.from(participant.tracks.values()).map((t) => t.mid);
         try {
           await closeTracks(this.env, participant.sessionId, mids, true);
         } catch {
@@ -477,7 +479,7 @@ export class CallRoomDurableObject implements DurableObject {
       // Close WebSocket
       if (participant.webSocket) {
         try {
-          participant.webSocket.close(1000, 'Call ended');
+          participant.webSocket.close(1000, "Call ended");
         } catch {
           // Already closed
         }
@@ -505,12 +507,12 @@ export class CallRoomDurableObject implements DurableObject {
     try {
       ws.send(JSON.stringify(msg));
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error("Error sending message:", error);
     }
   }
 
   private sendError(ws: WebSocket, code: string, message: string): void {
-    const errorMsg: ErrorMessage = { type: 'error', code, message };
+    const errorMsg: ErrorMessage = { type: "error", code, message };
     this.send(ws, errorMsg);
   }
 

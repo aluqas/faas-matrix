@@ -3,10 +3,10 @@
 //
 // Provides full-text search for room messages
 
-import { Hono } from 'hono';
-import type { AppEnv } from '../types';
-import { Errors } from '../utils/errors';
-import { requireAuth } from '../middleware/auth';
+import { Hono } from "hono";
+import type { AppEnv } from "../types";
+import { Errors } from "../utils/errors";
+import { requireAuth } from "../middleware/auth";
 
 const app = new Hono<AppEnv>();
 
@@ -27,7 +27,7 @@ interface SearchRequest {
         types?: string[];
         not_types?: string[];
       };
-      order_by?: 'recent' | 'rank';
+      order_by?: "recent" | "rank";
       event_context?: {
         before_limit?: number;
         after_limit?: number;
@@ -66,12 +66,12 @@ interface SearchResult {
 // ============================================
 
 // POST /_matrix/client/v3/search - Search room events
-app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
-  const userId = c.get('userId');
+app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
+  const userId = c.get("userId");
   const db = c.env.DB;
 
   // Parse pagination
-  const nextBatch = c.req.query('next_batch');
+  const nextBatch = c.req.query("next_batch");
 
   let body: SearchRequest;
   try {
@@ -107,27 +107,30 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
   }
 
   const filter = roomEvents.filter || {};
-  const orderBy = roomEvents.order_by || 'recent';
+  const orderBy = roomEvents.order_by || "recent";
   const eventContext = roomEvents.event_context;
   const includeState = roomEvents.include_state || false;
 
   // Get rooms the user is a member of
-  const userRooms = await db.prepare(`
+  const userRooms = await db
+    .prepare(`
     SELECT room_id FROM room_memberships
     WHERE user_id = ? AND membership IN ('join', 'leave')
-  `).bind(userId).all<{ room_id: string }>();
+  `)
+    .bind(userId)
+    .all<{ room_id: string }>();
 
-  const userRoomIds = new Set(userRooms.results.map(r => r.room_id));
+  const userRoomIds = new Set(userRooms.results.map((r) => r.room_id));
 
   // Apply room filters
   let searchRoomIds = Array.from(userRoomIds);
 
   if (filter.rooms && filter.rooms.length > 0) {
-    searchRoomIds = searchRoomIds.filter(r => filter.rooms!.includes(r));
+    searchRoomIds = searchRoomIds.filter((r) => filter.rooms!.includes(r));
   }
 
   if (filter.not_rooms && filter.not_rooms.length > 0) {
-    searchRoomIds = searchRoomIds.filter(r => !filter.not_rooms!.includes(r));
+    searchRoomIds = searchRoomIds.filter((r) => !filter.not_rooms!.includes(r));
   }
 
   if (searchRoomIds.length === 0) {
@@ -154,7 +157,7 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
 
   // Use FTS5 MATCH for full-text search with BM25 ranking
   // Escape FTS5 special characters in search term
-  const ftsSearchTerm = searchTerm.replace(/['"*()]/g, ' ').trim();
+  const ftsSearchTerm = searchTerm.replace(/['"*()]/g, " ").trim();
 
   let query = `
     SELECT e.event_id, e.event_type, e.room_id, e.sender, e.origin_server_ts, e.content,
@@ -162,35 +165,35 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
     FROM events_fts fts
     JOIN events e ON fts.event_id = e.event_id
     WHERE fts.body MATCH ?
-      AND e.room_id IN (${searchRoomIds.map(() => '?').join(',')})
+      AND e.room_id IN (${searchRoomIds.map(() => "?").join(",")})
   `;
 
   const params: any[] = [ftsSearchTerm, ...searchRoomIds];
 
   // Apply sender filter
   if (filter.senders && filter.senders.length > 0) {
-    query += ` AND e.sender IN (${filter.senders.map(() => '?').join(',')})`;
+    query += ` AND e.sender IN (${filter.senders.map(() => "?").join(",")})`;
     params.push(...filter.senders);
   }
 
   if (filter.not_senders && filter.not_senders.length > 0) {
-    query += ` AND e.sender NOT IN (${filter.not_senders.map(() => '?').join(',')})`;
+    query += ` AND e.sender NOT IN (${filter.not_senders.map(() => "?").join(",")})`;
     params.push(...filter.not_senders);
   }
 
   // Apply type filter (though we're already filtering for m.room.message)
   if (filter.types && filter.types.length > 0) {
-    query += ` AND e.event_type IN (${filter.types.map(() => '?').join(',')})`;
+    query += ` AND e.event_type IN (${filter.types.map(() => "?").join(",")})`;
     params.push(...filter.types);
   }
 
   if (filter.not_types && filter.not_types.length > 0) {
-    query += ` AND e.event_type NOT IN (${filter.not_types.map(() => '?').join(',')})`;
+    query += ` AND e.event_type NOT IN (${filter.not_types.map(() => "?").join(",")})`;
     params.push(...filter.not_types);
   }
 
   // Order by
-  if (orderBy === 'rank') {
+  if (orderBy === "rank") {
     query += ` ORDER BY rank ASC`; // BM25 returns negative values, lower = better
   } else {
     query += ` ORDER BY e.origin_server_ts DESC`;
@@ -199,15 +202,18 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
   query += ` LIMIT ? OFFSET ?`;
   params.push(limit + 1, offset);
 
-  const results = await db.prepare(query).bind(...params).all<{
-    event_id: string;
-    event_type: string;
-    room_id: string;
-    sender: string;
-    origin_server_ts: number;
-    content: string;
-    rank: number;
-  }>();
+  const results = await db
+    .prepare(query)
+    .bind(...params)
+    .all<{
+      event_id: string;
+      event_type: string;
+      room_id: string;
+      sender: string;
+      origin_server_ts: number;
+      content: string;
+      rank: number;
+    }>();
 
   // Check if there are more results
   const hasMore = results.results.length > limit;
@@ -219,9 +225,12 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
     FROM events_fts fts
     JOIN events e ON fts.event_id = e.event_id
     WHERE fts.body MATCH ?
-      AND e.room_id IN (${searchRoomIds.map(() => '?').join(',')})
+      AND e.room_id IN (${searchRoomIds.map(() => "?").join(",")})
   `;
-  const countResult = await db.prepare(countQuery).bind(ftsSearchTerm, ...searchRoomIds).first<{ total: number }>();
+  const countResult = await db
+    .prepare(countQuery)
+    .bind(ftsSearchTerm, ...searchRoomIds)
+    .first<{ total: number }>();
   const totalCount = countResult?.total || 0;
 
   // Build response
@@ -252,37 +261,43 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
       const afterLimit = eventContext.after_limit || 5;
 
       // Get events before
-      const eventsBefore = await db.prepare(`
+      const eventsBefore = await db
+        .prepare(`
         SELECT event_id, event_type, sender, origin_server_ts, content
         FROM events
         WHERE room_id = ? AND origin_server_ts < ?
         ORDER BY origin_server_ts DESC
         LIMIT ?
-      `).bind(event.room_id, event.origin_server_ts, beforeLimit).all<{
-        event_id: string;
-        event_type: string;
-        sender: string;
-        origin_server_ts: number;
-        content: string;
-      }>();
+      `)
+        .bind(event.room_id, event.origin_server_ts, beforeLimit)
+        .all<{
+          event_id: string;
+          event_type: string;
+          sender: string;
+          origin_server_ts: number;
+          content: string;
+        }>();
 
       // Get events after
-      const eventsAfter = await db.prepare(`
+      const eventsAfter = await db
+        .prepare(`
         SELECT event_id, event_type, sender, origin_server_ts, content
         FROM events
         WHERE room_id = ? AND origin_server_ts > ?
         ORDER BY origin_server_ts ASC
         LIMIT ?
-      `).bind(event.room_id, event.origin_server_ts, afterLimit).all<{
-        event_id: string;
-        event_type: string;
-        sender: string;
-        origin_server_ts: number;
-        content: string;
-      }>();
+      `)
+        .bind(event.room_id, event.origin_server_ts, afterLimit)
+        .all<{
+          event_id: string;
+          event_type: string;
+          sender: string;
+          origin_server_ts: number;
+          content: string;
+        }>();
 
       result.context = {
-        events_before: eventsBefore.results.reverse().map(e => ({
+        events_before: eventsBefore.results.reverse().map((e) => ({
           event_id: e.event_id,
           type: e.event_type,
           sender: e.sender,
@@ -290,7 +305,7 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
           content: JSON.parse(e.content),
           room_id: event.room_id,
         })),
-        events_after: eventsAfter.results.map(e => ({
+        events_after: eventsAfter.results.map((e) => ({
           event_id: e.event_id,
           type: e.event_type,
           sender: e.sender,
@@ -304,15 +319,18 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
       if (eventContext.include_profile) {
         const senders = new Set<string>();
         senders.add(event.sender);
-        eventsBefore.results.forEach(e => senders.add(e.sender));
-        eventsAfter.results.forEach(e => senders.add(e.sender));
+        eventsBefore.results.forEach((e) => senders.add(e.sender));
+        eventsAfter.results.forEach((e) => senders.add(e.sender));
 
         const profiles: Record<string, { displayname?: string; avatar_url?: string }> = {};
 
         for (const senderId of senders) {
-          const profile = await db.prepare(`
+          const profile = await db
+            .prepare(`
             SELECT display_name, avatar_url FROM users WHERE user_id = ?
-          `).bind(senderId).first<{ display_name: string | null; avatar_url: string | null }>();
+          `)
+            .bind(senderId)
+            .first<{ display_name: string | null; avatar_url: string | null }>();
 
           if (profile) {
             profiles[senderId] = {
@@ -350,24 +368,27 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
 
   // Add room state if requested
   if (includeState && formattedResults.length > 0) {
-    const roomIds = new Set(formattedResults.map(r => r.result.room_id));
+    const roomIds = new Set(formattedResults.map((r) => r.result.room_id));
     const state: Record<string, any[]> = {};
 
     for (const roomId of roomIds) {
-      const roomState = await db.prepare(`
+      const roomState = await db
+        .prepare(`
         SELECT e.event_type, e.state_key, e.sender, e.content, e.origin_server_ts
         FROM room_state rs
         JOIN events e ON rs.event_id = e.event_id
         WHERE rs.room_id = ?
-      `).bind(roomId).all<{
-        event_type: string;
-        state_key: string;
-        sender: string;
-        content: string;
-        origin_server_ts: number;
-      }>();
+      `)
+        .bind(roomId)
+        .all<{
+          event_type: string;
+          state_key: string;
+          sender: string;
+          content: string;
+          origin_server_ts: number;
+        }>();
 
-      state[roomId] = roomState.results.map(s => ({
+      state[roomId] = roomState.results.map((s) => ({
         type: s.event_type,
         state_key: s.state_key,
         sender: s.sender,
@@ -385,8 +406,11 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
     const groups: Record<string, any> = {};
 
     for (const groupBy of roomEvents.groupings.group_by) {
-      if (groupBy.key === 'room_id') {
-        const roomGroups: Record<string, { results: string[]; order: number; next_batch?: string }> = {};
+      if (groupBy.key === "room_id") {
+        const roomGroups: Record<
+          string,
+          { results: string[]; order: number; next_batch?: string }
+        > = {};
 
         for (const result of formattedResults) {
           const roomId = result.result.room_id;
@@ -397,8 +421,11 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
         }
 
         groups.room_id = roomGroups;
-      } else if (groupBy.key === 'sender') {
-        const senderGroups: Record<string, { results: string[]; order: number; next_batch?: string }> = {};
+      } else if (groupBy.key === "sender") {
+        const senderGroups: Record<
+          string,
+          { results: string[]; order: number; next_batch?: string }
+        > = {};
 
         for (const result of formattedResults) {
           const sender = result.result.sender;
@@ -423,7 +450,10 @@ app.post('/_matrix/client/v3/search', requireAuth(), async (c) => {
 // Helper function to extract highlight terms
 function extractHighlights(searchTerm: string): string[] {
   // Split search term into words and return unique terms
-  const words = searchTerm.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+  const words = searchTerm
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
   return [...new Set(words)];
 }
 

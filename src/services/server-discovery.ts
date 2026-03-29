@@ -2,7 +2,7 @@
 // Implements Matrix spec server discovery with SRV record support via Cloudflare DoH
 // Reference: https://spec.matrix.org/v1.12/server-server-api/#resolving-server-names
 
-import { validateUrl } from '../utils/url-validator';
+import { validateUrl } from "../utils/url-validator";
 
 export interface ServerDiscoveryResult {
   host: string;
@@ -28,7 +28,7 @@ interface CloudflareDNSResponse {
 }
 
 // Cache key prefix for server discovery
-const DISCOVERY_CACHE_PREFIX = 'discovery:';
+const DISCOVERY_CACHE_PREFIX = "discovery:";
 const DISCOVERY_CACHE_TTL = 3600; // 1 hour
 
 /**
@@ -37,7 +37,7 @@ const DISCOVERY_CACHE_TTL = 3600; // 1 hour
  */
 export async function discoverServer(
   serverName: string,
-  cache?: KVNamespace
+  cache?: KVNamespace,
 ): Promise<ServerDiscoveryResult> {
   // Check cache first if available
   if (cache) {
@@ -136,7 +136,7 @@ async function tryWellKnown(serverName: string): Promise<ServerDiscoveryResult |
 
   try {
     const response = await fetch(wellKnownUrl, {
-      headers: { Accept: 'application/json' },
+      headers: { Accept: "application/json" },
       cf: { cacheTtl: 3600, cacheEverything: true },
     });
 
@@ -144,10 +144,10 @@ async function tryWellKnown(serverName: string): Promise<ServerDiscoveryResult |
       return null;
     }
 
-    const wellKnown = (await response.json()) as { 'm.server'?: string };
-    const delegatedServer = wellKnown['m.server'];
+    const wellKnown = (await response.json()) as { "m.server"?: string };
+    const delegatedServer = wellKnown["m.server"];
 
-    if (!delegatedServer || typeof delegatedServer !== 'string') {
+    if (!delegatedServer || typeof delegatedServer !== "string") {
       return null;
     }
 
@@ -196,7 +196,7 @@ async function tryWellKnown(serverName: string): Promise<ServerDiscoveryResult |
  */
 async function trySRVRecords(serverName: string): Promise<ServerDiscoveryResult | null> {
   // Try the new _matrix-fed._tcp record first (Matrix 1.8+)
-  const fedSrvRecords = await lookupSRVRecords(serverName, '_matrix-fed._tcp');
+  const fedSrvRecords = await lookupSRVRecords(serverName, "_matrix-fed._tcp");
   if (fedSrvRecords.length > 0) {
     const selected = selectSRVRecord(fedSrvRecords);
     return {
@@ -207,7 +207,7 @@ async function trySRVRecords(serverName: string): Promise<ServerDiscoveryResult 
   }
 
   // Fall back to legacy _matrix._tcp record
-  const legacySrvRecords = await lookupSRVRecords(serverName, '_matrix._tcp');
+  const legacySrvRecords = await lookupSRVRecords(serverName, "_matrix._tcp");
   if (legacySrvRecords.length > 0) {
     const selected = selectSRVRecord(legacySrvRecords);
     return {
@@ -232,10 +232,10 @@ async function lookupSRVRecords(serverName: string, recordName: string): Promise
       `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(queryName)}&type=SRV`,
       {
         headers: {
-          Accept: 'application/dns-json',
+          Accept: "application/dns-json",
         },
         cf: { cacheTtl: 300, cacheEverything: true },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -261,10 +261,10 @@ async function lookupSRVRecords(serverName: string, recordName: string): Promise
       const [priority, weight, port, target] = parts;
 
       // Skip if target is "." (no service available)
-      if (target === '.') continue;
+      if (target === ".") continue;
 
       // Remove trailing dot from target if present
-      const cleanTarget = target.endsWith('.') ? target.slice(0, -1) : target;
+      const cleanTarget = target.endsWith(".") ? target.slice(0, -1) : target;
 
       // Validate the target isn't a private/internal address
       const targetUrl = `https://${cleanTarget}/`;
@@ -336,16 +336,13 @@ function selectSRVRecord(records: SRVRecord[]): SRVRecord {
  */
 export function buildServerUrl(discovery: ServerDiscoveryResult): string {
   // Use the discovered host and port
-  const portSuffix = discovery.port === 443 ? '' : `:${discovery.port}`;
+  const portSuffix = discovery.port === 443 ? "" : `:${discovery.port}`;
   return `https://${discovery.host}${portSuffix}`;
 }
 
 /**
  * Clear the discovery cache for a specific server
  */
-export async function clearDiscoveryCache(
-  serverName: string,
-  cache: KVNamespace
-): Promise<void> {
+export async function clearDiscoveryCache(serverName: string, cache: KVNamespace): Promise<void> {
   await cache.delete(`${DISCOVERY_CACHE_PREFIX}${serverName}`);
 }

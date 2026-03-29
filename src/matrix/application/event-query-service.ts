@@ -1,6 +1,6 @@
-import type { PDU } from '../../types';
+import type { PDU } from "../../types";
 
-export type TimestampDirection = 'f' | 'b';
+export type TimestampDirection = "f" | "b";
 
 export interface MissingEventsQuery {
   roomId: string;
@@ -68,22 +68,24 @@ function toPdu(row: EventRow): PDU {
     auth_events: safeJsonParse<string[]>(row.auth_events) ?? [],
     prev_events: safeJsonParse<string[]>(row.prev_events) ?? [],
     hashes: safeJsonParse<{ sha256: string }>(row.hashes ?? undefined) ?? undefined,
-    signatures: safeJsonParse<Record<string, Record<string, string>>>(row.signatures ?? undefined) ?? undefined,
+    signatures:
+      safeJsonParse<Record<string, Record<string, string>>>(row.signatures ?? undefined) ??
+      undefined,
   };
 }
 
 export function normalizeOffsetToken(from?: string | null): number {
-  if (!from || !from.startsWith('offset_')) {
+  if (!from || !from.startsWith("offset_")) {
     return 0;
   }
 
-  const parsed = Number.parseInt(from.slice('offset_'.length), 10);
+  const parsed = Number.parseInt(from.slice("offset_".length), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 export function selectSpaceChildren(
   edges: SpaceChildEdge[],
-  options: { suggestedOnly: boolean; limit: number; offset: number }
+  options: { suggestedOnly: boolean; limit: number; offset: number },
 ): { children: SpaceChildEdge[]; hasMore: boolean } {
   const filtered = edges.filter((edge) => {
     const via = edge.content.via;
@@ -106,19 +108,21 @@ export function selectSpaceChildren(
 
 export class EventQueryService {
   async roomExists(db: D1Database, roomId: string): Promise<boolean> {
-    const room = await db.prepare(`
+    const room = await db
+      .prepare(`
       SELECT room_id
       FROM rooms
       WHERE room_id = ?
-    `).bind(roomId).first<{ room_id: string }>();
+    `)
+      .bind(roomId)
+      .first<{ room_id: string }>();
 
     return !!room;
   }
 
   async getMissingEvents(db: D1Database, query: MissingEventsQuery): Promise<PDU[]> {
-    const frontier = query.latestEvents.length > 0
-      ? [...query.latestEvents]
-      : [...query.earliestEvents];
+    const frontier =
+      query.latestEvents.length > 0 ? [...query.latestEvents] : [...query.earliestEvents];
     const seedSet = new Set(frontier);
     const stopSet = new Set(query.earliestEvents);
     const visited = new Set<string>();
@@ -131,12 +135,15 @@ export class EventQueryService {
       }
       visited.add(eventId);
 
-      const row = await db.prepare(`
+      const row = await db
+        .prepare(`
         SELECT event_id, room_id, sender, event_type, state_key, content,
                origin_server_ts, depth, auth_events, prev_events, hashes, signatures
         FROM events
         WHERE event_id = ? AND room_id = ? AND depth >= ?
-      `).bind(eventId, query.roomId, query.minDepth).first<EventRow>();
+      `)
+        .bind(eventId, query.roomId, query.minDepth)
+        .first<EventRow>();
 
       if (!row) {
         continue;
@@ -166,34 +173,43 @@ export class EventQueryService {
     db: D1Database,
     roomId: string,
     ts: number,
-    dir: TimestampDirection
+    dir: TimestampDirection,
   ): Promise<{ event_id: string; origin_server_ts: number } | null> {
-    if (dir === 'b') {
-      return db.prepare(`
+    if (dir === "b") {
+      return db
+        .prepare(`
         SELECT event_id, origin_server_ts
         FROM events
         WHERE room_id = ? AND origin_server_ts <= ?
         ORDER BY origin_server_ts DESC
         LIMIT 1
-      `).bind(roomId, ts).first<{ event_id: string; origin_server_ts: number }>();
+      `)
+        .bind(roomId, ts)
+        .first<{ event_id: string; origin_server_ts: number }>();
     }
 
-    return db.prepare(`
+    return db
+      .prepare(`
       SELECT event_id, origin_server_ts
       FROM events
       WHERE room_id = ? AND origin_server_ts >= ?
       ORDER BY origin_server_ts ASC
       LIMIT 1
-    `).bind(roomId, ts).first<{ event_id: string; origin_server_ts: number }>();
+    `)
+      .bind(roomId, ts)
+      .first<{ event_id: string; origin_server_ts: number }>();
   }
 
   async getSpaceChildEdges(db: D1Database, roomId: string): Promise<SpaceChildEdge[]> {
-    const rows = await db.prepare(`
+    const rows = await db
+      .prepare(`
       SELECT rs.state_key, e.content
       FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.room_id = ? AND rs.event_type = 'm.space.child' AND e.redacted_because IS NULL
-    `).bind(roomId).all<{ state_key: string; content: string }>();
+    `)
+      .bind(roomId)
+      .all<{ state_key: string; content: string }>();
 
     return rows.results.flatMap((row) => {
       const content = safeJsonParse<Record<string, unknown>>(row.content);
@@ -201,25 +217,31 @@ export class EventQueryService {
         return [];
       }
 
-      return [{
-        roomId: row.state_key,
-        content,
-      }];
+      return [
+        {
+          roomId: row.state_key,
+          content,
+        },
+      ];
     });
   }
 
   async getRoomPublicInfo(db: D1Database, roomId: string): Promise<PublicRoomInfo | null> {
-    const room = await db.prepare(`
+    const room = await db
+      .prepare(`
       SELECT room_id
       FROM rooms
       WHERE room_id = ?
-    `).bind(roomId).first<{ room_id: string }>();
+    `)
+      .bind(roomId)
+      .first<{ room_id: string }>();
 
     if (!room) {
       return null;
     }
 
-    const stateRows = await db.prepare(`
+    const stateRows = await db
+      .prepare(`
       SELECT rs.event_type, e.content
       FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
@@ -234,7 +256,9 @@ export class EventQueryService {
           'm.room.guest_access',
           'm.room.create'
         )
-    `).bind(roomId).all<{ event_type: string; content: string }>();
+    `)
+      .bind(roomId)
+      .all<{ event_type: string; content: string }>();
 
     const state = new Map<string, Record<string, unknown>>();
     for (const row of stateRows.results) {
@@ -244,38 +268,47 @@ export class EventQueryService {
       }
     }
 
-    const memberCount = await db.prepare(`
+    const memberCount = await db
+      .prepare(`
       SELECT COUNT(*) as count
       FROM room_memberships
       WHERE room_id = ? AND membership = 'join'
-    `).bind(roomId).first<{ count: number }>();
+    `)
+      .bind(roomId)
+      .first<{ count: number }>();
 
-    const historyVisibility = state.get('m.room.history_visibility')?.history_visibility;
-    const guestAccess = state.get('m.room.guest_access')?.guest_access;
+    const historyVisibility = state.get("m.room.history_visibility")?.history_visibility;
+    const guestAccess = state.get("m.room.guest_access")?.guest_access;
 
     return {
       room_id: roomId,
-      room_type: typeof state.get('m.room.create')?.type === 'string'
-        ? state.get('m.room.create')?.type as string
-        : undefined,
-      name: typeof state.get('m.room.name')?.name === 'string'
-        ? state.get('m.room.name')?.name as string
-        : undefined,
-      topic: typeof state.get('m.room.topic')?.topic === 'string'
-        ? state.get('m.room.topic')?.topic as string
-        : undefined,
-      canonical_alias: typeof state.get('m.room.canonical_alias')?.alias === 'string'
-        ? state.get('m.room.canonical_alias')?.alias as string
-        : undefined,
-      avatar_url: typeof state.get('m.room.avatar')?.url === 'string'
-        ? state.get('m.room.avatar')?.url as string
-        : undefined,
-      join_rule: typeof state.get('m.room.join_rules')?.join_rule === 'string'
-        ? state.get('m.room.join_rules')?.join_rule as string
-        : 'invite',
+      room_type:
+        typeof state.get("m.room.create")?.type === "string"
+          ? (state.get("m.room.create")?.type as string)
+          : undefined,
+      name:
+        typeof state.get("m.room.name")?.name === "string"
+          ? (state.get("m.room.name")?.name as string)
+          : undefined,
+      topic:
+        typeof state.get("m.room.topic")?.topic === "string"
+          ? (state.get("m.room.topic")?.topic as string)
+          : undefined,
+      canonical_alias:
+        typeof state.get("m.room.canonical_alias")?.alias === "string"
+          ? (state.get("m.room.canonical_alias")?.alias as string)
+          : undefined,
+      avatar_url:
+        typeof state.get("m.room.avatar")?.url === "string"
+          ? (state.get("m.room.avatar")?.url as string)
+          : undefined,
+      join_rule:
+        typeof state.get("m.room.join_rules")?.join_rule === "string"
+          ? (state.get("m.room.join_rules")?.join_rule as string)
+          : "invite",
       num_joined_members: memberCount?.count ?? 0,
-      world_readable: historyVisibility === 'world_readable',
-      guest_can_join: guestAccess === 'can_join',
+      world_readable: historyVisibility === "world_readable",
+      guest_can_join: guestAccess === "can_join",
     };
   }
 }

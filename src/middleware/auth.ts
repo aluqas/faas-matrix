@@ -1,11 +1,11 @@
 // Authentication middleware
 
-import { createMiddleware } from 'hono/factory';
-import type { AppEnv } from '../types';
-import { Errors } from '../utils/errors';
-import { hashToken } from '../utils/crypto';
-import { getUserByTokenHash } from '../services/database';
-import { getAppServiceByToken } from '../services/appservice';
+import { createMiddleware } from "hono/factory";
+import type { AppEnv } from "../types";
+import { Errors } from "../utils/errors";
+import { hashToken } from "../utils/crypto";
+import { getUserByTokenHash } from "../services/database";
+import { getAppServiceByToken } from "../services/appservice";
 
 export type AuthContext = {
   userId: string;
@@ -16,7 +16,7 @@ export type AuthContext = {
 // Extract access token from request
 export function extractAccessToken(request: Request): string | null {
   // Check Authorization header first
-  const authHeader = request.headers.get('Authorization');
+  const authHeader = request.headers.get("Authorization");
   if (authHeader) {
     const match = authHeader.match(/^Bearer\s+(.+)$/i);
     if (match) {
@@ -26,7 +26,7 @@ export function extractAccessToken(request: Request): string | null {
 
   // Fall back to query parameter
   const url = new URL(request.url);
-  const queryToken = url.searchParams.get('access_token');
+  const queryToken = url.searchParams.get("access_token");
   if (queryToken) {
     return queryToken;
   }
@@ -37,7 +37,7 @@ export function extractAccessToken(request: Request): string | null {
 // Validate access token and return user info
 export async function validateAccessToken(
   db: D1Database,
-  token: string
+  token: string,
 ): Promise<AuthContext | null> {
   const tokenHash = await hashToken(token);
   const result = await getUserByTokenHash(db, tokenHash);
@@ -61,8 +61,10 @@ export function requireAuth() {
 
     if (!token) {
       // Log full headers for debugging missing token
-      const authHeader = c.req.raw.headers.get('Authorization');
-      console.log(`[AUTH] Missing token for ${path}. Authorization header: ${authHeader || 'NONE'}`);
+      const authHeader = c.req.raw.headers.get("Authorization");
+      console.log(
+        `[AUTH] Missing token for ${path}. Authorization header: ${authHeader || "NONE"}`,
+      );
       return Errors.missingToken().toResponse();
     }
 
@@ -79,7 +81,7 @@ export function requireAuth() {
         if (appservice) {
           // AS can act as its sender user or as a user specified by user_id query param
           const url = new URL(c.req.url);
-          const asUserId = url.searchParams.get('user_id');
+          const asUserId = url.searchParams.get("user_id");
           const serverName = c.env.SERVER_NAME;
           const senderUserId = asUserId || `@${appservice.sender_localpart}:${serverName}`;
           auth = {
@@ -94,18 +96,19 @@ export function requireAuth() {
     }
 
     if (!auth) {
-      console.log(`[AUTH] Token ${tokenPrefix}... is INVALID for ${path}. Token length: ${token.length}`);
+      console.log(
+        `[AUTH] Token ${tokenPrefix}... is INVALID for ${path}. Token length: ${token.length}`,
+      );
       return Errors.unknownToken().toResponse();
     }
 
     console.log(`[AUTH] Token ${tokenPrefix}... valid for user ${auth.userId}`);
 
-
     // Store auth context
-    c.set('auth', auth);
-    c.set('userId', auth.userId);
-    c.set('deviceId', auth.deviceId);
-    c.set('accessToken', auth.accessToken);
+    c.set("auth", auth);
+    c.set("userId", auth.userId);
+    c.set("deviceId", auth.deviceId);
+    c.set("accessToken", auth.accessToken);
 
     return next();
   });
@@ -119,10 +122,10 @@ export function optionalAuth() {
     if (token) {
       const auth = await validateAccessToken(c.env.DB, token);
       if (auth) {
-        c.set('auth', auth);
-        c.set('userId', auth.userId);
-        c.set('deviceId', auth.deviceId);
-        c.set('accessToken', auth.accessToken);
+        c.set("auth", auth);
+        c.set("userId", auth.userId);
+        c.set("deviceId", auth.deviceId);
+        c.set("accessToken", auth.accessToken);
       }
     }
 

@@ -1,9 +1,9 @@
 // Room Version Registry
 // Maps each Matrix room version to its specific behaviors per the spec
 
-export type StateResolutionAlgorithm = 'v1' | 'v2';
-export type EventIdFormat = 'v1' | 'v3' | 'v4';
-export type RedactionAlgorithm = 'v1' | 'v11';
+export type StateResolutionAlgorithm = "v1" | "v2";
+export type EventIdFormat = "v1" | "v3" | "v4";
+export type RedactionAlgorithm = "v1" | "v11";
 
 export interface RoomVersionBehavior {
   /** Room version string */
@@ -23,7 +23,7 @@ export interface RoomVersionBehavior {
   /** Whether the updated redaction algorithm is used (v11+) */
   updatedRedactionRules: boolean;
   /** Auth rule variant: determines which auth checks apply */
-  authRuleVariant: 'v1' | 'v8' | 'v10';
+  authRuleVariant: "v1" | "v8" | "v10";
   /** Whether knock_restricted join rule is supported (v10+) */
   knockRestrictedSupported: boolean;
   /** Stability status */
@@ -31,159 +31,159 @@ export interface RoomVersionBehavior {
 }
 
 const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
-  '1': {
-    version: '1',
-    stateResolution: 'v1',
-    eventIdFormat: 'v1',
-    redactionAlgorithm: 'v1',
+  "1": {
+    version: "1",
+    stateResolution: "v1",
+    eventIdFormat: "v1",
+    redactionAlgorithm: "v1",
     knockingSupported: false,
     restrictedJoinsSupported: false,
     integerPowerLevels: false,
     updatedRedactionRules: false,
-    authRuleVariant: 'v1',
+    authRuleVariant: "v1",
     knockRestrictedSupported: false,
     stable: true,
   },
-  '2': {
-    version: '2',
-    stateResolution: 'v2',
-    eventIdFormat: 'v1',
-    redactionAlgorithm: 'v1',
+  "2": {
+    version: "2",
+    stateResolution: "v2",
+    eventIdFormat: "v1",
+    redactionAlgorithm: "v1",
     knockingSupported: false,
     restrictedJoinsSupported: false,
     integerPowerLevels: false,
     updatedRedactionRules: false,
-    authRuleVariant: 'v1',
+    authRuleVariant: "v1",
     knockRestrictedSupported: false,
     stable: true,
   },
-  '3': {
-    version: '3',
-    stateResolution: 'v2',
-    eventIdFormat: 'v3',
-    redactionAlgorithm: 'v1',
+  "3": {
+    version: "3",
+    stateResolution: "v2",
+    eventIdFormat: "v3",
+    redactionAlgorithm: "v1",
     knockingSupported: false,
     restrictedJoinsSupported: false,
     integerPowerLevels: false,
     updatedRedactionRules: false,
-    authRuleVariant: 'v1',
+    authRuleVariant: "v1",
     knockRestrictedSupported: false,
     stable: true,
   },
-  '4': {
-    version: '4',
-    stateResolution: 'v2',
-    eventIdFormat: 'v4',
-    redactionAlgorithm: 'v1',
+  "4": {
+    version: "4",
+    stateResolution: "v2",
+    eventIdFormat: "v4",
+    redactionAlgorithm: "v1",
     knockingSupported: false,
     restrictedJoinsSupported: false,
     integerPowerLevels: false,
     updatedRedactionRules: false,
-    authRuleVariant: 'v1',
+    authRuleVariant: "v1",
     knockRestrictedSupported: false,
     stable: true,
   },
-  '5': {
-    version: '5',
-    stateResolution: 'v2',
-    eventIdFormat: 'v4',
-    redactionAlgorithm: 'v1',
+  "5": {
+    version: "5",
+    stateResolution: "v2",
+    eventIdFormat: "v4",
+    redactionAlgorithm: "v1",
     knockingSupported: false,
     restrictedJoinsSupported: false,
     integerPowerLevels: false,
     updatedRedactionRules: false,
-    authRuleVariant: 'v1',
+    authRuleVariant: "v1",
     knockRestrictedSupported: false,
     stable: true,
   },
-  '6': {
-    version: '6',
-    stateResolution: 'v2',
-    eventIdFormat: 'v4',
-    redactionAlgorithm: 'v1',
+  "6": {
+    version: "6",
+    stateResolution: "v2",
+    eventIdFormat: "v4",
+    redactionAlgorithm: "v1",
     knockingSupported: false,
     restrictedJoinsSupported: false,
     integerPowerLevels: false,
     updatedRedactionRules: false,
-    authRuleVariant: 'v1',
+    authRuleVariant: "v1",
     knockRestrictedSupported: false,
     stable: true,
   },
-  '7': {
-    version: '7',
-    stateResolution: 'v2',
-    eventIdFormat: 'v4',
-    redactionAlgorithm: 'v1',
+  "7": {
+    version: "7",
+    stateResolution: "v2",
+    eventIdFormat: "v4",
+    redactionAlgorithm: "v1",
     knockingSupported: true,
     restrictedJoinsSupported: false,
     integerPowerLevels: false,
     updatedRedactionRules: false,
-    authRuleVariant: 'v1',
+    authRuleVariant: "v1",
     knockRestrictedSupported: false,
     stable: true,
   },
-  '8': {
-    version: '8',
-    stateResolution: 'v2',
-    eventIdFormat: 'v4',
-    redactionAlgorithm: 'v1',
-    knockingSupported: true,
-    restrictedJoinsSupported: true,
-    integerPowerLevels: false,
-    updatedRedactionRules: false,
-    authRuleVariant: 'v8',
-    knockRestrictedSupported: false,
-    stable: true,
-  },
-  '9': {
-    version: '9',
-    stateResolution: 'v2',
-    eventIdFormat: 'v4',
-    redactionAlgorithm: 'v1',
+  "8": {
+    version: "8",
+    stateResolution: "v2",
+    eventIdFormat: "v4",
+    redactionAlgorithm: "v1",
     knockingSupported: true,
     restrictedJoinsSupported: true,
     integerPowerLevels: false,
     updatedRedactionRules: false,
-    authRuleVariant: 'v8',
+    authRuleVariant: "v8",
     knockRestrictedSupported: false,
     stable: true,
   },
-  '10': {
-    version: '10',
-    stateResolution: 'v2',
-    eventIdFormat: 'v4',
-    redactionAlgorithm: 'v1',
+  "9": {
+    version: "9",
+    stateResolution: "v2",
+    eventIdFormat: "v4",
+    redactionAlgorithm: "v1",
+    knockingSupported: true,
+    restrictedJoinsSupported: true,
+    integerPowerLevels: false,
+    updatedRedactionRules: false,
+    authRuleVariant: "v8",
+    knockRestrictedSupported: false,
+    stable: true,
+  },
+  "10": {
+    version: "10",
+    stateResolution: "v2",
+    eventIdFormat: "v4",
+    redactionAlgorithm: "v1",
     knockingSupported: true,
     restrictedJoinsSupported: true,
     integerPowerLevels: true,
     updatedRedactionRules: false,
-    authRuleVariant: 'v10',
+    authRuleVariant: "v10",
     knockRestrictedSupported: true,
     stable: true,
   },
-  '11': {
-    version: '11',
-    stateResolution: 'v2',
-    eventIdFormat: 'v4',
-    redactionAlgorithm: 'v11',
+  "11": {
+    version: "11",
+    stateResolution: "v2",
+    eventIdFormat: "v4",
+    redactionAlgorithm: "v11",
     knockingSupported: true,
     restrictedJoinsSupported: true,
     integerPowerLevels: true,
     updatedRedactionRules: true,
-    authRuleVariant: 'v10',
+    authRuleVariant: "v10",
     knockRestrictedSupported: true,
     stable: true,
   },
-  '12': {
-    version: '12',
-    stateResolution: 'v2',
-    eventIdFormat: 'v4',
-    redactionAlgorithm: 'v11',
+  "12": {
+    version: "12",
+    stateResolution: "v2",
+    eventIdFormat: "v4",
+    redactionAlgorithm: "v11",
     knockingSupported: true,
     restrictedJoinsSupported: true,
     integerPowerLevels: true,
     updatedRedactionRules: true,
-    authRuleVariant: 'v10',
+    authRuleVariant: "v10",
     knockRestrictedSupported: true,
     stable: true,
   },
@@ -201,14 +201,14 @@ export function isRoomVersionSupported(version: string): boolean {
 
 /** Get the default room version */
 export function getDefaultRoomVersion(): string {
-  return '10';
+  return "10";
 }
 
 /** Get all supported room versions */
-export function getSupportedRoomVersions(): Record<string, 'stable' | 'unstable'> {
-  const result: Record<string, 'stable' | 'unstable'> = {};
+export function getSupportedRoomVersions(): Record<string, "stable" | "unstable"> {
+  const result: Record<string, "stable" | "unstable"> = {};
   for (const [version, behavior] of Object.entries(ROOM_VERSIONS)) {
-    result[version] = behavior.stable ? 'stable' : 'unstable';
+    result[version] = behavior.stable ? "stable" : "unstable";
   }
   return result;
 }
@@ -216,38 +216,63 @@ export function getSupportedRoomVersions(): Record<string, 'stable' | 'unstable'
 /** Keys to preserve during redaction, per spec. Version-dependent. */
 export function getRedactionAllowedKeys(
   eventType: string,
-  roomVersion: RoomVersionBehavior
+  roomVersion: RoomVersionBehavior,
 ): string[] {
   // Keys always preserved for all event types
   const baseKeys = [
-    'event_id', 'type', 'room_id', 'sender', 'state_key',
-    'hashes', 'signatures', 'depth', 'prev_events', 'auth_events',
-    'origin_server_ts',
+    "event_id",
+    "type",
+    "room_id",
+    "sender",
+    "state_key",
+    "hashes",
+    "signatures",
+    "depth",
+    "prev_events",
+    "auth_events",
+    "origin_server_ts",
   ];
 
   // Content keys preserved per event type
   const contentKeys: Record<string, string[]> = {
-    'm.room.member': ['membership', 'join_authorised_via_users_server'],
-    'm.room.create': ['creator'],
-    'm.room.join_rules': ['join_rule', 'allow'],
-    'm.room.power_levels': [
-      'ban', 'events', 'events_default', 'invite', 'kick',
-      'redact', 'state_default', 'users', 'users_default',
+    "m.room.member": ["membership", "join_authorised_via_users_server"],
+    "m.room.create": ["creator"],
+    "m.room.join_rules": ["join_rule", "allow"],
+    "m.room.power_levels": [
+      "ban",
+      "events",
+      "events_default",
+      "invite",
+      "kick",
+      "redact",
+      "state_default",
+      "users",
+      "users_default",
     ],
-    'm.room.history_visibility': ['history_visibility'],
+    "m.room.history_visibility": ["history_visibility"],
   };
 
   if (roomVersion.updatedRedactionRules) {
     // v11+ preserves additional keys
-    contentKeys['m.room.member'] = [
-      'membership', 'join_authorised_via_users_server', 'third_party_invite',
+    contentKeys["m.room.member"] = [
+      "membership",
+      "join_authorised_via_users_server",
+      "third_party_invite",
     ];
-    contentKeys['m.room.create'] = ['creator', 'room_version'];
-    contentKeys['m.room.power_levels'] = [
-      'ban', 'events', 'events_default', 'invite', 'kick',
-      'redact', 'state_default', 'users', 'users_default', 'notifications',
+    contentKeys["m.room.create"] = ["creator", "room_version"];
+    contentKeys["m.room.power_levels"] = [
+      "ban",
+      "events",
+      "events_default",
+      "invite",
+      "kick",
+      "redact",
+      "state_default",
+      "users",
+      "users_default",
+      "notifications",
     ];
-    contentKeys['m.room.redaction'] = ['redacts'];
+    contentKeys["m.room.redaction"] = ["redacts"];
   }
 
   return [...baseKeys, ...(contentKeys[eventType] || [])];

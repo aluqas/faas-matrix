@@ -1,5 +1,5 @@
-import type { IdempotencyStore } from '../../foundation/idempotency';
-import { getTransaction, storeTransaction } from '../../services/transactions';
+import type { IdempotencyStore } from "../../foundation/idempotency";
+import { getTransaction, storeTransaction } from "../../services/transactions";
 
 export class CloudflareIdempotencyStore implements IdempotencyStore<Record<string, unknown>> {
   constructor(private readonly db: D1Database) {}
@@ -10,8 +10,7 @@ export class CloudflareIdempotencyStore implements IdempotencyStore<Record<strin
   }
 
   async put(scope: string, key: string, value: Record<string, unknown>): Promise<void> {
-    const eventId = typeof value.event_id === 'string' ? value.event_id : undefined;
+    const eventId = typeof value.event_id === "string" ? value.event_id : undefined;
     await storeTransaction(this.db, scope, key, eventId, value);
   }
 }
-

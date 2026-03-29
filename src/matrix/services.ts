@@ -1,22 +1,22 @@
-import type { AppContext } from '../foundation/app-context';
-import { DefaultEventPipeline, type EventPipeline } from './domain/event-pipeline';
+import type { AppContext } from "../foundation/app-context";
+import { DefaultEventPipeline, type EventPipeline } from "./domain/event-pipeline";
 import type {
   FederationRepository,
   RoomRepository,
   SyncRepository,
-} from './repositories/interfaces';
-import { MatrixRoomService } from './application/room-service';
-import { MatrixSyncService } from './application/sync-service';
-import { MatrixFederationService } from './application/federation-service';
-import type { IdempotencyStore } from '../foundation/idempotency';
-import type { AdminService } from './application/admin-service';
-import { CloudflareBackedAdminService } from './application/admin-service';
+} from "./repositories/interfaces";
+import { MatrixRoomService } from "./application/room-service";
+import { MatrixSyncService } from "./application/sync-service";
+import { MatrixFederationService } from "./application/federation-service";
+import type { IdempotencyStore } from "../foundation/idempotency";
+import type { AdminService } from "./application/admin-service";
+import { CloudflareBackedAdminService } from "./application/admin-service";
 import type {
   DeliveryQueue,
   DiscoveryService,
   RemoteKeyCache,
   SignedTransport,
-} from '../fedcore/contracts';
+} from "../fedcore/contracts";
 
 export interface MatrixServiceRegistry {
   rooms: MatrixRoomService;
@@ -39,7 +39,7 @@ export interface CreateMatrixServiceRegistryOptions {
 }
 
 export function createMatrixServiceRegistry(
-  options: CreateMatrixServiceRegistryOptions
+  options: CreateMatrixServiceRegistryOptions,
 ): MatrixServiceRegistry {
   const eventPipeline = new DefaultEventPipeline();
 
@@ -48,7 +48,7 @@ export function createMatrixServiceRegistry(
       options.appContext,
       options.roomRepository,
       eventPipeline,
-      options.idempotencyStore
+      options.idempotencyStore,
     ),
     sync: new MatrixSyncService(options.appContext, options.syncRepository),
     federation: new MatrixFederationService(
@@ -57,7 +57,7 @@ export function createMatrixServiceRegistry(
       options.signedTransport,
       options.discoveryService,
       options.deliveryQueue,
-      options.remoteKeyCache
+      options.remoteKeyCache,
     ),
     admin: new CloudflareBackedAdminService(options.appContext),
     eventPipeline,

@@ -21,270 +21,168 @@
     {
       "key": "client-server/account-data.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-client-config"
-      ],
-      "unitIds": [
-        "cs-module-client-config"
-      ],
-      "rows": [
-        "Client config"
-      ],
+      "rowIds": ["cs-module-client-config"],
+      "unitIds": ["cs-module-client-config"],
+      "rows": ["Client config"],
       "operationCount": 4,
       "mappedOperationCount": 4,
       "operations": [
         {
           "operationId": "setAccountData",
           "operationKey": "PUT /user/{userId}/account_data/{type}",
-          "rowIds": [
-            "cs-module-client-config"
-          ],
-          "unitIds": [
-            "cs-module-client-config"
-          ]
+          "rowIds": ["cs-module-client-config"],
+          "unitIds": ["cs-module-client-config"]
         },
         {
           "operationId": "getAccountData",
           "operationKey": "GET /user/{userId}/account_data/{type}",
-          "rowIds": [
-            "cs-module-client-config"
-          ],
-          "unitIds": [
-            "cs-module-client-config"
-          ]
+          "rowIds": ["cs-module-client-config"],
+          "unitIds": ["cs-module-client-config"]
         },
         {
           "operationId": "setAccountDataPerRoom",
           "operationKey": "PUT /user/{userId}/rooms/{roomId}/account_data/{type}",
-          "rowIds": [
-            "cs-module-client-config"
-          ],
-          "unitIds": [
-            "cs-module-client-config"
-          ]
+          "rowIds": ["cs-module-client-config"],
+          "unitIds": ["cs-module-client-config"]
         },
         {
           "operationId": "getAccountDataPerRoom",
           "operationKey": "GET /user/{userId}/rooms/{roomId}/account_data/{type}",
-          "rowIds": [
-            "cs-module-client-config"
-          ],
-          "unitIds": [
-            "cs-module-client-config"
-          ]
+          "rowIds": ["cs-module-client-config"],
+          "unitIds": ["cs-module-client-config"]
         }
       ]
     },
     {
       "key": "client-server/account_deactivation.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-client-authentication"
-      ],
-      "unitIds": [
-        "cs-core-client-authentication"
-      ],
-      "rows": [
-        "Client authentication"
-      ],
+      "rowIds": ["cs-core-client-authentication"],
+      "unitIds": ["cs-core-client-authentication"],
+      "rows": ["Client authentication"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "deactivateAccount",
           "operationKey": "POST /account/deactivate",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         }
       ]
     },
     {
       "key": "client-server/admin.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-server-administration"
-      ],
-      "unitIds": [
-        "cs-module-server-administration"
-      ],
-      "rows": [
-        "Server administration"
-      ],
+      "rowIds": ["cs-module-server-administration"],
+      "unitIds": ["cs-module-server-administration"],
+      "rows": ["Server administration"],
       "operationCount": 5,
       "mappedOperationCount": 5,
       "operations": [
         {
           "operationId": "getWhoIs",
           "operationKey": "GET /v3/admin/whois/{userId}",
-          "rowIds": [
-            "cs-module-server-administration"
-          ],
-          "unitIds": [
-            "cs-module-server-administration"
-          ]
+          "rowIds": ["cs-module-server-administration"],
+          "unitIds": ["cs-module-server-administration"]
         },
         {
           "operationId": "getAdminSuspendUser",
           "operationKey": "GET /v1/admin/suspend/{userId}",
-          "rowIds": [
-            "cs-module-server-administration"
-          ],
-          "unitIds": [
-            "cs-module-server-administration"
-          ]
+          "rowIds": ["cs-module-server-administration"],
+          "unitIds": ["cs-module-server-administration"]
         },
         {
           "operationId": "setAdminSuspendUser",
           "operationKey": "PUT /v1/admin/suspend/{userId}",
-          "rowIds": [
-            "cs-module-server-administration"
-          ],
-          "unitIds": [
-            "cs-module-server-administration"
-          ]
+          "rowIds": ["cs-module-server-administration"],
+          "unitIds": ["cs-module-server-administration"]
         },
         {
           "operationId": "getAdminLockUser",
           "operationKey": "GET /v1/admin/lock/{userId}",
-          "rowIds": [
-            "cs-module-server-administration"
-          ],
-          "unitIds": [
-            "cs-module-server-administration"
-          ]
+          "rowIds": ["cs-module-server-administration"],
+          "unitIds": ["cs-module-server-administration"]
         },
         {
           "operationId": "setAdminLockUser",
           "operationKey": "PUT /v1/admin/lock/{userId}",
-          "rowIds": [
-            "cs-module-server-administration"
-          ],
-          "unitIds": [
-            "cs-module-server-administration"
-          ]
+          "rowIds": ["cs-module-server-administration"],
+          "unitIds": ["cs-module-server-administration"]
         }
       ]
     },
     {
       "key": "client-server/administrative_contact.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-client-authentication"
-      ],
-      "unitIds": [
-        "cs-core-client-authentication"
-      ],
-      "rows": [
-        "Client authentication"
-      ],
+      "rowIds": ["cs-core-client-authentication"],
+      "unitIds": ["cs-core-client-authentication"],
+      "rows": ["Client authentication"],
       "operationCount": 8,
       "mappedOperationCount": 8,
       "operations": [
         {
           "operationId": "getAccount3PIDs",
           "operationKey": "GET /account/3pid",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "post3PIDs",
           "operationKey": "POST /account/3pid",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "add3PID",
           "operationKey": "POST /account/3pid/add",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "bind3PID",
           "operationKey": "POST /account/3pid/bind",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "delete3pidFromAccount",
           "operationKey": "POST /account/3pid/delete",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "unbind3pidFromAccount",
           "operationKey": "POST /account/3pid/unbind",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "requestTokenTo3PIDEmail",
           "operationKey": "POST /account/3pid/email/requestToken",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "requestTokenTo3PIDMSISDN",
           "operationKey": "POST /account/3pid/msisdn/requestToken",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         }
       ]
     },
     {
       "key": "client-server/appservice_ping.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-application-service-adjunct-endpoints"
-      ],
+      "rowIds": ["cs-module-application-service-adjunct-endpoints"],
       "unitIds": [],
-      "rows": [
-        "Application service adjunct endpoints"
-      ],
+      "rows": ["Application service adjunct endpoints"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "pingAppservice",
           "operationKey": "POST /appservice/{appserviceId}/ping",
-          "rowIds": [
-            "cs-module-application-service-adjunct-endpoints"
-          ],
+          "rowIds": ["cs-module-application-service-adjunct-endpoints"],
           "unitIds": []
         }
       ]
@@ -292,22 +190,16 @@
     {
       "key": "client-server/appservice_room_directory.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-application-service-adjunct-endpoints"
-      ],
+      "rowIds": ["cs-module-application-service-adjunct-endpoints"],
       "unitIds": [],
-      "rows": [
-        "Application service adjunct endpoints"
-      ],
+      "rows": ["Application service adjunct endpoints"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "updateAppserviceRoomDirectoryVisibility",
           "operationKey": "PUT /directory/list/appservice/{networkId}/{roomId}",
-          "rowIds": [
-            "cs-module-application-service-adjunct-endpoints"
-          ],
+          "rowIds": ["cs-module-application-service-adjunct-endpoints"],
           "unitIds": []
         }
       ]
@@ -315,1083 +207,671 @@
     {
       "key": "client-server/authed-content-repo.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-content-repository"
-      ],
-      "unitIds": [
-        "cs-module-content-repository"
-      ],
-      "rows": [
-        "Content repository"
-      ],
+      "rowIds": ["cs-module-content-repository"],
+      "unitIds": ["cs-module-content-repository"],
+      "rows": ["Content repository"],
       "operationCount": 5,
       "mappedOperationCount": 5,
       "operations": [
         {
           "operationId": "getContentAuthed",
           "operationKey": "GET /media/download/{serverName}/{mediaId}",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         },
         {
           "operationId": "getContentOverrideNameAuthed",
           "operationKey": "GET /media/download/{serverName}/{mediaId}/{fileName}",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         },
         {
           "operationId": "getContentThumbnailAuthed",
           "operationKey": "GET /media/thumbnail/{serverName}/{mediaId}",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         },
         {
           "operationId": "getUrlPreviewAuthed",
           "operationKey": "GET /media/preview_url",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         },
         {
           "operationId": "getConfigAuthed",
           "operationKey": "GET /media/config",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         }
       ]
     },
     {
       "key": "client-server/banning.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "ban",
           "operationKey": "POST /rooms/{roomId}/ban",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "unban",
           "operationKey": "POST /rooms/{roomId}/unban",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/capabilities.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-capabilities-negotiation"
-      ],
-      "unitIds": [
-        "cs-core-capabilities-negotiation"
-      ],
-      "rows": [
-        "Capabilities negotiation"
-      ],
+      "rowIds": ["cs-core-capabilities-negotiation"],
+      "unitIds": ["cs-core-capabilities-negotiation"],
+      "rows": ["Capabilities negotiation"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getCapabilities",
           "operationKey": "GET /capabilities",
-          "rowIds": [
-            "cs-core-capabilities-negotiation"
-          ],
-          "unitIds": [
-            "cs-core-capabilities-negotiation"
-          ]
+          "rowIds": ["cs-core-capabilities-negotiation"],
+          "unitIds": ["cs-core-capabilities-negotiation"]
         }
       ]
     },
     {
       "key": "client-server/content-repo.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-content-repository"
-      ],
-      "unitIds": [
-        "cs-module-content-repository"
-      ],
-      "rows": [
-        "Content repository"
-      ],
+      "rowIds": ["cs-module-content-repository"],
+      "unitIds": ["cs-module-content-repository"],
+      "rows": ["Content repository"],
       "operationCount": 8,
       "mappedOperationCount": 8,
       "operations": [
         {
           "operationId": "uploadContent",
           "operationKey": "POST /media/v3/upload",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         },
         {
           "operationId": "uploadContentToMXC",
           "operationKey": "PUT /media/v3/upload/{serverName}/{mediaId}",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         },
         {
           "operationId": "createContent",
           "operationKey": "POST /media/v1/create",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         },
         {
           "operationId": "getContent",
           "operationKey": "GET /media/v3/download/{serverName}/{mediaId}",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         },
         {
           "operationId": "getContentOverrideName",
           "operationKey": "GET /media/v3/download/{serverName}/{mediaId}/{fileName}",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         },
         {
           "operationId": "getContentThumbnail",
           "operationKey": "GET /media/v3/thumbnail/{serverName}/{mediaId}",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         },
         {
           "operationId": "getUrlPreview",
           "operationKey": "GET /media/v3/preview_url",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         },
         {
           "operationId": "getConfig",
           "operationKey": "GET /media/v3/config",
-          "rowIds": [
-            "cs-module-content-repository"
-          ],
-          "unitIds": [
-            "cs-module-content-repository"
-          ]
+          "rowIds": ["cs-module-content-repository"],
+          "unitIds": ["cs-module-content-repository"]
         }
       ]
     },
     {
       "key": "client-server/create_room.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "createRoom",
           "operationKey": "POST /createRoom",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/cross_signing.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-end-to-end-encryption"
-      ],
-      "unitIds": [
-        "cs-module-end-to-end-encryption"
-      ],
-      "rows": [
-        "End-to-end encryption"
-      ],
+      "rowIds": ["cs-module-end-to-end-encryption"],
+      "unitIds": ["cs-module-end-to-end-encryption"],
+      "rows": ["End-to-end encryption"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "uploadCrossSigningKeys",
           "operationKey": "POST /keys/device_signing/upload",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "uploadCrossSigningSignatures",
           "operationKey": "POST /keys/signatures/upload",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         }
       ]
     },
     {
       "key": "client-server/device_management.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-device-management"
-      ],
-      "unitIds": [
-        "cs-module-device-management"
-      ],
-      "rows": [
-        "Device management"
-      ],
+      "rowIds": ["cs-module-device-management"],
+      "unitIds": ["cs-module-device-management"],
+      "rows": ["Device management"],
       "operationCount": 5,
       "mappedOperationCount": 5,
       "operations": [
         {
           "operationId": "getDevices",
           "operationKey": "GET /devices",
-          "rowIds": [
-            "cs-module-device-management"
-          ],
-          "unitIds": [
-            "cs-module-device-management"
-          ]
+          "rowIds": ["cs-module-device-management"],
+          "unitIds": ["cs-module-device-management"]
         },
         {
           "operationId": "getDevice",
           "operationKey": "GET /devices/{deviceId}",
-          "rowIds": [
-            "cs-module-device-management"
-          ],
-          "unitIds": [
-            "cs-module-device-management"
-          ]
+          "rowIds": ["cs-module-device-management"],
+          "unitIds": ["cs-module-device-management"]
         },
         {
           "operationId": "updateDevice",
           "operationKey": "PUT /devices/{deviceId}",
-          "rowIds": [
-            "cs-module-device-management"
-          ],
-          "unitIds": [
-            "cs-module-device-management"
-          ]
+          "rowIds": ["cs-module-device-management"],
+          "unitIds": ["cs-module-device-management"]
         },
         {
           "operationId": "deleteDevice",
           "operationKey": "DELETE /devices/{deviceId}",
-          "rowIds": [
-            "cs-module-device-management"
-          ],
-          "unitIds": [
-            "cs-module-device-management"
-          ]
+          "rowIds": ["cs-module-device-management"],
+          "unitIds": ["cs-module-device-management"]
         },
         {
           "operationId": "deleteDevices",
           "operationKey": "POST /delete_devices",
-          "rowIds": [
-            "cs-module-device-management"
-          ],
-          "unitIds": [
-            "cs-module-device-management"
-          ]
+          "rowIds": ["cs-module-device-management"],
+          "unitIds": ["cs-module-device-management"]
         }
       ]
     },
     {
       "key": "client-server/directory.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 4,
       "mappedOperationCount": 4,
       "operations": [
         {
           "operationId": "setRoomAlias",
           "operationKey": "PUT /directory/room/{roomAlias}",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "getRoomIdByAlias",
           "operationKey": "GET /directory/room/{roomAlias}",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "deleteRoomAlias",
           "operationKey": "DELETE /directory/room/{roomAlias}",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "getLocalAliases",
           "operationKey": "GET /rooms/{roomId}/aliases",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/event_context.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-event-context"
-      ],
-      "unitIds": [
-        "cs-module-event-context"
-      ],
-      "rows": [
-        "Event context"
-      ],
+      "rowIds": ["cs-module-event-context"],
+      "unitIds": ["cs-module-event-context"],
+      "rows": ["Event context"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getEventContext",
           "operationKey": "GET /rooms/{roomId}/context/{eventId}",
-          "rowIds": [
-            "cs-module-event-context"
-          ],
-          "unitIds": [
-            "cs-module-event-context"
-          ]
+          "rowIds": ["cs-module-event-context"],
+          "unitIds": ["cs-module-event-context"]
         }
       ]
     },
     {
       "key": "client-server/filter.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-filtering"
-      ],
-      "unitIds": [
-        "cs-core-filtering"
-      ],
-      "rows": [
-        "Filtering"
-      ],
+      "rowIds": ["cs-core-filtering"],
+      "unitIds": ["cs-core-filtering"],
+      "rows": ["Filtering"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "defineFilter",
           "operationKey": "POST /user/{userId}/filter",
-          "rowIds": [
-            "cs-core-filtering"
-          ],
-          "unitIds": [
-            "cs-core-filtering"
-          ]
+          "rowIds": ["cs-core-filtering"],
+          "unitIds": ["cs-core-filtering"]
         },
         {
           "operationId": "getFilter",
           "operationKey": "GET /user/{userId}/filter/{filterId}",
-          "rowIds": [
-            "cs-core-filtering"
-          ],
-          "unitIds": [
-            "cs-core-filtering"
-          ]
+          "rowIds": ["cs-core-filtering"],
+          "unitIds": ["cs-core-filtering"]
         }
       ]
     },
     {
       "key": "client-server/inviting.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "inviteUser",
           "operationKey": "POST /rooms/{roomId}/invite ",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/joining.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "joinRoomById",
           "operationKey": "POST /rooms/{roomId}/join",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "joinRoom",
           "operationKey": "POST /join/{roomIdOrAlias}",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/key_backup.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-end-to-end-encryption"
-      ],
-      "unitIds": [
-        "cs-module-end-to-end-encryption"
-      ],
-      "rows": [
-        "End-to-end encryption"
-      ],
+      "rowIds": ["cs-module-end-to-end-encryption"],
+      "unitIds": ["cs-module-end-to-end-encryption"],
+      "rows": ["End-to-end encryption"],
       "operationCount": 14,
       "mappedOperationCount": 14,
       "operations": [
         {
           "operationId": "postRoomKeysVersion",
           "operationKey": "POST /room_keys/version",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "getRoomKeysVersionCurrent",
           "operationKey": "GET /room_keys/version",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "getRoomKeysVersion",
           "operationKey": "GET /room_keys/version/{version}",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "putRoomKeysVersion",
           "operationKey": "PUT /room_keys/version/{version}",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "deleteRoomKeysVersion",
           "operationKey": "DELETE /room_keys/version/{version}",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "putRoomKeyBySessionId",
           "operationKey": "PUT /room_keys/keys/{roomId}/{sessionId}",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "getRoomKeyBySessionId",
           "operationKey": "GET /room_keys/keys/{roomId}/{sessionId}",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "deleteRoomKeyBySessionId",
           "operationKey": "DELETE /room_keys/keys/{roomId}/{sessionId}",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "putRoomKeysByRoomId",
           "operationKey": "PUT /room_keys/keys/{roomId}",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "getRoomKeysByRoomId",
           "operationKey": "GET /room_keys/keys/{roomId}",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "deleteRoomKeysByRoomId",
           "operationKey": "DELETE /room_keys/keys/{roomId}",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "putRoomKeys",
           "operationKey": "PUT /room_keys/keys",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "getRoomKeys",
           "operationKey": "GET /room_keys/keys",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "deleteRoomKeys",
           "operationKey": "DELETE /room_keys/keys",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         }
       ]
     },
     {
       "key": "client-server/keys.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-end-to-end-encryption"
-      ],
-      "unitIds": [
-        "cs-module-end-to-end-encryption"
-      ],
-      "rows": [
-        "End-to-end encryption"
-      ],
+      "rowIds": ["cs-module-end-to-end-encryption"],
+      "unitIds": ["cs-module-end-to-end-encryption"],
+      "rows": ["End-to-end encryption"],
       "operationCount": 4,
       "mappedOperationCount": 4,
       "operations": [
         {
           "operationId": "uploadKeys",
           "operationKey": "POST /keys/upload",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "queryKeys",
           "operationKey": "POST /keys/query",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "claimKeys",
           "operationKey": "POST /keys/claim",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         },
         {
           "operationId": "getKeysChanges",
           "operationKey": "GET /keys/changes",
-          "rowIds": [
-            "cs-module-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "cs-module-end-to-end-encryption"
-          ]
+          "rowIds": ["cs-module-end-to-end-encryption"],
+          "unitIds": ["cs-module-end-to-end-encryption"]
         }
       ]
     },
     {
       "key": "client-server/kicking.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "kick",
           "operationKey": "POST /rooms/{roomId}/kick",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/knocking.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "knockRoom",
           "operationKey": "POST /knock/{roomIdOrAlias}",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/leaving.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "leaveRoom",
           "operationKey": "POST /rooms/{roomId}/leave",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "forgetRoom",
           "operationKey": "POST /rooms/{roomId}/forget",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/list_joined_rooms.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getJoinedRooms",
           "operationKey": "GET /joined_rooms",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/list_public_rooms.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 4,
       "mappedOperationCount": 4,
       "operations": [
         {
           "operationId": "getRoomVisibilityOnDirectory",
           "operationKey": "GET /directory/list/room/{roomId}",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "setRoomVisibilityOnDirectory",
           "operationKey": "PUT /directory/list/room/{roomId}",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "getPublicRooms",
           "operationKey": "GET /publicRooms",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "queryPublicRooms",
           "operationKey": "POST /publicRooms",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/login.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-client-authentication"
-      ],
-      "unitIds": [
-        "cs-core-client-authentication"
-      ],
-      "rows": [
-        "Client authentication"
-      ],
+      "rowIds": ["cs-core-client-authentication"],
+      "unitIds": ["cs-core-client-authentication"],
+      "rows": ["Client authentication"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "getLoginFlows",
           "operationKey": "GET /login",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "login",
           "operationKey": "POST /login",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         }
       ]
     },
     {
       "key": "client-server/login_token.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-client-authentication"
-      ],
-      "unitIds": [
-        "cs-core-client-authentication"
-      ],
-      "rows": [
-        "Client authentication"
-      ],
+      "rowIds": ["cs-core-client-authentication"],
+      "unitIds": ["cs-core-client-authentication"],
+      "rows": ["Client authentication"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "generateLoginToken",
           "operationKey": "POST /login/get_token",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         }
       ]
     },
     {
       "key": "client-server/logout.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-client-authentication"
-      ],
-      "unitIds": [
-        "cs-core-client-authentication"
-      ],
-      "rows": [
-        "Client authentication"
-      ],
+      "rowIds": ["cs-core-client-authentication"],
+      "unitIds": ["cs-core-client-authentication"],
+      "rows": ["Client authentication"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "logout",
           "operationKey": "POST /logout",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "logout_all",
           "operationKey": "POST /logout/all",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         }
       ]
     },
     {
       "key": "client-server/message_pagination.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-events"
-      ],
-      "unitIds": [
-        "cs-core-events"
-      ],
-      "rows": [
-        "Events"
-      ],
+      "rowIds": ["cs-core-events"],
+      "unitIds": ["cs-core-events"],
+      "rows": ["Events"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getRoomEvents",
           "operationKey": "GET /rooms/{roomId}/messages",
-          "rowIds": [
-            "cs-core-events"
-          ],
-          "unitIds": [
-            "cs-core-events"
-          ]
+          "rowIds": ["cs-core-events"],
+          "unitIds": ["cs-core-events"]
         }
       ]
     },
     {
       "key": "client-server/notifications.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-notifications"
-      ],
+      "rowIds": ["cs-module-notifications"],
       "unitIds": [],
-      "rows": [
-        "Notifications"
-      ],
+      "rows": ["Notifications"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getNotifications",
           "operationKey": "GET /notifications",
-          "rowIds": [
-            "cs-module-notifications"
-          ],
+          "rowIds": ["cs-module-notifications"],
           "unitIds": []
         }
       ]
@@ -1399,65 +879,45 @@
     {
       "key": "client-server/oauth_server_metadata.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-client-authentication"
-      ],
-      "unitIds": [
-        "cs-core-client-authentication"
-      ],
-      "rows": [
-        "Client authentication"
-      ],
+      "rowIds": ["cs-core-client-authentication"],
+      "unitIds": ["cs-core-client-authentication"],
+      "rows": ["Client authentication"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getAuthMetadata",
           "operationKey": "GET /auth_metadata",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         }
       ]
     },
     {
       "key": "client-server/old_sync.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-old-sync-and-legacy-endpoints"
-      ],
+      "rowIds": ["cs-module-old-sync-and-legacy-endpoints"],
       "unitIds": [],
-      "rows": [
-        "Old sync and legacy endpoints"
-      ],
+      "rows": ["Old sync and legacy endpoints"],
       "operationCount": 3,
       "mappedOperationCount": 3,
       "operations": [
         {
           "operationId": "getEvents",
           "operationKey": "GET /events",
-          "rowIds": [
-            "cs-module-old-sync-and-legacy-endpoints"
-          ],
+          "rowIds": ["cs-module-old-sync-and-legacy-endpoints"],
           "unitIds": []
         },
         {
           "operationId": "initialSync",
           "operationKey": "GET /initialSync",
-          "rowIds": [
-            "cs-module-old-sync-and-legacy-endpoints"
-          ],
+          "rowIds": ["cs-module-old-sync-and-legacy-endpoints"],
           "unitIds": []
         },
         {
           "operationId": "getOneEvent",
           "operationKey": "GET /events/{eventId}",
-          "rowIds": [
-            "cs-module-old-sync-and-legacy-endpoints"
-          ],
+          "rowIds": ["cs-module-old-sync-and-legacy-endpoints"],
           "unitIds": []
         }
       ]
@@ -1465,96 +925,62 @@
     {
       "key": "client-server/openid.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-openid"
-      ],
-      "unitIds": [
-        "cs-module-openid"
-      ],
-      "rows": [
-        "OpenID"
-      ],
+      "rowIds": ["cs-module-openid"],
+      "unitIds": ["cs-module-openid"],
+      "rows": ["OpenID"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "requestOpenIdToken",
           "operationKey": "POST /user/{userId}/openid/request_token",
-          "rowIds": [
-            "cs-module-openid"
-          ],
-          "unitIds": [
-            "cs-module-openid"
-          ]
+          "rowIds": ["cs-module-openid"],
+          "unitIds": ["cs-module-openid"]
         }
       ]
     },
     {
       "key": "client-server/password_management.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-client-authentication"
-      ],
-      "unitIds": [
-        "cs-core-client-authentication"
-      ],
-      "rows": [
-        "Client authentication"
-      ],
+      "rowIds": ["cs-core-client-authentication"],
+      "unitIds": ["cs-core-client-authentication"],
+      "rows": ["Client authentication"],
       "operationCount": 3,
       "mappedOperationCount": 3,
       "operations": [
         {
           "operationId": "changePassword",
           "operationKey": "POST /account/password",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "requestTokenToResetPasswordEmail",
           "operationKey": "POST /account/password/email/requestToken",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "requestTokenToResetPasswordMSISDN",
           "operationKey": "POST /account/password/msisdn/requestToken",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         }
       ]
     },
     {
       "key": "client-server/peeking_events.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-peeking-events"
-      ],
+      "rowIds": ["cs-module-peeking-events"],
       "unitIds": [],
-      "rows": [
-        "Peeking events"
-      ],
+      "rows": ["Peeking events"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "peekEvents",
           "operationKey": "GET /events ",
-          "rowIds": [
-            "cs-module-peeking-events"
-          ],
+          "rowIds": ["cs-module-peeking-events"],
           "unitIds": []
         }
       ]
@@ -1562,457 +988,283 @@
     {
       "key": "client-server/policy_server.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-policy-servers"
-      ],
-      "unitIds": [
-        "cs-module-policy-servers"
-      ],
-      "rows": [
-        "Policy servers"
-      ],
+      "rowIds": ["cs-module-policy-servers"],
+      "unitIds": ["cs-module-policy-servers"],
+      "rows": ["Policy servers"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getWellknownPolicy",
           "operationKey": "GET /matrix/policy_server",
-          "rowIds": [
-            "cs-module-policy-servers"
-          ],
-          "unitIds": [
-            "cs-module-policy-servers"
-          ]
+          "rowIds": ["cs-module-policy-servers"],
+          "unitIds": ["cs-module-policy-servers"]
         }
       ]
     },
     {
       "key": "client-server/presence.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-presence"
-      ],
-      "unitIds": [
-        "cs-module-presence"
-      ],
-      "rows": [
-        "Presence"
-      ],
+      "rowIds": ["cs-module-presence"],
+      "unitIds": ["cs-module-presence"],
+      "rows": ["Presence"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "setPresence",
           "operationKey": "PUT /presence/{userId}/status",
-          "rowIds": [
-            "cs-module-presence"
-          ],
-          "unitIds": [
-            "cs-module-presence"
-          ]
+          "rowIds": ["cs-module-presence"],
+          "unitIds": ["cs-module-presence"]
         },
         {
           "operationId": "getPresence",
           "operationKey": "GET /presence/{userId}/status",
-          "rowIds": [
-            "cs-module-presence"
-          ],
-          "unitIds": [
-            "cs-module-presence"
-          ]
+          "rowIds": ["cs-module-presence"],
+          "unitIds": ["cs-module-presence"]
         }
       ]
     },
     {
       "key": "client-server/profile.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-user-data"
-      ],
-      "unitIds": [
-        "cs-core-user-data"
-      ],
-      "rows": [
-        "User data"
-      ],
+      "rowIds": ["cs-core-user-data"],
+      "unitIds": ["cs-core-user-data"],
+      "rows": ["User data"],
       "operationCount": 4,
       "mappedOperationCount": 4,
       "operations": [
         {
           "operationId": "setProfileField",
           "operationKey": "PUT /profile/{userId}/{keyName}",
-          "rowIds": [
-            "cs-core-user-data"
-          ],
-          "unitIds": [
-            "cs-core-user-data"
-          ]
+          "rowIds": ["cs-core-user-data"],
+          "unitIds": ["cs-core-user-data"]
         },
         {
           "operationId": "getProfileField",
           "operationKey": "GET /profile/{userId}/{keyName}",
-          "rowIds": [
-            "cs-core-user-data"
-          ],
-          "unitIds": [
-            "cs-core-user-data"
-          ]
+          "rowIds": ["cs-core-user-data"],
+          "unitIds": ["cs-core-user-data"]
         },
         {
           "operationId": "deleteProfileField",
           "operationKey": "DELETE /profile/{userId}/{keyName}",
-          "rowIds": [
-            "cs-core-user-data"
-          ],
-          "unitIds": [
-            "cs-core-user-data"
-          ]
+          "rowIds": ["cs-core-user-data"],
+          "unitIds": ["cs-core-user-data"]
         },
         {
           "operationId": "getUserProfile",
           "operationKey": "GET /profile/{userId}",
-          "rowIds": [
-            "cs-core-user-data"
-          ],
-          "unitIds": [
-            "cs-core-user-data"
-          ]
+          "rowIds": ["cs-core-user-data"],
+          "unitIds": ["cs-core-user-data"]
         }
       ]
     },
     {
       "key": "client-server/pusher.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-push-notifications"
-      ],
-      "unitIds": [
-        "cs-module-push-notifications"
-      ],
-      "rows": [
-        "Push notifications"
-      ],
+      "rowIds": ["cs-module-push-notifications"],
+      "unitIds": ["cs-module-push-notifications"],
+      "rows": ["Push notifications"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "getPushers",
           "operationKey": "GET /pushers",
-          "rowIds": [
-            "cs-module-push-notifications"
-          ],
-          "unitIds": [
-            "cs-module-push-notifications"
-          ]
+          "rowIds": ["cs-module-push-notifications"],
+          "unitIds": ["cs-module-push-notifications"]
         },
         {
           "operationId": "postPusher",
           "operationKey": "POST /pushers/set",
-          "rowIds": [
-            "cs-module-push-notifications"
-          ],
-          "unitIds": [
-            "cs-module-push-notifications"
-          ]
+          "rowIds": ["cs-module-push-notifications"],
+          "unitIds": ["cs-module-push-notifications"]
         }
       ]
     },
     {
       "key": "client-server/pushrules.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-push-notifications"
-      ],
-      "unitIds": [
-        "cs-module-push-notifications"
-      ],
-      "rows": [
-        "Push notifications"
-      ],
+      "rowIds": ["cs-module-push-notifications"],
+      "unitIds": ["cs-module-push-notifications"],
+      "rows": ["Push notifications"],
       "operationCount": 9,
       "mappedOperationCount": 9,
       "operations": [
         {
           "operationId": "getPushRules",
           "operationKey": "GET /pushrules/",
-          "rowIds": [
-            "cs-module-push-notifications"
-          ],
-          "unitIds": [
-            "cs-module-push-notifications"
-          ]
+          "rowIds": ["cs-module-push-notifications"],
+          "unitIds": ["cs-module-push-notifications"]
         },
         {
           "operationId": "getPushRulesGlobal",
           "operationKey": "GET /pushrules/global/",
-          "rowIds": [
-            "cs-module-push-notifications"
-          ],
-          "unitIds": [
-            "cs-module-push-notifications"
-          ]
+          "rowIds": ["cs-module-push-notifications"],
+          "unitIds": ["cs-module-push-notifications"]
         },
         {
           "operationId": "getPushRule",
           "operationKey": "GET /pushrules/global/{kind}/{ruleId}",
-          "rowIds": [
-            "cs-module-push-notifications"
-          ],
-          "unitIds": [
-            "cs-module-push-notifications"
-          ]
+          "rowIds": ["cs-module-push-notifications"],
+          "unitIds": ["cs-module-push-notifications"]
         },
         {
           "operationId": "deletePushRule",
           "operationKey": "DELETE /pushrules/global/{kind}/{ruleId}",
-          "rowIds": [
-            "cs-module-push-notifications"
-          ],
-          "unitIds": [
-            "cs-module-push-notifications"
-          ]
+          "rowIds": ["cs-module-push-notifications"],
+          "unitIds": ["cs-module-push-notifications"]
         },
         {
           "operationId": "setPushRule",
           "operationKey": "PUT /pushrules/global/{kind}/{ruleId}",
-          "rowIds": [
-            "cs-module-push-notifications"
-          ],
-          "unitIds": [
-            "cs-module-push-notifications"
-          ]
+          "rowIds": ["cs-module-push-notifications"],
+          "unitIds": ["cs-module-push-notifications"]
         },
         {
           "operationId": "isPushRuleEnabled",
           "operationKey": "GET /pushrules/global/{kind}/{ruleId}/enabled",
-          "rowIds": [
-            "cs-module-push-notifications"
-          ],
-          "unitIds": [
-            "cs-module-push-notifications"
-          ]
+          "rowIds": ["cs-module-push-notifications"],
+          "unitIds": ["cs-module-push-notifications"]
         },
         {
           "operationId": "setPushRuleEnabled",
           "operationKey": "PUT /pushrules/global/{kind}/{ruleId}/enabled",
-          "rowIds": [
-            "cs-module-push-notifications"
-          ],
-          "unitIds": [
-            "cs-module-push-notifications"
-          ]
+          "rowIds": ["cs-module-push-notifications"],
+          "unitIds": ["cs-module-push-notifications"]
         },
         {
           "operationId": "getPushRuleActions",
           "operationKey": "GET /pushrules/global/{kind}/{ruleId}/actions",
-          "rowIds": [
-            "cs-module-push-notifications"
-          ],
-          "unitIds": [
-            "cs-module-push-notifications"
-          ]
+          "rowIds": ["cs-module-push-notifications"],
+          "unitIds": ["cs-module-push-notifications"]
         },
         {
           "operationId": "setPushRuleActions",
           "operationKey": "PUT /pushrules/global/{kind}/{ruleId}/actions",
-          "rowIds": [
-            "cs-module-push-notifications"
-          ],
-          "unitIds": [
-            "cs-module-push-notifications"
-          ]
+          "rowIds": ["cs-module-push-notifications"],
+          "unitIds": ["cs-module-push-notifications"]
         }
       ]
     },
     {
       "key": "client-server/read_markers.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-read-and-unread-markers"
-      ],
-      "unitIds": [
-        "cs-module-read-and-unread-markers"
-      ],
-      "rows": [
-        "Read and unread markers"
-      ],
+      "rowIds": ["cs-module-read-and-unread-markers"],
+      "unitIds": ["cs-module-read-and-unread-markers"],
+      "rows": ["Read and unread markers"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "setReadMarker",
           "operationKey": "POST /rooms/{roomId}/read_markers",
-          "rowIds": [
-            "cs-module-read-and-unread-markers"
-          ],
-          "unitIds": [
-            "cs-module-read-and-unread-markers"
-          ]
+          "rowIds": ["cs-module-read-and-unread-markers"],
+          "unitIds": ["cs-module-read-and-unread-markers"]
         }
       ]
     },
     {
       "key": "client-server/receipts.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-receipts"
-      ],
-      "unitIds": [
-        "cs-module-receipts"
-      ],
-      "rows": [
-        "Receipts"
-      ],
+      "rowIds": ["cs-module-receipts"],
+      "unitIds": ["cs-module-receipts"],
+      "rows": ["Receipts"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "postReceipt",
           "operationKey": "POST /rooms/{roomId}/receipt/{receiptType}/{eventId}",
-          "rowIds": [
-            "cs-module-receipts"
-          ],
-          "unitIds": [
-            "cs-module-receipts"
-          ]
+          "rowIds": ["cs-module-receipts"],
+          "unitIds": ["cs-module-receipts"]
         }
       ]
     },
     {
       "key": "client-server/redaction.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-events"
-      ],
-      "unitIds": [
-        "cs-core-events"
-      ],
-      "rows": [
-        "Events"
-      ],
+      "rowIds": ["cs-core-events"],
+      "unitIds": ["cs-core-events"],
+      "rows": ["Events"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "redactEvent",
           "operationKey": "PUT /rooms/{roomId}/redact/{eventId}/{txnId}",
-          "rowIds": [
-            "cs-core-events"
-          ],
-          "unitIds": [
-            "cs-core-events"
-          ]
+          "rowIds": ["cs-core-events"],
+          "unitIds": ["cs-core-events"]
         }
       ]
     },
     {
       "key": "client-server/refresh.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-client-authentication"
-      ],
-      "unitIds": [
-        "cs-core-client-authentication"
-      ],
-      "rows": [
-        "Client authentication"
-      ],
+      "rowIds": ["cs-core-client-authentication"],
+      "unitIds": ["cs-core-client-authentication"],
+      "rows": ["Client authentication"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "refresh",
           "operationKey": "POST /refresh",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         }
       ]
     },
     {
       "key": "client-server/registration.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-client-authentication"
-      ],
-      "unitIds": [
-        "cs-core-client-authentication"
-      ],
-      "rows": [
-        "Client authentication"
-      ],
+      "rowIds": ["cs-core-client-authentication"],
+      "unitIds": ["cs-core-client-authentication"],
+      "rows": ["Client authentication"],
       "operationCount": 4,
       "mappedOperationCount": 4,
       "operations": [
         {
           "operationId": "register",
           "operationKey": "POST /register",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "requestTokenToRegisterEmail",
           "operationKey": "POST /register/email/requestToken",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "requestTokenToRegisterMSISDN",
           "operationKey": "POST /register/msisdn/requestToken",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         },
         {
           "operationId": "checkUsernameAvailability",
           "operationKey": "GET /register/available",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         }
       ]
     },
     {
       "key": "client-server/registration_tokens.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-client-authentication"
-      ],
-      "unitIds": [
-        "cs-core-client-authentication"
-      ],
-      "rows": [
-        "Client authentication"
-      ],
+      "rowIds": ["cs-core-client-authentication"],
+      "unitIds": ["cs-core-client-authentication"],
+      "rows": ["Client authentication"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "registrationTokenValidity",
           "operationKey": "GET /register/m.login.registration_token/validity",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         }
       ]
     },
@@ -2102,96 +1354,62 @@
     {
       "key": "client-server/report_content.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-reporting-content"
-      ],
-      "unitIds": [
-        "cs-module-reporting-content"
-      ],
-      "rows": [
-        "Reporting content"
-      ],
+      "rowIds": ["cs-module-reporting-content"],
+      "unitIds": ["cs-module-reporting-content"],
+      "rows": ["Reporting content"],
       "operationCount": 3,
       "mappedOperationCount": 3,
       "operations": [
         {
           "operationId": "reportRoom",
           "operationKey": "POST /rooms/{roomId}/report",
-          "rowIds": [
-            "cs-module-reporting-content"
-          ],
-          "unitIds": [
-            "cs-module-reporting-content"
-          ]
+          "rowIds": ["cs-module-reporting-content"],
+          "unitIds": ["cs-module-reporting-content"]
         },
         {
           "operationId": "reportEvent",
           "operationKey": "POST /rooms/{roomId}/report/{eventId}",
-          "rowIds": [
-            "cs-module-reporting-content"
-          ],
-          "unitIds": [
-            "cs-module-reporting-content"
-          ]
+          "rowIds": ["cs-module-reporting-content"],
+          "unitIds": ["cs-module-reporting-content"]
         },
         {
           "operationId": "reportUser",
           "operationKey": "POST /users/{userId}/report",
-          "rowIds": [
-            "cs-module-reporting-content"
-          ],
-          "unitIds": [
-            "cs-module-reporting-content"
-          ]
+          "rowIds": ["cs-module-reporting-content"],
+          "unitIds": ["cs-module-reporting-content"]
         }
       ]
     },
     {
       "key": "client-server/room_event_by_timestamp.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-events"
-      ],
-      "unitIds": [
-        "cs-core-events"
-      ],
-      "rows": [
-        "Events"
-      ],
+      "rowIds": ["cs-core-events"],
+      "unitIds": ["cs-core-events"],
+      "rows": ["Events"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getEventByTimestamp",
           "operationKey": "GET /rooms/{roomId}/timestamp_to_event",
-          "rowIds": [
-            "cs-core-events"
-          ],
-          "unitIds": [
-            "cs-core-events"
-          ]
+          "rowIds": ["cs-core-events"],
+          "unitIds": ["cs-core-events"]
         }
       ]
     },
     {
       "key": "client-server/room_initial_sync.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-old-sync-and-legacy-endpoints"
-      ],
+      "rowIds": ["cs-module-old-sync-and-legacy-endpoints"],
       "unitIds": [],
-      "rows": [
-        "Old sync and legacy endpoints"
-      ],
+      "rows": ["Old sync and legacy endpoints"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "roomInitialSync",
           "operationKey": "GET /rooms/{roomId}/initialSync",
-          "rowIds": [
-            "cs-module-old-sync-and-legacy-endpoints"
-          ],
+          "rowIds": ["cs-module-old-sync-and-legacy-endpoints"],
           "unitIds": []
         }
       ]
@@ -2199,288 +1417,182 @@
     {
       "key": "client-server/room_send.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-events"
-      ],
-      "unitIds": [
-        "cs-core-events"
-      ],
-      "rows": [
-        "Events"
-      ],
+      "rowIds": ["cs-core-events"],
+      "unitIds": ["cs-core-events"],
+      "rows": ["Events"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "sendMessage",
           "operationKey": "PUT /rooms/{roomId}/send/{eventType}/{txnId}",
-          "rowIds": [
-            "cs-core-events"
-          ],
-          "unitIds": [
-            "cs-core-events"
-          ]
+          "rowIds": ["cs-core-events"],
+          "unitIds": ["cs-core-events"]
         }
       ]
     },
     {
       "key": "client-server/room_state.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "setRoomStateWithKey",
           "operationKey": "PUT /rooms/{roomId}/state/{eventType}/{stateKey}",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/room_summary.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-room-previews"
-      ],
-      "unitIds": [
-        "cs-module-room-previews"
-      ],
-      "rows": [
-        "Room previews"
-      ],
+      "rowIds": ["cs-module-room-previews"],
+      "unitIds": ["cs-module-room-previews"],
+      "rows": ["Room previews"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getRoomSummary",
           "operationKey": "GET /room_summary/{roomIdOrAlias}",
-          "rowIds": [
-            "cs-module-room-previews"
-          ],
-          "unitIds": [
-            "cs-module-room-previews"
-          ]
+          "rowIds": ["cs-module-room-previews"],
+          "unitIds": ["cs-module-room-previews"]
         }
       ]
     },
     {
       "key": "client-server/room_upgrades.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-room-upgrades"
-      ],
-      "unitIds": [
-        "cs-module-room-upgrades"
-      ],
-      "rows": [
-        "Room upgrades"
-      ],
+      "rowIds": ["cs-module-room-upgrades"],
+      "unitIds": ["cs-module-room-upgrades"],
+      "rows": ["Room upgrades"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "upgradeRoom",
           "operationKey": "POST /rooms/{roomId}/upgrade",
-          "rowIds": [
-            "cs-module-room-upgrades"
-          ],
-          "unitIds": [
-            "cs-module-room-upgrades"
-          ]
+          "rowIds": ["cs-module-room-upgrades"],
+          "unitIds": ["cs-module-room-upgrades"]
         }
       ]
     },
     {
       "key": "client-server/rooms.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-rooms"
-      ],
-      "unitIds": [
-        "cs-core-rooms"
-      ],
-      "rows": [
-        "Rooms"
-      ],
+      "rowIds": ["cs-core-rooms"],
+      "unitIds": ["cs-core-rooms"],
+      "rows": ["Rooms"],
       "operationCount": 5,
       "mappedOperationCount": 5,
       "operations": [
         {
           "operationId": "getOneRoomEvent",
           "operationKey": "GET /rooms/{roomId}/event/{eventId}",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "getRoomStateWithKey",
           "operationKey": "GET /rooms/{roomId}/state/{eventType}/{stateKey}",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "getRoomState",
           "operationKey": "GET /rooms/{roomId}/state",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "getMembersByRoom",
           "operationKey": "GET /rooms/{roomId}/members",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         },
         {
           "operationId": "getJoinedMembersByRoom",
           "operationKey": "GET /rooms/{roomId}/joined_members",
-          "rowIds": [
-            "cs-core-rooms"
-          ],
-          "unitIds": [
-            "cs-core-rooms"
-          ]
+          "rowIds": ["cs-core-rooms"],
+          "unitIds": ["cs-core-rooms"]
         }
       ]
     },
     {
       "key": "client-server/search.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-server-side-search"
-      ],
-      "unitIds": [
-        "cs-module-server-side-search"
-      ],
-      "rows": [
-        "Server side search"
-      ],
+      "rowIds": ["cs-module-server-side-search"],
+      "unitIds": ["cs-module-server-side-search"],
+      "rows": ["Server side search"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "search",
           "operationKey": "POST /search",
-          "rowIds": [
-            "cs-module-server-side-search"
-          ],
-          "unitIds": [
-            "cs-module-server-side-search"
-          ]
+          "rowIds": ["cs-module-server-side-search"],
+          "unitIds": ["cs-module-server-side-search"]
         }
       ]
     },
     {
       "key": "client-server/space_hierarchy.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-spaces"
-      ],
-      "unitIds": [
-        "cs-module-spaces"
-      ],
-      "rows": [
-        "Spaces"
-      ],
+      "rowIds": ["cs-module-spaces"],
+      "unitIds": ["cs-module-spaces"],
+      "rows": ["Spaces"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getSpaceHierarchy",
           "operationKey": "GET /rooms/{roomId}/hierarchy",
-          "rowIds": [
-            "cs-module-spaces"
-          ],
-          "unitIds": [
-            "cs-module-spaces"
-          ]
+          "rowIds": ["cs-module-spaces"],
+          "unitIds": ["cs-module-spaces"]
         }
       ]
     },
     {
       "key": "client-server/sso_login_redirect.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-sso-client-login-authentication"
-      ],
-      "unitIds": [
-        "cs-module-sso-client-login-authentication"
-      ],
-      "rows": [
-        "SSO client login/authentication"
-      ],
+      "rowIds": ["cs-module-sso-client-login-authentication"],
+      "unitIds": ["cs-module-sso-client-login-authentication"],
+      "rows": ["SSO client login/authentication"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "redirectToSSO",
           "operationKey": "GET /login/sso/redirect",
-          "rowIds": [
-            "cs-module-sso-client-login-authentication"
-          ],
-          "unitIds": [
-            "cs-module-sso-client-login-authentication"
-          ]
+          "rowIds": ["cs-module-sso-client-login-authentication"],
+          "unitIds": ["cs-module-sso-client-login-authentication"]
         },
         {
           "operationId": "redirectToIdP",
           "operationKey": "GET /login/sso/redirect/{idpId}",
-          "rowIds": [
-            "cs-module-sso-client-login-authentication"
-          ],
-          "unitIds": [
-            "cs-module-sso-client-login-authentication"
-          ]
+          "rowIds": ["cs-module-sso-client-login-authentication"],
+          "unitIds": ["cs-module-sso-client-login-authentication"]
         }
       ]
     },
     {
       "key": "client-server/support.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-support-information"
-      ],
+      "rowIds": ["cs-core-support-information"],
       "unitIds": [],
-      "rows": [
-        "Support information"
-      ],
+      "rows": ["Support information"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getWellknownSupport",
           "operationKey": "GET /matrix/support",
-          "rowIds": [
-            "cs-core-support-information"
-          ],
+          "rowIds": ["cs-core-support-information"],
           "unitIds": []
         }
       ]
@@ -2488,687 +1600,433 @@
     {
       "key": "client-server/sync.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-events"
-      ],
-      "unitIds": [
-        "cs-core-events"
-      ],
-      "rows": [
-        "Events"
-      ],
+      "rowIds": ["cs-core-events"],
+      "unitIds": ["cs-core-events"],
+      "rows": ["Events"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "sync",
           "operationKey": "GET /sync",
-          "rowIds": [
-            "cs-core-events"
-          ],
-          "unitIds": [
-            "cs-core-events"
-          ]
+          "rowIds": ["cs-core-events"],
+          "unitIds": ["cs-core-events"]
         }
       ]
     },
     {
       "key": "client-server/tags.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-room-tagging"
-      ],
-      "unitIds": [
-        "cs-module-room-tagging"
-      ],
-      "rows": [
-        "Room tagging"
-      ],
+      "rowIds": ["cs-module-room-tagging"],
+      "unitIds": ["cs-module-room-tagging"],
+      "rows": ["Room tagging"],
       "operationCount": 3,
       "mappedOperationCount": 3,
       "operations": [
         {
           "operationId": "getRoomTags",
           "operationKey": "GET /user/{userId}/rooms/{roomId}/tags",
-          "rowIds": [
-            "cs-module-room-tagging"
-          ],
-          "unitIds": [
-            "cs-module-room-tagging"
-          ]
+          "rowIds": ["cs-module-room-tagging"],
+          "unitIds": ["cs-module-room-tagging"]
         },
         {
           "operationId": "setRoomTag",
           "operationKey": "PUT /user/{userId}/rooms/{roomId}/tags/{tag}",
-          "rowIds": [
-            "cs-module-room-tagging"
-          ],
-          "unitIds": [
-            "cs-module-room-tagging"
-          ]
+          "rowIds": ["cs-module-room-tagging"],
+          "unitIds": ["cs-module-room-tagging"]
         },
         {
           "operationId": "deleteRoomTag",
           "operationKey": "DELETE /user/{userId}/rooms/{roomId}/tags/{tag}",
-          "rowIds": [
-            "cs-module-room-tagging"
-          ],
-          "unitIds": [
-            "cs-module-room-tagging"
-          ]
+          "rowIds": ["cs-module-room-tagging"],
+          "unitIds": ["cs-module-room-tagging"]
         }
       ]
     },
     {
       "key": "client-server/third_party_lookup.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-third-party-networks"
-      ],
-      "unitIds": [
-        "cs-module-third-party-networks"
-      ],
-      "rows": [
-        "Third-party networks"
-      ],
+      "rowIds": ["cs-module-third-party-networks"],
+      "unitIds": ["cs-module-third-party-networks"],
+      "rows": ["Third-party networks"],
       "operationCount": 6,
       "mappedOperationCount": 6,
       "operations": [
         {
           "operationId": "getProtocols",
           "operationKey": "GET /thirdparty/protocols",
-          "rowIds": [
-            "cs-module-third-party-networks"
-          ],
-          "unitIds": [
-            "cs-module-third-party-networks"
-          ]
+          "rowIds": ["cs-module-third-party-networks"],
+          "unitIds": ["cs-module-third-party-networks"]
         },
         {
           "operationId": "getProtocolMetadata",
           "operationKey": "GET /thirdparty/protocol/{protocol}",
-          "rowIds": [
-            "cs-module-third-party-networks"
-          ],
-          "unitIds": [
-            "cs-module-third-party-networks"
-          ]
+          "rowIds": ["cs-module-third-party-networks"],
+          "unitIds": ["cs-module-third-party-networks"]
         },
         {
           "operationId": "queryLocationByProtocol",
           "operationKey": "GET /thirdparty/location/{protocol}",
-          "rowIds": [
-            "cs-module-third-party-networks"
-          ],
-          "unitIds": [
-            "cs-module-third-party-networks"
-          ]
+          "rowIds": ["cs-module-third-party-networks"],
+          "unitIds": ["cs-module-third-party-networks"]
         },
         {
           "operationId": "queryUserByProtocol",
           "operationKey": "GET /thirdparty/user/{protocol}",
-          "rowIds": [
-            "cs-module-third-party-networks"
-          ],
-          "unitIds": [
-            "cs-module-third-party-networks"
-          ]
+          "rowIds": ["cs-module-third-party-networks"],
+          "unitIds": ["cs-module-third-party-networks"]
         },
         {
           "operationId": "queryLocationByAlias",
           "operationKey": "GET /thirdparty/location",
-          "rowIds": [
-            "cs-module-third-party-networks"
-          ],
-          "unitIds": [
-            "cs-module-third-party-networks"
-          ]
+          "rowIds": ["cs-module-third-party-networks"],
+          "unitIds": ["cs-module-third-party-networks"]
         },
         {
           "operationId": "queryUserByID",
           "operationKey": "GET /thirdparty/user",
-          "rowIds": [
-            "cs-module-third-party-networks"
-          ],
-          "unitIds": [
-            "cs-module-third-party-networks"
-          ]
+          "rowIds": ["cs-module-third-party-networks"],
+          "unitIds": ["cs-module-third-party-networks"]
         }
       ]
     },
     {
       "key": "client-server/third_party_membership.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-third-party-invites"
-      ],
-      "unitIds": [
-        "cs-module-third-party-invites"
-      ],
-      "rows": [
-        "Third-party invites"
-      ],
+      "rowIds": ["cs-module-third-party-invites"],
+      "unitIds": ["cs-module-third-party-invites"],
+      "rows": ["Third-party invites"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "inviteBy3PID",
           "operationKey": "POST /rooms/{roomId}/invite",
-          "rowIds": [
-            "cs-module-third-party-invites"
-          ],
-          "unitIds": [
-            "cs-module-third-party-invites"
-          ]
+          "rowIds": ["cs-module-third-party-invites"],
+          "unitIds": ["cs-module-third-party-invites"]
         }
       ]
     },
     {
       "key": "client-server/threads_list.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-threading"
-      ],
-      "unitIds": [
-        "cs-module-threading"
-      ],
-      "rows": [
-        "Threading"
-      ],
+      "rowIds": ["cs-module-threading"],
+      "unitIds": ["cs-module-threading"],
+      "rows": ["Threading"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getThreadRoots",
           "operationKey": "GET /rooms/{roomId}/threads",
-          "rowIds": [
-            "cs-module-threading"
-          ],
-          "unitIds": [
-            "cs-module-threading"
-          ]
+          "rowIds": ["cs-module-threading"],
+          "unitIds": ["cs-module-threading"]
         }
       ]
     },
     {
       "key": "client-server/to_device.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-send-to-device-messaging"
-      ],
-      "unitIds": [
-        "cs-module-send-to-device-messaging"
-      ],
-      "rows": [
-        "Send-to-device messaging"
-      ],
+      "rowIds": ["cs-module-send-to-device-messaging"],
+      "unitIds": ["cs-module-send-to-device-messaging"],
+      "rows": ["Send-to-device messaging"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "sendToDevice",
           "operationKey": "PUT /sendToDevice/{eventType}/{txnId}",
-          "rowIds": [
-            "cs-module-send-to-device-messaging"
-          ],
-          "unitIds": [
-            "cs-module-send-to-device-messaging"
-          ]
+          "rowIds": ["cs-module-send-to-device-messaging"],
+          "unitIds": ["cs-module-send-to-device-messaging"]
         }
       ]
     },
     {
       "key": "client-server/typing.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-typing-notifications"
-      ],
-      "unitIds": [
-        "cs-module-typing-notifications"
-      ],
-      "rows": [
-        "Typing notifications"
-      ],
+      "rowIds": ["cs-module-typing-notifications"],
+      "unitIds": ["cs-module-typing-notifications"],
+      "rows": ["Typing notifications"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "setTyping",
           "operationKey": "PUT /rooms/{roomId}/typing/{userId}",
-          "rowIds": [
-            "cs-module-typing-notifications"
-          ],
-          "unitIds": [
-            "cs-module-typing-notifications"
-          ]
+          "rowIds": ["cs-module-typing-notifications"],
+          "unitIds": ["cs-module-typing-notifications"]
         }
       ]
     },
     {
       "key": "client-server/users.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-user-data"
-      ],
-      "unitIds": [
-        "cs-core-user-data"
-      ],
-      "rows": [
-        "User data"
-      ],
+      "rowIds": ["cs-core-user-data"],
+      "unitIds": ["cs-core-user-data"],
+      "rows": ["User data"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "searchUserDirectory",
           "operationKey": "POST /user_directory/search",
-          "rowIds": [
-            "cs-core-user-data"
-          ],
-          "unitIds": [
-            "cs-core-user-data"
-          ]
+          "rowIds": ["cs-core-user-data"],
+          "unitIds": ["cs-core-user-data"]
         }
       ]
     },
     {
       "key": "client-server/versions.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-server-discovery"
-      ],
-      "unitIds": [
-        "cs-core-server-discovery"
-      ],
-      "rows": [
-        "Server discovery"
-      ],
+      "rowIds": ["cs-core-server-discovery"],
+      "unitIds": ["cs-core-server-discovery"],
+      "rows": ["Server discovery"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getVersions",
           "operationKey": "GET /versions",
-          "rowIds": [
-            "cs-core-server-discovery"
-          ],
-          "unitIds": [
-            "cs-core-server-discovery"
-          ]
+          "rowIds": ["cs-core-server-discovery"],
+          "unitIds": ["cs-core-server-discovery"]
         }
       ]
     },
     {
       "key": "client-server/voip.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-module-voice-over-ip"
-      ],
-      "unitIds": [
-        "cs-module-voice-over-ip"
-      ],
-      "rows": [
-        "Voice over IP"
-      ],
+      "rowIds": ["cs-module-voice-over-ip"],
+      "unitIds": ["cs-module-voice-over-ip"],
+      "rows": ["Voice over IP"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getTurnServer",
           "operationKey": "GET /voip/turnServer",
-          "rowIds": [
-            "cs-module-voice-over-ip"
-          ],
-          "unitIds": [
-            "cs-module-voice-over-ip"
-          ]
+          "rowIds": ["cs-module-voice-over-ip"],
+          "unitIds": ["cs-module-voice-over-ip"]
         }
       ]
     },
     {
       "key": "client-server/wellknown.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-server-discovery"
-      ],
-      "unitIds": [
-        "cs-core-server-discovery"
-      ],
-      "rows": [
-        "Server discovery"
-      ],
+      "rowIds": ["cs-core-server-discovery"],
+      "unitIds": ["cs-core-server-discovery"],
+      "rows": ["Server discovery"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getWellknown",
           "operationKey": "GET /matrix/client",
-          "rowIds": [
-            "cs-core-server-discovery"
-          ],
-          "unitIds": [
-            "cs-core-server-discovery"
-          ]
+          "rowIds": ["cs-core-server-discovery"],
+          "unitIds": ["cs-core-server-discovery"]
         }
       ]
     },
     {
       "key": "client-server/whoami.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "cs-core-client-authentication"
-      ],
-      "unitIds": [
-        "cs-core-client-authentication"
-      ],
-      "rows": [
-        "Client authentication"
-      ],
+      "rowIds": ["cs-core-client-authentication"],
+      "unitIds": ["cs-core-client-authentication"],
+      "rows": ["Client authentication"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getTokenOwner",
           "operationKey": "GET /account/whoami",
-          "rowIds": [
-            "cs-core-client-authentication"
-          ],
-          "unitIds": [
-            "cs-core-client-authentication"
-          ]
+          "rowIds": ["cs-core-client-authentication"],
+          "unitIds": ["cs-core-client-authentication"]
         }
       ]
     },
     {
       "key": "server-server/backfill.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-backfilling-and-retrieving-missing-events"
-      ],
-      "unitIds": [
-        "ss-core-backfilling-and-retrieving-missing-events"
-      ],
-      "rows": [
-        "Backfill / missing events"
-      ],
+      "rowIds": ["ss-core-backfilling-and-retrieving-missing-events"],
+      "unitIds": ["ss-core-backfilling-and-retrieving-missing-events"],
+      "rows": ["Backfill / missing events"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "backfillRoom",
           "operationKey": "GET /backfill/{roomId}",
-          "rowIds": [
-            "ss-core-backfilling-and-retrieving-missing-events"
-          ],
-          "unitIds": [
-            "ss-core-backfilling-and-retrieving-missing-events"
-          ]
+          "rowIds": ["ss-core-backfilling-and-retrieving-missing-events"],
+          "unitIds": ["ss-core-backfilling-and-retrieving-missing-events"]
         },
         {
           "operationId": "getMissingPreviousEvents",
           "operationKey": "POST /get_missing_events/{roomId}",
-          "rowIds": [
-            "ss-core-backfilling-and-retrieving-missing-events"
-          ],
-          "unitIds": [
-            "ss-core-backfilling-and-retrieving-missing-events"
-          ]
+          "rowIds": ["ss-core-backfilling-and-retrieving-missing-events"],
+          "unitIds": ["ss-core-backfilling-and-retrieving-missing-events"]
         }
       ]
     },
     {
       "key": "server-server/content_repository.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-content-repository"
-      ],
-      "unitIds": [
-        "ss-core-content-repository"
-      ],
-      "rows": [
-        "Content repository"
-      ],
+      "rowIds": ["ss-core-content-repository"],
+      "unitIds": ["ss-core-content-repository"],
+      "rows": ["Content repository"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "getContent",
           "operationKey": "GET /media/download/{mediaId}",
-          "rowIds": [
-            "ss-core-content-repository"
-          ],
-          "unitIds": [
-            "ss-core-content-repository"
-          ]
+          "rowIds": ["ss-core-content-repository"],
+          "unitIds": ["ss-core-content-repository"]
         },
         {
           "operationId": "getContentThumbnail",
           "operationKey": "GET /media/thumbnail/{mediaId}",
-          "rowIds": [
-            "ss-core-content-repository"
-          ],
-          "unitIds": [
-            "ss-core-content-repository"
-          ]
+          "rowIds": ["ss-core-content-repository"],
+          "unitIds": ["ss-core-content-repository"]
         }
       ]
     },
     {
       "key": "server-server/event_auth.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-retrieving-events"
-      ],
-      "unitIds": [
-        "ss-core-retrieving-events"
-      ],
-      "rows": [
-        "Retrieving events"
-      ],
+      "rowIds": ["ss-core-retrieving-events"],
+      "unitIds": ["ss-core-retrieving-events"],
+      "rows": ["Retrieving events"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getEventAuth",
           "operationKey": "GET /event_auth/{roomId}/{eventId}",
-          "rowIds": [
-            "ss-core-retrieving-events"
-          ],
-          "unitIds": [
-            "ss-core-retrieving-events"
-          ]
+          "rowIds": ["ss-core-retrieving-events"],
+          "unitIds": ["ss-core-retrieving-events"]
         }
       ]
     },
     {
       "key": "server-server/events.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-retrieving-events"
-      ],
-      "unitIds": [
-        "ss-core-retrieving-events"
-      ],
-      "rows": [
-        "Retrieving events"
-      ],
+      "rowIds": ["ss-core-retrieving-events"],
+      "unitIds": ["ss-core-retrieving-events"],
+      "rows": ["Retrieving events"],
       "operationCount": 4,
       "mappedOperationCount": 4,
       "operations": [
         {
           "operationId": "getRoomState",
           "operationKey": "GET /state/{roomId}",
-          "rowIds": [
-            "ss-core-retrieving-events"
-          ],
-          "unitIds": [
-            "ss-core-retrieving-events"
-          ]
+          "rowIds": ["ss-core-retrieving-events"],
+          "unitIds": ["ss-core-retrieving-events"]
         },
         {
           "operationId": "getRoomStateIds",
           "operationKey": "GET /state_ids/{roomId}",
-          "rowIds": [
-            "ss-core-retrieving-events"
-          ],
-          "unitIds": [
-            "ss-core-retrieving-events"
-          ]
+          "rowIds": ["ss-core-retrieving-events"],
+          "unitIds": ["ss-core-retrieving-events"]
         },
         {
           "operationId": "getEvent",
           "operationKey": "GET /event/{eventId}",
-          "rowIds": [
-            "ss-core-retrieving-events"
-          ],
-          "unitIds": [
-            "ss-core-retrieving-events"
-          ]
+          "rowIds": ["ss-core-retrieving-events"],
+          "unitIds": ["ss-core-retrieving-events"]
         },
         {
           "operationId": "getEventByTimestamp",
           "operationKey": "GET /timestamp_to_event/{roomId}",
-          "rowIds": [
-            "ss-core-retrieving-events"
-          ],
-          "unitIds": [
-            "ss-core-retrieving-events"
-          ]
+          "rowIds": ["ss-core-retrieving-events"],
+          "unitIds": ["ss-core-retrieving-events"]
         }
       ]
     },
     {
       "key": "server-server/invites-v1.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-inviting-to-a-room"
-      ],
-      "unitIds": [
-        "ss-core-inviting-to-a-room"
-      ],
-      "rows": [
-        "Inviting"
-      ],
+      "rowIds": ["ss-core-inviting-to-a-room"],
+      "unitIds": ["ss-core-inviting-to-a-room"],
+      "rows": ["Inviting"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "sendInviteV1",
           "operationKey": "PUT /invite/{roomId}/{eventId}",
-          "rowIds": [
-            "ss-core-inviting-to-a-room"
-          ],
-          "unitIds": [
-            "ss-core-inviting-to-a-room"
-          ]
+          "rowIds": ["ss-core-inviting-to-a-room"],
+          "unitIds": ["ss-core-inviting-to-a-room"]
         }
       ]
     },
     {
       "key": "server-server/invites-v2.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-inviting-to-a-room"
-      ],
-      "unitIds": [
-        "ss-core-inviting-to-a-room"
-      ],
-      "rows": [
-        "Inviting"
-      ],
+      "rowIds": ["ss-core-inviting-to-a-room"],
+      "unitIds": ["ss-core-inviting-to-a-room"],
+      "rows": ["Inviting"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "sendInviteV2",
           "operationKey": "PUT /invite/{roomId}/{eventId}",
-          "rowIds": [
-            "ss-core-inviting-to-a-room"
-          ],
-          "unitIds": [
-            "ss-core-inviting-to-a-room"
-          ]
+          "rowIds": ["ss-core-inviting-to-a-room"],
+          "unitIds": ["ss-core-inviting-to-a-room"]
         }
       ]
     },
     {
       "key": "server-server/joins-v1.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-joining-rooms"
-      ],
-      "unitIds": [
-        "ss-core-joining-rooms"
-      ],
-      "rows": [
-        "Joining rooms"
-      ],
+      "rowIds": ["ss-core-joining-rooms"],
+      "unitIds": ["ss-core-joining-rooms"],
+      "rows": ["Joining rooms"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "makeJoin",
           "operationKey": "GET /make_join/{roomId}/{userId}",
-          "rowIds": [
-            "ss-core-joining-rooms"
-          ],
-          "unitIds": [
-            "ss-core-joining-rooms"
-          ]
+          "rowIds": ["ss-core-joining-rooms"],
+          "unitIds": ["ss-core-joining-rooms"]
         }
       ]
     },
     {
       "key": "server-server/joins-v2.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-joining-rooms"
-      ],
-      "unitIds": [
-        "ss-core-joining-rooms"
-      ],
-      "rows": [
-        "Joining rooms"
-      ],
+      "rowIds": ["ss-core-joining-rooms"],
+      "unitIds": ["ss-core-joining-rooms"],
+      "rows": ["Joining rooms"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "sendJoinV2",
           "operationKey": "PUT /send_join/{roomId}/{eventId}",
-          "rowIds": [
-            "ss-core-joining-rooms"
-          ],
-          "unitIds": [
-            "ss-core-joining-rooms"
-          ]
+          "rowIds": ["ss-core-joining-rooms"],
+          "unitIds": ["ss-core-joining-rooms"]
         }
       ]
     },
     {
       "key": "server-server/keys_query.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-authentication"
-      ],
+      "rowIds": ["ss-core-authentication"],
       "unitIds": [
         "ss-core-authentication",
         "ss-subsection-authentication-request-authentication",
         "ss-subsection-authentication-response-authentication",
         "ss-subsection-authentication-client-tls-certificates"
       ],
-      "rows": [
-        "Authentication"
-      ],
+      "rows": ["Authentication"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "perspectivesKeyQuery",
           "operationKey": "GET /query/{serverName}",
-          "rowIds": [
-            "ss-core-authentication"
-          ],
+          "rowIds": ["ss-core-authentication"],
           "unitIds": [
             "ss-core-authentication",
             "ss-subsection-authentication-request-authentication",
@@ -3179,9 +2037,7 @@
         {
           "operationId": "bulkPerspectivesKeyQuery",
           "operationKey": "POST /query",
-          "rowIds": [
-            "ss-core-authentication"
-          ],
+          "rowIds": ["ss-core-authentication"],
           "unitIds": [
             "ss-core-authentication",
             "ss-subsection-authentication-request-authentication",
@@ -3194,27 +2050,21 @@
     {
       "key": "server-server/keys_server.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-authentication"
-      ],
+      "rowIds": ["ss-core-authentication"],
       "unitIds": [
         "ss-core-authentication",
         "ss-subsection-authentication-request-authentication",
         "ss-subsection-authentication-response-authentication",
         "ss-subsection-authentication-client-tls-certificates"
       ],
-      "rows": [
-        "Authentication"
-      ],
+      "rows": ["Authentication"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getServerKey",
           "operationKey": "GET /server",
-          "rowIds": [
-            "ss-core-authentication"
-          ],
+          "rowIds": ["ss-core-authentication"],
           "unitIds": [
             "ss-core-authentication",
             "ss-subsection-authentication-request-authentication",
@@ -3227,438 +2077,274 @@
     {
       "key": "server-server/knocks.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-knocking-upon-a-room"
-      ],
-      "unitIds": [
-        "ss-core-knocking-upon-a-room"
-      ],
-      "rows": [
-        "Knocking"
-      ],
+      "rowIds": ["ss-core-knocking-upon-a-room"],
+      "unitIds": ["ss-core-knocking-upon-a-room"],
+      "rows": ["Knocking"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "makeKnock",
           "operationKey": "GET /make_knock/{roomId}/{userId}",
-          "rowIds": [
-            "ss-core-knocking-upon-a-room"
-          ],
-          "unitIds": [
-            "ss-core-knocking-upon-a-room"
-          ]
+          "rowIds": ["ss-core-knocking-upon-a-room"],
+          "unitIds": ["ss-core-knocking-upon-a-room"]
         },
         {
           "operationId": "sendKnock",
           "operationKey": "PUT /send_knock/{roomId}/{eventId}",
-          "rowIds": [
-            "ss-core-knocking-upon-a-room"
-          ],
-          "unitIds": [
-            "ss-core-knocking-upon-a-room"
-          ]
+          "rowIds": ["ss-core-knocking-upon-a-room"],
+          "unitIds": ["ss-core-knocking-upon-a-room"]
         }
       ]
     },
     {
       "key": "server-server/leaving-v1.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-leaving-rooms-rejecting-invites"
-      ],
-      "unitIds": [
-        "ss-core-leaving-rooms-rejecting-invites"
-      ],
-      "rows": [
-        "Leaving rooms"
-      ],
+      "rowIds": ["ss-core-leaving-rooms-rejecting-invites"],
+      "unitIds": ["ss-core-leaving-rooms-rejecting-invites"],
+      "rows": ["Leaving rooms"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "makeLeave",
           "operationKey": "GET /make_leave/{roomId}/{userId}",
-          "rowIds": [
-            "ss-core-leaving-rooms-rejecting-invites"
-          ],
-          "unitIds": [
-            "ss-core-leaving-rooms-rejecting-invites"
-          ]
+          "rowIds": ["ss-core-leaving-rooms-rejecting-invites"],
+          "unitIds": ["ss-core-leaving-rooms-rejecting-invites"]
         }
       ]
     },
     {
       "key": "server-server/leaving-v2.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-leaving-rooms-rejecting-invites"
-      ],
-      "unitIds": [
-        "ss-core-leaving-rooms-rejecting-invites"
-      ],
-      "rows": [
-        "Leaving rooms"
-      ],
+      "rowIds": ["ss-core-leaving-rooms-rejecting-invites"],
+      "unitIds": ["ss-core-leaving-rooms-rejecting-invites"],
+      "rows": ["Leaving rooms"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "sendLeaveV2",
           "operationKey": "PUT /send_leave/{roomId}/{eventId}",
-          "rowIds": [
-            "ss-core-leaving-rooms-rejecting-invites"
-          ],
-          "unitIds": [
-            "ss-core-leaving-rooms-rejecting-invites"
-          ]
+          "rowIds": ["ss-core-leaving-rooms-rejecting-invites"],
+          "unitIds": ["ss-core-leaving-rooms-rejecting-invites"]
         }
       ]
     },
     {
       "key": "server-server/openid.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-openid"
-      ],
-      "unitIds": [
-        "ss-core-openid"
-      ],
-      "rows": [
-        "OpenID"
-      ],
+      "rowIds": ["ss-core-openid"],
+      "unitIds": ["ss-core-openid"],
+      "rows": ["OpenID"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "exchangeOpenIdToken",
           "operationKey": "GET /openid/userinfo",
-          "rowIds": [
-            "ss-core-openid"
-          ],
-          "unitIds": [
-            "ss-core-openid"
-          ]
+          "rowIds": ["ss-core-openid"],
+          "unitIds": ["ss-core-openid"]
         }
       ]
     },
     {
       "key": "server-server/public_rooms.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-published-room-directory"
-      ],
-      "unitIds": [
-        "ss-core-published-room-directory"
-      ],
-      "rows": [
-        "Published room directory"
-      ],
+      "rowIds": ["ss-core-published-room-directory"],
+      "unitIds": ["ss-core-published-room-directory"],
+      "rows": ["Published room directory"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "getPublicRooms",
           "operationKey": "GET /publicRooms",
-          "rowIds": [
-            "ss-core-published-room-directory"
-          ],
-          "unitIds": [
-            "ss-core-published-room-directory"
-          ]
+          "rowIds": ["ss-core-published-room-directory"],
+          "unitIds": ["ss-core-published-room-directory"]
         },
         {
           "operationId": "queryPublicRooms",
           "operationKey": "POST /publicRooms",
-          "rowIds": [
-            "ss-core-published-room-directory"
-          ],
-          "unitIds": [
-            "ss-core-published-room-directory"
-          ]
+          "rowIds": ["ss-core-published-room-directory"],
+          "unitIds": ["ss-core-published-room-directory"]
         }
       ]
     },
     {
       "key": "server-server/query.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-querying-for-information"
-      ],
-      "unitIds": [
-        "ss-core-querying-for-information"
-      ],
-      "rows": [
-        "Querying for information"
-      ],
+      "rowIds": ["ss-core-querying-for-information"],
+      "unitIds": ["ss-core-querying-for-information"],
+      "rows": ["Querying for information"],
       "operationCount": 3,
       "mappedOperationCount": 3,
       "operations": [
         {
           "operationId": "queryInfo",
           "operationKey": "GET /query/{queryType}",
-          "rowIds": [
-            "ss-core-querying-for-information"
-          ],
-          "unitIds": [
-            "ss-core-querying-for-information"
-          ]
+          "rowIds": ["ss-core-querying-for-information"],
+          "unitIds": ["ss-core-querying-for-information"]
         },
         {
           "operationId": "queryRoomDirectory",
           "operationKey": "GET /query/directory",
-          "rowIds": [
-            "ss-core-querying-for-information"
-          ],
-          "unitIds": [
-            "ss-core-querying-for-information"
-          ]
+          "rowIds": ["ss-core-querying-for-information"],
+          "unitIds": ["ss-core-querying-for-information"]
         },
         {
           "operationId": "queryProfile",
           "operationKey": "GET /query/profile",
-          "rowIds": [
-            "ss-core-querying-for-information"
-          ],
-          "unitIds": [
-            "ss-core-querying-for-information"
-          ]
+          "rowIds": ["ss-core-querying-for-information"],
+          "unitIds": ["ss-core-querying-for-information"]
         }
       ]
     },
     {
       "key": "server-server/room_policy.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-policy-servers"
-      ],
-      "unitIds": [
-        "ss-core-policy-servers"
-      ],
-      "rows": [
-        "Policy servers"
-      ],
+      "rowIds": ["ss-core-policy-servers"],
+      "unitIds": ["ss-core-policy-servers"],
+      "rows": ["Policy servers"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "askPolicyServerToSign",
           "operationKey": "POST /sign",
-          "rowIds": [
-            "ss-core-policy-servers"
-          ],
-          "unitIds": [
-            "ss-core-policy-servers"
-          ]
+          "rowIds": ["ss-core-policy-servers"],
+          "unitIds": ["ss-core-policy-servers"]
         }
       ]
     },
     {
       "key": "server-server/space_hierarchy.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-spaces"
-      ],
-      "unitIds": [
-        "ss-core-spaces"
-      ],
-      "rows": [
-        "Spaces"
-      ],
+      "rowIds": ["ss-core-spaces"],
+      "unitIds": ["ss-core-spaces"],
+      "rows": ["Spaces"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getSpaceHierarchy",
           "operationKey": "GET /hierarchy/{roomId}",
-          "rowIds": [
-            "ss-core-spaces"
-          ],
-          "unitIds": [
-            "ss-core-spaces"
-          ]
+          "rowIds": ["ss-core-spaces"],
+          "unitIds": ["ss-core-spaces"]
         }
       ]
     },
     {
       "key": "server-server/third_party_invite.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-third-party-invites"
-      ],
-      "unitIds": [
-        "ss-core-third-party-invites"
-      ],
-      "rows": [
-        "Third-party invites"
-      ],
+      "rowIds": ["ss-core-third-party-invites"],
+      "unitIds": ["ss-core-third-party-invites"],
+      "rows": ["Third-party invites"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "exchangeThirdPartyInvite",
           "operationKey": "PUT /exchange_third_party_invite/{roomId}",
-          "rowIds": [
-            "ss-core-third-party-invites"
-          ],
-          "unitIds": [
-            "ss-core-third-party-invites"
-          ]
+          "rowIds": ["ss-core-third-party-invites"],
+          "unitIds": ["ss-core-third-party-invites"]
         },
         {
           "operationId": "onBindThirdPartyIdentifier",
           "operationKey": "PUT /3pid/onbind",
-          "rowIds": [
-            "ss-core-third-party-invites"
-          ],
-          "unitIds": [
-            "ss-core-third-party-invites"
-          ]
+          "rowIds": ["ss-core-third-party-invites"],
+          "unitIds": ["ss-core-third-party-invites"]
         }
       ]
     },
     {
       "key": "server-server/transactions.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-transactions"
-      ],
-      "unitIds": [
-        "ss-core-transactions"
-      ],
-      "rows": [
-        "Transactions"
-      ],
+      "rowIds": ["ss-core-transactions"],
+      "unitIds": ["ss-core-transactions"],
+      "rows": ["Transactions"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "sendTransaction",
           "operationKey": "PUT /send/{txnId}",
-          "rowIds": [
-            "ss-core-transactions"
-          ],
-          "unitIds": [
-            "ss-core-transactions"
-          ]
+          "rowIds": ["ss-core-transactions"],
+          "unitIds": ["ss-core-transactions"]
         }
       ]
     },
     {
       "key": "server-server/user_devices.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-device-management"
-      ],
-      "unitIds": [
-        "ss-core-device-management"
-      ],
-      "rows": [
-        "Device management"
-      ],
+      "rowIds": ["ss-core-device-management"],
+      "unitIds": ["ss-core-device-management"],
+      "rows": ["Device management"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getUserDevices",
           "operationKey": "GET /user/devices/{userId}",
-          "rowIds": [
-            "ss-core-device-management"
-          ],
-          "unitIds": [
-            "ss-core-device-management"
-          ]
+          "rowIds": ["ss-core-device-management"],
+          "unitIds": ["ss-core-device-management"]
         }
       ]
     },
     {
       "key": "server-server/user_keys.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-end-to-end-encryption"
-      ],
-      "unitIds": [
-        "ss-core-end-to-end-encryption"
-      ],
-      "rows": [
-        "End-to-end encryption"
-      ],
+      "rowIds": ["ss-core-end-to-end-encryption"],
+      "unitIds": ["ss-core-end-to-end-encryption"],
+      "rows": ["End-to-end encryption"],
       "operationCount": 2,
       "mappedOperationCount": 2,
       "operations": [
         {
           "operationId": "claimUserEncryptionKeys",
           "operationKey": "POST /user/keys/claim",
-          "rowIds": [
-            "ss-core-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "ss-core-end-to-end-encryption"
-          ]
+          "rowIds": ["ss-core-end-to-end-encryption"],
+          "unitIds": ["ss-core-end-to-end-encryption"]
         },
         {
           "operationId": "queryUserEncryptionKeys",
           "operationKey": "POST /user/keys/query",
-          "rowIds": [
-            "ss-core-end-to-end-encryption"
-          ],
-          "unitIds": [
-            "ss-core-end-to-end-encryption"
-          ]
+          "rowIds": ["ss-core-end-to-end-encryption"],
+          "unitIds": ["ss-core-end-to-end-encryption"]
         }
       ]
     },
     {
       "key": "server-server/version.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-api-standards"
-      ],
-      "unitIds": [
-        "ss-core-api-standards"
-      ],
-      "rows": [
-        "API standards"
-      ],
+      "rowIds": ["ss-core-api-standards"],
+      "unitIds": ["ss-core-api-standards"],
+      "rows": ["API standards"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getVersion",
           "operationKey": "GET /version",
-          "rowIds": [
-            "ss-core-api-standards"
-          ],
-          "unitIds": [
-            "ss-core-api-standards"
-          ]
+          "rowIds": ["ss-core-api-standards"],
+          "unitIds": ["ss-core-api-standards"]
         }
       ]
     },
     {
       "key": "server-server/wellknown.yaml",
       "scope": "tracked",
-      "rowIds": [
-        "ss-core-server-discovery"
-      ],
-      "unitIds": [
-        "ss-core-server-discovery"
-      ],
-      "rows": [
-        "Server discovery"
-      ],
+      "rowIds": ["ss-core-server-discovery"],
+      "unitIds": ["ss-core-server-discovery"],
+      "rows": ["Server discovery"],
       "operationCount": 1,
       "mappedOperationCount": 1,
       "operations": [
         {
           "operationId": "getWellKnown",
           "operationKey": "GET /matrix/server",
-          "rowIds": [
-            "ss-core-server-discovery"
-          ],
-          "unitIds": [
-            "ss-core-server-discovery"
-          ]
+          "rowIds": ["ss-core-server-discovery"],
+          "unitIds": ["ss-core-server-discovery"]
         }
       ]
     }

@@ -4,42 +4,42 @@
 // IPv4 private and reserved ranges
 const BLOCKED_IPV4_RANGES = [
   // Loopback
-  { start: '127.0.0.0', end: '127.255.255.255' },
+  { start: "127.0.0.0", end: "127.255.255.255" },
   // Private networks (RFC 1918)
-  { start: '10.0.0.0', end: '10.255.255.255' },
-  { start: '172.16.0.0', end: '172.31.255.255' },
-  { start: '192.168.0.0', end: '192.168.255.255' },
+  { start: "10.0.0.0", end: "10.255.255.255" },
+  { start: "172.16.0.0", end: "172.31.255.255" },
+  { start: "192.168.0.0", end: "192.168.255.255" },
   // Link-local
-  { start: '169.254.0.0', end: '169.254.255.255' },
+  { start: "169.254.0.0", end: "169.254.255.255" },
   // AWS metadata service
-  { start: '169.254.169.254', end: '169.254.169.254' },
+  { start: "169.254.169.254", end: "169.254.169.254" },
   // Broadcast
-  { start: '255.255.255.255', end: '255.255.255.255' },
+  { start: "255.255.255.255", end: "255.255.255.255" },
   // Current network
-  { start: '0.0.0.0', end: '0.255.255.255' },
+  { start: "0.0.0.0", end: "0.255.255.255" },
 ];
 
 // Blocked hostnames
 const BLOCKED_HOSTNAMES = [
-  'localhost',
-  'localhost.localdomain',
-  'ip6-localhost',
-  'ip6-loopback',
+  "localhost",
+  "localhost.localdomain",
+  "ip6-localhost",
+  "ip6-loopback",
   // Kubernetes internal
-  'kubernetes.default',
-  'kubernetes.default.svc',
-  'kubernetes.default.svc.cluster.local',
+  "kubernetes.default",
+  "kubernetes.default.svc",
+  "kubernetes.default.svc.cluster.local",
   // Common internal service names
-  'internal',
-  'metadata',
-  'metadata.google.internal',
+  "internal",
+  "metadata",
+  "metadata.google.internal",
 ];
 
 /**
  * Convert an IPv4 address to a 32-bit integer for range comparison
  */
 function ipv4ToInt(ip: string): number {
-  const parts = ip.split('.').map(Number);
+  const parts = ip.split(".").map(Number);
   if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) {
     return -1;
   }
@@ -72,12 +72,12 @@ function isBlockedIPv6(ip: string): boolean {
   const normalized = ip.toLowerCase();
 
   // Loopback
-  if (normalized === '::1' || normalized === '0:0:0:0:0:0:0:1') {
+  if (normalized === "::1" || normalized === "0:0:0:0:0:0:0:1") {
     return true;
   }
 
   // Unspecified
-  if (normalized === '::' || normalized === '0:0:0:0:0:0:0:0') {
+  if (normalized === "::" || normalized === "0:0:0:0:0:0:0:0") {
     return true;
   }
 
@@ -88,12 +88,17 @@ function isBlockedIPv6(ip: string): boolean {
   }
 
   // Link-local (fe80::/10)
-  if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) {
+  if (
+    normalized.startsWith("fe8") ||
+    normalized.startsWith("fe9") ||
+    normalized.startsWith("fea") ||
+    normalized.startsWith("feb")
+  ) {
     return true;
   }
 
   // Unique local (fc00::/7)
-  if (normalized.startsWith('fc') || normalized.startsWith('fd')) {
+  if (normalized.startsWith("fc") || normalized.startsWith("fd")) {
     return true;
   }
 
@@ -113,18 +118,18 @@ function isBlockedHostname(hostname: string): boolean {
 
   // Check if it's a subdomain of a blocked hostname
   for (const blocked of BLOCKED_HOSTNAMES) {
-    if (lower.endsWith('.' + blocked)) {
+    if (lower.endsWith("." + blocked)) {
       return true;
     }
   }
 
   // Check for .local TLD (mDNS)
-  if (lower.endsWith('.local')) {
+  if (lower.endsWith(".local")) {
     return true;
   }
 
   // Check for .internal domains
-  if (lower.endsWith('.internal')) {
+  if (lower.endsWith(".internal")) {
     return true;
   }
 
@@ -141,8 +146,8 @@ function isBlockedIPAddress(hostname: string): boolean {
   }
 
   // IPv6 check (with brackets removed if present)
-  const ipv6 = hostname.replace(/^\[|\]$/g, '');
-  if (ipv6.includes(':')) {
+  const ipv6 = hostname.replace(/^\[|\]$/g, "");
+  if (ipv6.includes(":")) {
     return isBlockedIPv6(ipv6);
   }
 
@@ -164,24 +169,24 @@ export function validateUrl(url: string): URLValidationResult {
     const parsed = new URL(url);
 
     // Only allow http and https
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return { valid: false, error: 'Only HTTP and HTTPS protocols are allowed' };
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return { valid: false, error: "Only HTTP and HTTPS protocols are allowed" };
     }
 
     const hostname = parsed.hostname.toLowerCase();
 
     // Check for blocked hostnames
     if (isBlockedHostname(hostname)) {
-      return { valid: false, error: 'Access to internal hostnames is not allowed' };
+      return { valid: false, error: "Access to internal hostnames is not allowed" };
     }
 
     // Check for blocked IP addresses
     if (isBlockedIPAddress(hostname)) {
-      return { valid: false, error: 'Access to internal IP addresses is not allowed' };
+      return { valid: false, error: "Access to internal IP addresses is not allowed" };
     }
 
     // Check for non-standard ports that might indicate internal services
-    const port = parsed.port ? parseInt(parsed.port, 10) : parsed.protocol === 'https:' ? 443 : 80;
+    const port = parsed.port ? parseInt(parsed.port, 10) : parsed.protocol === "https:" ? 443 : 80;
 
     // Block common internal service ports
     const blockedPorts = [
@@ -209,7 +214,7 @@ export function validateUrl(url: string): URLValidationResult {
 
     return { valid: true, sanitizedUrl: parsed.toString() };
   } catch {
-    return { valid: false, error: 'Invalid URL format' };
+    return { valid: false, error: "Invalid URL format" };
   }
 }
 
@@ -226,9 +231,12 @@ export function validateUrlForPreview(url: string): URLValidationResult {
   const parsed = new URL(url);
 
   // For previews, only allow standard HTTP ports
-  const port = parsed.port ? parseInt(parsed.port, 10) : parsed.protocol === 'https:' ? 443 : 80;
+  const port = parsed.port ? parseInt(parsed.port, 10) : parsed.protocol === "https:" ? 443 : 80;
   if (port !== 80 && port !== 443 && port !== 8080 && port !== 8443) {
-    return { valid: false, error: 'Only standard HTTP ports (80, 443, 8080, 8443) are allowed for URL preview' };
+    return {
+      valid: false,
+      error: "Only standard HTTP ports (80, 443, 8080, 8443) are allowed for URL preview",
+    };
   }
 
   return result;

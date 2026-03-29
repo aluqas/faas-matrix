@@ -43,7 +43,9 @@ async function main() {
     const fileMapping = openapiRowMap[fileKey];
     if (!fileMapping?.operations) continue;
 
-    const operationMapping = fileMapping.operations[operation.operationId] || fileMapping.operations[operation.operationKey];
+    const operationMapping =
+      fileMapping.operations[operation.operationId] ||
+      fileMapping.operations[operation.operationKey];
     if (!operationMapping) continue;
 
     const rowIds = [
@@ -55,7 +57,12 @@ async function main() {
     const uniqueRowIds = [...new Set(rowIds)].filter((rowId) => rowMetaById.has(rowId));
     if (uniqueRowIds.length === 0) continue;
 
-    const unitIds = [...new Set([...(operationMapping.unitIds || []), ...(operationMapping.unitId ? [operationMapping.unitId] : [])])];
+    const unitIds = [
+      ...new Set([
+        ...(operationMapping.unitIds || []),
+        ...(operationMapping.unitId ? [operationMapping.unitId] : []),
+      ]),
+    ];
 
     for (const rowId of uniqueRowIds) {
       const list = operationsByRowId.get(rowId) || [];
@@ -127,4 +134,3 @@ async function main() {
 }
 
 await main();
-

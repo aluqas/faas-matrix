@@ -1,13 +1,13 @@
 // Sliding Sync API (MSC3575 & MSC4186)
 // Implements both the original sliding sync and simplified sliding sync
 
-import { Hono, type Context } from 'hono';
-import type { AppEnv } from '../types';
-import { Errors } from '../utils/errors';
-import { requireAuth } from '../middleware/auth';
-import { getTypingForRooms } from './typing';
-import { getReceiptsForRooms } from './receipts';
-import { countNotificationsWithRules } from '../services/push-rule-evaluator';
+import { Hono, type Context } from "hono";
+import type { AppEnv } from "../types";
+import { Errors } from "../utils/errors";
+import { requireAuth } from "../middleware/auth";
+import { getTypingForRooms } from "./typing";
+import { getReceiptsForRooms } from "./receipts";
+import { countNotificationsWithRules } from "../services/push-rule-evaluator";
 // Room cache helper available for future optimizations
 // import { getRoomMetadata, invalidateRoomCache, type RoomMetadata } from '../services/room-cache';
 
@@ -37,8 +37,8 @@ interface SlidingSyncRequest {
 }
 
 interface SyncListConfig {
-  ranges?: [number, number][];  // MSC3575
-  range?: [number, number];     // MSC4186
+  ranges?: [number, number][]; // MSC3575
+  range?: [number, number]; // MSC4186
   sort?: string[];
   required_state?: [string, string][];
   timeline_limit?: number;
@@ -112,7 +112,7 @@ interface SyncListResult {
 }
 
 interface RoomListOperation {
-  op: 'SYNC' | 'DELETE' | 'INSERT' | 'INVALIDATE';
+  op: "SYNC" | "DELETE" | "INSERT" | "INVALIDATE";
   range?: [number, number];
   index?: number;
   room_ids?: string[];
@@ -140,7 +140,7 @@ interface RoomResult {
   is_dm?: boolean;
   invite_state?: any[];
   knock_state?: any[];
-  membership?: string;  // MSC4186: explicit membership status ('join', 'invite', 'knock', 'leave', 'ban')
+  membership?: string; // MSC4186: explicit membership status ('join', 'invite', 'knock', 'leave', 'ban')
 }
 
 interface StrippedHero {
@@ -180,16 +180,22 @@ interface ExtensionsResponse {
 // Connection state stored in Durable Object (previously KV, migrated to avoid rate limits)
 interface ConnectionState {
   userId: string;
-  pos: number;  // Actual stream_ordering from database
+  pos: number; // Actual stream_ordering from database
   lastAccess: number;
-  roomStates: Record<string, {
-    lastStreamOrdering: number;  // Last stream_ordering sent for this room
-    sentState: boolean;
-  }>;
-  listStates: Record<string, {
-    roomIds: string[];
-    count: number;
-  }>;
+  roomStates: Record<
+    string,
+    {
+      lastStreamOrdering: number; // Last stream_ordering sent for this room
+      sentState: boolean;
+    }
+  >;
+  listStates: Record<
+    string,
+    {
+      roomIds: string[];
+      count: number;
+    }
+  >;
   // Track last-sent notification counts to detect changes even without new timeline events
   roomNotificationCounts?: Record<string, number>;
   // Track last-sent m.fully_read event IDs to detect when user marks as read
@@ -202,9 +208,9 @@ interface ConnectionState {
 
 // Helper to get the current maximum stream ordering from the database
 async function getCurrentStreamPosition(db: D1Database): Promise<number> {
-  const result = await db.prepare(
-    `SELECT MAX(stream_ordering) as max_pos FROM events`
-  ).first<{ max_pos: number | null }>();
+  const result = await db
+    .prepare(`SELECT MAX(stream_ordering) as max_pos FROM events`)
+    .first<{ max_pos: number | null }>();
   return result?.max_pos ?? 0;
 }
 
@@ -212,7 +218,7 @@ async function getCurrentStreamPosition(db: D1Database): Promise<number> {
 async function getConnectionState(
   syncDO: DurableObjectNamespace,
   userId: string,
-  connId: string
+  connId: string,
 ): Promise<ConnectionState | null> {
   // Use userId as the DO ID so each user has their own DO instance
   const doId = syncDO.idFromName(userId);
@@ -221,13 +227,13 @@ async function getConnectionState(
   try {
     const response = await stub.fetch(
       new URL(`http://internal/sliding-sync/state?conn_id=${encodeURIComponent(connId)}`),
-      { method: 'GET' }
+      { method: "GET" },
     );
 
     if (!response.ok) {
       // DO returned error (400 for bad params, 500 for internal error)
       // Throw so caller knows DO is unavailable vs state not found
-      const errorText = await response.text().catch(() => 'unknown error');
+      const errorText = await response.text().catch(() => "unknown error");
       throw new Error(`DO fetch failed: ${response.status} - ${errorText}`);
     }
 
@@ -237,7 +243,7 @@ async function getConnectionState(
     return data as ConnectionState | null;
   } catch (error) {
     // Log but rethrow - caller should handle DO unavailability
-    console.error('[sliding-sync] Failed to get connection state from DO:', error);
+    console.error("[sliding-sync] Failed to get connection state from DO:", error);
     throw error;
   }
 }
@@ -246,7 +252,7 @@ async function saveConnectionState(
   syncDO: DurableObjectNamespace,
   userId: string,
   connId: string,
-  state: ConnectionState
+  state: ConnectionState,
 ): Promise<void> {
   // Use userId as the DO ID so each user has their own DO instance
   const doId = syncDO.idFromName(userId);
@@ -256,10 +262,10 @@ async function saveConnectionState(
     const response = await stub.fetch(
       new URL(`http://internal/sliding-sync/state?conn_id=${encodeURIComponent(connId)}`),
       {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(state),
-      }
+      },
     );
 
     if (!response.ok) {
@@ -268,7 +274,7 @@ async function saveConnectionState(
     }
   } catch (error) {
     // Log but don't throw - state can be rebuilt on next sync
-    console.error('[sliding-sync] Failed to save connection state to DO:', error);
+    console.error("[sliding-sync] Failed to save connection state to DO:", error);
   }
 }
 
@@ -278,8 +284,10 @@ async function getUserRooms(
   db: D1Database,
   userId: string,
   filters?: SlidingRoomFilter,
-  sort?: string[]
-): Promise<{ roomId: string; membership: string; lastActivity: number; name?: string; isDm: boolean }[]> {
+  sort?: string[],
+): Promise<
+  { roomId: string; membership: string; lastActivity: number; name?: string; isDm: boolean }[]
+> {
   // Consolidated query with subqueries for room name and member count
   // This eliminates N+1 queries by fetching all data in a single query
   let query = `
@@ -320,18 +328,27 @@ async function getUserRooms(
   }
 
   // Default sort: by recency
-  const sortBy = sort || ['by_recency'];
-  if (sortBy.includes('by_recency')) {
+  const sortBy = sort || ["by_recency"];
+  if (sortBy.includes("by_recency")) {
     query += ` ORDER BY last_activity DESC`;
-  } else if (sortBy.includes('by_name')) {
+  } else if (sortBy.includes("by_name")) {
     query += ` ORDER BY COALESCE(room_name, rm.room_id) ASC`;
   } else {
     query += ` ORDER BY last_activity DESC`;
   }
 
-  const result = await db.prepare(query).bind(...params).all();
+  const result = await db
+    .prepare(query)
+    .bind(...params)
+    .all();
 
-  const rooms: { roomId: string; membership: string; lastActivity: number; name?: string; isDm: boolean }[] = [];
+  const rooms: {
+    roomId: string;
+    membership: string;
+    lastActivity: number;
+    name?: string;
+    isDm: boolean;
+  }[] = [];
 
   for (const row of result.results as any[]) {
     const name = row.room_name as string | null | undefined;
@@ -374,11 +391,11 @@ async function getRoomData(
     requiredState?: [string, string][];
     timelineLimit?: number;
     initial?: boolean;
-    sinceStreamOrdering?: number;  // Only return events after this stream position
-  }
+    sinceStreamOrdering?: number; // Only return events after this stream position
+  },
 ): Promise<RoomResult & { maxStreamOrdering?: number }> {
   const result: RoomResult & { maxStreamOrdering?: number } = {
-    membership: 'join',  // MSC4186: explicitly indicate this is a joined room
+    membership: "join", // MSC4186: explicitly indicate this is a joined room
   };
 
   // OPTIMIZATION: Batch all metadata queries into a single network call
@@ -396,40 +413,58 @@ async function getRoomData(
     // 1. Room info
     db.prepare(`SELECT room_id, created_at FROM rooms WHERE room_id = ?`).bind(roomId),
     // 2. Room name
-    db.prepare(`
+    db
+      .prepare(`
       SELECT e.content FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.room_id = ? AND rs.event_type = 'm.room.name'
-    `).bind(roomId),
+    `)
+      .bind(roomId),
     // 3. Room avatar
-    db.prepare(`
+    db
+      .prepare(`
       SELECT e.content FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.room_id = ? AND rs.event_type = 'm.room.avatar'
-    `).bind(roomId),
+    `)
+      .bind(roomId),
     // 4. Room topic
-    db.prepare(`
+    db
+      .prepare(`
       SELECT e.content FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.room_id = ? AND rs.event_type = 'm.room.topic'
-    `).bind(roomId),
+    `)
+      .bind(roomId),
     // 5. Canonical alias
-    db.prepare(`
+    db
+      .prepare(`
       SELECT e.content FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.room_id = ? AND rs.event_type = 'm.room.canonical_alias'
-    `).bind(roomId),
+    `)
+      .bind(roomId),
     // 6. Joined member count
-    db.prepare(`SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'join'`).bind(roomId),
+    db
+      .prepare(
+        `SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'join'`,
+      )
+      .bind(roomId),
     // 7. Invited member count
-    db.prepare(`SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'invite'`).bind(roomId),
+    db
+      .prepare(
+        `SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'invite'`,
+      )
+      .bind(roomId),
     // 8. Heroes (other members for display)
-    db.prepare(`
+    db
+      .prepare(`
       SELECT user_id, display_name, avatar_url
       FROM room_memberships
       WHERE room_id = ? AND membership = 'join' AND user_id != ?
       LIMIT 5
-    `).bind(roomId, userId),
+    `)
+      .bind(roomId, userId),
   ]);
 
   // Check if room exists
@@ -453,7 +488,9 @@ async function getRoomData(
   if (nameEvent) {
     try {
       result.name = JSON.parse(nameEvent.content).name;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // Room avatar
@@ -461,7 +498,9 @@ async function getRoomData(
   if (avatarEvent) {
     try {
       result.avatar = JSON.parse(avatarEvent.content).url;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // Room topic
@@ -469,7 +508,9 @@ async function getRoomData(
   if (topicEvent) {
     try {
       result.topic = JSON.parse(topicEvent.content).topic;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // Canonical alias
@@ -477,12 +518,14 @@ async function getRoomData(
   if (aliasEvent) {
     try {
       result.canonical_alias = JSON.parse(aliasEvent.content).alias;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // Heroes (only used when room has no name)
   if (!result.name) {
-    result.heroes = (heroesResult.results as any[]).map(h => ({
+    result.heroes = (heroesResult.results as any[]).map((h) => ({
       user_id: h.user_id,
       displayname: h.display_name,
       avatar_url: h.avatar_url,
@@ -502,21 +545,24 @@ async function getRoomData(
       `;
       const stateParams: any[] = [roomId];
 
-      if (eventType !== '*') {
+      if (eventType !== "*") {
         stateQuery += ` AND rs.event_type = ?`;
         stateParams.push(eventType);
       }
 
-      if (stateKey !== '*' && stateKey !== '') {
+      if (stateKey !== "*" && stateKey !== "") {
         stateQuery += ` AND rs.state_key = ?`;
         // Handle $ME placeholder - replace with actual user ID
-        const resolvedStateKey = stateKey === '$ME' ? userId : stateKey;
+        const resolvedStateKey = stateKey === "$ME" ? userId : stateKey;
         stateParams.push(resolvedStateKey);
-      } else if (stateKey === '') {
+      } else if (stateKey === "") {
         stateQuery += ` AND rs.state_key = ''`;
       }
 
-      const stateEvents = await db.prepare(stateQuery).bind(...stateParams).all();
+      const stateEvents = await db
+        .prepare(stateQuery)
+        .bind(...stateParams)
+        .all();
 
       for (const event of stateEvents.results as any[]) {
         try {
@@ -529,7 +575,9 @@ async function getRoomData(
             event_id: event.event_id,
             unsigned: event.unsigned ? JSON.parse(event.unsigned) : undefined,
           });
-        } catch { /* ignore parse errors */ }
+        } catch {
+          /* ignore parse errors */
+        }
       }
     }
   }
@@ -538,7 +586,8 @@ async function getRoomData(
   if (config.timelineLimit && config.timelineLimit > 0) {
     let timelineQuery: string;
     let timelineParams: (string | number)[];
-    const isIncremental = config.sinceStreamOrdering !== undefined && config.sinceStreamOrdering > 0;
+    const isIncremental =
+      config.sinceStreamOrdering !== undefined && config.sinceStreamOrdering > 0;
 
     // For incremental sync (sinceStreamOrdering provided), only get new events
     // For initial sync, get the last N events
@@ -567,7 +616,10 @@ async function getRoomData(
       timelineParams = [roomId, fetchLimit];
     }
 
-    const timelineEvents = await db.prepare(timelineQuery).bind(...timelineParams).all();
+    const timelineEvents = await db
+      .prepare(timelineQuery)
+      .bind(...timelineParams)
+      .all();
 
     // Check if there are more events than the limit
     const hasMoreEvents = timelineEvents.results.length > config.timelineLimit;
@@ -578,7 +630,7 @@ async function getRoomData(
     // For initial sync, reverse to get chronological order
     const eventsToProcess = isIncremental ? eventsToUse : eventsToUse.reverse();
 
-    result.timeline = eventsToProcess.map(event => {
+    result.timeline = eventsToProcess.map((event) => {
       try {
         return {
           type: event.event_type,
@@ -630,9 +682,12 @@ async function getRoomData(
   result.highlight_count = counts.highlight_count;
 
   // Get last activity timestamp
-  const lastEvent = await db.prepare(`
+  const lastEvent = await db
+    .prepare(`
     SELECT MAX(origin_server_ts) as ts FROM events WHERE room_id = ?
-  `).bind(roomId).first<{ ts: number }>();
+  `)
+    .bind(roomId)
+    .first<{ ts: number }>();
 
   if (lastEvent?.ts) {
     result.bump_stamp = lastEvent.ts;
@@ -647,23 +702,23 @@ async function getRoomData(
 async function getInviteRoomData(
   db: D1Database,
   roomId: string,
-  userId: string
+  userId: string,
 ): Promise<RoomResult> {
   const result: RoomResult = {
     initial: true,
-    membership: 'invite',  // MSC4186: explicitly indicate this is an invited room
+    membership: "invite", // MSC4186: explicitly indicate this is an invited room
   };
 
   // Get stripped state events for invited users
   // These are the key events that help the user understand what they're invited to
   const strippedStateTypes = [
-    'm.room.create',
-    'm.room.name',
-    'm.room.avatar',
-    'm.room.topic',
-    'm.room.canonical_alias',
-    'm.room.encryption',
-    'm.room.member',  // Only for inviter and invitee
+    "m.room.create",
+    "m.room.name",
+    "m.room.avatar",
+    "m.room.topic",
+    "m.room.canonical_alias",
+    "m.room.encryption",
+    "m.room.member", // Only for inviter and invitee
   ];
 
   const inviteState: any[] = [];
@@ -678,12 +733,15 @@ async function getInviteRoomData(
     const params: any[] = [roomId, eventType];
 
     // For member events, only include the invitee's own membership
-    if (eventType === 'm.room.member') {
+    if (eventType === "m.room.member") {
       query += ` AND rs.state_key = ?`;
       params.push(userId);
     }
 
-    const events = await db.prepare(query).bind(...params).all();
+    const events = await db
+      .prepare(query)
+      .bind(...params)
+      .all();
 
     for (const event of events.results as any[]) {
       try {
@@ -693,32 +751,40 @@ async function getInviteRoomData(
           content: JSON.parse(event.content),
           sender: event.sender,
         });
-      } catch { /* ignore parse errors */ }
+      } catch {
+        /* ignore parse errors */
+      }
     }
   }
 
   result.invite_state = inviteState;
 
   // Extract name from state if available
-  const nameEvent = inviteState.find(e => e.type === 'm.room.name');
+  const nameEvent = inviteState.find((e) => e.type === "m.room.name");
   if (nameEvent?.content?.name) {
     result.name = nameEvent.content.name;
   }
 
   // Extract avatar from state if available
-  const avatarEvent = inviteState.find(e => e.type === 'm.room.avatar');
+  const avatarEvent = inviteState.find((e) => e.type === "m.room.avatar");
   if (avatarEvent?.content?.url) {
     result.avatar = avatarEvent.content.url;
   }
 
   // Get member counts
-  const joinedCount = await db.prepare(`
+  const joinedCount = await db
+    .prepare(`
     SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'join'
-  `).bind(roomId).first<{ count: number }>();
+  `)
+    .bind(roomId)
+    .first<{ count: number }>();
 
-  const invitedCount = await db.prepare(`
+  const invitedCount = await db
+    .prepare(`
     SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'invite'
-  `).bind(roomId).first<{ count: number }>();
+  `)
+    .bind(roomId)
+    .first<{ count: number }>();
 
   result.joined_count = joinedCount?.count || 0;
   result.invited_count = invitedCount?.count || 0;
@@ -727,11 +793,11 @@ async function getInviteRoomData(
 }
 
 // MSC3575 Sliding Sync endpoint
-app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), async (c) => {
-  const userId = c.get('userId');
+app.post("/_matrix/client/unstable/org.matrix.msc3575/sync", requireAuth(), async (c) => {
+  const userId = c.get("userId");
   const db = c.env.DB;
-  const syncDO = c.env.SYNC;  // Use Durable Object for connection state (not KV - avoids rate limits)
-  const cache = c.env.CACHE;  // KV for presence lookups (read-only, no rate limit issues)
+  const syncDO = c.env.SYNC; // Use Durable Object for connection state (not KV - avoids rate limits)
+  const cache = c.env.CACHE; // KV for presence lookups (read-only, no rate limit issues)
 
   let body: SlidingSyncRequest;
   try {
@@ -740,9 +806,10 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
     return Errors.badJson().toResponse();
   }
 
-  const connId = body.conn_id || 'default';
+  const connId = body.conn_id || "default";
   // Note: timeout is parsed but not used yet (for future long-polling support)
-  const _ = Math.min(body.timeout || 0, 30000); void _;
+  const _ = Math.min(body.timeout || 0, 30000);
+  void _;
 
   // Get current stream position from database
   const currentStreamPos = await getCurrentStreamPosition(db);
@@ -753,15 +820,18 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
     connectionState = await getConnectionState(syncDO, userId, connId);
   } catch (error) {
     // DO unavailable - return error so client knows to retry
-    console.error('[sliding-sync MSC3575] DO unavailable:', error);
-    return c.json({
-      errcode: 'M_UNKNOWN',
-      error: 'Sync service temporarily unavailable',
-    }, 503);
+    console.error("[sliding-sync MSC3575] DO unavailable:", error);
+    return c.json(
+      {
+        errcode: "M_UNKNOWN",
+        error: "Sync service temporarily unavailable",
+      },
+      503,
+    );
   }
 
   // IMPORTANT: pos can be in query string OR body - check both
-  const queryPos = c.req.query('pos');
+  const queryPos = c.req.query("pos");
   const posToken = queryPos || body.pos;
   const sincePos = posToken ? parseInt(posToken) : 0;
   // Note: isInitialSync is computed but not currently used (for future diagnostics)
@@ -772,7 +842,12 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
   if (posToken && !connectionState) {
     if (sincePos <= currentStreamPos) {
       // Valid position, create fresh connection state treating it as a reconnect
-      console.log('[sliding-sync MSC3575] Reconnecting with valid pos', sincePos, 'current:', currentStreamPos);
+      console.log(
+        "[sliding-sync MSC3575] Reconnecting with valid pos",
+        sincePos,
+        "current:",
+        currentStreamPos,
+      );
       connectionState = {
         userId,
         pos: sincePos,
@@ -782,10 +857,13 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
       };
     } else {
       // Position is in the future - invalid
-      return c.json({
-        errcode: 'M_UNKNOWN_POS',
-        error: 'Unknown position token',
-      }, 400);
+      return c.json(
+        {
+          errcode: "M_UNKNOWN_POS",
+          error: "Unknown position token",
+        },
+        400,
+      );
     }
   }
 
@@ -834,11 +912,12 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
       }
 
       const roomsInRange = rooms.slice(startIndex, endIndex + 1);
-      const roomIds = roomsInRange.map(r => r.roomId);
+      const roomIds = roomsInRange.map((r) => r.roomId);
 
       // Check if the list has changed since last sync
       const previousListState = connectionState.listStates[listKey];
-      const listChanged = !previousListState ||
+      const listChanged =
+        !previousListState ||
         previousListState.count !== rooms.length ||
         JSON.stringify(previousListState.roomIds) !== JSON.stringify(roomIds);
 
@@ -846,11 +925,13 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
       if (listChanged) {
         response.lists[listKey] = {
           count: rooms.length,
-          ops: [{
-            op: 'SYNC',
-            range: [startIndex, endIndex],
-            room_ids: roomIds,
-          }],
+          ops: [
+            {
+              op: "SYNC",
+              range: [startIndex, endIndex],
+              room_ids: roomIds,
+            },
+          ],
         };
       } else {
         // List unchanged - just report count with no ops
@@ -863,11 +944,11 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
       for (const roomInfo of roomsInRange) {
         const roomState = connectionState.roomStates[roomInfo.roomId];
         const isInitialRoom = !roomState?.sentState;
-        const roomSincePos = isInitialRoom ? 0 : (roomState?.lastStreamOrdering || 0);
+        const roomSincePos = isInitialRoom ? 0 : roomState?.lastStreamOrdering || 0;
 
         // Handle invited rooms differently - they get invite_state not timeline
         // Always include invited room data (small payload) so client doesn't lose invites on reconnect
-        if (roomInfo.membership === 'invite') {
+        if (roomInfo.membership === "invite") {
           const roomData = await getInviteRoomData(db, roomInfo.roomId, userId);
           response.rooms[roomInfo.roomId] = roomData;
           connectionState.roomStates[roomInfo.roomId] = {
@@ -887,31 +968,44 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
 
         // Check if notification count changed (for marking rooms as read)
         const hasPrevCount = roomInfo.roomId in (connectionState.roomNotificationCounts || {});
-        const prevNotificationCount = connectionState.roomNotificationCounts?.[roomInfo.roomId] ?? 0;
+        const prevNotificationCount =
+          connectionState.roomNotificationCounts?.[roomInfo.roomId] ?? 0;
         const currentNotificationCount = roomData.notification_count ?? 0;
-        const notificationCountChanged = hasPrevCount && currentNotificationCount !== prevNotificationCount;
+        const notificationCountChanged =
+          hasPrevCount && currentNotificationCount !== prevNotificationCount;
 
         // Check if m.fully_read marker changed
-        const fullyReadResult = await db.prepare(`
+        const fullyReadResult = await db
+          .prepare(`
           SELECT content FROM account_data
           WHERE user_id = ? AND room_id = ? AND event_type = 'm.fully_read'
-        `).bind(userId, roomInfo.roomId).first<{ content: string }>();
-        let currentFullyRead = '';
+        `)
+          .bind(userId, roomInfo.roomId)
+          .first<{ content: string }>();
+        let currentFullyRead = "";
         if (fullyReadResult) {
           try {
-            currentFullyRead = JSON.parse(fullyReadResult.content).event_id || '';
-          } catch { /* ignore */ }
+            currentFullyRead = JSON.parse(fullyReadResult.content).event_id || "";
+          } catch {
+            /* ignore */
+          }
         }
-        const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomInfo.roomId] ?? '';
-        const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== '';
+        const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomInfo.roomId] ?? "";
+        const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== "";
 
         // Track if this is the first time we're sending this room as "read" (notification_count = 0)
         // This ensures Element X receives the room with 0 unread count at least once
-        const firstTimeRead = currentNotificationCount === 0
-          && !connectionState.roomSentAsRead?.[roomInfo.roomId];
+        const firstTimeRead =
+          currentNotificationCount === 0 && !connectionState.roomSentAsRead?.[roomInfo.roomId];
 
         // Include room if it's initial, has new events, notification count changed, fully_read changed, OR first time read
-        if (isInitialRoom || (roomData.timeline && roomData.timeline.length > 0) || notificationCountChanged || fullyReadChanged || firstTimeRead) {
+        if (
+          isInitialRoom ||
+          (roomData.timeline && roomData.timeline.length > 0) ||
+          notificationCountChanged ||
+          fullyReadChanged ||
+          firstTimeRead
+        ) {
           response.rooms[roomInfo.roomId] = roomData;
 
           // Update tracked state
@@ -950,9 +1044,12 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
   if (body.room_subscriptions) {
     for (const [roomId, subscription] of Object.entries(body.room_subscriptions)) {
       // Check if user has access to this room
-      const membershipResult = await db.prepare(`
+      const membershipResult = await db
+        .prepare(`
         SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?
-      `).bind(roomId, userId).first<{ membership: string }>();
+      `)
+        .bind(roomId, userId)
+        .first<{ membership: string }>();
 
       if (!membershipResult) {
         continue; // Skip rooms user isn't in
@@ -960,11 +1057,11 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
 
       const roomState = connectionState.roomStates[roomId];
       const isInitialRoom = !roomState?.sentState;
-      const roomSincePos = isInitialRoom ? 0 : (roomState?.lastStreamOrdering || 0);
+      const roomSincePos = isInitialRoom ? 0 : roomState?.lastStreamOrdering || 0;
 
       // Handle invited rooms differently - they get invite_state not timeline
       // Always include invited room data (small payload) so client doesn't lose invites on reconnect
-      if (membershipResult.membership === 'invite') {
+      if (membershipResult.membership === "invite") {
         const roomData = await getInviteRoomData(db, roomId, userId);
         response.rooms[roomId] = roomData;
         connectionState.roomStates[roomId] = {
@@ -986,28 +1083,40 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
       const hasPrevCount = roomId in (connectionState.roomNotificationCounts || {});
       const prevNotificationCount = connectionState.roomNotificationCounts?.[roomId] ?? 0;
       const currentNotificationCount = roomData.notification_count ?? 0;
-      const notificationCountChanged = hasPrevCount && currentNotificationCount !== prevNotificationCount;
+      const notificationCountChanged =
+        hasPrevCount && currentNotificationCount !== prevNotificationCount;
 
       // Check if m.fully_read marker changed
-      const fullyReadResult = await db.prepare(`
+      const fullyReadResult = await db
+        .prepare(`
         SELECT content FROM account_data
         WHERE user_id = ? AND room_id = ? AND event_type = 'm.fully_read'
-      `).bind(userId, roomId).first<{ content: string }>();
-      let currentFullyRead = '';
+      `)
+        .bind(userId, roomId)
+        .first<{ content: string }>();
+      let currentFullyRead = "";
       if (fullyReadResult) {
         try {
-          currentFullyRead = JSON.parse(fullyReadResult.content).event_id || '';
-        } catch { /* ignore */ }
+          currentFullyRead = JSON.parse(fullyReadResult.content).event_id || "";
+        } catch {
+          /* ignore */
+        }
       }
-      const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomId] ?? '';
-      const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== '';
+      const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomId] ?? "";
+      const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== "";
 
       // Track if this is the first time we're sending this room as "read" (notification_count = 0)
-      const firstTimeRead = currentNotificationCount === 0
-        && !connectionState.roomSentAsRead?.[roomId];
+      const firstTimeRead =
+        currentNotificationCount === 0 && !connectionState.roomSentAsRead?.[roomId];
 
       // Include room if it's initial, has new events, notification count changed, fully_read changed, OR first time read
-      if (isInitialRoom || (roomData.timeline && roomData.timeline.length > 0) || notificationCountChanged || fullyReadChanged || firstTimeRead) {
+      if (
+        isInitialRoom ||
+        (roomData.timeline && roomData.timeline.length > 0) ||
+        notificationCountChanged ||
+        fullyReadChanged ||
+        firstTimeRead
+      ) {
         response.rooms[roomId] = roomData;
 
         // Update tracked state
@@ -1044,22 +1153,22 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
   // Process extensions
   if (body.extensions) {
     const extensionKeys = Object.keys(body.extensions);
-    console.log('[sliding-sync] Extensions requested:', extensionKeys, 'by user:', userId);
+    console.log("[sliding-sync] Extensions requested:", extensionKeys, "by user:", userId);
 
     // To-device messages
     // to_device: enabled if key exists (MSC4186) or enabled=true (MSC3575)
     if (body.extensions.to_device) {
       const limit = body.extensions.to_device.limit || 100;
-      const deviceId = c.get('deviceId');
+      const deviceId = c.get("deviceId");
 
       // Get to-device messages from D1 database (properly stored per-device)
-      const { getToDeviceMessages } = await import('./to-device');
+      const { getToDeviceMessages } = await import("./to-device");
       const { events, nextBatch } = await getToDeviceMessages(
         db,
         userId,
-        deviceId || '',
+        deviceId || "",
         body.extensions.to_device.since,
-        limit
+        limit,
       );
 
       response.extensions.to_device = {
@@ -1071,17 +1180,20 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
     // E2EE extension
     // e2ee: enabled if key exists (MSC4186) or enabled=true (MSC3575)
     if (body.extensions.e2ee) {
-      const deviceId = c.get('deviceId');
+      const deviceId = c.get("deviceId");
 
       // Get one-time key counts from database
       const keyCounts: Record<string, number> = {};
       if (deviceId) {
-        const counts = await db.prepare(`
+        const counts = await db
+          .prepare(`
           SELECT algorithm, COUNT(*) as count
           FROM one_time_keys
           WHERE user_id = ? AND device_id = ? AND claimed = 0
           GROUP BY algorithm
-        `).bind(userId, deviceId).all();
+        `)
+          .bind(userId, deviceId)
+          .all();
         for (const row of counts.results as { algorithm: string; count: number }[]) {
           keyCounts[row.algorithm] = row.count;
         }
@@ -1090,12 +1202,17 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
       // Get unused fallback key types
       const unusedFallbackTypes: string[] = [];
       if (deviceId) {
-        const fallbackKeys = await db.prepare(`
+        const fallbackKeys = await db
+          .prepare(`
           SELECT DISTINCT algorithm
           FROM fallback_keys
           WHERE user_id = ? AND device_id = ? AND used = 0
-        `).bind(userId, deviceId).all();
-        unusedFallbackTypes.push(...(fallbackKeys.results as { algorithm: string }[]).map(row => row.algorithm));
+        `)
+          .bind(userId, deviceId)
+          .all();
+        unusedFallbackTypes.push(
+          ...(fallbackKeys.results as { algorithm: string }[]).map((row) => row.algorithm),
+        );
       }
 
       // Get device list changes
@@ -1109,18 +1226,23 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
         // This is essential for E2EE bootstrap - Element X needs to see its own user
         // in device_lists.changed to know cross-signing keys were uploaded successfully
         const userKeysDO = c.env.USER_KEYS.get(c.env.USER_KEYS.idFromName(userId));
-        const deviceIdsResp = await userKeysDO.fetch(new Request('http://internal/device-keys/list'));
-        const deviceIds = await deviceIdsResp.json() as string[];
+        const deviceIdsResp = await userKeysDO.fetch(
+          new Request("http://internal/device-keys/list"),
+        );
+        const deviceIds = (await deviceIdsResp.json()) as string[];
 
         // Also check for cross-signing keys
-        const crossSigningResp = await userKeysDO.fetch(new Request('http://internal/cross-signing/get'));
-        const crossSigningKeys = await crossSigningResp.json() as Record<string, any>;
+        const crossSigningResp = await userKeysDO.fetch(
+          new Request("http://internal/cross-signing/get"),
+        );
+        const crossSigningKeys = (await crossSigningResp.json()) as Record<string, any>;
 
         if (deviceIds.length > 0 || Object.keys(crossSigningKeys).length > 0) {
           deviceListChanged.push(userId);
         }
       } else {
-        const changes = await db.prepare(`
+        const changes = await db
+          .prepare(`
           SELECT DISTINCT dkc.user_id
           FROM device_key_changes dkc
           WHERE dkc.stream_position > ?
@@ -1133,8 +1255,12 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
                   AND rm2.user_id = dkc.user_id AND rm2.membership = 'join'
               )
             )
-        `).bind(sincePos, userId, userId).all();
-        deviceListChanged.push(...(changes.results as { user_id: string }[]).map(row => row.user_id));
+        `)
+          .bind(sincePos, userId, userId)
+          .all();
+        deviceListChanged.push(
+          ...(changes.results as { user_id: string }[]).map((row) => row.user_id),
+        );
       }
 
       response.extensions.e2ee = {
@@ -1151,10 +1277,13 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
     // account_data: enabled if key exists (MSC4186) or enabled=true (MSC3575)
     if (body.extensions.account_data) {
       // Get global account data from D1
-      const globalData = await db.prepare(`
+      const globalData = await db
+        .prepare(`
         SELECT event_type, content FROM account_data
         WHERE user_id = ? AND room_id = ''
-      `).bind(userId).all();
+      `)
+        .bind(userId)
+        .all();
 
       // Build map of D1 account data
       const globalAccountData: Record<string, any> = {};
@@ -1164,13 +1293,13 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
         } catch {
           // Malformed JSON in account_data - use empty object
           globalAccountData[d.event_type] = {};
-          console.warn('[sliding-sync MSC3575] Failed to parse account data:', d.event_type);
+          console.warn("[sliding-sync MSC3575] Failed to parse account data:", d.event_type);
         }
       }
 
       // CRITICAL: Get E2EE account data from Durable Object (strongly consistent)
       // This ensures SSSS data is immediately visible after being written
-      const { getE2EEAccountDataFromDO } = await import('./account-data');
+      const { getE2EEAccountDataFromDO } = await import("./account-data");
       try {
         const e2eeData = await getE2EEAccountDataFromDO(c.env, userId);
         // Merge E2EE data (Durable Object takes precedence for consistency)
@@ -1178,7 +1307,7 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
           globalAccountData[eventType] = content;
         }
       } catch (error) {
-        console.error('[sliding-sync MSC3575] Failed to get E2EE account data from DO:', error);
+        console.error("[sliding-sync MSC3575] Failed to get E2EE account data from DO:", error);
         // Continue with D1 data only - DO unavailable
       }
 
@@ -1193,13 +1322,16 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
       // Get room account data for specified rooms
       const roomsToCheck = body.extensions.account_data.rooms || Object.keys(response.rooms);
       for (const roomId of roomsToCheck) {
-        const roomData = await db.prepare(`
+        const roomData = await db
+          .prepare(`
           SELECT event_type, content FROM account_data
           WHERE user_id = ? AND room_id = ?
-        `).bind(userId, roomId).all();
+        `)
+          .bind(userId, roomId)
+          .all();
 
         if (roomData.results.length > 0) {
-          response.extensions.account_data.rooms![roomId] = (roomData.results as any[]).map(d => {
+          response.extensions.account_data.rooms![roomId] = (roomData.results as any[]).map((d) => {
             try {
               return { type: d.event_type, content: JSON.parse(d.content) };
             } catch {
@@ -1225,8 +1357,8 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
         for (const roomId of allRoomIds) {
           const userIds = typingByRoom[roomId] || [];
           response.extensions.typing.rooms![roomId] = {
-            type: 'm.typing',
-            content: { user_ids: userIds }
+            type: "m.typing",
+            content: { user_ids: userIds },
           };
         }
       }
@@ -1249,7 +1381,7 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
       response.extensions.receipts = { rooms: {} };
       for (const [roomId, content] of Object.entries(receiptsByRoom)) {
         response.extensions.receipts.rooms![roomId] = {
-          type: 'm.receipt',
+          type: "m.receipt",
           content,
         };
       }
@@ -1263,9 +1395,12 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
       // Get presence for users in the rooms
       const userIds = new Set<string>();
       for (const roomId of Object.keys(response.rooms)) {
-        const members = await db.prepare(`
+        const members = await db
+          .prepare(`
           SELECT user_id FROM room_memberships WHERE room_id = ? AND membership = 'join'
-        `).bind(roomId).all();
+        `)
+          .bind(roomId)
+          .all();
         for (const member of members.results as any[]) {
           userIds.add(member.user_id);
         }
@@ -1274,10 +1409,10 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
       for (const uid of userIds) {
         if (uid === userId) continue;
         const presenceKey = `presence:${uid}`;
-        const presence = await cache.get(presenceKey, 'json') as any;
+        const presence = (await cache.get(presenceKey, "json")) as any;
         if (presence) {
           response.extensions.presence.events!.push({
-            type: 'm.presence',
+            type: "m.presence",
             sender: uid,
             content: presence,
           });
@@ -1290,7 +1425,7 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
   try {
     await saveConnectionState(syncDO, userId, connId, connectionState);
   } catch (error) {
-    console.error('[sliding-sync MSC3575] Failed to save connection state:', error);
+    console.error("[sliding-sync MSC3575] Failed to save connection state:", error);
   }
 
   return c.json(response);
@@ -1304,20 +1439,20 @@ app.post('/_matrix/client/unstable/org.matrix.msc3575/sync', requireAuth(), asyn
 // - Made shortly after push notification delivery
 function detectNSERequest(
   userAgent: string | undefined,
-  body: SlidingSyncRequest
+  body: SlidingSyncRequest,
 ): { isLikelyNSE: boolean; indicators: string[] } {
   const indicators: string[] = [];
 
   // Check User-Agent patterns
   // Element X iOS NSE typically has "NSE" in User-Agent or different app name
   if (userAgent) {
-    if (userAgent.includes('NSE') || userAgent.includes('NotificationService')) {
-      indicators.push('user-agent-nse');
+    if (userAgent.includes("NSE") || userAgent.includes("NotificationService")) {
+      indicators.push("user-agent-nse");
     }
     // Element X iOS main app pattern: "Element X iOS/..."
     // NSE might use different pattern
-    if (!userAgent.includes('Element X iOS') && userAgent.includes('iOS')) {
-      indicators.push('user-agent-different-ios');
+    if (!userAgent.includes("Element X iOS") && userAgent.includes("iOS")) {
+      indicators.push("user-agent-different-ios");
     }
   }
 
@@ -1326,23 +1461,27 @@ function detectNSERequest(
   const lists = body.lists ? Object.keys(body.lists) : [];
 
   if (roomSubscriptions.length === 1 && lists.length === 0) {
-    indicators.push('single-room-subscription');
+    indicators.push("single-room-subscription");
   }
 
   // Check for minimal extensions (NSE only needs room content)
   const extensionKeys = body.extensions ? Object.keys(body.extensions) : [];
   if (extensionKeys.length === 0) {
-    indicators.push('no-extensions');
-  } else if (extensionKeys.length <= 2 && !extensionKeys.includes('typing') && !extensionKeys.includes('presence')) {
-    indicators.push('minimal-extensions');
+    indicators.push("no-extensions");
+  } else if (
+    extensionKeys.length <= 2 &&
+    !extensionKeys.includes("typing") &&
+    !extensionKeys.includes("presence")
+  ) {
+    indicators.push("minimal-extensions");
   }
 
   // NSE typically requests small timeline
   if (body.room_subscriptions) {
     const subscriptions = Object.values(body.room_subscriptions);
-    const allSmallTimeline = subscriptions.every(s => (s.timeline_limit || 10) <= 5);
+    const allSmallTimeline = subscriptions.every((s) => (s.timeline_limit || 10) <= 5);
     if (allSmallTimeline && subscriptions.length > 0) {
-      indicators.push('small-timeline-limit');
+      indicators.push("small-timeline-limit");
     }
   }
 
@@ -1354,12 +1493,12 @@ function detectNSERequest(
 
 // MSC4186 Simplified Sliding Sync handler (shared between endpoints)
 async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
-  const userId = c.get('userId');
+  const userId = c.get("userId");
   const db = c.env.DB;
-  const syncDO = c.env.SYNC;  // Use Durable Object for connection state (not KV - avoids rate limits)
+  const syncDO = c.env.SYNC; // Use Durable Object for connection state (not KV - avoids rate limits)
 
   // Capture User-Agent for NSE detection
-  const userAgent = c.req.header('User-Agent');
+  const userAgent = c.req.header("User-Agent");
 
   let body: SlidingSyncRequest;
   try {
@@ -1368,12 +1507,12 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
     return Errors.badJson().toResponse();
   }
 
-  const connId = body.conn_id || 'default';
+  const connId = body.conn_id || "default";
 
   // NSE Detection - log potential NSE requests
   const nseDetection = detectNSERequest(userAgent, body);
   if (nseDetection.isLikelyNSE || nseDetection.indicators.length > 0) {
-    console.log('[sliding-sync] POTENTIAL NSE REQUEST:', {
+    console.log("[sliding-sync] POTENTIAL NSE REQUEST:", {
       userId,
       userAgent,
       isLikelyNSE: nseDetection.isLikelyNSE,
@@ -1385,10 +1524,10 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   }
 
   // Parse timeout for long-polling (query string takes precedence, then body, default 0)
-  const queryTimeout = c.req.query('timeout');
+  const queryTimeout = c.req.query("timeout");
   const timeout = Math.min(
-    queryTimeout ? parseInt(queryTimeout) : (body.timeout || 0),
-    25000  // Cap at 25s to stay under Workers 30s limit
+    queryTimeout ? parseInt(queryTimeout) : body.timeout || 0,
+    25000, // Cap at 25s to stay under Workers 30s limit
   );
 
   // Get current stream position from database
@@ -1400,21 +1539,24 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
     connectionState = await getConnectionState(syncDO, userId, connId);
   } catch (error) {
     // DO unavailable - return error so client knows to retry
-    console.error('[sliding-sync] DO unavailable:', error);
-    return c.json({
-      errcode: 'M_UNKNOWN',
-      error: 'Sync service temporarily unavailable',
-    }, 503);
+    console.error("[sliding-sync] DO unavailable:", error);
+    return c.json(
+      {
+        errcode: "M_UNKNOWN",
+        error: "Sync service temporarily unavailable",
+      },
+      503,
+    );
   }
 
   // IMPORTANT: pos can be in query string OR body - check both
   // Element X sends pos in query string, other clients may use body
-  const queryPos = c.req.query('pos');
+  const queryPos = c.req.query("pos");
   const posToken = queryPos || body.pos;
   const sincePos = posToken ? parseInt(posToken) : 0;
 
   // Debug logging for connection state (includes user-agent for NSE debugging)
-  console.log('[sliding-sync] Request:', {
+  console.log("[sliding-sync] Request:", {
     userId,
     connId,
     timeout,
@@ -1424,7 +1566,8 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
     currentStreamPos,
     hasConnectionState: !!connectionState,
     hasLists: !!body.lists && Object.keys(body.lists).length > 0,
-    hasRoomSubscriptions: !!body.room_subscriptions && Object.keys(body.room_subscriptions).length > 0,
+    hasRoomSubscriptions:
+      !!body.room_subscriptions && Object.keys(body.room_subscriptions).length > 0,
     hasExtensions: !!body.extensions,
     extensionKeys: body.extensions ? Object.keys(body.extensions) : [],
     userAgent: userAgent?.substring(0, 100), // Truncate for log readability
@@ -1436,7 +1579,12 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   if (posToken && !connectionState) {
     if (sincePos <= currentStreamPos) {
       // Valid position, create fresh connection state treating it as a reconnect
-      console.log('[sliding-sync] Reconnecting with valid pos', sincePos, 'current:', currentStreamPos);
+      console.log(
+        "[sliding-sync] Reconnecting with valid pos",
+        sincePos,
+        "current:",
+        currentStreamPos,
+      );
       connectionState = {
         userId,
         pos: sincePos,
@@ -1446,10 +1594,13 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
       };
     } else {
       // Position is in the future - invalid
-      return c.json({
-        errcode: 'M_UNKNOWN_POS',
-        error: 'Unknown position token',
-      }, 400);
+      return c.json(
+        {
+          errcode: "M_UNKNOWN_POS",
+          error: "Unknown position token",
+        },
+        400,
+      );
     }
   }
 
@@ -1502,11 +1653,12 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
       }
 
       const roomsInRange = rooms.slice(startIndex, endIndex + 1);
-      const roomIds = roomsInRange.map(r => r.roomId);
+      const roomIds = roomsInRange.map((r) => r.roomId);
 
       // Check if the list has changed since last sync
       const previousListState = connectionState.listStates[listKey];
-      const listChanged = !previousListState ||
+      const listChanged =
+        !previousListState ||
         previousListState.count !== rooms.length ||
         JSON.stringify(previousListState.roomIds) !== JSON.stringify(roomIds);
 
@@ -1515,11 +1667,13 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
         hasChanges = true; // Mark that we have actual changes
         response.lists[listKey] = {
           count: rooms.length,
-          ops: [{
-            op: 'SYNC',
-            range: [startIndex, endIndex],
-            room_ids: roomIds,
-          }],
+          ops: [
+            {
+              op: "SYNC",
+              range: [startIndex, endIndex],
+              room_ids: roomIds,
+            },
+          ],
         };
       } else {
         // List unchanged - just report count with no ops
@@ -1531,11 +1685,11 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
       for (const roomInfo of roomsInRange) {
         const roomState = connectionState.roomStates[roomInfo.roomId];
         const isInitialRoom = !roomState?.sentState;
-        const roomSincePos = isInitialRoom ? 0 : (roomState?.lastStreamOrdering || sincePos);
+        const roomSincePos = isInitialRoom ? 0 : roomState?.lastStreamOrdering || sincePos;
 
         // Handle invited rooms differently - they get invite_state not timeline
         // Always include invited room data (small payload) so client doesn't lose invites on reconnect
-        if (roomInfo.membership === 'invite') {
+        if (roomInfo.membership === "invite") {
           const roomData = await getInviteRoomData(db, roomInfo.roomId, userId);
           hasChanges = true; // Mark that we have actual changes
           response.rooms[roomInfo.roomId] = roomData;
@@ -1556,31 +1710,44 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
 
         // Check if notification count changed (for marking rooms as read)
         const hasPrevCount = roomInfo.roomId in (connectionState.roomNotificationCounts || {});
-        const prevNotificationCount = connectionState.roomNotificationCounts?.[roomInfo.roomId] ?? 0;
+        const prevNotificationCount =
+          connectionState.roomNotificationCounts?.[roomInfo.roomId] ?? 0;
         const currentNotificationCount = roomData.notification_count ?? 0;
-        const notificationCountChanged = hasPrevCount && currentNotificationCount !== prevNotificationCount;
+        const notificationCountChanged =
+          hasPrevCount && currentNotificationCount !== prevNotificationCount;
 
         // Check if m.fully_read marker changed (Element X uses this for encrypted rooms)
-        const fullyReadResult = await db.prepare(`
+        const fullyReadResult = await db
+          .prepare(`
           SELECT content FROM account_data
           WHERE user_id = ? AND room_id = ? AND event_type = 'm.fully_read'
-        `).bind(userId, roomInfo.roomId).first<{ content: string }>();
-        let currentFullyRead = '';
+        `)
+          .bind(userId, roomInfo.roomId)
+          .first<{ content: string }>();
+        let currentFullyRead = "";
         if (fullyReadResult) {
           try {
-            currentFullyRead = JSON.parse(fullyReadResult.content).event_id || '';
-          } catch { /* ignore */ }
+            currentFullyRead = JSON.parse(fullyReadResult.content).event_id || "";
+          } catch {
+            /* ignore */
+          }
         }
-        const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomInfo.roomId] ?? '';
-        const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== '';
+        const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomInfo.roomId] ?? "";
+        const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== "";
 
         // Track if this is the first time we're sending this room as "read" (notification_count = 0)
         // This ensures Element X receives the room with 0 unread count at least once
-        const firstTimeRead = currentNotificationCount === 0
-          && !connectionState.roomSentAsRead?.[roomInfo.roomId];
+        const firstTimeRead =
+          currentNotificationCount === 0 && !connectionState.roomSentAsRead?.[roomInfo.roomId];
 
         // Include room if it's initial, has new events, notification count changed, fully_read changed, OR first time read
-        if (isInitialRoom || (roomData.timeline && roomData.timeline.length > 0) || notificationCountChanged || fullyReadChanged || firstTimeRead) {
+        if (
+          isInitialRoom ||
+          (roomData.timeline && roomData.timeline.length > 0) ||
+          notificationCountChanged ||
+          fullyReadChanged ||
+          firstTimeRead
+        ) {
           hasChanges = true; // Mark that we have actual changes
           response.rooms[roomInfo.roomId] = roomData;
 
@@ -1622,19 +1789,22 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   // Process room subscriptions
   if (body.room_subscriptions) {
     for (const [roomId, subscription] of Object.entries(body.room_subscriptions)) {
-      const membershipResult = await db.prepare(`
+      const membershipResult = (await db
+        .prepare(`
         SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?
-      `).bind(roomId, userId).first() as { membership: string } | null;
+      `)
+        .bind(roomId, userId)
+        .first()) as { membership: string } | null;
 
       if (!membershipResult) continue;
 
       const roomState = connectionState.roomStates[roomId];
       const isInitialRoom = !roomState?.sentState;
-      const roomSincePos = isInitialRoom ? 0 : (roomState?.lastStreamOrdering || sincePos);
+      const roomSincePos = isInitialRoom ? 0 : roomState?.lastStreamOrdering || sincePos;
 
       // Handle invited rooms differently - they get invite_state not timeline
       // Always include invited room data (small payload) so client doesn't lose invites on reconnect
-      if (membershipResult.membership === 'invite') {
+      if (membershipResult.membership === "invite") {
         const roomData = await getInviteRoomData(db, roomId, userId);
         hasChanges = true; // Mark that we have actual changes
         response.rooms[roomId] = roomData;
@@ -1657,25 +1827,31 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
       const hasPrevCount = roomId in (connectionState.roomNotificationCounts || {});
       const prevNotificationCount = connectionState.roomNotificationCounts?.[roomId] ?? 0;
       const currentNotificationCount = roomData.notification_count ?? 0;
-      const notificationCountChanged = hasPrevCount && currentNotificationCount !== prevNotificationCount;
+      const notificationCountChanged =
+        hasPrevCount && currentNotificationCount !== prevNotificationCount;
 
       // Check if m.fully_read marker changed (Element X uses this for encrypted rooms)
-      const fullyReadResult = await db.prepare(`
+      const fullyReadResult = await db
+        .prepare(`
         SELECT content FROM account_data
         WHERE user_id = ? AND room_id = ? AND event_type = 'm.fully_read'
-      `).bind(userId, roomId).first<{ content: string }>();
-      let currentFullyRead = '';
+      `)
+        .bind(userId, roomId)
+        .first<{ content: string }>();
+      let currentFullyRead = "";
       if (fullyReadResult) {
         try {
-          currentFullyRead = JSON.parse(fullyReadResult.content).event_id || '';
-        } catch { /* ignore */ }
+          currentFullyRead = JSON.parse(fullyReadResult.content).event_id || "";
+        } catch {
+          /* ignore */
+        }
       }
-      const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomId] ?? '';
-      const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== '';
+      const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomId] ?? "";
+      const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== "";
 
       // Track if this is the first time we're sending this room as "read" (notification_count = 0)
-      const firstTimeRead = currentNotificationCount === 0
-        && !connectionState.roomSentAsRead?.[roomId];
+      const firstTimeRead =
+        currentNotificationCount === 0 && !connectionState.roomSentAsRead?.[roomId];
 
       // For room subscriptions, ALWAYS include room data because client explicitly requested it
       // This is different from list-based sync - room subscriptions mean "give me this room's data"
@@ -1684,7 +1860,13 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
       response.rooms[roomId] = roomData;
 
       // Also track for legacy reasons (notification changes, read status)
-      if (isInitialRoom || (roomData.timeline && roomData.timeline.length > 0) || notificationCountChanged || fullyReadChanged || firstTimeRead) {
+      if (
+        isInitialRoom ||
+        (roomData.timeline && roomData.timeline.length > 0) ||
+        notificationCountChanged ||
+        fullyReadChanged ||
+        firstTimeRead
+      ) {
         // Already included above, but update tracking state
 
         // Update tracked state
@@ -1720,25 +1902,25 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   // Element X sends extensions without explicit enabled:true
   if (body.extensions) {
     // Log what extensions are requested (consider present = enabled for MSC4186 compatibility)
-    const enabledExtensions = Object.keys(body.extensions).filter(k => {
+    const enabledExtensions = Object.keys(body.extensions).filter((k) => {
       const ext = (body.extensions as any)[k];
       return ext !== undefined && ext !== null;
     });
-    console.log('[sliding-sync] Extensions requested:', enabledExtensions);
+    console.log("[sliding-sync] Extensions requested:", enabledExtensions);
 
     // to_device: enabled if key exists (MSC4186) or enabled=true (MSC3575)
     if (body.extensions.to_device) {
-      const deviceId = c.get('deviceId');
+      const deviceId = c.get("deviceId");
       const limit = body.extensions.to_device.limit || 100;
 
       // Get to-device messages from D1 database (properly stored per-device)
-      const { getToDeviceMessages } = await import('./to-device');
+      const { getToDeviceMessages } = await import("./to-device");
       const { events, nextBatch } = await getToDeviceMessages(
         db,
         userId,
-        deviceId || '',
+        deviceId || "",
         body.extensions.to_device.since,
-        limit
+        limit,
       );
 
       response.extensions.to_device = {
@@ -1749,17 +1931,20 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
 
     // e2ee: enabled if key exists (MSC4186) or enabled=true (MSC3575)
     if (body.extensions.e2ee) {
-      const deviceId = c.get('deviceId');
+      const deviceId = c.get("deviceId");
 
       // Get one-time key counts from database
       const keyCounts: Record<string, number> = {};
       if (deviceId) {
-        const counts = await db.prepare(`
+        const counts = await db
+          .prepare(`
           SELECT algorithm, COUNT(*) as count
           FROM one_time_keys
           WHERE user_id = ? AND device_id = ? AND claimed = 0
           GROUP BY algorithm
-        `).bind(userId, deviceId).all();
+        `)
+          .bind(userId, deviceId)
+          .all();
         for (const row of counts.results as { algorithm: string; count: number }[]) {
           keyCounts[row.algorithm] = row.count;
         }
@@ -1768,12 +1953,17 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
       // Get unused fallback key types
       const unusedFallbackTypes: string[] = [];
       if (deviceId) {
-        const fallbackKeys = await db.prepare(`
+        const fallbackKeys = await db
+          .prepare(`
           SELECT DISTINCT algorithm
           FROM fallback_keys
           WHERE user_id = ? AND device_id = ? AND used = 0
-        `).bind(userId, deviceId).all();
-        unusedFallbackTypes.push(...(fallbackKeys.results as { algorithm: string }[]).map(row => row.algorithm));
+        `)
+          .bind(userId, deviceId)
+          .all();
+        unusedFallbackTypes.push(
+          ...(fallbackKeys.results as { algorithm: string }[]).map((row) => row.algorithm),
+        );
       }
 
       // Get device list changes
@@ -1787,18 +1977,23 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
         // This is essential for E2EE bootstrap - Element X needs to see its own user
         // in device_lists.changed to know cross-signing keys were uploaded successfully
         const userKeysDO = c.env.USER_KEYS.get(c.env.USER_KEYS.idFromName(userId));
-        const deviceIdsResp = await userKeysDO.fetch(new Request('http://internal/device-keys/list'));
-        const deviceIds = await deviceIdsResp.json() as string[];
+        const deviceIdsResp = await userKeysDO.fetch(
+          new Request("http://internal/device-keys/list"),
+        );
+        const deviceIds = (await deviceIdsResp.json()) as string[];
 
         // Also check for cross-signing keys
-        const crossSigningResp = await userKeysDO.fetch(new Request('http://internal/cross-signing/get'));
-        const crossSigningKeys = await crossSigningResp.json() as Record<string, any>;
+        const crossSigningResp = await userKeysDO.fetch(
+          new Request("http://internal/cross-signing/get"),
+        );
+        const crossSigningKeys = (await crossSigningResp.json()) as Record<string, any>;
 
         if (deviceIds.length > 0 || Object.keys(crossSigningKeys).length > 0) {
           deviceListChanged.push(userId);
         }
       } else {
-        const changes = await db.prepare(`
+        const changes = await db
+          .prepare(`
           SELECT DISTINCT dkc.user_id
           FROM device_key_changes dkc
           WHERE dkc.stream_position > ?
@@ -1811,8 +2006,12 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
                   AND rm2.user_id = dkc.user_id AND rm2.membership = 'join'
               )
             )
-        `).bind(sincePos, userId, userId).all();
-        deviceListChanged.push(...(changes.results as { user_id: string }[]).map(row => row.user_id));
+        `)
+          .bind(sincePos, userId, userId)
+          .all();
+        deviceListChanged.push(
+          ...(changes.results as { user_id: string }[]).map((row) => row.user_id),
+        );
       }
 
       response.extensions.e2ee = {
@@ -1825,10 +2024,13 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
     // account_data: enabled if key exists (MSC4186) or enabled=true (MSC3575)
     if (body.extensions.account_data) {
       // Get global account data from D1
-      const globalData = await db.prepare(`
+      const globalData = await db
+        .prepare(`
         SELECT event_type, content FROM account_data
         WHERE user_id = ? AND room_id = ''
-      `).bind(userId).all();
+      `)
+        .bind(userId)
+        .all();
 
       // Build map of D1 account data
       const globalAccountData: Record<string, any> = {};
@@ -1842,7 +2044,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
 
       // CRITICAL: Get E2EE account data from Durable Object (strongly consistent)
       // This ensures SSSS data is immediately visible after being written
-      const { getE2EEAccountDataFromDO } = await import('./account-data');
+      const { getE2EEAccountDataFromDO } = await import("./account-data");
       try {
         const e2eeData = await getE2EEAccountDataFromDO(c.env, userId);
         // Merge E2EE data (Durable Object takes precedence for consistency)
@@ -1850,7 +2052,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
           globalAccountData[eventType] = content;
         }
       } catch (error) {
-        console.error('[sliding-sync MSC4186] Failed to get E2EE account data from DO:', error);
+        console.error("[sliding-sync MSC4186] Failed to get E2EE account data from DO:", error);
         // Continue with D1 data only - DO unavailable
       }
 
@@ -1863,25 +2065,33 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
       };
 
       // Get room account data (including m.fully_read for unread counts)
-      const userRooms = await db.prepare(`
+      const userRooms = await db
+        .prepare(`
         SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'
-      `).bind(userId).all();
-      const userRoomIds = (userRooms.results as { room_id: string }[]).map(r => r.room_id);
+      `)
+        .bind(userId)
+        .all();
+      const userRoomIds = (userRooms.results as { room_id: string }[]).map((r) => r.room_id);
 
       for (const roomId of userRoomIds) {
-        const roomAccountData = await db.prepare(`
+        const roomAccountData = await db
+          .prepare(`
           SELECT event_type, content FROM account_data
           WHERE user_id = ? AND room_id = ?
-        `).bind(userId, roomId).all();
+        `)
+          .bind(userId, roomId)
+          .all();
 
         if (roomAccountData.results.length > 0) {
-          response.extensions.account_data.rooms![roomId] = (roomAccountData.results as any[]).map(d => {
-            try {
-              return { type: d.event_type, content: JSON.parse(d.content) };
-            } catch {
-              return { type: d.event_type, content: {} };
-            }
-          });
+          response.extensions.account_data.rooms![roomId] = (roomAccountData.results as any[]).map(
+            (d) => {
+              try {
+                return { type: d.event_type, content: JSON.parse(d.content) };
+              } catch {
+                return { type: d.event_type, content: {} };
+              }
+            },
+          );
         }
       }
     }
@@ -1899,10 +2109,13 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
 
       // Element X uses a separate sync connection for extensions with NO rooms
       if (typingRequested && responseRoomIds.length === 0 && subscribedRoomIds.length === 0) {
-        const userRooms = await db.prepare(`
+        const userRooms = await db
+          .prepare(`
           SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'
-        `).bind(userId).all();
-        responseRoomIds = (userRooms.results as { room_id: string }[]).map(r => r.room_id);
+        `)
+          .bind(userId)
+          .all();
+        responseRoomIds = (userRooms.results as { room_id: string }[]).map((r) => r.room_id);
       }
 
       const allRoomIds = [...new Set([...responseRoomIds, ...subscribedRoomIds])];
@@ -1915,16 +2128,20 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
         for (const roomId of allRoomIds) {
           const userIds = typingByRoom[roomId] || [];
           response.extensions.typing.rooms![roomId] = {
-            type: 'm.typing',
-            content: { user_ids: userIds }
+            type: "m.typing",
+            content: { user_ids: userIds },
           };
         }
 
         // Debug: log typing data being returned
-        const typingRoomsWithUsers = Object.entries(response.extensions.typing.rooms!)
-          .filter(([_, data]) => (data as any).content.user_ids.length > 0);
+        const typingRoomsWithUsers = Object.entries(response.extensions.typing.rooms!).filter(
+          ([_, data]) => (data as any).content.user_ids.length > 0,
+        );
         if (typingRoomsWithUsers.length > 0) {
-          console.log('[sliding-sync] Returning typing data:', JSON.stringify(typingRoomsWithUsers));
+          console.log(
+            "[sliding-sync] Returning typing data:",
+            JSON.stringify(typingRoomsWithUsers),
+          );
         }
       }
     }
@@ -1939,10 +2156,13 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
       // If no rooms in response and no subscriptions, fetch for all user's joined rooms
       // Element X uses separate sync connections for extensions with no room context
       if (roomIdsToFetch.length === 0 && subscribedRoomIds.length === 0) {
-        const userRooms = await db.prepare(`
+        const userRooms = await db
+          .prepare(`
           SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'
-        `).bind(userId).all();
-        roomIdsToFetch = (userRooms.results as { room_id: string }[]).map(r => r.room_id);
+        `)
+          .bind(userId)
+          .all();
+        roomIdsToFetch = (userRooms.results as { room_id: string }[]).map((r) => r.room_id);
       } else {
         roomIdsToFetch = [...new Set([...roomIdsToFetch, ...subscribedRoomIds])];
       }
@@ -1954,7 +2174,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
         response.extensions.receipts = { rooms: {} };
         for (const [roomId, content] of Object.entries(receiptsByRoom)) {
           response.extensions.receipts.rooms![roomId] = {
-            type: 'm.receipt',
+            type: "m.receipt",
             content,
           };
         }
@@ -1962,7 +2182,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
         // Debug: log receipts data being returned
         const roomsWithReceipts = Object.keys(receiptsByRoom).length;
         if (roomsWithReceipts > 0) {
-          console.log('[sliding-sync] Returning receipts for', roomsWithReceipts, 'rooms');
+          console.log("[sliding-sync] Returning receipts for", roomsWithReceipts, "rooms");
         }
       } else {
         response.extensions.receipts = { rooms: {} };
@@ -1980,15 +2200,19 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   // Element X typically requests extensions properly on incremental syncs
   // Use initialSyncComplete flag to track if we've already done initial sync for this connection,
   // since clients can reconnect with sincePos === 0 but we shouldn't spam ephemeral data again
-  const needsEphemeralFallback = !connectionState.initialSyncComplete
-    && (!body.extensions || Object.keys(body.extensions).length === 0);
+  const needsEphemeralFallback =
+    !connectionState.initialSyncComplete &&
+    (!body.extensions || Object.keys(body.extensions).length === 0);
 
   if (needsEphemeralFallback) {
     // Get all user's rooms for ephemeral data
-    const userRoomsResult = await db.prepare(`
+    const userRoomsResult = await db
+      .prepare(`
       SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'
-    `).bind(userId).all();
-    const userRoomIds = (userRoomsResult.results as { room_id: string }[]).map(r => r.room_id);
+    `)
+      .bind(userId)
+      .all();
+    const userRoomIds = (userRoomsResult.results as { room_id: string }[]).map((r) => r.room_id);
 
     // Fallback: Include typing for all rooms - uses Room Durable Objects
     const typingByRoom = await getTypingForRooms(c.env, userRoomIds);
@@ -1998,8 +2222,8 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
     for (const roomId of userRoomIds) {
       const userIds = typingByRoom[roomId] || [];
       response.extensions.typing.rooms![roomId] = {
-        type: 'm.typing',
-        content: { user_ids: userIds }
+        type: "m.typing",
+        content: { user_ids: userIds },
       };
     }
 
@@ -2010,7 +2234,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
     response.extensions.receipts = { rooms: {} };
     for (const [roomId, content] of Object.entries(receiptsByRoom)) {
       response.extensions.receipts.rooms![roomId] = {
-        type: 'm.receipt',
+        type: "m.receipt",
         content,
       };
     }
@@ -2020,20 +2244,24 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
     // IMPORTANT: Also ensure room is in response.rooms so Element X processes the account_data
     response.extensions.account_data = { global: [], rooms: {} };
     for (const roomId of userRoomIds) {
-      const roomAccountData = await db.prepare(`
+      const roomAccountData = await db
+        .prepare(`
         SELECT event_type, content FROM account_data
         WHERE user_id = ? AND room_id = ?
-      `).bind(userId, roomId).all();
+      `)
+        .bind(userId, roomId)
+        .all();
 
       if (roomAccountData.results.length > 0) {
-        response.extensions.account_data.rooms![roomId] = (roomAccountData.results as any[]).map(d => {
-          try {
-            return { type: d.event_type, content: JSON.parse(d.content) };
-          } catch {
-            return { type: d.event_type, content: {} };
-          }
-        });
-
+        response.extensions.account_data.rooms![roomId] = (roomAccountData.results as any[]).map(
+          (d) => {
+            try {
+              return { type: d.event_type, content: JSON.parse(d.content) };
+            } catch {
+              return { type: d.event_type, content: {} };
+            }
+          },
+        );
       }
     }
   }
@@ -2050,7 +2278,13 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   }
 
   // Debug logging for response
-  console.log('[sliding-sync] Response:', { userId, responsePos: response.pos, hasChanges, timeout, willWait: !hasChanges && timeout > 0 });
+  console.log("[sliding-sync] Response:", {
+    userId,
+    responsePos: response.pos,
+    hasChanges,
+    timeout,
+    willWait: !hasChanges && timeout > 0,
+  });
 
   // ALWAYS save connection state - flags like initialSyncComplete must be persisted
   // We use Durable Objects now (not KV), so rate limits aren't a concern
@@ -2059,7 +2293,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   try {
     await saveConnectionState(syncDO, userId, connId, connectionState);
   } catch (error) {
-    console.error('[sliding-sync] Failed to save connection state:', error);
+    console.error("[sliding-sync] Failed to save connection state:", error);
     // Don't return error here - state can be rebuilt on next request
     // But client may experience duplicated ephemeral data
   }
@@ -2068,26 +2302,28 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   // The SyncDurableObject will wake us up when events arrive for this user
   // Per MSC3575/MSC4186, server should wait up to timeout ms for new events
   if (!hasChanges && timeout > 0) {
-    console.log('[sliding-sync] No changes, waiting for events via DO, timeout:', timeout, 'ms');
+    console.log("[sliding-sync] No changes, waiting for events via DO, timeout:", timeout, "ms");
     try {
       const doId = syncDO.idFromName(userId);
       const stub = syncDO.get(doId);
-      const waitResponse = await stub.fetch(new Request('http://internal/wait-for-events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timeout }),
-      }));
-      const waitResult = await waitResponse.json() as { hasEvents: boolean };
+      const waitResponse = await stub.fetch(
+        new Request("http://internal/wait-for-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timeout }),
+        }),
+      );
+      const waitResult = (await waitResponse.json()) as { hasEvents: boolean };
 
       if (waitResult.hasEvents) {
-        console.log('[sliding-sync] Woken up early - events arrived');
+        console.log("[sliding-sync] Woken up early - events arrived");
         // Events arrived while waiting - return immediately so client makes new request
         // The next request will pick up the new events
       } else {
-        console.log('[sliding-sync] Wait timed out, no new events');
+        console.log("[sliding-sync] Wait timed out, no new events");
       }
     } catch (error) {
-      console.error('[sliding-sync] Error waiting for events:', error);
+      console.error("[sliding-sync] Error waiting for events:", error);
       // Fall through and return current response on error
     }
   }
@@ -2096,10 +2332,13 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
 }
 
 // MSC4186 Simplified Sliding Sync - unstable endpoint (used by Element X)
-app.post('/_matrix/client/unstable/org.matrix.simplified_msc3575/sync', requireAuth(), handleSimplifiedSlidingSync);
+app.post(
+  "/_matrix/client/unstable/org.matrix.simplified_msc3575/sync",
+  requireAuth(),
+  handleSimplifiedSlidingSync,
+);
 
 // MSC4186 Simplified Sliding Sync endpoint (v4)
-app.post('/_matrix/client/v4/sync', requireAuth(), handleSimplifiedSlidingSync);
-
+app.post("/_matrix/client/v4/sync", requireAuth(), handleSimplifiedSlidingSync);
 
 export default app;

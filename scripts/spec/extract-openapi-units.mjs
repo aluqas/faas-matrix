@@ -81,7 +81,8 @@ async function extractSpec(specName) {
         continue;
       }
 
-      const methodMatch = indent === 4 ? trimmed.match(/^(get|post|put|delete|patch|head|options):$/) : null;
+      const methodMatch =
+        indent === 4 ? trimmed.match(/^(get|post|put|delete|patch|head|options):$/) : null;
       if (methodMatch) {
         flushOperation();
         currentMethod = methodMatch[1];

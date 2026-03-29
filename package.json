@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "description": "Matrix homeserver running on Cloudflare Workers",
   "type": "module",
-  "packageManager": "bun",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
@@ -35,5 +34,6 @@
     "typescript": "^6.0.2",
     "vitest": "^4.1.1",
     "wrangler": "^4.77.0"
-  }
+  },
+  "packageManager": "bun"
 }

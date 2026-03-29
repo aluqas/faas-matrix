@@ -4,7 +4,7 @@
 // Each instance handles rate limiting for a specific category (login, register, etc.)
 // Counters are stored in memory and automatically cleaned up when they expire
 
-import { DurableObject } from 'cloudflare:workers';
+import { DurableObject } from "cloudflare:workers";
 
 interface RateLimitEntry {
   count: number;
@@ -12,19 +12,19 @@ interface RateLimitEntry {
 }
 
 interface CheckLimitRequest {
-  action: 'check';
+  action: "check";
   clientId: string;
   limit: number;
   windowMs: number;
 }
 
 interface ResetRequest {
-  action: 'reset';
+  action: "reset";
   clientId: string;
 }
 
 interface CleanupRequest {
-  action: 'cleanup';
+  action: "cleanup";
 }
 
 type RateLimitRequest = CheckLimitRequest | ResetRequest | CleanupRequest;
@@ -45,20 +45,20 @@ export class RateLimitDurableObject extends DurableObject<Record<string, unknown
       const body: RateLimitRequest = await request.json();
 
       switch (body.action) {
-        case 'check':
+        case "check":
           return Response.json(this.checkLimit(body.clientId, body.limit, body.windowMs));
-        case 'reset':
+        case "reset":
           this.counters.delete(body.clientId);
           return Response.json({ success: true });
-        case 'cleanup':
+        case "cleanup":
           this.cleanupExpiredEntries();
           return Response.json({ success: true });
         default:
-          return Response.json({ error: 'Unknown action' }, { status: 400 });
+          return Response.json({ error: "Unknown action" }, { status: 400 });
       }
     } catch (error) {
-      console.error('RateLimitDurableObject error:', error);
-      return Response.json({ error: 'Internal error' }, { status: 500 });
+      console.error("RateLimitDurableObject error:", error);
+      return Response.json({ error: "Internal error" }, { status: 500 });
     }
   }
 

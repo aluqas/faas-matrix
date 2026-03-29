@@ -5,10 +5,5 @@
     "browser": true,
     "es2022": true
   },
-  "ignorePatterns": [
-    "dist/**",
-    "coverage/**",
-    ".wrangler/**",
-    "node_modules/**"
-  ]
+  "ignorePatterns": ["dist/**", "coverage/**", ".wrangler/**", "node_modules/**"]
 }

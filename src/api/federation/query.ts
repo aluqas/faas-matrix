@@ -1,13 +1,13 @@
-import { Hono } from 'hono';
-import type { AppEnv } from '../../types';
-import { Errors } from '../../utils/errors';
-import { EventQueryService } from '../../matrix/application/event-query-service';
+import { Hono } from "hono";
+import type { AppEnv } from "../../types";
+import { Errors } from "../../utils/errors";
+import { EventQueryService } from "../../matrix/application/event-query-service";
 
 const app = new Hono<AppEnv>();
 const queries = new EventQueryService();
 
-app.post('/_matrix/federation/v1/get_missing_events/:roomId', async (c) => {
-  const roomId = c.req.param('roomId');
+app.post("/_matrix/federation/v1/get_missing_events/:roomId", async (c) => {
+  const roomId = c.req.param("roomId");
 
   let body: {
     earliest_events?: string[];
@@ -23,7 +23,7 @@ app.post('/_matrix/federation/v1/get_missing_events/:roomId', async (c) => {
   }
 
   if (!(await queries.roomExists(c.env.DB, roomId))) {
-    return Errors.notFound('Room not found').toResponse();
+    return Errors.notFound("Room not found").toResponse();
   }
 
   const events = await queries.getMissingEvents(c.env.DB, {
@@ -37,22 +37,22 @@ app.post('/_matrix/federation/v1/get_missing_events/:roomId', async (c) => {
   return c.json({ events });
 });
 
-app.get('/_matrix/federation/v1/timestamp_to_event/:roomId', async (c) => {
-  const roomId = c.req.param('roomId');
-  const ts = Number.parseInt(c.req.query('ts') || '0', 10);
-  const dir = c.req.query('dir') === 'b' ? 'b' : 'f';
+app.get("/_matrix/federation/v1/timestamp_to_event/:roomId", async (c) => {
+  const roomId = c.req.param("roomId");
+  const ts = Number.parseInt(c.req.query("ts") || "0", 10);
+  const dir = c.req.query("dir") === "b" ? "b" : "f";
 
   if (!ts || ts <= 0) {
-    return Errors.missingParam('ts').toResponse();
+    return Errors.missingParam("ts").toResponse();
   }
 
   if (!(await queries.roomExists(c.env.DB, roomId))) {
-    return Errors.notFound('Room not found').toResponse();
+    return Errors.notFound("Room not found").toResponse();
   }
 
   const event = await queries.findClosestEventByTimestamp(c.env.DB, roomId, ts, dir);
   if (!event) {
-    return Errors.notFound('No event found near timestamp').toResponse();
+    return Errors.notFound("No event found near timestamp").toResponse();
   }
 
   return c.json(event);

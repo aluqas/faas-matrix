@@ -1,10 +1,10 @@
 // TURN server integration for VoIP/WebRTC
 // Uses Cloudflare Calls TURN service
 
-import type { Env } from '../types';
+import type { Env } from "../types";
 
 // Cloudflare TURN API base URL
-const TURN_API_URL = 'https://rtc.live.cloudflare.com/v1/turn/keys';
+const TURN_API_URL = "https://rtc.live.cloudflare.com/v1/turn/keys";
 
 // Cache TTL for credentials (cache for 80% of credential TTL to ensure freshness)
 const CACHE_TTL_RATIO = 0.8;
@@ -24,9 +24,7 @@ const USER_RATE_LIMIT_MAX = 5; // Max 5 requests per minute per user
 
 // Cloudflare STUN servers to include in response
 // These help with NAT traversal even when TURN isn't needed
-const CLOUDFLARE_STUN_SERVERS = [
-  'stun:stun.cloudflare.com:3478',
-];
+const CLOUDFLARE_STUN_SERVERS = ["stun:stun.cloudflare.com:3478"];
 
 interface CloudflareTurnResponse {
   iceServers: Array<{
@@ -56,12 +54,17 @@ export interface MatrixTurnResponse {
 export class TurnError extends Error {
   constructor(
     message: string,
-    public readonly code: 'NOT_CONFIGURED' | 'API_ERROR' | 'INVALID_RESPONSE' | 'RATE_LIMITED' | 'USER_RATE_LIMITED',
+    public readonly code:
+      | "NOT_CONFIGURED"
+      | "API_ERROR"
+      | "INVALID_RESPONSE"
+      | "RATE_LIMITED"
+      | "USER_RATE_LIMITED",
     public readonly statusCode?: number,
-    public readonly retryAfterMs?: number
+    public readonly retryAfterMs?: number,
   ) {
     super(message);
-    this.name = 'TurnError';
+    this.name = "TurnError";
   }
 }
 
@@ -77,13 +80,13 @@ export class TurnError extends Error {
 export async function getMatrixTurnCredentials(
   env: Env,
   ttl: number = DEFAULT_TTL,
-  userId?: string
+  userId?: string,
 ): Promise<MatrixTurnResponse> {
   // Validate configuration
   if (!env.TURN_KEY_ID || !env.TURN_API_TOKEN) {
     throw new TurnError(
-      'TURN server not configured. Set TURN_KEY_ID and TURN_API_TOKEN.',
-      'NOT_CONFIGURED'
+      "TURN server not configured. Set TURN_KEY_ID and TURN_API_TOKEN.",
+      "NOT_CONFIGURED",
     );
   }
 
@@ -93,9 +96,9 @@ export async function getMatrixTurnCredentials(
     if (!rateLimitResult.allowed) {
       throw new TurnError(
         `Rate limited. Try again in ${rateLimitResult.retryAfterMs}ms.`,
-        'USER_RATE_LIMITED',
+        "USER_RATE_LIMITED",
         429,
-        rateLimitResult.retryAfterMs
+        rateLimitResult.retryAfterMs,
       );
     }
   }
@@ -131,8 +134,8 @@ export async function getMatrixTurnCredentials(
  */
 export function getStunServers(): MatrixTurnResponse {
   return {
-    username: '',
-    password: '',
+    username: "",
+    password: "",
     uris: CLOUDFLARE_STUN_SERVERS,
     ttl: 86400, // STUN doesn't need short TTL
   };
@@ -141,36 +144,33 @@ export function getStunServers(): MatrixTurnResponse {
 /**
  * Fetch fresh TURN credentials from Cloudflare Calls API
  */
-async function fetchTurnCredentials(
-  env: Env,
-  ttl: number
-): Promise<MatrixTurnResponse> {
+async function fetchTurnCredentials(env: Env, ttl: number): Promise<MatrixTurnResponse> {
   const url = `${TURN_API_URL}/${env.TURN_KEY_ID}/credentials/generate-ice-servers`;
 
   let response: Response;
   try {
     response = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${env.TURN_API_TOKEN}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${env.TURN_API_TOKEN}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ ttl }),
     });
   } catch (error) {
     throw new TurnError(
-      `Failed to connect to TURN API: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      'API_ERROR'
+      `Failed to connect to TURN API: ${error instanceof Error ? error.message : "Unknown error"}`,
+      "API_ERROR",
     );
   }
 
   // Handle rate limiting
   if (response.status === 429) {
-    const retryAfter = response.headers.get('Retry-After');
+    const retryAfter = response.headers.get("Retry-After");
     throw new TurnError(
-      `TURN API rate limited. Retry after ${retryAfter || 'unknown'} seconds.`,
-      'RATE_LIMITED',
-      429
+      `TURN API rate limited. Retry after ${retryAfter || "unknown"} seconds.`,
+      "RATE_LIMITED",
+      429,
     );
   }
 
@@ -185,36 +185,36 @@ async function fetchTurnCredentials(
     } catch {
       // Ignore error reading body
     }
-    throw new TurnError(errorMessage, 'API_ERROR', response.status);
+    throw new TurnError(errorMessage, "API_ERROR", response.status);
   }
 
   // Parse response
   let data: CloudflareTurnResponse;
   try {
-    data = await response.json() as CloudflareTurnResponse;
+    data = (await response.json()) as CloudflareTurnResponse;
   } catch {
-    throw new TurnError('Invalid JSON response from TURN API', 'INVALID_RESPONSE');
+    throw new TurnError("Invalid JSON response from TURN API", "INVALID_RESPONSE");
   }
 
   // Validate response structure - Cloudflare returns an array of iceServers
   if (!data.iceServers || !Array.isArray(data.iceServers) || data.iceServers.length === 0) {
     throw new TurnError(
       `TURN API response missing iceServers array. Got: ${JSON.stringify(data)}`,
-      'INVALID_RESPONSE'
+      "INVALID_RESPONSE",
     );
   }
 
   // Find the TURN server entry (the one with credentials)
-  const turnServer = data.iceServers.find(s => s.username && s.credential);
+  const turnServer = data.iceServers.find((s) => s.username && s.credential);
   if (!turnServer) {
     throw new TurnError(
       `TURN API response has no server with credentials. Got: ${JSON.stringify(data)}`,
-      'INVALID_RESPONSE'
+      "INVALID_RESPONSE",
     );
   }
 
   // Collect all URLs from Cloudflare (includes both STUN and TURN)
-  const cloudflareUrls = data.iceServers.flatMap(s => s.urls || []);
+  const cloudflareUrls = data.iceServers.flatMap((s) => s.urls || []);
 
   // Transform to Matrix format
   return {
@@ -230,10 +230,10 @@ async function fetchTurnCredentials(
  */
 async function getCachedCredentials(
   cache: KVNamespace,
-  key: string
+  key: string,
 ): Promise<CachedCredentials | null> {
   try {
-    const cached = await cache.get(key, 'json') as CachedCredentials | null;
+    const cached = (await cache.get(key, "json")) as CachedCredentials | null;
 
     if (!cached) {
       return null;
@@ -266,10 +266,10 @@ async function cacheCredentials(
   cache: KVNamespace,
   key: string,
   credentials: MatrixTurnResponse,
-  ttl: number
+  ttl: number,
 ): Promise<void> {
   try {
-    const expiresAt = Date.now() + (ttl * 1000 * CACHE_TTL_RATIO);
+    const expiresAt = Date.now() + ttl * 1000 * CACHE_TTL_RATIO;
     const cacheTtl = Math.floor(ttl * CACHE_TTL_RATIO);
 
     const cached: CachedCredentials = {
@@ -285,7 +285,7 @@ async function cacheCredentials(
     });
   } catch {
     // Cache write failed, non-fatal
-    console.warn('Failed to cache TURN credentials');
+    console.warn("Failed to cache TURN credentials");
   }
 }
 
@@ -318,25 +318,22 @@ interface RateLimitResult {
 /**
  * Check and update per-user rate limit for TURN credential requests
  */
-async function checkUserRateLimit(
-  cache: KVNamespace,
-  userId: string
-): Promise<RateLimitResult> {
+async function checkUserRateLimit(cache: KVNamespace, userId: string): Promise<RateLimitResult> {
   const key = `turn_ratelimit:${userId}`;
   const now = Date.now();
-  const windowStart = now - (USER_RATE_LIMIT_WINDOW * 1000);
+  const windowStart = now - USER_RATE_LIMIT_WINDOW * 1000;
 
   try {
     // Get current rate limit data
-    const data = await cache.get(key, 'json') as { requests: number[] } | null;
+    const data = (await cache.get(key, "json")) as { requests: number[] } | null;
 
     // Filter to only requests within the window
-    const recentRequests = data?.requests?.filter(t => t > windowStart) || [];
+    const recentRequests = data?.requests?.filter((t) => t > windowStart) || [];
 
     if (recentRequests.length >= USER_RATE_LIMIT_MAX) {
       // Rate limited - calculate when the oldest request will expire
       const oldestRequest = Math.min(...recentRequests);
-      const retryAfterMs = (oldestRequest + USER_RATE_LIMIT_WINDOW * 1000) - now;
+      const retryAfterMs = oldestRequest + USER_RATE_LIMIT_WINDOW * 1000 - now;
 
       return {
         allowed: false,

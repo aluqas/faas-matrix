@@ -1,8 +1,8 @@
 // State Resolution Algorithm v1 (Room Version 1)
 // Simple: sort by depth, then by event_id lexicographically
 
-import type { PDU } from '../types';
-import { stateKey } from './event-auth';
+import type { PDU } from "../types";
+import { stateKey } from "./event-auth";
 
 /**
  * Resolve conflicting state using the v1 algorithm.
@@ -20,7 +20,7 @@ export function resolveStateV1(stateSets: PDU[][]): PDU[] {
       const key = stateKey(event.type, event.state_key);
       const existing = allState.get(key) || [];
       // Don't add duplicates
-      if (!existing.some(e => e.event_id === event.event_id)) {
+      if (!existing.some((e) => e.event_id === event.event_id)) {
         existing.push(event);
       }
       allState.set(key, existing);

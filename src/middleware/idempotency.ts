@@ -6,9 +6,9 @@
 // 2. Returns cached response if found
 // 3. After handler completes, stores the response for future requests
 
-import type { Context, Next } from 'hono';
-import type { AppEnv } from '../types';
-import { getTransaction, storeTransaction } from '../services/transactions';
+import type { Context, Next } from "hono";
+import type { AppEnv } from "../types";
+import { getTransaction, storeTransaction } from "../services/transactions";
 
 /**
  * Middleware that handles transaction ID idempotency
@@ -16,8 +16,8 @@ import { getTransaction, storeTransaction } from '../services/transactions';
  */
 export function idempotent() {
   return async (c: Context<AppEnv>, next: Next) => {
-    const txnId = c.req.param('txnId');
-    const userId = c.get('userId');
+    const txnId = c.req.param("txnId");
+    const userId = c.get("userId");
 
     if (!txnId || !userId) {
       // No transaction ID or not authenticated, continue normally
@@ -56,10 +56,10 @@ export function idempotent() {
 export async function idempotentResponse(
   c: Context<AppEnv>,
   response: Record<string, unknown>,
-  eventId?: string
+  eventId?: string,
 ) {
-  const txnId = c.req.param('txnId');
-  const userId = c.get('userId');
+  const txnId = c.req.param("txnId");
+  const userId = c.get("userId");
   const db = c.env.DB;
 
   if (txnId && userId) {

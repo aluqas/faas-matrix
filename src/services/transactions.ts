@@ -25,15 +25,18 @@ export interface TransactionResult {
 export async function getTransaction(
   db: D1Database,
   userId: string,
-  txnId: string
+  txnId: string,
 ): Promise<TransactionResult | null> {
-  const result = await db.prepare(`
+  const result = await db
+    .prepare(`
     SELECT event_id, response FROM transaction_ids
     WHERE user_id = ? AND txn_id = ?
-  `).bind(userId, txnId).first<{
-    event_id: string | null;
-    response: string | null;
-  }>();
+  `)
+    .bind(userId, txnId)
+    .first<{
+      event_id: string | null;
+      response: string | null;
+    }>();
 
   if (!result) {
     return null;
@@ -53,20 +56,18 @@ export async function storeTransaction(
   userId: string,
   txnId: string,
   eventId?: string,
-  response?: any
+  response?: any,
 ): Promise<void> {
-  await db.prepare(`
+  await db
+    .prepare(`
     INSERT INTO transaction_ids (user_id, txn_id, event_id, response)
     VALUES (?, ?, ?, ?)
     ON CONFLICT (user_id, txn_id) DO UPDATE SET
       event_id = COALESCE(excluded.event_id, transaction_ids.event_id),
       response = COALESCE(excluded.response, transaction_ids.response)
-  `).bind(
-    userId,
-    txnId,
-    eventId || null,
-    response ? JSON.stringify(response) : null
-  ).run();
+  `)
+    .bind(userId, txnId, eventId || null, response ? JSON.stringify(response) : null)
+    .run();
 }
 
 /**
@@ -75,13 +76,16 @@ export async function storeTransaction(
  */
 export async function cleanupOldTransactions(
   db: D1Database,
-  maxAgeMs: number = 24 * 60 * 60 * 1000
+  maxAgeMs: number = 24 * 60 * 60 * 1000,
 ): Promise<number> {
   const cutoff = Date.now() - maxAgeMs;
 
-  const result = await db.prepare(`
+  const result = await db
+    .prepare(`
     DELETE FROM transaction_ids WHERE created_at < ?
-  `).bind(cutoff).run();
+  `)
+    .bind(cutoff)
+    .run();
 
   return result.meta.changes || 0;
 }
@@ -93,7 +97,7 @@ export async function cleanupOldTransactions(
 export async function checkTransactionIdempotency(
   db: D1Database,
   userId: string,
-  txnId: string | undefined
+  txnId: string | undefined,
 ): Promise<{ cached: true; response: any } | { cached: false }> {
   if (!txnId) {
     return { cached: false };
@@ -113,14 +117,8 @@ export async function checkTransactionIdempotency(
  * Higher-order function for idempotent request handling
  * Wraps a handler to automatically check/store transaction IDs
  */
-export function withIdempotency<T>(
-  handler: () => Promise<{ eventId?: string; response: T }>
-) {
-  return async (
-    db: D1Database,
-    userId: string,
-    txnId: string | undefined
-  ): Promise<T> => {
+export function withIdempotency<T>(handler: () => Promise<{ eventId?: string; response: T }>) {
+  return async (db: D1Database, userId: string, txnId: string | undefined): Promise<T> => {
     // Check for existing transaction
     if (txnId) {
       const existing = await getTransaction(db, userId, txnId);

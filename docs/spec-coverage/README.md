@@ -1,10 +1,11 @@
 # Spec Coverage
 
 ## 日本語概要（読むべき順）
+
 - まず `docs/matrix/speccheck-matrix-v2.md` を読む（`row_id` ベースのチェックリスト、かつカバレッジ対象セクションはここだけ）。
 - 次に `docs/matrix/speccheck-matrix-v2-complement.md`（Complement Evidence Summary の本文：証拠ソース。coverage 抽出の対象外）。
 - 最後に `docs/matrix/speccheck-matrix-v2-endpoint.md`（OpenAPI operation -> `row_id` の導線：生成物。coverage 抽出の対象外）。
-  
+
 `bun run spec:coverage` は「v2 の3つの主セクション」がカバレッジ対象で、OpenAPI 側の operation mapping は `openapi-row-map.json` と `openapi-coverage-report.json` で健康度を確認します。
 
 This directory contains the machinery for checking that our Matrix checklist covers the specification surface in a systematic way.

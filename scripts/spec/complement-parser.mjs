@@ -3,7 +3,10 @@ import { checklistPath, checklistRepoPath } from "./paths.mjs";
 import { buildChecklistIndex, extractChecklistRows } from "./checklist-parser.mjs";
 
 function parseTableCells(line) {
-  return line.split("|").map((part) => part.trim()).filter(Boolean);
+  return line
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 function isDividerLine(line) {

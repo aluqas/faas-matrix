@@ -17,21 +17,23 @@ export interface AppServiceRegistration {
 
 /** Get all registered application services */
 export async function getAppServices(db: D1Database): Promise<AppServiceRegistration[]> {
-  const result = await db.prepare(
-    `SELECT id, url, as_token, hs_token, sender_localpart, rate_limited, protocols, namespaces
-     FROM appservice_registrations`
-  ).all<{
-    id: string;
-    url: string;
-    as_token: string;
-    hs_token: string;
-    sender_localpart: string;
-    rate_limited: number;
-    protocols: string | null;
-    namespaces: string;
-  }>();
+  const result = await db
+    .prepare(
+      `SELECT id, url, as_token, hs_token, sender_localpart, rate_limited, protocols, namespaces
+     FROM appservice_registrations`,
+    )
+    .all<{
+      id: string;
+      url: string;
+      as_token: string;
+      hs_token: string;
+      sender_localpart: string;
+      rate_limited: number;
+      protocols: string | null;
+      namespaces: string;
+    }>();
 
-  return result.results.map(r => ({
+  return result.results.map((r) => ({
     id: r.id,
     url: r.url,
     as_token: r.as_token,
@@ -44,20 +46,26 @@ export async function getAppServices(db: D1Database): Promise<AppServiceRegistra
 }
 
 /** Find app service by AS token */
-export async function getAppServiceByToken(db: D1Database, asToken: string): Promise<AppServiceRegistration | null> {
-  const result = await db.prepare(
-    `SELECT id, url, as_token, hs_token, sender_localpart, rate_limited, protocols, namespaces
-     FROM appservice_registrations WHERE as_token = ?`
-  ).bind(asToken).first<{
-    id: string;
-    url: string;
-    as_token: string;
-    hs_token: string;
-    sender_localpart: string;
-    rate_limited: number;
-    protocols: string | null;
-    namespaces: string;
-  }>();
+export async function getAppServiceByToken(
+  db: D1Database,
+  asToken: string,
+): Promise<AppServiceRegistration | null> {
+  const result = await db
+    .prepare(
+      `SELECT id, url, as_token, hs_token, sender_localpart, rate_limited, protocols, namespaces
+     FROM appservice_registrations WHERE as_token = ?`,
+    )
+    .bind(asToken)
+    .first<{
+      id: string;
+      url: string;
+      as_token: string;
+      hs_token: string;
+      sender_localpart: string;
+      rate_limited: number;
+      protocols: string | null;
+      namespaces: string;
+    }>();
 
   if (!result) return null;
 
@@ -77,7 +85,7 @@ export async function getAppServiceByToken(db: D1Database, asToken: string): Pro
 export function isExclusiveAppServiceUser(
   appservices: AppServiceRegistration[],
   userId: string,
-  excludeAsId?: string
+  excludeAsId?: string,
 ): AppServiceRegistration | null {
   for (const as of appservices) {
     if (excludeAsId && as.id === excludeAsId) continue;
@@ -94,7 +102,7 @@ export function isExclusiveAppServiceUser(
 export function isExclusiveAppServiceAlias(
   appservices: AppServiceRegistration[],
   alias: string,
-  excludeAsId?: string
+  excludeAsId?: string,
 ): AppServiceRegistration | null {
   for (const as of appservices) {
     if (excludeAsId && as.id === excludeAsId) continue;
@@ -110,7 +118,7 @@ export function isExclusiveAppServiceAlias(
 /** Check if an event interests any app service */
 export function getInterestedAppServices(
   appservices: AppServiceRegistration[],
-  event: { room_id: string; sender: string; state_key?: string; type: string }
+  event: { room_id: string; sender: string; state_key?: string; type: string },
 ): AppServiceRegistration[] {
   const interested: AppServiceRegistration[] = [];
 
@@ -151,30 +159,34 @@ export function getInterestedAppServices(
 export async function sendAppServiceTransaction(
   db: D1Database,
   appservice: AppServiceRegistration,
-  events: Record<string, unknown>[]
+  events: Record<string, unknown>[],
 ): Promise<boolean> {
   // Store the transaction
-  const txnResult = await db.prepare(
-    `INSERT INTO appservice_transactions (appservice_id, events, created_at)
-     VALUES (?, ?, ?)`
-  ).bind(appservice.id, JSON.stringify(events), Date.now()).run();
+  const txnResult = await db
+    .prepare(
+      `INSERT INTO appservice_transactions (appservice_id, events, created_at)
+     VALUES (?, ?, ?)`,
+    )
+    .bind(appservice.id, JSON.stringify(events), Date.now())
+    .run();
 
   const txnId = txnResult.meta.last_row_id;
 
   try {
     const response = await fetch(`${appservice.url}/_matrix/app/v1/transactions/${txnId}`, {
-      method: 'PUT',
+      method: "PUT",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${appservice.hs_token}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${appservice.hs_token}`,
       },
       body: JSON.stringify({ events }),
     });
 
     if (response.ok) {
-      await db.prepare(
-        `UPDATE appservice_transactions SET sent_at = ? WHERE txn_id = ?`
-      ).bind(Date.now(), txnId).run();
+      await db
+        .prepare(`UPDATE appservice_transactions SET sent_at = ? WHERE txn_id = ?`)
+        .bind(Date.now(), txnId)
+        .run();
       return true;
     }
   } catch (err) {
@@ -182,9 +194,10 @@ export async function sendAppServiceTransaction(
   }
 
   // Increment retry
-  await db.prepare(
-    `UPDATE appservice_transactions SET retry_count = retry_count + 1 WHERE txn_id = ?`
-  ).bind(txnId).run();
+  await db
+    .prepare(`UPDATE appservice_transactions SET retry_count = retry_count + 1 WHERE txn_id = ?`)
+    .bind(txnId)
+    .run();
 
   return false;
 }

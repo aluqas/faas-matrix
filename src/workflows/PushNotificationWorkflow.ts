@@ -6,8 +6,8 @@
 // - Step persistence for resume on failure
 // - Parallel pusher delivery with retry
 
-import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
-import type { Env } from '../types';
+import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:workers";
+import type { Env } from "../types";
 
 // Parameters passed when triggering the workflow
 export interface PushParams {
@@ -62,27 +62,29 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
   async run(event: WorkflowEvent<PushParams>, step: WorkflowStep): Promise<PushResult> {
     const { eventId, roomId, eventType, sender, content, originServerTs } = event.payload;
 
-    console.log('[PushNotificationWorkflow] Starting', { eventId, roomId, eventType, sender });
+    console.log("[PushNotificationWorkflow] Starting", { eventId, roomId, eventType, sender });
 
     try {
       // Step 1: Get room members (excluding sender)
-      const members = await step.do('get-members', async () => {
+      const members = (await step.do("get-members", async () => {
         const result = await this.env.DB.prepare(`
           SELECT user_id FROM room_memberships
           WHERE room_id = ? AND membership = 'join' AND user_id != ?
-        `).bind(roomId, sender).all<{ user_id: string }>();
-        return result.results.map(m => m.user_id);
-      }) as string[];
+        `)
+          .bind(roomId, sender)
+          .all<{ user_id: string }>();
+        return result.results.map((m) => m.user_id);
+      })) as string[];
 
       if (members.length === 0) {
-        console.log('[PushNotificationWorkflow] No members to notify');
+        console.log("[PushNotificationWorkflow] No members to notify");
         return { success: true, notifiedCount: 0, failedCount: 0, skippedCount: 0 };
       }
 
       // Step 2: Get room context (member count, sender name, room name)
-      const roomContext = await step.do('get-room-context', async () => {
+      const roomContext = (await step.do("get-room-context", async () => {
         return await this.getRoomContext(roomId, sender);
-      }) as RoomContext;
+      })) as RoomContext;
 
       // Step 3: Process members in batches of 50
       const BATCH_SIZE = 50;
@@ -93,26 +95,30 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
       for (let i = 0; i < members.length; i += BATCH_SIZE) {
         const batch = members.slice(i, i + BATCH_SIZE);
 
-        const batchResults = await step.do(`notify-batch-${i}`, {
-          retries: {
-            limit: 2,
-            delay: 5000,
-            backoff: 'exponential',
+        const batchResults = (await step.do(
+          `notify-batch-${i}`,
+          {
+            retries: {
+              limit: 2,
+              delay: 5000,
+              backoff: "exponential",
+            },
+            timeout: 60000, // 60 seconds per batch
           },
-          timeout: 60000, // 60 seconds per batch
-        }, async () => {
-          return await this.processMemberBatch(batch, {
-            eventId,
-            roomId,
-            eventType,
-            sender,
-            content,
-            originServerTs,
-            senderDisplayName: roomContext.senderDisplayName,
-            roomName: roomContext.roomName,
-            memberCount: roomContext.memberCount,
-          });
-        }) as MemberResult[];
+          async () => {
+            return await this.processMemberBatch(batch, {
+              eventId,
+              roomId,
+              eventType,
+              sender,
+              content,
+              originServerTs,
+              senderDisplayName: roomContext.senderDisplayName,
+              roomName: roomContext.roomName,
+              memberCount: roomContext.memberCount,
+            });
+          },
+        )) as MemberResult[];
 
         // Aggregate results
         for (const result of batchResults) {
@@ -126,7 +132,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
         }
       }
 
-      console.log('[PushNotificationWorkflow] Completed', {
+      console.log("[PushNotificationWorkflow] Completed", {
         eventId,
         roomId,
         notifiedCount,
@@ -141,13 +147,13 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
         skippedCount,
       };
     } catch (error) {
-      console.error('[PushNotificationWorkflow] Failed', { eventId, roomId, error });
+      console.error("[PushNotificationWorkflow] Failed", { eventId, roomId, error });
       return {
         success: false,
         notifiedCount: 0,
         failedCount: 0,
         skippedCount: 0,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       };
     }
   }
@@ -158,22 +164,29 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
     const memberCountResult = await this.env.DB.prepare(`
       SELECT COUNT(*) as count FROM room_memberships
       WHERE room_id = ? AND membership = 'join'
-    `).bind(roomId).first<{ count: number }>();
+    `)
+      .bind(roomId)
+      .first<{ count: number }>();
     const memberCount = memberCountResult?.count || 0;
 
     // Get sender's display name
     const senderMembership = await this.env.DB.prepare(`
       SELECT display_name FROM room_memberships
       WHERE room_id = ? AND user_id = ?
-    `).bind(roomId, sender).first<{ display_name: string | null }>();
-    const senderDisplayName = senderMembership?.display_name || sender.split(':')[0].replace('@', '');
+    `)
+      .bind(roomId, sender)
+      .first<{ display_name: string | null }>();
+    const senderDisplayName =
+      senderMembership?.display_name || sender.split(":")[0].replace("@", "");
 
     // Get room name
     const roomNameEvent = await this.env.DB.prepare(`
       SELECT content FROM events
       WHERE room_id = ? AND event_type = 'm.room.name' AND state_key = ''
       ORDER BY origin_server_ts DESC LIMIT 1
-    `).bind(roomId).first<{ content: string }>();
+    `)
+      .bind(roomId)
+      .first<{ content: string }>();
 
     let roomName: string | undefined;
     if (roomNameEvent) {
@@ -204,7 +217,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
       senderDisplayName: string;
       roomName: string | undefined;
       memberCount: number;
-    }
+    },
   ): Promise<MemberResult[]> {
     const results: MemberResult[] = [];
 
@@ -220,7 +233,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
             sender: eventContext.sender,
             room_id: eventContext.roomId,
           },
-          eventContext.memberCount
+          eventContext.memberCount,
         );
 
         if (!pushResult.notify) {
@@ -240,17 +253,12 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
         let anySuccess = false;
         for (const pusher of pushers) {
           try {
-            const success = await this.sendToPusher(
-              userId,
-              pusher,
-              eventContext,
-              unreadCount
-            );
+            const success = await this.sendToPusher(userId, pusher, eventContext, unreadCount);
             if (success) {
               anySuccess = true;
             }
           } catch (err) {
-            console.error('[PushNotificationWorkflow] Pusher failed', {
+            console.error("[PushNotificationWorkflow] Pusher failed", {
               userId,
               appId: pusher.appId,
               error: err instanceof Error ? err.message : String(err),
@@ -263,7 +271,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
 
         return { userId, notified: anySuccess, skipped: false };
       } catch (error) {
-        console.error('[PushNotificationWorkflow] Member failed', {
+        console.error("[PushNotificationWorkflow] Member failed", {
           userId,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -271,7 +279,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
           userId,
           notified: false,
           skipped: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : "Unknown error",
         };
       }
     });
@@ -286,7 +294,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
   private async evaluatePushRules(
     userId: string,
     event: { type: string; content: any; sender: string; room_id: string },
-    _roomMemberCount: number
+    _roomMemberCount: number,
   ): Promise<PushRuleResult> {
     // Import the evaluatePushRules function isn't possible in workflow context
     // So we implement a simplified version here
@@ -295,15 +303,17 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
     const masterRule = await this.env.DB.prepare(`
       SELECT enabled FROM push_rules
       WHERE user_id = ? AND rule_id = '.m.rule.master'
-    `).bind(userId).first<{ enabled: number }>();
+    `)
+      .bind(userId)
+      .first<{ enabled: number }>();
 
     if (masterRule?.enabled === 1) {
       return { notify: false, actions: [], highlight: false };
     }
 
     // Default: notify for messages and encrypted events
-    if (event.type === 'm.room.message' || event.type === 'm.room.encrypted') {
-      return { notify: true, actions: ['notify'], highlight: false };
+    if (event.type === "m.room.message" || event.type === "m.room.encrypted") {
+      return { notify: true, actions: ["notify"], highlight: false };
     }
 
     return { notify: false, actions: [], highlight: false };
@@ -321,7 +331,9 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
         )
         AND e.sender != ?
         AND e.event_type IN ('m.room.message', 'm.room.encrypted')
-    `).bind(roomId, userId, roomId, userId).first<{ count: number }>();
+    `)
+      .bind(roomId, userId, roomId, userId)
+      .first<{ count: number }>();
 
     return result?.count || 1;
   }
@@ -330,9 +342,11 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
   private async getUserPushers(userId: string): Promise<SerializablePusher[]> {
     const result = await this.env.DB.prepare(`
       SELECT pushkey, kind, app_id, data FROM pushers WHERE user_id = ?
-    `).bind(userId).all<{ pushkey: string; kind: string; app_id: string; data: string }>();
+    `)
+      .bind(userId)
+      .all<{ pushkey: string; kind: string; app_id: string; data: string }>();
 
-    return result.results.map(p => ({
+    return result.results.map((p) => ({
       pushkey: p.pushkey,
       kind: p.kind,
       appId: p.app_id,
@@ -353,9 +367,9 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
       senderDisplayName: string;
       roomName: string | undefined;
     },
-    unreadCount: number
+    unreadCount: number,
   ): Promise<boolean> {
-    if (pusher.kind !== 'http') {
+    if (pusher.kind !== "http") {
       return false;
     }
 
@@ -371,26 +385,26 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
     }
 
     const senderDisplayName = eventContext.senderDisplayName;
-    const roomDisplayName = eventContext.roomName || 'Chat';
+    const roomDisplayName = eventContext.roomName || "Chat";
 
     // Build device data with APNs alert
     const deviceData = JSON.parse(JSON.stringify(pusherData.default_payload || {}));
 
     if (deviceData.aps) {
-      if (eventContext.eventType === 'm.room.encrypted') {
+      if (eventContext.eventType === "m.room.encrypted") {
         deviceData.aps.alert = {
           title: senderDisplayName,
           body: roomDisplayName,
         };
       } else {
-        const messageBody = eventContext.content?.body || 'New message';
+        const messageBody = eventContext.content?.body || "New message";
         deviceData.aps.alert = {
           title: senderDisplayName,
           subtitle: roomDisplayName,
           body: messageBody,
         };
       }
-      deviceData.aps['mutable-content'] = 1;
+      deviceData.aps["mutable-content"] = 1;
     }
 
     deviceData.event_id = eventContext.eventId;
@@ -406,25 +420,27 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
         sender: eventContext.sender,
         sender_display_name: senderDisplayName,
         room_name: roomDisplayName,
-        prio: 'high',
+        prio: "high",
         counts: { unread: unreadCount },
-        devices: [{
-          app_id: pusher.appId,
-          pushkey: pusher.pushkey,
-          pushkey_ts: Date.now(),
-          data: {
-            format: pusherData.format,
-            default_payload: deviceData,
+        devices: [
+          {
+            app_id: pusher.appId,
+            pushkey: pusher.pushkey,
+            pushkey_ts: Date.now(),
+            data: {
+              format: pusherData.format,
+              default_payload: deviceData,
+            },
           },
-        }],
-        ...(pusherData.format !== 'event_id_only' && { content: eventContext.content }),
+        ],
+        ...(pusherData.format !== "event_id_only" && { content: eventContext.content }),
       },
     };
 
     try {
       const response = await fetch(pusherData.url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(notification),
       });
 
@@ -433,14 +449,18 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
         await this.env.DB.prepare(`
           UPDATE pushers SET last_success = ?, failure_count = 0
           WHERE user_id = ? AND pushkey = ? AND app_id = ?
-        `).bind(Date.now(), userId, pusher.pushkey, pusher.appId).run();
+        `)
+          .bind(Date.now(), userId, pusher.pushkey, pusher.appId)
+          .run();
         return true;
       } else {
         // Update pusher failure
         await this.env.DB.prepare(`
           UPDATE pushers SET last_failure = ?, failure_count = failure_count + 1
           WHERE user_id = ? AND pushkey = ? AND app_id = ?
-        `).bind(Date.now(), userId, pusher.pushkey, pusher.appId).run();
+        `)
+          .bind(Date.now(), userId, pusher.pushkey, pusher.appId)
+          .run();
         return false;
       }
     } catch (error) {
@@ -448,7 +468,9 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
       await this.env.DB.prepare(`
         UPDATE pushers SET last_failure = ?, failure_count = failure_count + 1
         WHERE user_id = ? AND pushkey = ? AND app_id = ?
-      `).bind(Date.now(), userId, pusher.pushkey, pusher.appId).run();
+      `)
+        .bind(Date.now(), userId, pusher.pushkey, pusher.appId)
+        .run();
       throw error;
     }
   }
@@ -457,17 +479,19 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
   private async queueNotification(
     userId: string,
     eventContext: { eventId: string; roomId: string },
-    pushResult: PushRuleResult
+    pushResult: PushRuleResult,
   ): Promise<void> {
     await this.env.DB.prepare(`
       INSERT INTO notification_queue (user_id, room_id, event_id, notification_type, actions)
       VALUES (?, ?, ?, ?, ?)
-    `).bind(
-      userId,
-      eventContext.roomId,
-      eventContext.eventId,
-      pushResult.highlight ? 'highlight' : 'notify',
-      JSON.stringify(pushResult.actions)
-    ).run();
+    `)
+      .bind(
+        userId,
+        eventContext.roomId,
+        eventContext.eventId,
+        pushResult.highlight ? "highlight" : "notify",
+        JSON.stringify(pushResult.actions),
+      )
+      .run();
   }
 }

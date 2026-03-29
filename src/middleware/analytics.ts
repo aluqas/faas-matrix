@@ -1,7 +1,7 @@
 // Analytics middleware using Cloudflare Analytics Engine
 
-import { createMiddleware } from 'hono/factory';
-import type { AppEnv } from '../types';
+import { createMiddleware } from "hono/factory";
+import type { AppEnv } from "../types";
 
 export function analyticsMiddleware() {
   return createMiddleware<AppEnv>(async (c, next) => {
@@ -19,15 +19,15 @@ export function analyticsMiddleware() {
 
         c.env.ANALYTICS.writeDataPoint({
           blobs: [
-            path,              // blob1: request path
-            method,            // blob2: HTTP method
-            String(status),    // blob3: status code
+            path, // blob1: request path
+            method, // blob2: HTTP method
+            String(status), // blob3: status code
           ],
           doubles: [
-            latency,           // double1: latency in ms
+            latency, // double1: latency in ms
           ],
           indexes: [
-            path.split('/').slice(0, 5).join('/'), // index1: path prefix for grouping
+            path.split("/").slice(0, 5).join("/"), // index1: path prefix for grouping
           ],
         });
       } catch {

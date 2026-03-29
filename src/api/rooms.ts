@@ -1,11 +1,11 @@
 // Matrix room endpoints
 
-import { Hono } from 'hono';
-import type { AppEnv, RoomCreateContent, RoomMemberContent, PDU } from '../types';
-import { Errors } from '../utils/errors';
-import { requireAuth } from '../middleware/auth';
-import { generateRoomId, generateEventId } from '../utils/ids';
-import { invalidateRoomCache } from '../services/room-cache';
+import { Hono } from "hono";
+import type { AppEnv, RoomCreateContent, RoomMemberContent, PDU } from "../types";
+import { Errors } from "../utils/errors";
+import { requireAuth } from "../middleware/auth";
+import { generateRoomId, generateEventId } from "../utils/ids";
+import { invalidateRoomCache } from "../services/room-cache";
 import {
   createRoom,
   getRoom,
@@ -23,25 +23,25 @@ import {
   getEvent,
   notifyUsersOfEvent,
   fanoutEventToFederation,
-} from '../services/database';
+} from "../services/database";
 import {
   applyMembershipTransitionToDatabase,
   loadMembershipTransitionContext,
-} from '../matrix/application/membership-transition-service';
-import { sendFederationInvite } from '../services/federation-invite';
-import roomMembershipRoutes from './rooms/membership';
-import roomQueryRoutes from './rooms/query';
+} from "../matrix/application/membership-transition-service";
+import { sendFederationInvite } from "../services/federation-invite";
+import roomMembershipRoutes from "./rooms/membership";
+import roomQueryRoutes from "./rooms/query";
 const app = new Hono<AppEnv>();
 
-app.route('/', roomMembershipRoutes);
-app.route('/', roomQueryRoutes);
+app.route("/", roomMembershipRoutes);
+app.route("/", roomQueryRoutes);
 
 // POST /_matrix/client/v3/createRoom - Create a new room
-app.post('/_matrix/client/v3/createRoom', requireAuth(), async (c) => {
+app.post("/_matrix/client/v3/createRoom", requireAuth(), async (c) => {
   try {
     const body = await c.req.json();
-    const response = await c.get('appContext').services.rooms.createRoom({
-      userId: c.get('userId'),
+    const response = await c.get("appContext").services.rooms.createRoom({
+      userId: c.get("userId"),
       body,
     });
     return c.json(response);
@@ -49,7 +49,7 @@ app.post('/_matrix/client/v3/createRoom', requireAuth(), async (c) => {
     if (error instanceof SyntaxError) {
       return Errors.badJson().toResponse();
     }
-    if (error instanceof Error && 'toResponse' in error) {
+    if (error instanceof Error && "toResponse" in error) {
       return (error as { toResponse(): Response }).toResponse();
     }
     throw error;
@@ -57,22 +57,22 @@ app.post('/_matrix/client/v3/createRoom', requireAuth(), async (c) => {
 });
 
 // GET /_matrix/client/v3/joined_rooms - List joined rooms
-app.get('/_matrix/client/v3/joined_rooms', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const rooms = await getUserRooms(c.env.DB, userId, 'join');
+app.get("/_matrix/client/v3/joined_rooms", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const rooms = await getUserRooms(c.env.DB, userId, "join");
   return c.json({ joined_rooms: rooms });
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/join - Join a room
-app.post('/_matrix/client/v3/rooms/:roomId/join', requireAuth(), async (c) => {
+app.post("/_matrix/client/v3/rooms/:roomId/join", requireAuth(), async (c) => {
   try {
-    const response = await c.get('appContext').services.rooms.joinRoom({
-      userId: c.get('userId'),
-      roomId: c.req.param('roomId'),
+    const response = await c.get("appContext").services.rooms.joinRoom({
+      userId: c.get("userId"),
+      roomId: c.req.param("roomId"),
     });
     return c.json(response);
   } catch (error) {
-    if (error instanceof Error && 'toResponse' in error) {
+    if (error instanceof Error && "toResponse" in error) {
       return (error as { toResponse(): Response }).toResponse();
     }
     throw error;
@@ -80,22 +80,27 @@ app.post('/_matrix/client/v3/rooms/:roomId/join', requireAuth(), async (c) => {
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/leave - Leave a room
-app.post('/_matrix/client/v3/rooms/:roomId/leave', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.post("/_matrix/client/v3/rooms/:roomId/leave", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
 
   // Check current membership
   const currentMembership = await getMembership(c.env.DB, roomId, userId);
-  if (!currentMembership || (currentMembership.membership !== 'join' && currentMembership.membership !== 'invite')) {
-    return Errors.forbidden('Not joined or invited to this room').toResponse();
+  if (
+    !currentMembership ||
+    (currentMembership.membership !== "join" &&
+      currentMembership.membership !== "invite" &&
+      currentMembership.membership !== "knock")
+  ) {
+    return Errors.forbidden("Not joined, invited, or knocking in this room").toResponse();
   }
 
   // Create leave event
   const eventId = await generateEventId(c.env.SERVER_NAME);
 
-  const createEvent = await getStateEvent(c.env.DB, roomId, 'm.room.create');
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, 'm.room.power_levels');
-  const currentMembershipEvent = await getStateEvent(c.env.DB, roomId, 'm.room.member', userId);
+  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
+  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
+  const currentMembershipEvent = await getStateEvent(c.env.DB, roomId, "m.room.member", userId);
 
   const authEvents: string[] = [];
   if (createEvent) authEvents.push(createEvent.event_id);
@@ -103,10 +108,10 @@ app.post('/_matrix/client/v3/rooms/:roomId/leave', requireAuth(), async (c) => {
   if (currentMembership) authEvents.push(currentMembership.eventId);
 
   const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
+  const prevEvents = latestEvents.map((e) => e.event_id);
 
   const memberContent: RoomMemberContent = {
-    membership: 'leave',
+    membership: "leave",
   };
 
   const prevContent = currentMembershipEvent?.content as Record<string, unknown> | undefined;
@@ -115,7 +120,7 @@ app.post('/_matrix/client/v3/rooms/:roomId/leave', requireAuth(), async (c) => {
     event_id: eventId,
     room_id: roomId,
     sender: userId,
-    type: 'm.room.member',
+    type: "m.room.member",
     state_key: userId,
     content: memberContent,
     origin_server_ts: Date.now(),
@@ -135,32 +140,32 @@ app.post('/_matrix/client/v3/rooms/:roomId/leave', requireAuth(), async (c) => {
   await applyMembershipTransitionToDatabase(c.env.DB, {
     roomId,
     event,
-    source: 'client',
+    source: "client",
     context: transitionContext,
   });
 
   // Notify room members about the leave
-  await notifyUsersOfEvent(c.env, roomId, eventId, 'm.room.member');
+  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
   c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
 
   return c.json({});
 });
 
 // GET /_matrix/client/v3/rooms/:roomId/state - Get all current state
-app.get('/_matrix/client/v3/rooms/:roomId/state', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.get("/_matrix/client/v3/rooms/:roomId/state", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
 
   // Check membership
   const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   const state = await getRoomState(c.env.DB, roomId);
 
   // Format events for client
-  const clientEvents = state.map(e => ({
+  const clientEvents = state.map((e) => ({
     type: e.type,
     state_key: e.state_key,
     content: e.content,
@@ -174,126 +179,138 @@ app.get('/_matrix/client/v3/rooms/:roomId/state', requireAuth(), async (c) => {
 });
 
 // GET /_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey? - Get specific state
-app.get('/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey?', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-  const eventType = c.req.param('eventType');
-  const stateKey = c.req.param('stateKey') ?? '';
+app.get(
+  "/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey?",
+  requireAuth(),
+  async (c) => {
+    const userId = c.get("userId");
+    const roomId = c.req.param("roomId");
+    const eventType = c.req.param("eventType");
+    const stateKey = c.req.param("stateKey") ?? "";
 
-  // Check membership
-  const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
-  }
+    // Check membership
+    const membership = await getMembership(c.env.DB, roomId, userId);
+    if (!membership || membership.membership !== "join") {
+      return Errors.forbidden("Not a member of this room").toResponse();
+    }
 
-  const event = await getStateEvent(c.env.DB, roomId, eventType, stateKey);
-  if (!event) {
-    return Errors.notFound('State event not found').toResponse();
-  }
+    const event = await getStateEvent(c.env.DB, roomId, eventType, stateKey);
+    if (!event) {
+      return Errors.notFound("State event not found").toResponse();
+    }
 
-  return c.json(event.content);
-});
+    return c.json(event.content);
+  },
+);
 
 // PUT /_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey? - Set state
-app.put('/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey?', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-  const eventType = c.req.param('eventType');
-  const stateKey = c.req.param('stateKey') ?? '';
+app.put(
+  "/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey?",
+  requireAuth(),
+  async (c) => {
+    const userId = c.get("userId");
+    const roomId = c.req.param("roomId");
+    const eventType = c.req.param("eventType");
+    const stateKey = c.req.param("stateKey") ?? "";
 
-  // Check membership
-  const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
-  }
+    // Check membership
+    const membership = await getMembership(c.env.DB, roomId, userId);
+    if (!membership || membership.membership !== "join") {
+      return Errors.forbidden("Not a member of this room").toResponse();
+    }
 
-  let content: any;
-  try {
-    content = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
-  }
+    let content: any;
+    try {
+      content = await c.req.json();
+    } catch {
+      return Errors.badJson().toResponse();
+    }
 
-  const eventId = await generateEventId(c.env.SERVER_NAME);
+    const eventId = await generateEventId(c.env.SERVER_NAME);
 
-  const createEvent = await getStateEvent(c.env.DB, roomId, 'm.room.create');
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, 'm.room.power_levels');
+    const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
+    const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
 
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (membership) authEvents.push(membership.eventId);
+    const authEvents: string[] = [];
+    if (createEvent) authEvents.push(createEvent.event_id);
+    if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
+    if (membership) authEvents.push(membership.eventId);
 
-  const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
+    const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
+    const prevEvents = latestEvents.map((e) => e.event_id);
 
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: eventType,
-    state_key: stateKey,
-    content,
-    origin_server_ts: Date.now(),
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
+    const event: PDU = {
+      event_id: eventId,
+      room_id: roomId,
+      sender: userId,
+      type: eventType,
+      state_key: stateKey,
+      content,
+      origin_server_ts: Date.now(),
+      depth: (latestEvents[0]?.depth ?? 0) + 1,
+      auth_events: authEvents,
+      prev_events: prevEvents,
+    };
 
-  await storeEvent(c.env.DB, event);
+    await storeEvent(c.env.DB, event);
 
-  // Invalidate room metadata cache if this is a metadata-affecting state event
-  const CACHED_STATE_TYPES = ['m.room.name', 'm.room.avatar', 'm.room.topic', 'm.room.canonical_alias', 'm.room.member'];
-  if (CACHED_STATE_TYPES.includes(eventType)) {
-    // Non-blocking cache invalidation
-    invalidateRoomCache(c.env.CACHE, roomId).catch(() => {});
-  }
+    // Invalidate room metadata cache if this is a metadata-affecting state event
+    const CACHED_STATE_TYPES = [
+      "m.room.name",
+      "m.room.avatar",
+      "m.room.topic",
+      "m.room.canonical_alias",
+      "m.room.member",
+    ];
+    if (CACHED_STATE_TYPES.includes(eventType)) {
+      // Non-blocking cache invalidation
+      invalidateRoomCache(c.env.CACHE, roomId).catch(() => {});
+    }
 
-  // Update membership table if this is a membership event
-  if (eventType === 'm.room.member') {
-    await updateMembership(
-      c.env.DB,
-      roomId,
-      stateKey,
-      content.membership,
-      eventId,
-      content.displayname,
-      content.avatar_url
-    );
-  }
+    // Update membership table if this is a membership event
+    if (eventType === "m.room.member") {
+      await updateMembership(
+        c.env.DB,
+        roomId,
+        stateKey,
+        content.membership,
+        eventId,
+        content.displayname,
+        content.avatar_url,
+      );
+    }
 
-  // Notify room members about the state change (wakes up long-polling syncs)
-  await notifyUsersOfEvent(c.env, roomId, eventId, eventType);
+    // Notify room members about the state change (wakes up long-polling syncs)
+    await notifyUsersOfEvent(c.env, roomId, eventId, eventType);
 
-  // Fan out to remote federation peers (kept alive via waitUntil)
-  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
+    // Fan out to remote federation peers (kept alive via waitUntil)
+    c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
 
-  return c.json({ event_id: eventId });
-});
+    return c.json({ event_id: eventId });
+  },
+);
 
 // GET /_matrix/client/v3/rooms/:roomId/members - Get room members
-app.get('/_matrix/client/v3/rooms/:roomId/members', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.get("/_matrix/client/v3/rooms/:roomId/members", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
 
   // Check membership
   const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   const members = await getRoomMembers(c.env.DB, roomId);
 
   // Get full member events - OPTIMIZED: fetch in parallel instead of sequential
   const events = await Promise.all(
-    members.map(member =>
-      getStateEvent(c.env.DB, roomId, 'm.room.member', member.userId)
-    )
+    members.map((member) => getStateEvent(c.env.DB, roomId, "m.room.member", member.userId)),
   );
 
   const memberEvents = events
     .filter((event): event is NonNullable<typeof event> => event !== null && event !== undefined)
-    .map(event => ({
+    .map((event) => ({
       type: event.type,
       state_key: event.state_key,
       content: event.content,
@@ -307,31 +324,31 @@ app.get('/_matrix/client/v3/rooms/:roomId/members', requireAuth(), async (c) => 
 });
 
 // GET /_matrix/client/v3/rooms/:roomId/messages - Get room messages
-app.get('/_matrix/client/v3/rooms/:roomId/messages', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.get("/_matrix/client/v3/rooms/:roomId/messages", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
 
   // Check membership
   const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
-  const from = c.req.query('from');
-  const dir = (c.req.query('dir') || 'b') as 'f' | 'b';
-  const limit = Math.min(parseInt(c.req.query('limit') || '10'), 100);
+  const from = c.req.query("from");
+  const dir = (c.req.query("dir") || "b") as "f" | "b";
+  const limit = Math.min(parseInt(c.req.query("limit") || "10"), 100);
 
   // Parse token - handle both 's123' format (from sliding-sync) and plain '123' format
   let fromToken: number | undefined;
   if (from) {
-    const tokenStr = from.startsWith('s') ? from.slice(1) : from;
+    const tokenStr = from.startsWith("s") ? from.slice(1) : from;
     const parsed = parseInt(tokenStr);
     fromToken = isNaN(parsed) ? undefined : parsed;
   }
   const { events, end } = await getRoomEvents(c.env.DB, roomId, fromToken, limit, dir);
 
   // Format events for client
-  const clientEvents = events.map(e => ({
+  const clientEvents = events.map((e) => ({
     type: e.type,
     state_key: e.state_key,
     content: e.content,
@@ -346,7 +363,7 @@ app.get('/_matrix/client/v3/rooms/:roomId/messages', requireAuth(), async (c) =>
   // This prevents infinite retry loops when client paginates past available events
   // Use 's' prefix for consistency with sliding-sync prev_batch tokens
   const response: { start: string; end?: string; chunk: typeof clientEvents } = {
-    start: from || 's0',
+    start: from || "s0",
     chunk: clientEvents,
   };
 
@@ -359,20 +376,20 @@ app.get('/_matrix/client/v3/rooms/:roomId/messages', requireAuth(), async (c) =>
 });
 
 // GET /_matrix/client/v3/rooms/:roomId/event/:eventId - Get specific event
-app.get('/_matrix/client/v3/rooms/:roomId/event/:eventId', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-  const eventId = c.req.param('eventId');
+app.get("/_matrix/client/v3/rooms/:roomId/event/:eventId", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
+  const eventId = c.req.param("eventId");
 
   // Check membership
   const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   const event = await getEvent(c.env.DB, eventId);
   if (!event || event.room_id !== roomId) {
-    return Errors.notFound('Event not found').toResponse();
+    return Errors.notFound("Event not found").toResponse();
   }
 
   return c.json({
@@ -388,25 +405,27 @@ app.get('/_matrix/client/v3/rooms/:roomId/event/:eventId', requireAuth(), async 
 });
 
 // PUT /_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId - Send message
-app.put('/_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId', requireAuth(), async (c) => {
+app.put("/_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId", requireAuth(), async (c) => {
   try {
     const content = await c.req.json();
-    const roomId = c.req.param('roomId');
-    const response = await c.get('appContext').services.rooms.sendEvent({
-      userId: c.get('userId'),
+    const roomId = c.req.param("roomId");
+    const response = await c.get("appContext").services.rooms.sendEvent({
+      userId: c.get("userId"),
       roomId,
-      eventType: c.req.param('eventType'),
-      txnId: c.req.param('txnId'),
+      eventType: c.req.param("eventType"),
+      txnId: c.req.param("txnId"),
       content,
     });
 
     // Fan out to federation peers (kept alive via waitUntil)
     if (response.event_id) {
       c.executionCtx.waitUntil(
-        getEvent(c.env.DB, response.event_id).then(pdu => {
-          if (pdu) return fanoutEventToFederation(c.env, roomId, pdu);
-          return undefined;
-        }).catch(() => undefined)
+        getEvent(c.env.DB, response.event_id)
+          .then((pdu) => {
+            if (pdu) return fanoutEventToFederation(c.env, roomId, pdu);
+            return undefined;
+          })
+          .catch(() => undefined),
       );
     }
 
@@ -415,7 +434,7 @@ app.put('/_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId', requireAuth()
     if (error instanceof SyntaxError) {
       return Errors.badJson().toResponse();
     }
-    if (error instanceof Error && 'toResponse' in error) {
+    if (error instanceof Error && "toResponse" in error) {
       return (error as { toResponse(): Response }).toResponse();
     }
     throw error;
@@ -423,9 +442,9 @@ app.put('/_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId', requireAuth()
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/invite - Invite a user
-app.post('/_matrix/client/v3/rooms/:roomId/invite', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.post("/_matrix/client/v3/rooms/:roomId/invite", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
 
   let body: any;
   try {
@@ -436,38 +455,38 @@ app.post('/_matrix/client/v3/rooms/:roomId/invite', requireAuth(), async (c) => 
 
   const { user_id: inviteeId } = body;
   if (!inviteeId) {
-    return Errors.missingParam('user_id').toResponse();
+    return Errors.missingParam("user_id").toResponse();
   }
 
   // Check inviter membership
   const inviterMembership = await getMembership(c.env.DB, roomId, userId);
-  if (!inviterMembership || inviterMembership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!inviterMembership || inviterMembership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   // Check power levels
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, 'm.room.power_levels');
-  const powerLevels = powerLevelsEvent?.content as any || {};
+  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
+  const powerLevels = (powerLevelsEvent?.content as any) || {};
   const userPower = powerLevels.users?.[userId] ?? powerLevels.users_default ?? 0;
   const invitePower = powerLevels.invite ?? 50;
 
   if (userPower < invitePower) {
-    return Errors.forbidden('Insufficient power level to invite').toResponse();
+    return Errors.forbidden("Insufficient power level to invite").toResponse();
   }
 
   // Check if already invited or joined
   const inviteeMembership = await getMembership(c.env.DB, roomId, inviteeId);
-  if (inviteeMembership?.membership === 'join') {
-    return Errors.forbidden('User is already in the room').toResponse();
+  if (inviteeMembership?.membership === "join") {
+    return Errors.forbidden("User is already in the room").toResponse();
   }
-  if (inviteeMembership?.membership === 'invite') {
+  if (inviteeMembership?.membership === "invite") {
     return c.json({}); // Already invited, idempotent
   }
 
   // Create invite event
   const eventId = await generateEventId(c.env.SERVER_NAME);
 
-  const createEvent = await getStateEvent(c.env.DB, roomId, 'm.room.create');
+  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
 
   const authEvents: string[] = [];
   if (createEvent) authEvents.push(createEvent.event_id);
@@ -475,17 +494,17 @@ app.post('/_matrix/client/v3/rooms/:roomId/invite', requireAuth(), async (c) => 
   if (inviterMembership) authEvents.push(inviterMembership.eventId);
 
   const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
+  const prevEvents = latestEvents.map((e) => e.event_id);
 
   const memberContent: RoomMemberContent = {
-    membership: 'invite',
+    membership: "invite",
   };
 
   const event: PDU = {
     event_id: eventId,
     room_id: roomId,
     sender: userId,
-    type: 'm.room.member',
+    type: "m.room.member",
     state_key: inviteeId,
     content: memberContent,
     origin_server_ts: Date.now(),
@@ -499,22 +518,18 @@ app.post('/_matrix/client/v3/rooms/:roomId/invite', requireAuth(), async (c) => 
   await applyMembershipTransitionToDatabase(c.env.DB, {
     roomId,
     event,
-    source: 'client',
+    source: "client",
     context: transitionContext,
   });
 
   // Notify room members and the invitee about the invite
-  await notifyUsersOfEvent(c.env, roomId, eventId, 'm.room.member');
+  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
 
-  c.executionCtx.waitUntil(sendFederationInvite(
-    c.env.DB,
-    c.env.CACHE,
-    c.env.SERVER_NAME,
-    roomId,
-    event
-  ).catch((error) => {
-    console.error('[rooms.invite] Failed to send federation invite:', error);
-  }));
+  c.executionCtx.waitUntil(
+    sendFederationInvite(c.env.DB, c.env.CACHE, c.env.SERVER_NAME, roomId, event).catch((error) => {
+      console.error("[rooms.invite] Failed to send federation invite:", error);
+    }),
+  );
 
   // Fan out the invite to existing federation peers already in the room.
   c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
@@ -523,9 +538,9 @@ app.post('/_matrix/client/v3/rooms/:roomId/invite', requireAuth(), async (c) => 
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/kick - Kick a user
-app.post('/_matrix/client/v3/rooms/:roomId/kick', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.post("/_matrix/client/v3/rooms/:roomId/kick", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
 
   let body: any;
   try {
@@ -536,37 +551,42 @@ app.post('/_matrix/client/v3/rooms/:roomId/kick', requireAuth(), async (c) => {
 
   const { user_id: targetId, reason } = body;
   if (!targetId) {
-    return Errors.missingParam('user_id').toResponse();
+    return Errors.missingParam("user_id").toResponse();
   }
 
   // Check kicker membership
   const kickerMembership = await getMembership(c.env.DB, roomId, userId);
-  if (!kickerMembership || kickerMembership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!kickerMembership || kickerMembership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   // Check target membership
   const targetMembership = await getMembership(c.env.DB, roomId, targetId);
-  if (!targetMembership || (targetMembership.membership !== 'join' && targetMembership.membership !== 'invite')) {
-    return Errors.forbidden('User is not joined or invited').toResponse();
+  if (
+    !targetMembership ||
+    (targetMembership.membership !== "join" &&
+      targetMembership.membership !== "invite" &&
+      targetMembership.membership !== "knock")
+  ) {
+    return Errors.forbidden("User is not joined, invited, or knocking").toResponse();
   }
 
   // Check power levels
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, 'm.room.power_levels');
-  const powerLevels = powerLevelsEvent?.content as any || {};
+  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
+  const powerLevels = (powerLevelsEvent?.content as any) || {};
   const userPower = powerLevels.users?.[userId] ?? powerLevels.users_default ?? 0;
   const targetPower = powerLevels.users?.[targetId] ?? powerLevels.users_default ?? 0;
   const kickPower = powerLevels.kick ?? 50;
 
   if (userPower < kickPower || userPower <= targetPower) {
-    return Errors.forbidden('Insufficient power level to kick').toResponse();
+    return Errors.forbidden("Insufficient power level to kick").toResponse();
   }
 
   // Create leave event for target
   const eventId = await generateEventId(c.env.SERVER_NAME);
 
-  const createEvent = await getStateEvent(c.env.DB, roomId, 'm.room.create');
-  const targetMembershipEvent = await getStateEvent(c.env.DB, roomId, 'm.room.member', targetId);
+  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
+  const targetMembershipEvent = await getStateEvent(c.env.DB, roomId, "m.room.member", targetId);
 
   const authEvents: string[] = [];
   if (createEvent) authEvents.push(createEvent.event_id);
@@ -575,10 +595,10 @@ app.post('/_matrix/client/v3/rooms/:roomId/kick', requireAuth(), async (c) => {
   if (targetMembership) authEvents.push(targetMembership.eventId);
 
   const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
+  const prevEvents = latestEvents.map((e) => e.event_id);
 
   const memberContent: RoomMemberContent = {
-    membership: 'leave',
+    membership: "leave",
     reason,
   };
 
@@ -588,7 +608,7 @@ app.post('/_matrix/client/v3/rooms/:roomId/kick', requireAuth(), async (c) => {
     event_id: eventId,
     room_id: roomId,
     sender: userId,
-    type: 'm.room.member',
+    type: "m.room.member",
     state_key: targetId,
     content: memberContent,
     origin_server_ts: Date.now(),
@@ -608,21 +628,21 @@ app.post('/_matrix/client/v3/rooms/:roomId/kick', requireAuth(), async (c) => {
   await applyMembershipTransitionToDatabase(c.env.DB, {
     roomId,
     event,
-    source: 'client',
+    source: "client",
     context: transitionContext,
   });
 
   // Notify room members about the kick
-  await notifyUsersOfEvent(c.env, roomId, eventId, 'm.room.member');
+  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
   c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
 
   return c.json({});
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/ban - Ban a user
-app.post('/_matrix/client/v3/rooms/:roomId/ban', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.post("/_matrix/client/v3/rooms/:roomId/ban", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
 
   let body: any;
   try {
@@ -633,30 +653,30 @@ app.post('/_matrix/client/v3/rooms/:roomId/ban', requireAuth(), async (c) => {
 
   const { user_id: targetId, reason } = body;
   if (!targetId) {
-    return Errors.missingParam('user_id').toResponse();
+    return Errors.missingParam("user_id").toResponse();
   }
 
   // Check banner membership
   const bannerMembership = await getMembership(c.env.DB, roomId, userId);
-  if (!bannerMembership || bannerMembership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!bannerMembership || bannerMembership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   // Check power levels
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, 'm.room.power_levels');
-  const powerLevels = powerLevelsEvent?.content as any || {};
+  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
+  const powerLevels = (powerLevelsEvent?.content as any) || {};
   const userPower = powerLevels.users?.[userId] ?? powerLevels.users_default ?? 0;
   const targetPower = powerLevels.users?.[targetId] ?? powerLevels.users_default ?? 0;
   const banPower = powerLevels.ban ?? 50;
 
   if (userPower < banPower || userPower <= targetPower) {
-    return Errors.forbidden('Insufficient power level to ban').toResponse();
+    return Errors.forbidden("Insufficient power level to ban").toResponse();
   }
 
   // Create ban event
   const eventId = await generateEventId(c.env.SERVER_NAME);
 
-  const createEvent = await getStateEvent(c.env.DB, roomId, 'm.room.create');
+  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
   const targetMembership = await getMembership(c.env.DB, roomId, targetId);
 
   const authEvents: string[] = [];
@@ -666,10 +686,10 @@ app.post('/_matrix/client/v3/rooms/:roomId/ban', requireAuth(), async (c) => {
   if (targetMembership) authEvents.push(targetMembership.eventId);
 
   const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
+  const prevEvents = latestEvents.map((e) => e.event_id);
 
   const memberContent: RoomMemberContent = {
-    membership: 'ban',
+    membership: "ban",
     reason,
   };
 
@@ -677,7 +697,7 @@ app.post('/_matrix/client/v3/rooms/:roomId/ban', requireAuth(), async (c) => {
     event_id: eventId,
     room_id: roomId,
     sender: userId,
-    type: 'm.room.member',
+    type: "m.room.member",
     state_key: targetId,
     content: memberContent,
     origin_server_ts: Date.now(),
@@ -687,18 +707,18 @@ app.post('/_matrix/client/v3/rooms/:roomId/ban', requireAuth(), async (c) => {
   };
 
   await storeEvent(c.env.DB, event);
-  await updateMembership(c.env.DB, roomId, targetId, 'ban', eventId);
+  await updateMembership(c.env.DB, roomId, targetId, "ban", eventId);
 
   // Notify room members about the ban
-  await notifyUsersOfEvent(c.env, roomId, eventId, 'm.room.member');
+  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
 
   return c.json({});
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/unban - Unban a user
-app.post('/_matrix/client/v3/rooms/:roomId/unban', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.post("/_matrix/client/v3/rooms/:roomId/unban", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
 
   let body: any;
   try {
@@ -709,35 +729,35 @@ app.post('/_matrix/client/v3/rooms/:roomId/unban', requireAuth(), async (c) => {
 
   const { user_id: targetId, reason } = body;
   if (!targetId) {
-    return Errors.missingParam('user_id').toResponse();
+    return Errors.missingParam("user_id").toResponse();
   }
 
   // Check unbanner membership
   const unbannerMembership = await getMembership(c.env.DB, roomId, userId);
-  if (!unbannerMembership || unbannerMembership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!unbannerMembership || unbannerMembership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   // Check target is actually banned
   const targetMembership = await getMembership(c.env.DB, roomId, targetId);
-  if (!targetMembership || targetMembership.membership !== 'ban') {
-    return Errors.forbidden('User is not banned').toResponse();
+  if (!targetMembership || targetMembership.membership !== "ban") {
+    return Errors.forbidden("User is not banned").toResponse();
   }
 
   // Check power levels
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, 'm.room.power_levels');
-  const powerLevels = powerLevelsEvent?.content as any || {};
+  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
+  const powerLevels = (powerLevelsEvent?.content as any) || {};
   const userPower = powerLevels.users?.[userId] ?? powerLevels.users_default ?? 0;
   const banPower = powerLevels.ban ?? 50;
 
   if (userPower < banPower) {
-    return Errors.forbidden('Insufficient power level to unban').toResponse();
+    return Errors.forbidden("Insufficient power level to unban").toResponse();
   }
 
   // Create leave event (unban sets membership to leave)
   const eventId = await generateEventId(c.env.SERVER_NAME);
 
-  const createEvent = await getStateEvent(c.env.DB, roomId, 'm.room.create');
+  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
 
   const authEvents: string[] = [];
   if (createEvent) authEvents.push(createEvent.event_id);
@@ -746,10 +766,10 @@ app.post('/_matrix/client/v3/rooms/:roomId/unban', requireAuth(), async (c) => {
   if (targetMembership) authEvents.push(targetMembership.eventId);
 
   const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
+  const prevEvents = latestEvents.map((e) => e.event_id);
 
   const memberContent: RoomMemberContent = {
-    membership: 'leave',
+    membership: "leave",
     reason,
   };
 
@@ -757,7 +777,7 @@ app.post('/_matrix/client/v3/rooms/:roomId/unban', requireAuth(), async (c) => {
     event_id: eventId,
     room_id: roomId,
     sender: userId,
-    type: 'm.room.member',
+    type: "m.room.member",
     state_key: targetId,
     content: memberContent,
     origin_server_ts: Date.now(),
@@ -767,62 +787,65 @@ app.post('/_matrix/client/v3/rooms/:roomId/unban', requireAuth(), async (c) => {
   };
 
   await storeEvent(c.env.DB, event);
-  await updateMembership(c.env.DB, roomId, targetId, 'leave', eventId);
+  await updateMembership(c.env.DB, roomId, targetId, "leave", eventId);
 
   // Notify room members about the unban
-  await notifyUsersOfEvent(c.env, roomId, eventId, 'm.room.member');
+  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
 
   return c.json({});
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/forget - Forget a room
-app.post('/_matrix/client/v3/rooms/:roomId/forget', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.post("/_matrix/client/v3/rooms/:roomId/forget", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
   const db = c.env.DB;
 
   // Check that user has left the room
   const membership = await getMembership(db, roomId, userId);
-  if (membership && membership.membership === 'join') {
-    return Errors.forbidden('Cannot forget room while still a member').toResponse();
+  if (membership && membership.membership === "join") {
+    return Errors.forbidden("Cannot forget room while still a member").toResponse();
   }
 
   // Remove membership record entirely
-  await db.prepare(`
+  await db
+    .prepare(`
     DELETE FROM room_memberships WHERE room_id = ? AND user_id = ?
-  `).bind(roomId, userId).run();
+  `)
+    .bind(roomId, userId)
+    .run();
 
   return c.json({});
 });
 
 // PUT /_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId - Redact an event
-app.put('/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-  const targetEventId = c.req.param('eventId');
-  const txnId = c.req.param('txnId');
+app.put("/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
+  const targetEventId = c.req.param("eventId");
+  const txnId = c.req.param("txnId");
 
   // Check membership
   const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   // Get the target event
   const targetEvent = await getEvent(c.env.DB, targetEventId);
   if (!targetEvent || targetEvent.room_id !== roomId) {
-    return Errors.notFound('Event not found').toResponse();
+    return Errors.notFound("Event not found").toResponse();
   }
 
   // Check power levels for redaction
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, 'm.room.power_levels');
-  const powerLevels = powerLevelsEvent?.content as any || {};
+  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
+  const powerLevels = (powerLevelsEvent?.content as any) || {};
   const userPower = powerLevels.users?.[userId] ?? powerLevels.users_default ?? 0;
   const redactPower = powerLevels.redact ?? 50;
 
   // Users can redact their own messages, or need redact power level
   if (targetEvent.sender !== userId && userPower < redactPower) {
-    return Errors.forbidden('Insufficient power level to redact').toResponse();
+    return Errors.forbidden("Insufficient power level to redact").toResponse();
   }
 
   let body: any = {};
@@ -835,7 +858,7 @@ app.put('/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId', requireAuth()
   // Create redaction event
   const eventId = await generateEventId(c.env.SERVER_NAME);
 
-  const createEvent = await getStateEvent(c.env.DB, roomId, 'm.room.create');
+  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
 
   const authEvents: string[] = [];
   if (createEvent) authEvents.push(createEvent.event_id);
@@ -843,7 +866,7 @@ app.put('/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId', requireAuth()
   if (membership) authEvents.push(membership.eventId);
 
   const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
+  const prevEvents = latestEvents.map((e) => e.event_id);
 
   const redactionContent: any = {
     redacts: targetEventId,
@@ -856,7 +879,7 @@ app.put('/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId', requireAuth()
     event_id: eventId,
     room_id: roomId,
     sender: userId,
-    type: 'm.room.redaction',
+    type: "m.room.redaction",
     content: redactionContent,
     redacts: targetEventId,
     origin_server_ts: Date.now(),
@@ -871,10 +894,12 @@ app.put('/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId', requireAuth()
   // Mark the original event as redacted
   await c.env.DB.prepare(`
     UPDATE events SET redacted_because = ? WHERE event_id = ?
-  `).bind(eventId, targetEventId).run();
+  `)
+    .bind(eventId, targetEventId)
+    .run();
 
   // Notify room members about the redaction
-  await notifyUsersOfEvent(c.env, roomId, eventId, 'm.room.redaction');
+  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.redaction");
 
   return c.json({ event_id: eventId });
 });
@@ -883,17 +908,17 @@ app.put('/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId', requireAuth()
 // NOTE: This endpoint is used by Element X NSE (Notification Service Extension) to fetch
 // event content for rich push notifications. If you see this endpoint being called
 // shortly after a push notification is sent, that's the NSE working correctly.
-app.get('/_matrix/client/v3/rooms/:roomId/context/:eventId', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-  const eventId = c.req.param('eventId');
-  const limit = Math.min(parseInt(c.req.query('limit') || '10'), 100);
-  const userAgent = c.req.header('User-Agent');
+app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
+  const eventId = c.req.param("eventId");
+  const limit = Math.min(parseInt(c.req.query("limit") || "10"), 100);
+  const userAgent = c.req.header("User-Agent");
 
   // NSE Detection logging - /context is a key endpoint for push notification content
   // NSE typically requests small limit (1-5) for single event context
   const isLikelyNSE = limit <= 5;
-  console.log('[rooms/context] Request:', {
+  console.log("[rooms/context] Request:", {
     userId,
     roomId,
     eventId,
@@ -905,19 +930,23 @@ app.get('/_matrix/client/v3/rooms/:roomId/context/:eventId', requireAuth(), asyn
 
   // Check membership
   const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    console.log('[rooms/context] DENIED - not a member:', { userId, roomId, eventId });
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || membership.membership !== "join") {
+    console.log("[rooms/context] DENIED - not a member:", { userId, roomId, eventId });
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   // Get the target event
   const targetEvent = await getEvent(c.env.DB, eventId);
   if (!targetEvent || targetEvent.room_id !== roomId) {
-    console.log('[rooms/context] Event not found:', { eventId, roomId, eventRoomId: targetEvent?.room_id });
-    return Errors.notFound('Event not found').toResponse();
+    console.log("[rooms/context] Event not found:", {
+      eventId,
+      roomId,
+      eventRoomId: targetEvent?.room_id,
+    });
+    return Errors.notFound("Event not found").toResponse();
   }
 
-  console.log('[rooms/context] Found event:', {
+  console.log("[rooms/context] Found event:", {
     eventId,
     eventType: targetEvent.type,
     sender: targetEvent.sender,
@@ -930,18 +959,22 @@ app.get('/_matrix/client/v3/rooms/:roomId/context/:eventId', requireAuth(), asyn
   const eventsBefore = await c.env.DB.prepare(`
     SELECT * FROM events WHERE room_id = ? AND origin_server_ts < ?
     ORDER BY origin_server_ts DESC LIMIT ?
-  `).bind(roomId, targetEvent.origin_server_ts, halfLimit).all();
+  `)
+    .bind(roomId, targetEvent.origin_server_ts, halfLimit)
+    .all();
 
   const eventsAfter = await c.env.DB.prepare(`
     SELECT * FROM events WHERE room_id = ? AND origin_server_ts > ?
     ORDER BY origin_server_ts ASC LIMIT ?
-  `).bind(roomId, targetEvent.origin_server_ts, halfLimit).all();
+  `)
+    .bind(roomId, targetEvent.origin_server_ts, halfLimit)
+    .all();
 
   // Format events
   const formatEvent = (e: any) => ({
     type: e.event_type,
     state_key: e.state_key,
-    content: JSON.parse(e.content || '{}'),
+    content: JSON.parse(e.content || "{}"),
     sender: e.sender,
     origin_server_ts: e.origin_server_ts,
     event_id: e.event_id,
@@ -950,7 +983,7 @@ app.get('/_matrix/client/v3/rooms/:roomId/context/:eventId', requireAuth(), asyn
 
   // Get current state
   const state = await getRoomState(c.env.DB, roomId);
-  const stateEvents = state.map(e => ({
+  const stateEvents = state.map((e) => ({
     type: e.type,
     state_key: e.state_key,
     content: e.content,
@@ -965,31 +998,39 @@ app.get('/_matrix/client/v3/rooms/:roomId/context/:eventId', requireAuth(), asyn
     events_before: eventsBefore.results.reverse().map(formatEvent),
     events_after: eventsAfter.results.map(formatEvent),
     state: stateEvents,
-    start: eventsBefore.results.length > 0 ? String(eventsBefore.results[0].origin_server_ts) : undefined,
-    end: eventsAfter.results.length > 0 ? String(eventsAfter.results[eventsAfter.results.length - 1].origin_server_ts) : undefined,
+    start:
+      eventsBefore.results.length > 0
+        ? String(eventsBefore.results[0].origin_server_ts)
+        : undefined,
+    end:
+      eventsAfter.results.length > 0
+        ? String(eventsAfter.results[eventsAfter.results.length - 1].origin_server_ts)
+        : undefined,
   });
 });
 
 // GET /_matrix/client/v3/rooms/:roomId/joined_members - Get joined members with details
-app.get('/_matrix/client/v3/rooms/:roomId/joined_members', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.get("/_matrix/client/v3/rooms/:roomId/joined_members", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
 
   // Check membership
   const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   const members = await c.env.DB.prepare(`
     SELECT user_id, display_name, avatar_url
     FROM room_memberships
     WHERE room_id = ? AND membership = 'join'
-  `).bind(roomId).all<{
-    user_id: string;
-    display_name: string | null;
-    avatar_url: string | null;
-  }>();
+  `)
+    .bind(roomId)
+    .all<{
+      user_id: string;
+      display_name: string | null;
+      avatar_url: string | null;
+    }>();
 
   const joined: Record<string, { display_name?: string; avatar_url?: string }> = {};
   for (const member of members.results) {
@@ -1003,51 +1044,54 @@ app.get('/_matrix/client/v3/rooms/:roomId/joined_members', requireAuth(), async 
 });
 
 // GET /_matrix/client/v3/rooms/:roomId/aliases - Get room aliases
-app.get('/_matrix/client/v3/rooms/:roomId/aliases', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.get("/_matrix/client/v3/rooms/:roomId/aliases", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
   const db = c.env.DB;
 
   // Check membership
   const membership = await getMembership(db, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
-  const aliases = await db.prepare(`
+  const aliases = await db
+    .prepare(`
     SELECT alias FROM room_aliases WHERE room_id = ?
-  `).bind(roomId).all<{ alias: string }>();
+  `)
+    .bind(roomId)
+    .all<{ alias: string }>();
 
   return c.json({
-    aliases: aliases.results.map(a => a.alias),
+    aliases: aliases.results.map((a) => a.alias),
   });
 });
 
 // POST /_matrix/client/v3/join/:roomIdOrAlias - Join room by ID or alias
-app.post('/_matrix/client/v3/join/:roomIdOrAlias', requireAuth(), async (c) => {
+app.post("/_matrix/client/v3/join/:roomIdOrAlias", requireAuth(), async (c) => {
   try {
-    const roomIdOrAlias = decodeURIComponent(c.req.param('roomIdOrAlias'));
+    const roomIdOrAlias = decodeURIComponent(c.req.param("roomIdOrAlias"));
     const db = c.env.DB;
-    const remoteServers = c.req.queries('server_name');
+    const remoteServers = c.req.queries("server_name");
 
     let roomId = roomIdOrAlias;
-    if (roomIdOrAlias.startsWith('#')) {
+    if (roomIdOrAlias.startsWith("#")) {
       const resolved = await getRoomByAlias(db, roomIdOrAlias);
       if (!resolved) {
-        return Errors.notFound('Room alias not found').toResponse();
+        return Errors.notFound("Room alias not found").toResponse();
       }
       roomId = resolved;
     }
 
-    const response = await c.get('appContext').services.rooms.joinRoom({
-      userId: c.get('userId'),
+    const response = await c.get("appContext").services.rooms.joinRoom({
+      userId: c.get("userId"),
       roomId,
       remoteServers,
     });
 
     return c.json(response);
   } catch (error) {
-    if (error instanceof Error && 'toResponse' in error) {
+    if (error instanceof Error && "toResponse" in error) {
       return (error as { toResponse(): Response }).toResponse();
     }
     throw error;
@@ -1056,12 +1100,12 @@ app.post('/_matrix/client/v3/join/:roomIdOrAlias', requireAuth(), async (c) => {
 
 // Room alias endpoints
 // GET /_matrix/client/v3/directory/room/:roomAlias
-app.get('/_matrix/client/v3/directory/room/:roomAlias', async (c) => {
-  const alias = decodeURIComponent(c.req.param('roomAlias'));
+app.get("/_matrix/client/v3/directory/room/:roomAlias", async (c) => {
+  const alias = decodeURIComponent(c.req.param("roomAlias"));
 
   const roomId = await getRoomByAlias(c.env.DB, alias);
   if (!roomId) {
-    return Errors.notFound('Room alias not found').toResponse();
+    return Errors.notFound("Room alias not found").toResponse();
   }
 
   return c.json({
@@ -1071,9 +1115,9 @@ app.get('/_matrix/client/v3/directory/room/:roomAlias', async (c) => {
 });
 
 // PUT /_matrix/client/v3/directory/room/:roomAlias
-app.put('/_matrix/client/v3/directory/room/:roomAlias', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const alias = decodeURIComponent(c.req.param('roomAlias'));
+app.put("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const alias = decodeURIComponent(c.req.param("roomAlias"));
 
   let body: any;
   try {
@@ -1084,7 +1128,7 @@ app.put('/_matrix/client/v3/directory/room/:roomAlias', requireAuth(), async (c)
 
   const { room_id } = body;
   if (!room_id) {
-    return Errors.missingParam('room_id').toResponse();
+    return Errors.missingParam("room_id").toResponse();
   }
 
   // Check if alias already exists
@@ -1095,8 +1139,8 @@ app.put('/_matrix/client/v3/directory/room/:roomAlias', requireAuth(), async (c)
 
   // Check if user has permission (is member of room)
   const membership = await getMembership(c.env.DB, room_id, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   await createRoomAlias(c.env.DB, alias, room_id, userId);
@@ -1104,14 +1148,14 @@ app.put('/_matrix/client/v3/directory/room/:roomAlias', requireAuth(), async (c)
 });
 
 // DELETE /_matrix/client/v3/directory/room/:roomAlias
-app.delete('/_matrix/client/v3/directory/room/:roomAlias', requireAuth(), async (c) => {
+app.delete("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async (c) => {
   // Note: userId could be used for permission checks in future
-  void c.get('userId');
-  const alias = decodeURIComponent(c.req.param('roomAlias'));
+  void c.get("userId");
+  const alias = decodeURIComponent(c.req.param("roomAlias"));
 
   const roomId = await getRoomByAlias(c.env.DB, alias);
   if (!roomId) {
-    return Errors.notFound('Room alias not found').toResponse();
+    return Errors.notFound("Room alias not found").toResponse();
   }
 
   await deleteRoomAlias(c.env.DB, alias);
@@ -1124,34 +1168,37 @@ app.delete('/_matrix/client/v3/directory/room/:roomAlias', requireAuth(), async 
 
 // GET /_matrix/client/v1/room_summary/:roomIdOrAlias - Get a summary of a room
 // Allows previewing a room without joining it (if permitted by room settings)
-app.get('/_matrix/client/v1/room_summary/:roomIdOrAlias', async (c) => {
-  const roomIdOrAlias = decodeURIComponent(c.req.param('roomIdOrAlias'));
+app.get("/_matrix/client/v1/room_summary/:roomIdOrAlias", async (c) => {
+  const roomIdOrAlias = decodeURIComponent(c.req.param("roomIdOrAlias"));
   const db = c.env.DB;
 
   let roomId = roomIdOrAlias;
 
   // Resolve alias to room_id if needed
-  if (roomIdOrAlias.startsWith('#')) {
-    const aliasResult = await db.prepare(
-      `SELECT room_id FROM room_aliases WHERE alias = ?`
-    ).bind(roomIdOrAlias).first<{ room_id: string }>();
+  if (roomIdOrAlias.startsWith("#")) {
+    const aliasResult = await db
+      .prepare(`SELECT room_id FROM room_aliases WHERE alias = ?`)
+      .bind(roomIdOrAlias)
+      .first<{ room_id: string }>();
     if (!aliasResult) {
-      return Errors.notFound('Room alias not found').toResponse();
+      return Errors.notFound("Room alias not found").toResponse();
     }
     roomId = aliasResult.room_id;
   }
 
   // Get room info
-  const room = await db.prepare(
-    `SELECT room_id, room_version, is_public FROM rooms WHERE room_id = ?`
-  ).bind(roomId).first<{ room_id: string; room_version: string; is_public: number }>();
+  const room = await db
+    .prepare(`SELECT room_id, room_version, is_public FROM rooms WHERE room_id = ?`)
+    .bind(roomId)
+    .first<{ room_id: string; room_version: string; is_public: number }>();
 
   if (!room) {
-    return Errors.notFound('Room not found').toResponse();
+    return Errors.notFound("Room not found").toResponse();
   }
 
   // Get room state events we need
-  const stateEvents = await db.prepare(`
+  const stateEvents = await db
+    .prepare(`
     SELECT e.event_type, e.content FROM room_state rs
     JOIN events e ON rs.event_id = e.event_id
     WHERE rs.room_id = ? AND rs.event_type IN (
@@ -1159,12 +1206,17 @@ app.get('/_matrix/client/v1/room_summary/:roomIdOrAlias', async (c) => {
       'm.room.join_rules', 'm.room.canonical_alias', 'm.room.encryption',
       'm.room.history_visibility', 'm.room.guest_access'
     )
-  `).bind(roomId).all<{ event_type: string; content: string }>();
+  `)
+    .bind(roomId)
+    .all<{ event_type: string; content: string }>();
 
   // Get member count
-  const memberCount = await db.prepare(
-    `SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'join'`
-  ).bind(roomId).first<{ count: number }>();
+  const memberCount = await db
+    .prepare(
+      `SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'join'`,
+    )
+    .bind(roomId)
+    .first<{ count: number }>();
 
   // Build response
   const response: Record<string, unknown> = {
@@ -1174,39 +1226,39 @@ app.get('/_matrix/client/v1/room_summary/:roomIdOrAlias', async (c) => {
   };
 
   // Extract state
-  let joinRule = 'invite';
-  let historyVisibility = 'shared';
+  let joinRule = "invite";
+  let historyVisibility = "shared";
   let worldReadable = false;
   let guestCanJoin = false;
 
   for (const event of stateEvents.results || []) {
     const content = JSON.parse(event.content);
     switch (event.event_type) {
-      case 'm.room.name':
+      case "m.room.name":
         response.name = content.name;
         break;
-      case 'm.room.topic':
+      case "m.room.topic":
         response.topic = content.topic;
         break;
-      case 'm.room.avatar':
+      case "m.room.avatar":
         response.avatar_url = content.url;
         break;
-      case 'm.room.join_rules':
+      case "m.room.join_rules":
         joinRule = content.join_rule;
         response.join_rule = joinRule;
         break;
-      case 'm.room.canonical_alias':
+      case "m.room.canonical_alias":
         response.canonical_alias = content.alias;
         break;
-      case 'm.room.encryption':
+      case "m.room.encryption":
         response.encryption = content.algorithm;
         break;
-      case 'm.room.history_visibility':
+      case "m.room.history_visibility":
         historyVisibility = content.history_visibility;
-        worldReadable = historyVisibility === 'world_readable';
+        worldReadable = historyVisibility === "world_readable";
         break;
-      case 'm.room.guest_access':
-        guestCanJoin = content.guest_access === 'can_join';
+      case "m.room.guest_access":
+        guestCanJoin = content.guest_access === "can_join";
         break;
     }
   }
@@ -1215,20 +1267,22 @@ app.get('/_matrix/client/v1/room_summary/:roomIdOrAlias', async (c) => {
   response.guest_can_join = guestCanJoin;
 
   // Check user membership if authenticated (optional auth)
-  const authHeader = c.req.header('Authorization');
-  if (authHeader?.startsWith('Bearer ')) {
+  const authHeader = c.req.header("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
-    const { hashToken } = await import('../utils/crypto');
+    const { hashToken } = await import("../utils/crypto");
     const tokenHash = await hashToken(token);
-    const tokenResult = await db.prepare(
-      `SELECT user_id FROM access_tokens WHERE token_hash = ?`
-    ).bind(tokenHash).first<{ user_id: string }>();
+    const tokenResult = await db
+      .prepare(`SELECT user_id FROM access_tokens WHERE token_hash = ?`)
+      .bind(tokenHash)
+      .first<{ user_id: string }>();
 
     if (tokenResult) {
-      const membership = await db.prepare(
-        `SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?`
-      ).bind(roomId, tokenResult.user_id).first<{ membership: string }>();
-      response.membership = membership?.membership || 'leave';
+      const membership = await db
+        .prepare(`SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?`)
+        .bind(roomId, tokenResult.user_id)
+        .first<{ membership: string }>();
+      response.membership = membership?.membership || "leave";
     }
   }
 
@@ -1236,8 +1290,8 @@ app.get('/_matrix/client/v1/room_summary/:roomIdOrAlias', async (c) => {
   // For non-public rooms, only show summary if user is a member or if world_readable
   if (!room.is_public && !worldReadable && !response.membership) {
     // Don't reveal room existence for private rooms to non-members
-    if (!['public', 'knock', 'knock_restricted'].includes(joinRule)) {
-      return Errors.notFound('Room not found').toResponse();
+    if (!["public", "knock", "knock_restricted"].includes(joinRule)) {
+      return Errors.notFound("Room not found").toResponse();
     }
   }
 
@@ -1249,12 +1303,12 @@ app.get('/_matrix/client/v1/room_summary/:roomIdOrAlias', async (c) => {
 // ============================================
 
 // Supported room versions
-const SUPPORTED_ROOM_VERSIONS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+const SUPPORTED_ROOM_VERSIONS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
 
 // POST /_matrix/client/v3/rooms/:roomId/upgrade - Upgrade a room to a new version
-app.post('/_matrix/client/v3/rooms/:roomId/upgrade', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const oldRoomId = c.req.param('roomId');
+app.post("/_matrix/client/v3/rooms/:roomId/upgrade", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const oldRoomId = c.req.param("roomId");
   const db = c.env.DB;
   const serverName = c.env.SERVER_NAME;
 
@@ -1266,39 +1320,49 @@ app.post('/_matrix/client/v3/rooms/:roomId/upgrade', requireAuth(), async (c) =>
   }
 
   if (!body.new_version) {
-    return Errors.missingParam('new_version').toResponse();
+    return Errors.missingParam("new_version").toResponse();
   }
 
   // Validate room version
   if (!SUPPORTED_ROOM_VERSIONS.includes(body.new_version)) {
-    return c.json({
-      errcode: 'M_UNSUPPORTED_ROOM_VERSION',
-      error: `Room version ${body.new_version} is not supported`,
-    }, 400);
+    return c.json(
+      {
+        errcode: "M_UNSUPPORTED_ROOM_VERSION",
+        error: `Room version ${body.new_version} is not supported`,
+      },
+      400,
+    );
   }
 
   // Check if old room exists
   const oldRoom = await getRoom(db, oldRoomId);
   if (!oldRoom) {
-    return Errors.notFound('Room not found').toResponse();
+    return Errors.notFound("Room not found").toResponse();
   }
 
   // Check user is a member
   const membership = await getMembership(db, oldRoomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   // Check user has permission to send m.room.tombstone events
   // User needs power level >= events['m.room.tombstone'] (default 100 for state events)
-  const powerLevelsEvent = await getStateEvent(db, oldRoomId, 'm.room.power_levels', '');
-  const powerLevels = powerLevelsEvent ? JSON.parse(typeof powerLevelsEvent.content === 'string' ? powerLevelsEvent.content : JSON.stringify(powerLevelsEvent.content)) : null;
+  const powerLevelsEvent = await getStateEvent(db, oldRoomId, "m.room.power_levels", "");
+  const powerLevels = powerLevelsEvent
+    ? JSON.parse(
+        typeof powerLevelsEvent.content === "string"
+          ? powerLevelsEvent.content
+          : JSON.stringify(powerLevelsEvent.content),
+      )
+    : null;
 
   const userPowerLevel = powerLevels?.users?.[userId] ?? powerLevels?.users_default ?? 0;
-  const tombstonePowerLevel = powerLevels?.events?.['m.room.tombstone'] ?? powerLevels?.state_default ?? 50;
+  const tombstonePowerLevel =
+    powerLevels?.events?.["m.room.tombstone"] ?? powerLevels?.state_default ?? 50;
 
   if (userPowerLevel < tombstonePowerLevel) {
-    return Errors.forbidden('Insufficient power level to upgrade room').toResponse();
+    return Errors.forbidden("Insufficient power level to upgrade room").toResponse();
   }
 
   // Get current room state to copy to new room
@@ -1309,9 +1373,12 @@ app.post('/_matrix/client/v3/rooms/:roomId/upgrade', requireAuth(), async (c) =>
   const newRoomId = await generateRoomId(serverName);
 
   // Get the last event ID from old room for predecessor
-  const lastEvent = await db.prepare(`
+  const lastEvent = await db
+    .prepare(`
     SELECT event_id FROM events WHERE room_id = ? ORDER BY depth DESC LIMIT 1
-  `).bind(oldRoomId).first<{ event_id: string }>();
+  `)
+    .bind(oldRoomId)
+    .first<{ event_id: string }>();
 
   // Create the new room
   await createRoom(db, newRoomId, body.new_version, userId, false);
@@ -1321,7 +1388,11 @@ app.post('/_matrix/client/v3/rooms/:roomId/upgrade', requireAuth(), async (c) =>
   const prevEvents: string[] = [];
 
   // Helper to create events in new room
-  async function createNewRoomEvent(type: string, content: any, stateKey?: string): Promise<string> {
+  async function createNewRoomEvent(
+    type: string,
+    content: any,
+    stateKey?: string,
+  ): Promise<string> {
     const eventId = await generateEventId(serverName);
     const event: PDU = {
       event_id: eventId,
@@ -1353,119 +1424,129 @@ app.post('/_matrix/client/v3/rooms/:roomId/upgrade', requireAuth(), async (c) =>
     room_version: body.new_version,
     predecessor: {
       room_id: oldRoomId,
-      event_id: lastEvent?.event_id || '',
+      event_id: lastEvent?.event_id || "",
     },
   };
-  await createNewRoomEvent('m.room.create', createContent, '');
+  await createNewRoomEvent("m.room.create", createContent, "");
 
   // 2. Creator joins
-  const joinEventId = await createNewRoomEvent('m.room.member', { membership: 'join' }, userId);
-  await updateMembership(db, newRoomId, userId, 'join', joinEventId);
+  const joinEventId = await createNewRoomEvent("m.room.member", { membership: "join" }, userId);
+  await updateMembership(db, newRoomId, userId, "join", joinEventId);
 
   // 3. Copy power levels (with adjustments)
   if (powerLevels) {
-    await createNewRoomEvent('m.room.power_levels', powerLevels, '');
+    await createNewRoomEvent("m.room.power_levels", powerLevels, "");
   } else {
     // Default power levels
-    await createNewRoomEvent('m.room.power_levels', {
-      users: { [userId]: 100 },
-      users_default: 0,
-      events_default: 0,
-      state_default: 50,
-      ban: 50,
-      kick: 50,
-      redact: 50,
-      invite: 0,
-    }, '');
+    await createNewRoomEvent(
+      "m.room.power_levels",
+      {
+        users: { [userId]: 100 },
+        users_default: 0,
+        events_default: 0,
+        state_default: 50,
+        ban: 50,
+        kick: 50,
+        redact: 50,
+        invite: 0,
+      },
+      "",
+    );
   }
 
   // 4. Copy join rules
-  const joinRulesEvent = currentState.find(e => e.type === 'm.room.join_rules');
+  const joinRulesEvent = currentState.find((e) => e.type === "m.room.join_rules");
   if (joinRulesEvent) {
-    const content = typeof joinRulesEvent.content === 'string'
-      ? JSON.parse(joinRulesEvent.content)
-      : joinRulesEvent.content;
-    await createNewRoomEvent('m.room.join_rules', content, '');
+    const content =
+      typeof joinRulesEvent.content === "string"
+        ? JSON.parse(joinRulesEvent.content)
+        : joinRulesEvent.content;
+    await createNewRoomEvent("m.room.join_rules", content, "");
   } else {
-    await createNewRoomEvent('m.room.join_rules', { join_rule: 'invite' }, '');
+    await createNewRoomEvent("m.room.join_rules", { join_rule: "invite" }, "");
   }
 
   // 5. Copy history visibility
-  const historyEvent = currentState.find(e => e.type === 'm.room.history_visibility');
+  const historyEvent = currentState.find((e) => e.type === "m.room.history_visibility");
   if (historyEvent) {
-    const content = typeof historyEvent.content === 'string'
-      ? JSON.parse(historyEvent.content)
-      : historyEvent.content;
-    await createNewRoomEvent('m.room.history_visibility', content, '');
+    const content =
+      typeof historyEvent.content === "string"
+        ? JSON.parse(historyEvent.content)
+        : historyEvent.content;
+    await createNewRoomEvent("m.room.history_visibility", content, "");
   } else {
-    await createNewRoomEvent('m.room.history_visibility', { history_visibility: 'shared' }, '');
+    await createNewRoomEvent("m.room.history_visibility", { history_visibility: "shared" }, "");
   }
 
   // 6. Copy room name
-  const nameEvent = currentState.find(e => e.type === 'm.room.name');
+  const nameEvent = currentState.find((e) => e.type === "m.room.name");
   if (nameEvent) {
-    const content = typeof nameEvent.content === 'string'
-      ? JSON.parse(nameEvent.content)
-      : nameEvent.content;
-    await createNewRoomEvent('m.room.name', content, '');
+    const content =
+      typeof nameEvent.content === "string" ? JSON.parse(nameEvent.content) : nameEvent.content;
+    await createNewRoomEvent("m.room.name", content, "");
   }
 
   // 7. Copy room topic
-  const topicEvent = currentState.find(e => e.type === 'm.room.topic');
+  const topicEvent = currentState.find((e) => e.type === "m.room.topic");
   if (topicEvent) {
-    const content = typeof topicEvent.content === 'string'
-      ? JSON.parse(topicEvent.content)
-      : topicEvent.content;
-    await createNewRoomEvent('m.room.topic', content, '');
+    const content =
+      typeof topicEvent.content === "string" ? JSON.parse(topicEvent.content) : topicEvent.content;
+    await createNewRoomEvent("m.room.topic", content, "");
   }
 
   // 8. Copy room avatar
-  const avatarEvent = currentState.find(e => e.type === 'm.room.avatar');
+  const avatarEvent = currentState.find((e) => e.type === "m.room.avatar");
   if (avatarEvent) {
-    const content = typeof avatarEvent.content === 'string'
-      ? JSON.parse(avatarEvent.content)
-      : avatarEvent.content;
-    await createNewRoomEvent('m.room.avatar', content, '');
+    const content =
+      typeof avatarEvent.content === "string"
+        ? JSON.parse(avatarEvent.content)
+        : avatarEvent.content;
+    await createNewRoomEvent("m.room.avatar", content, "");
   }
 
   // 9. Copy encryption settings
-  const encryptionEvent = currentState.find(e => e.type === 'm.room.encryption');
+  const encryptionEvent = currentState.find((e) => e.type === "m.room.encryption");
   if (encryptionEvent) {
-    const content = typeof encryptionEvent.content === 'string'
-      ? JSON.parse(encryptionEvent.content)
-      : encryptionEvent.content;
-    await createNewRoomEvent('m.room.encryption', content, '');
+    const content =
+      typeof encryptionEvent.content === "string"
+        ? JSON.parse(encryptionEvent.content)
+        : encryptionEvent.content;
+    await createNewRoomEvent("m.room.encryption", content, "");
   }
 
   // 10. Copy guest access
-  const guestAccessEvent = currentState.find(e => e.type === 'm.room.guest_access');
+  const guestAccessEvent = currentState.find((e) => e.type === "m.room.guest_access");
   if (guestAccessEvent) {
-    const content = typeof guestAccessEvent.content === 'string'
-      ? JSON.parse(guestAccessEvent.content)
-      : guestAccessEvent.content;
-    await createNewRoomEvent('m.room.guest_access', content, '');
+    const content =
+      typeof guestAccessEvent.content === "string"
+        ? JSON.parse(guestAccessEvent.content)
+        : guestAccessEvent.content;
+    await createNewRoomEvent("m.room.guest_access", content, "");
   }
 
   // Now send tombstone to old room
   const oldRoomState = await getRoomState(db, oldRoomId);
-  const oldPrevEvent = await db.prepare(`
+  const oldPrevEvent = await db
+    .prepare(`
     SELECT event_id, depth FROM events WHERE room_id = ? ORDER BY depth DESC LIMIT 1
-  `).bind(oldRoomId).first<{ event_id: string; depth: number }>();
+  `)
+    .bind(oldRoomId)
+    .first<{ event_id: string; depth: number }>();
 
   const oldAuthEvents = oldRoomState
-    .filter(e => ['m.room.create', 'm.room.power_levels', 'm.room.member'].includes(e.type))
-    .filter(e => e.state_key === '' || e.state_key === userId)
-    .map(e => e.event_id);
+    .filter((e) => ["m.room.create", "m.room.power_levels", "m.room.member"].includes(e.type))
+    .filter((e) => e.state_key === "" || e.state_key === userId)
+    .map((e) => e.event_id);
 
   const tombstoneEventId = await generateEventId(serverName);
   const tombstoneEvent: PDU = {
     event_id: tombstoneEventId,
     room_id: oldRoomId,
     sender: userId,
-    type: 'm.room.tombstone',
-    state_key: '',
+    type: "m.room.tombstone",
+    state_key: "",
     content: {
-      body: 'This room has been replaced',
+      body: "This room has been replaced",
       replacement_room: newRoomId,
     },
     origin_server_ts: now,
@@ -1478,16 +1559,18 @@ app.post('/_matrix/client/v3/rooms/:roomId/upgrade', requireAuth(), async (c) =>
 
   // Update old room's power levels to restrict posting
   // Elevate events_default to prevent casual messaging
-  const newPowerLevels = powerLevels ? { ...powerLevels } : {
-    users: { [userId]: 100 },
-    users_default: 0,
-    events_default: 100, // Set high to prevent messaging
-    state_default: 100,
-    ban: 100,
-    kick: 100,
-    redact: 100,
-    invite: 100,
-  };
+  const newPowerLevels = powerLevels
+    ? { ...powerLevels }
+    : {
+        users: { [userId]: 100 },
+        users_default: 0,
+        events_default: 100, // Set high to prevent messaging
+        state_default: 100,
+        ban: 100,
+        kick: 100,
+        redact: 100,
+        invite: 100,
+      };
   newPowerLevels.events_default = 100;
   newPowerLevels.invite = 100;
 
@@ -1496,8 +1579,8 @@ app.post('/_matrix/client/v3/rooms/:roomId/upgrade', requireAuth(), async (c) =>
     event_id: restrictEventId,
     room_id: oldRoomId,
     sender: userId,
-    type: 'm.room.power_levels',
-    state_key: '',
+    type: "m.room.power_levels",
+    state_key: "",
     content: newPowerLevels,
     origin_server_ts: now + 1,
     depth: (oldPrevEvent?.depth || 0) + 2,
@@ -1508,14 +1591,20 @@ app.post('/_matrix/client/v3/rooms/:roomId/upgrade', requireAuth(), async (c) =>
   await storeEvent(db, restrictEvent);
 
   // Migrate local room aliases to point to new room
-  const aliases = await db.prepare(`
+  const aliases = await db
+    .prepare(`
     SELECT alias FROM room_aliases WHERE room_id = ?
-  `).bind(oldRoomId).all<{ alias: string }>();
+  `)
+    .bind(oldRoomId)
+    .all<{ alias: string }>();
 
   for (const aliasRow of aliases.results) {
-    await db.prepare(`
+    await db
+      .prepare(`
       UPDATE room_aliases SET room_id = ? WHERE alias = ?
-    `).bind(newRoomId, aliasRow.alias).run();
+    `)
+      .bind(newRoomId, aliasRow.alias)
+      .run();
   }
 
   return c.json({

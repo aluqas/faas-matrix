@@ -3,8 +3,8 @@
 // Triggered when a previously-offline server is detected as reachable again.
 // Requests missing events via /backfill and /get_missing_events.
 
-import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
-import type { Env } from '../types';
+import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:workers";
+import type { Env } from "../types";
 
 export interface CatchupParams {
   serverName: string;
@@ -23,7 +23,7 @@ export class FederationCatchupWorkflow extends WorkflowEntrypoint<Env, CatchupPa
     const { serverName, roomIds } = event.payload;
 
     // Step 1: Verify server is reachable
-    const isReachable = await step.do('check-server', async () => {
+    const isReachable = await step.do("check-server", async () => {
       try {
         const resp = await fetch(`https://${serverName}/_matrix/federation/v1/version`, {
           signal: AbortSignal.timeout(10000),
@@ -35,7 +35,7 @@ export class FederationCatchupWorkflow extends WorkflowEntrypoint<Env, CatchupPa
     });
 
     if (!isReachable) {
-      return { serverName, backfilledEvents: 0, success: false, error: 'Server not reachable' };
+      return { serverName, backfilledEvents: 0, success: false, error: "Server not reachable" };
     }
 
     let totalBackfilled = 0;
@@ -47,7 +47,9 @@ export class FederationCatchupWorkflow extends WorkflowEntrypoint<Env, CatchupPa
           // Get our latest event in this room
           const latestEvent = await this.env.DB.prepare(`
             SELECT event_id FROM events WHERE room_id = ? ORDER BY stream_ordering DESC LIMIT 1
-          `).bind(roomId).first<{ event_id: string }>();
+          `)
+            .bind(roomId)
+            .first<{ event_id: string }>();
 
           if (!latestEvent) return 0;
 
@@ -55,20 +57,20 @@ export class FederationCatchupWorkflow extends WorkflowEntrypoint<Env, CatchupPa
           const resp = await fetch(
             `https://${serverName}/_matrix/federation/v1/get_missing_events/${encodeURIComponent(roomId)}`,
             {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 limit: 100,
                 earliest_events: [latestEvent.event_id],
                 latest_events: [],
               }),
               signal: AbortSignal.timeout(30000),
-            }
+            },
           );
 
           if (!resp.ok) return 0;
 
-          const data = await resp.json() as { events?: unknown[] };
+          const data = (await resp.json()) as { events?: unknown[] };
           return data.events?.length || 0;
         } catch {
           return 0;

@@ -2,17 +2,17 @@
 // Provides WebRTC-based video/audio calling using Cloudflare's global SFU network
 // API Reference: https://developers.cloudflare.com/realtime/sfu/
 
-import type { Env } from '../types';
+import type { Env } from "../types";
 
-const CALLS_API_BASE = 'https://rtc.live.cloudflare.com/v1';
+const CALLS_API_BASE = "https://rtc.live.cloudflare.com/v1";
 
 export interface SessionDescription {
   sdp: string;
-  type: 'offer' | 'answer';
+  type: "offer" | "answer";
 }
 
 export interface TrackObject {
-  location: 'local' | 'remote';
+  location: "local" | "remote";
   mid?: string;
   trackName?: string;
   sessionId?: string; // Required for remote tracks
@@ -53,8 +53,8 @@ export interface SessionState {
   tracks: Array<{
     trackName: string;
     mid: string;
-    status: 'active' | 'inactive' | 'waiting';
-    location: 'local' | 'remote';
+    status: "active" | "inactive" | "waiting";
+    location: "local" | "remote";
   }>;
 }
 
@@ -62,10 +62,10 @@ export class CloudflareCallsError extends Error {
   constructor(
     message: string,
     public readonly code: string,
-    public readonly statusCode: number = 500
+    public readonly statusCode: number = 500,
   ) {
     super(message);
-    this.name = 'CloudflareCallsError';
+    this.name = "CloudflareCallsError";
   }
 }
 
@@ -79,17 +79,12 @@ export function isCallsConfigured(env: Env): boolean {
 /**
  * Make an authenticated request to the Cloudflare Calls API
  */
-async function callsRequest<T>(
-  env: Env,
-  method: string,
-  path: string,
-  body?: unknown
-): Promise<T> {
+async function callsRequest<T>(env: Env, method: string, path: string, body?: unknown): Promise<T> {
   if (!env.CALLS_APP_ID || !env.CALLS_APP_SECRET) {
     throw new CloudflareCallsError(
-      'Cloudflare Calls not configured. Set CALLS_APP_ID and CALLS_APP_SECRET.',
-      'NOT_CONFIGURED',
-      500
+      "Cloudflare Calls not configured. Set CALLS_APP_ID and CALLS_APP_SECRET.",
+      "NOT_CONFIGURED",
+      500,
     );
   }
 
@@ -98,8 +93,8 @@ async function callsRequest<T>(
   const response = await fetch(url, {
     method,
     headers: {
-      'Authorization': `Bearer ${env.CALLS_APP_SECRET}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.CALLS_APP_SECRET}`,
+      "Content-Type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -114,7 +109,7 @@ async function callsRequest<T>(
     } catch {
       // Ignore error reading body
     }
-    throw new CloudflareCallsError(errorMessage, 'API_ERROR', response.status);
+    throw new CloudflareCallsError(errorMessage, "API_ERROR", response.status);
   }
 
   return response.json() as Promise<T>;
@@ -125,7 +120,7 @@ async function callsRequest<T>(
  * Each session corresponds to a WebRTC PeerConnection
  */
 export async function createSession(env: Env): Promise<NewSessionResponse> {
-  return callsRequest<NewSessionResponse>(env, 'POST', '/sessions/new');
+  return callsRequest<NewSessionResponse>(env, "POST", "/sessions/new");
 }
 
 /**
@@ -134,14 +129,9 @@ export async function createSession(env: Env): Promise<NewSessionResponse> {
 export async function addTracks(
   env: Env,
   sessionId: string,
-  request: NewTracksRequest
+  request: NewTracksRequest,
 ): Promise<NewTracksResponse> {
-  return callsRequest<NewTracksResponse>(
-    env,
-    'POST',
-    `/sessions/${sessionId}/tracks/new`,
-    request
-  );
+  return callsRequest<NewTracksResponse>(env, "POST", `/sessions/${sessionId}/tracks/new`, request);
 }
 
 /**
@@ -150,13 +140,13 @@ export async function addTracks(
 export async function renegotiate(
   env: Env,
   sessionId: string,
-  request: RenegotiateRequest
+  request: RenegotiateRequest,
 ): Promise<RenegotiateResponse> {
   return callsRequest<RenegotiateResponse>(
     env,
-    'PUT',
+    "PUT",
     `/sessions/${sessionId}/renegotiate`,
-    request
+    request,
   );
 }
 
@@ -167,27 +157,19 @@ export async function closeTracks(
   env: Env,
   sessionId: string,
   trackMids: string[],
-  force: boolean = false
+  force: boolean = false,
 ): Promise<void> {
-  await callsRequest(
-    env,
-    'PUT',
-    `/sessions/${sessionId}/tracks/close`,
-    {
-      tracks: trackMids.map(mid => ({ mid })),
-      force,
-    }
-  );
+  await callsRequest(env, "PUT", `/sessions/${sessionId}/tracks/close`, {
+    tracks: trackMids.map((mid) => ({ mid })),
+    force,
+  });
 }
 
 /**
  * Get current session state
  */
-export async function getSessionState(
-  env: Env,
-  sessionId: string
-): Promise<SessionState> {
-  return callsRequest<SessionState>(env, 'GET', `/sessions/${sessionId}`);
+export async function getSessionState(env: Env, sessionId: string): Promise<SessionState> {
+  return callsRequest<SessionState>(env, "GET", `/sessions/${sessionId}`);
 }
 
 /**
@@ -198,29 +180,25 @@ export async function pushLocalTrack(
   env: Env,
   sessionId: string,
   offer: SessionDescription,
-  trackName: string
+  trackName: string,
 ): Promise<{ answer: SessionDescription; trackName: string; mid: string }> {
   const response = await addTracks(env, sessionId, {
     sessionDescription: offer,
     tracks: [
       {
-        location: 'local',
+        location: "local",
         trackName,
       },
     ],
   });
 
   if (!response.sessionDescription) {
-    throw new CloudflareCallsError('No answer received from SFU', 'NO_ANSWER', 500);
+    throw new CloudflareCallsError("No answer received from SFU", "NO_ANSWER", 500);
   }
 
   const track = response.tracks[0];
   if (track.errorCode) {
-    throw new CloudflareCallsError(
-      track.errorDescription || 'Track error',
-      track.errorCode,
-      400
-    );
+    throw new CloudflareCallsError(track.errorDescription || "Track error", track.errorCode, 400);
   }
 
   return {
@@ -238,7 +216,7 @@ export async function pullRemoteTrack(
   env: Env,
   sessionId: string,
   remoteSessionId: string,
-  trackName: string
+  trackName: string,
 ): Promise<{
   offer: SessionDescription;
   mid: string;
@@ -247,7 +225,7 @@ export async function pullRemoteTrack(
   const response = await addTracks(env, sessionId, {
     tracks: [
       {
-        location: 'remote',
+        location: "remote",
         sessionId: remoteSessionId,
         trackName,
       },
@@ -255,16 +233,12 @@ export async function pullRemoteTrack(
   });
 
   if (!response.sessionDescription) {
-    throw new CloudflareCallsError('No offer received from SFU', 'NO_OFFER', 500);
+    throw new CloudflareCallsError("No offer received from SFU", "NO_OFFER", 500);
   }
 
   const track = response.tracks[0];
   if (track.errorCode) {
-    throw new CloudflareCallsError(
-      track.errorDescription || 'Track error',
-      track.errorCode,
-      400
-    );
+    throw new CloudflareCallsError(track.errorDescription || "Track error", track.errorCode, 400);
   }
 
   return {

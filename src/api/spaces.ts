@@ -3,14 +3,11 @@
 //
 // Spaces are a way to organize rooms into hierarchical groups
 
-import { Hono } from 'hono';
-import type { AppEnv } from '../types';
-import { Errors } from '../utils/errors';
-import { requireAuth } from '../middleware/auth';
-import {
-  EventQueryService,
-  selectSpaceChildren,
-} from '../matrix/application/event-query-service';
+import { Hono } from "hono";
+import type { AppEnv } from "../types";
+import { Errors } from "../utils/errors";
+import { requireAuth } from "../middleware/auth";
+import { EventQueryService, selectSpaceChildren } from "../matrix/application/event-query-service";
 
 const app = new Hono<AppEnv>();
 const queries = new EventQueryService();
@@ -38,20 +35,20 @@ interface SpaceChild {
 // ============================================
 
 // GET /_matrix/client/v1/rooms/:roomId/hierarchy - Get space hierarchy
-app.get('/_matrix/client/v1/rooms/:roomId/hierarchy', requireAuth(), async (c) => {
+app.get("/_matrix/client/v1/rooms/:roomId/hierarchy", requireAuth(), async (c) => {
   // Note: userId could be used for permission checks in future
-  void c.get('userId');
-  const roomId = c.req.param('roomId');
+  void c.get("userId");
+  const roomId = c.req.param("roomId");
   if (!(await queries.roomExists(c.env.DB, roomId))) {
-    return Errors.notFound('Room not found').toResponse();
+    return Errors.notFound("Room not found").toResponse();
   }
 
   // Get pagination params
   // Note: 'from' pagination param reserved for future use
-  void c.req.query('from');
-  const limit = Math.min(parseInt(c.req.query('limit') || '50'), 100);
-  const maxDepth = parseInt(c.req.query('max_depth') || '1');
-  const suggestedOnly = c.req.query('suggested_only') === 'true';
+  void c.req.query("from");
+  const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
+  const maxDepth = parseInt(c.req.query("max_depth") || "1");
+  const suggestedOnly = c.req.query("suggested_only") === "true";
 
   const childEdges = await queries.getSpaceChildEdges(c.env.DB, roomId);
   const { children: childEvents } = selectSpaceChildren(childEdges, {
@@ -68,10 +65,10 @@ app.get('/_matrix/client/v1/rooms/:roomId/hierarchy', requireAuth(), async (c) =
     rooms.push({
       ...spaceInfo,
       children_state: childEdges.map((ce) => ({
-        type: 'm.space.child',
+        type: "m.space.child",
         state_key: ce.roomId,
         content: ce.content,
-        sender: '', // Would need to fetch from event
+        sender: "", // Would need to fetch from event
         origin_server_ts: 0,
       })),
     });
@@ -88,7 +85,7 @@ app.get('/_matrix/client/v1/rooms/:roomId/hierarchy', requireAuth(), async (c) =
     if (maxDepth > 1) {
       const grandchildEdges = await queries.getSpaceChildEdges(c.env.DB, child.roomId);
       childrenState = grandchildEdges.map((edge) => ({
-        type: 'm.space.child',
+        type: "m.space.child",
         state_key: edge.roomId,
         content: edge.content,
       }));
@@ -110,7 +107,7 @@ app.get('/_matrix/client/v1/rooms/:roomId/hierarchy', requireAuth(), async (c) =
 async function getRoomInfo(
   db: D1Database,
   roomId: string,
-  _serverName: string
+  _serverName: string,
 ): Promise<SpaceChild | null> {
   const info = await queries.getRoomPublicInfo(db, roomId);
   if (!info) {

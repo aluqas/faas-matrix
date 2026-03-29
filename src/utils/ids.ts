@@ -1,7 +1,7 @@
 // Matrix ID generation utilities
 
-import type { UserId, RoomId, EventId, RoomAlias, DeviceId } from '../types';
-import { getRoomVersion, type EventIdFormat } from '../services/room-versions';
+import type { UserId, RoomId, EventId, RoomAlias, DeviceId } from "../types";
+import { getRoomVersion, type EventIdFormat } from "../services/room-versions";
 
 // Generate a random opaque ID using Web Crypto API
 export async function generateOpaqueId(length: number = 18): Promise<string> {
@@ -13,15 +13,15 @@ export async function generateOpaqueId(length: number = 18): Promise<string> {
 // Base64 URL-safe encoding
 export function base64UrlEncode(bytes: Uint8Array): string {
   const base64 = btoa(String.fromCharCode(...bytes));
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
 // Base64 URL-safe decoding
 export function base64UrlDecode(str: string): Uint8Array {
-  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = atob(padded);
-  return new Uint8Array([...binary].map(c => c.charCodeAt(0)));
+  return new Uint8Array([...binary].map((c) => c.charCodeAt(0)));
 }
 
 // Generate a user ID
@@ -52,7 +52,7 @@ export function parseRoomId(roomId: RoomId): { opaque: string; serverName: strin
 // Generate an event ID appropriate for the given room version
 export async function generateEventId(serverName: string, roomVersion?: string): Promise<EventId> {
   const format = getEventIdFormat(roomVersion);
-  if (format === 'v1') {
+  if (format === "v1") {
     // Room versions 1-2: $opaque:domain
     const opaque = await generateOpaqueId(18);
     return `$${opaque}:${serverName}`;
@@ -70,9 +70,9 @@ export async function generateLegacyEventId(serverName: string): Promise<EventId
 
 // Get the event ID format for a room version
 function getEventIdFormat(roomVersion?: string): EventIdFormat {
-  if (!roomVersion) return 'v4';
+  if (!roomVersion) return "v4";
   const version = getRoomVersion(roomVersion);
-  return version?.eventIdFormat ?? 'v4';
+  return version?.eventIdFormat ?? "v4";
 }
 
 // Format a room alias
@@ -135,11 +135,16 @@ export function isValidServerName(serverName: string): boolean {
   if (!serverName || serverName.length > 255) return false;
 
   // Simple validation - domain with optional port
-  const domainWithPort = /^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(:\d+)?$/;
+  const domainWithPort =
+    /^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(:\d+)?$/;
   const ipv4WithPort = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/;
   const ipv6WithPort = /^\[[\da-fA-F:]+\](:\d+)?$/;
 
-  return domainWithPort.test(serverName) || ipv4WithPort.test(serverName) || ipv6WithPort.test(serverName);
+  return (
+    domainWithPort.test(serverName) ||
+    ipv4WithPort.test(serverName) ||
+    ipv6WithPort.test(serverName)
+  );
 }
 
 // Check if server name is local

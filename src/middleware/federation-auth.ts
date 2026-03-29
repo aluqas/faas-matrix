@@ -4,9 +4,9 @@
 // The Authorization header format is:
 // Authorization: X-Matrix origin=<origin>,destination=<destination>,key=<key_id>,sig=<signature>
 
-import type { Context, Next } from 'hono';
-import type { AppEnv } from '../types';
-import { verifyRemoteSignature } from '../services/federation-keys';
+import type { Context, Next } from "hono";
+import type { AppEnv } from "../types";
+import { verifyRemoteSignature } from "../services/federation-keys";
 
 interface MatrixAuthParams {
   origin: string;
@@ -19,7 +19,7 @@ interface MatrixAuthParams {
  * Parse the X-Matrix authorization header
  */
 function parseAuthHeader(authHeader: string): MatrixAuthParams | null {
-  if (!authHeader.startsWith('X-Matrix ')) {
+  if (!authHeader.startsWith("X-Matrix ")) {
     return null;
   }
 
@@ -31,7 +31,7 @@ function parseAuthHeader(authHeader: string): MatrixAuthParams | null {
   let match;
   while ((match = regex.exec(params)) !== null) {
     const [, key, value] = match;
-    if (key === 'origin' || key === 'destination' || key === 'key' || key === 'sig') {
+    if (key === "origin" || key === "destination" || key === "key" || key === "sig") {
       result[key] = value;
     }
   }
@@ -40,7 +40,10 @@ function parseAuthHeader(authHeader: string): MatrixAuthParams | null {
   const unquotedRegex = /(\w+)=([^,\s]+)/g;
   while ((match = unquotedRegex.exec(params)) !== null) {
     const [, key, value] = match;
-    if ((key === 'origin' || key === 'destination' || key === 'key' || key === 'sig') && !result[key]) {
+    if (
+      (key === "origin" || key === "destination" || key === "key" || key === "sig") &&
+      !result[key]
+    ) {
       result[key] = value;
     }
   }
@@ -60,7 +63,7 @@ function buildSignedRequest(
   uri: string,
   origin: string,
   destination: string,
-  content?: unknown
+  content?: unknown,
 ): Record<string, unknown> {
   const request: Record<string, unknown> = {
     method,
@@ -82,17 +85,17 @@ function buildSignedRequest(
  */
 export function requireFederationAuth() {
   return async (c: Context<AppEnv>, next: Next) => {
-    const authHeader = c.req.header('Authorization');
+    const authHeader = c.req.header("Authorization");
     const serverName = c.env.SERVER_NAME;
 
     // Parse authorization header
     if (!authHeader) {
       return c.json(
         {
-          errcode: 'M_UNAUTHORIZED',
-          error: 'Missing Authorization header',
+          errcode: "M_UNAUTHORIZED",
+          error: "Missing Authorization header",
         },
-        401
+        401,
       );
     }
 
@@ -100,10 +103,11 @@ export function requireFederationAuth() {
     if (!authParams) {
       return c.json(
         {
-          errcode: 'M_UNAUTHORIZED',
-          error: 'Invalid Authorization header format. Expected: X-Matrix origin=...,key=...,sig=...',
+          errcode: "M_UNAUTHORIZED",
+          error:
+            "Invalid Authorization header format. Expected: X-Matrix origin=...,key=...,sig=...",
         },
-        401
+        401,
       );
     }
 
@@ -111,10 +115,10 @@ export function requireFederationAuth() {
     if (authParams.destination && authParams.destination !== serverName) {
       return c.json(
         {
-          errcode: 'M_UNAUTHORIZED',
+          errcode: "M_UNAUTHORIZED",
           error: `Request destination ${authParams.destination} does not match this server ${serverName}`,
         },
-        401
+        401,
       );
     }
 
@@ -125,7 +129,7 @@ export function requireFederationAuth() {
 
     // Parse body for POST/PUT requests
     let content: unknown;
-    if (method === 'POST' || method === 'PUT') {
+    if (method === "POST" || method === "PUT") {
       try {
         const bodyText = await c.req.text();
         if (bodyText) {
@@ -137,13 +141,7 @@ export function requireFederationAuth() {
     }
 
     // Build the request object that was signed
-    const signedRequest = buildSignedRequest(
-      method,
-      uri,
-      authParams.origin,
-      serverName,
-      content
-    );
+    const signedRequest = buildSignedRequest(method, uri, authParams.origin, serverName, content);
 
     // Add the signature to the request object for verification
     const requestWithSig = {
@@ -162,32 +160,32 @@ export function requireFederationAuth() {
         authParams.origin,
         authParams.key,
         c.env.DB,
-        c.env.CACHE
+        c.env.CACHE,
       );
 
       if (!isValid) {
         console.warn(`Federation auth failed for ${authParams.origin}: invalid signature`);
         return c.json(
           {
-            errcode: 'M_UNAUTHORIZED',
-            error: 'Invalid request signature',
+            errcode: "M_UNAUTHORIZED",
+            error: "Invalid request signature",
           },
-          401
+          401,
         );
       }
 
       // Set origin in context for use by handlers
-      c.set('federationOrigin' as any, authParams.origin);
+      c.set("federationOrigin" as any, authParams.origin);
 
       return next();
     } catch (error) {
       console.error(`Federation auth error for ${authParams.origin}:`, error);
       return c.json(
         {
-          errcode: 'M_UNAUTHORIZED',
-          error: 'Failed to verify request signature',
+          errcode: "M_UNAUTHORIZED",
+          error: "Failed to verify request signature",
         },
-        401
+        401,
       );
     }
   };
@@ -199,9 +197,9 @@ export function requireFederationAuth() {
  */
 export function optionalFederationAuth() {
   return async (c: Context<AppEnv>, next: Next) => {
-    const authHeader = c.req.header('Authorization');
+    const authHeader = c.req.header("Authorization");
 
-    if (!authHeader || !authHeader.startsWith('X-Matrix ')) {
+    if (!authHeader || !authHeader.startsWith("X-Matrix ")) {
       // No Matrix auth - continue without setting origin
       return next();
     }
@@ -215,7 +213,7 @@ export function optionalFederationAuth() {
         const uri = url.pathname + url.search;
 
         let content: unknown;
-        if (method === 'POST' || method === 'PUT') {
+        if (method === "POST" || method === "PUT") {
           try {
             const bodyText = await c.req.text();
             if (bodyText) content = JSON.parse(bodyText);
@@ -229,7 +227,7 @@ export function optionalFederationAuth() {
           uri,
           authParams.origin,
           c.env.SERVER_NAME,
-          content
+          content,
         );
 
         const requestWithSig = {
@@ -246,11 +244,11 @@ export function optionalFederationAuth() {
           authParams.origin,
           authParams.key,
           c.env.DB,
-          c.env.CACHE
+          c.env.CACHE,
         );
 
         if (isValid) {
-          c.set('federationOrigin' as any, authParams.origin);
+          c.set("federationOrigin" as any, authParams.origin);
         }
       } catch {
         // Silently ignore auth errors for optional auth

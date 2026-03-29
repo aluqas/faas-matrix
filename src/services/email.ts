@@ -1,7 +1,7 @@
 // Email Service using Cloudflare Email Service
 // Used for 3PID email verification
 
-import type { Env } from '../types/env';
+import type { Env } from "../types/env";
 
 /**
  * Generate a 6-digit verification code
@@ -21,8 +21,8 @@ export function generateVerificationToken(): string {
 export async function generateSessionId(): Promise<string> {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   return Array.from(bytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /**
@@ -32,13 +32,13 @@ export async function sendVerificationEmail(
   env: Env,
   toEmail: string,
   token: string,
-  serverName: string
+  serverName: string,
 ): Promise<{ success: boolean; error?: string }> {
   const fromEmail = env.EMAIL_FROM || `noreply@${serverName}`;
 
   if (!env.EMAIL) {
-    console.error('EMAIL binding is not configured');
-    return { success: false, error: 'Email service not configured' };
+    console.error("EMAIL binding is not configured");
+    return { success: false, error: "Email service not configured" };
   }
 
   const subject = `Your ${serverName} verification code`;
@@ -96,10 +96,10 @@ This email was sent from ${serverName}
     console.log(`Verification email sent to ${toEmail}, message id: ${result.messageId}`);
     return { success: true };
   } catch (error) {
-    console.error('Error sending verification email:', error);
+    console.error("Error sending verification email:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to send email'
+      error: error instanceof Error ? error.message : "Failed to send email",
     };
   }
 }
@@ -112,7 +112,7 @@ export async function createVerificationSession(
   email: string,
   clientSecret: string,
   sendAttempt: number,
-  userId?: string
+  userId?: string,
 ): Promise<{ sessionId: string; token: string } | { error: string }> {
   const sessionId = await generateSessionId();
   const token = generateVerificationToken();
@@ -121,22 +121,25 @@ export async function createVerificationSession(
 
   try {
     // Check if there's an existing session for this email/client_secret combo
-    const existing = await db.prepare(`
+    const existing = await db
+      .prepare(`
       SELECT session_id, send_attempt, validated
       FROM email_verification_sessions
       WHERE email = ? AND client_secret = ?
       ORDER BY created_at DESC
       LIMIT 1
-    `).bind(email, clientSecret).first<{
-      session_id: string;
-      send_attempt: number;
-      validated: number;
-    }>();
+    `)
+      .bind(email, clientSecret)
+      .first<{
+        session_id: string;
+        send_attempt: number;
+        validated: number;
+      }>();
 
     if (existing) {
       // If already validated, reject
       if (existing.validated) {
-        return { error: 'Email already validated for this session' };
+        return { error: "Email already validated for this session" };
       }
 
       // If send_attempt is same or lower, it's a retry - return existing session
@@ -144,36 +147,33 @@ export async function createVerificationSession(
         // Return existing session without sending new email
         return {
           sessionId: existing.session_id,
-          token: '' // Don't return token on retry
+          token: "", // Don't return token on retry
         };
       }
 
       // Delete old session for new attempt
-      await db.prepare(`
+      await db
+        .prepare(`
         DELETE FROM email_verification_sessions WHERE session_id = ?
-      `).bind(existing.session_id).run();
+      `)
+        .bind(existing.session_id)
+        .run();
     }
 
     // Create new session
-    await db.prepare(`
+    await db
+      .prepare(`
       INSERT INTO email_verification_sessions
       (session_id, email, user_id, client_secret, token, send_attempt, validated, created_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
-    `).bind(
-      sessionId,
-      email,
-      userId || null,
-      clientSecret,
-      token,
-      sendAttempt,
-      now,
-      expiresAt
-    ).run();
+    `)
+      .bind(sessionId, email, userId || null, clientSecret, token, sendAttempt, now, expiresAt)
+      .run();
 
     return { sessionId, token };
   } catch (error) {
-    console.error('Error creating verification session:', error);
-    return { error: 'Failed to create verification session' };
+    console.error("Error creating verification session:", error);
+    return { error: "Failed to create verification session" };
   }
 }
 
@@ -184,24 +184,27 @@ export async function validateEmailToken(
   db: D1Database,
   sessionId: string,
   clientSecret: string,
-  token: string
+  token: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await db.prepare(`
+    const session = await db
+      .prepare(`
       SELECT session_id, email, client_secret, token, validated, expires_at
       FROM email_verification_sessions
       WHERE session_id = ?
-    `).bind(sessionId).first<{
-      session_id: string;
-      email: string;
-      client_secret: string;
-      token: string;
-      validated: number;
-      expires_at: number;
-    }>();
+    `)
+      .bind(sessionId)
+      .first<{
+        session_id: string;
+        email: string;
+        client_secret: string;
+        token: string;
+        validated: number;
+        expires_at: number;
+      }>();
 
     if (!session) {
-      return { success: false, error: 'Session not found' };
+      return { success: false, error: "Session not found" };
     }
 
     // Check if already validated
@@ -211,30 +214,33 @@ export async function validateEmailToken(
 
     // Check expiry
     if (Date.now() > session.expires_at) {
-      return { success: false, error: 'Session expired' };
+      return { success: false, error: "Session expired" };
     }
 
     // Verify client_secret matches
     if (session.client_secret !== clientSecret) {
-      return { success: false, error: 'Invalid client_secret' };
+      return { success: false, error: "Invalid client_secret" };
     }
 
     // Verify token
     if (session.token !== token) {
-      return { success: false, error: 'Invalid token' };
+      return { success: false, error: "Invalid token" };
     }
 
     // Mark as validated
-    await db.prepare(`
+    await db
+      .prepare(`
       UPDATE email_verification_sessions
       SET validated = 1, validated_at = ?
       WHERE session_id = ?
-    `).bind(Date.now(), sessionId).run();
+    `)
+      .bind(Date.now(), sessionId)
+      .run();
 
     return { success: true };
   } catch (error) {
-    console.error('Error validating email token:', error);
-    return { success: false, error: 'Validation failed' };
+    console.error("Error validating email token:", error);
+    return { success: false, error: "Validation failed" };
   }
 }
 
@@ -244,18 +250,21 @@ export async function validateEmailToken(
 export async function getValidatedSession(
   db: D1Database,
   sessionId: string,
-  clientSecret: string
+  clientSecret: string,
 ): Promise<{ email: string; userId?: string } | null> {
-  const session = await db.prepare(`
+  const session = await db
+    .prepare(`
     SELECT email, user_id, client_secret, validated
     FROM email_verification_sessions
     WHERE session_id = ? AND validated = 1
-  `).bind(sessionId).first<{
-    email: string;
-    user_id: string | null;
-    client_secret: string;
-    validated: number;
-  }>();
+  `)
+    .bind(sessionId)
+    .first<{
+      email: string;
+      user_id: string | null;
+      client_secret: string;
+      validated: number;
+    }>();
 
   if (!session || session.client_secret !== clientSecret) {
     return null;

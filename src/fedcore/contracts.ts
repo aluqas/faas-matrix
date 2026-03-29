@@ -3,11 +3,7 @@ export interface DiscoveryService<TTarget = unknown> {
 }
 
 export interface SignedTransport {
-  verifyJson(
-    payload: Record<string, unknown>,
-    origin: string,
-    keyId: string
-  ): Promise<boolean>;
+  verifyJson(payload: Record<string, unknown>, origin: string, keyId: string): Promise<boolean>;
 }
 
 export interface RemoteKeyCache<TKey = unknown> {
@@ -18,4 +14,3 @@ export interface RemoteKeyCache<TKey = unknown> {
 export interface DeliveryQueue<TMessage = unknown> {
   enqueue(destination: string, message: TMessage): Promise<void>;
 }
-

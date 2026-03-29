@@ -1,10 +1,15 @@
-import type { MiddlewareHandler } from 'hono';
-import type { AppEnv, Env } from '../../types';
-import type { AppContext } from '../../foundation/app-context';
-import { createFeatureProfile } from '../../foundation/config/feature-profile';
-import type { RuntimeCapabilities } from '../../foundation/runtime-capabilities';
-import { generateEventId, generateOpaqueId, generateRoomId, formatRoomAlias } from '../../utils/ids';
-import { createMatrixServiceRegistry, type MatrixServiceRegistry } from '../../matrix/services';
+import type { MiddlewareHandler } from "hono";
+import type { AppEnv, Env } from "../../types";
+import type { AppContext } from "../../foundation/app-context";
+import { createFeatureProfile } from "../../foundation/config/feature-profile";
+import type { RuntimeCapabilities } from "../../foundation/runtime-capabilities";
+import {
+  generateEventId,
+  generateOpaqueId,
+  generateRoomId,
+  formatRoomAlias,
+} from "../../utils/ids";
+import { createMatrixServiceRegistry, type MatrixServiceRegistry } from "../../matrix/services";
 import {
   CloudflareDeliveryQueue,
   CloudflareDiscoveryService,
@@ -13,11 +18,14 @@ import {
   CloudflareRoomRepository,
   CloudflareSignedTransport,
   CloudflareSyncRepository,
-} from './matrix-repositories';
-import { CloudflareIdempotencyStore } from './idempotency-store';
+} from "./matrix-repositories";
+import { CloudflareIdempotencyStore } from "./idempotency-store";
 
-function createRuntimeCapabilities(env: Env, defer: (task: Promise<unknown>) => void): RuntimeCapabilities {
-  const workflowWaitTimeoutMs = env.MATRIX_FEATURE_PROFILE === 'complement' ? 30000 : 15000;
+function createRuntimeCapabilities(
+  env: Env,
+  defer: (task: Promise<unknown>) => void,
+): RuntimeCapabilities {
+  const workflowWaitTimeoutMs = 30000;
   return {
     sql: { connection: env.DB },
     kv: {
@@ -41,9 +49,9 @@ function createRuntimeCapabilities(env: Env, defer: (task: Promise<unknown>) => 
         let status = await instance.status();
 
         while (
-          status.status === 'queued' ||
-          status.status === 'running' ||
-          status.status === 'waiting'
+          status.status === "queued" ||
+          status.status === "running" ||
+          status.status === "waiting"
         ) {
           if (Date.now() - startedAt >= workflowWaitTimeoutMs) {
             break;
@@ -72,11 +80,11 @@ function createRuntimeCapabilities(env: Env, defer: (task: Promise<unknown>) => 
         const doId = env.SYNC.idFromName(userId);
         const stub = env.SYNC.get(doId);
         const response = await stub.fetch(
-          new Request('http://internal/wait-for-events', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+          new Request("http://internal/wait-for-events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ timeout: timeoutMs }),
-          })
+          }),
         );
         return response.json() as Promise<{ hasEvents: boolean }>;
       },
@@ -111,7 +119,7 @@ function createRuntimeCapabilities(env: Env, defer: (task: Promise<unknown>) => 
 
 function createCloudflareAppContext(
   env: Env,
-  defer: (task: Promise<unknown>) => void
+  defer: (task: Promise<unknown>) => void,
 ): AppContext<MatrixServiceRegistry> {
   const capabilities = createRuntimeCapabilities(env, defer);
   const profile = createFeatureProfile(env.MATRIX_FEATURE_PROFILE);
@@ -141,7 +149,7 @@ function createCloudflareAppContext(
 export function appContextMiddleware(): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const appContext = createCloudflareAppContext(c.env, (task) => c.executionCtx.waitUntil(task));
-    c.set('appContext', appContext);
+    c.set("appContext", appContext);
     await next();
   };
 }

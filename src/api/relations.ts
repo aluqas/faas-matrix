@@ -3,10 +3,10 @@
 //
 // Relations allow events to reference other events (replies, reactions, threads, edits)
 
-import { Hono } from 'hono';
-import type { AppEnv } from '../types';
-import { Errors } from '../utils/errors';
-import { requireAuth } from '../middleware/auth';
+import { Hono } from "hono";
+import type { AppEnv } from "../types";
+import { Errors } from "../utils/errors";
+import { requireAuth } from "../middleware/auth";
 
 const app = new Hono<AppEnv>();
 
@@ -28,27 +28,30 @@ export interface RelationEvent {
 // ============================================
 
 // GET /_matrix/client/v1/rooms/:roomId/relations/:eventId - Get all relations
-app.get('/_matrix/client/v1/rooms/:roomId/relations/:eventId', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-  const eventId = c.req.param('eventId');
+app.get("/_matrix/client/v1/rooms/:roomId/relations/:eventId", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
+  const eventId = c.req.param("eventId");
   const db = c.env.DB;
 
   // Check membership
-  const membership = await db.prepare(`
+  const membership = await db
+    .prepare(`
     SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?
-  `).bind(roomId, userId).first<{ membership: string }>();
+  `)
+    .bind(roomId, userId)
+    .first<{ membership: string }>();
 
-  if (!membership || !['join', 'leave'].includes(membership.membership)) {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || !["join", "leave"].includes(membership.membership)) {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
   // Get pagination params
-  const from = c.req.query('from');
+  const from = c.req.query("from");
   // Note: 'to' pagination param reserved for future use
-  void c.req.query('to');
-  const limit = Math.min(parseInt(c.req.query('limit') || '50'), 100);
-  const dir = c.req.query('dir') || 'b'; // backwards by default
+  void c.req.query("to");
+  const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
+  const dir = c.req.query("dir") || "b"; // backwards by default
 
   // Query relations
   let query = `
@@ -59,7 +62,7 @@ app.get('/_matrix/client/v1/rooms/:roomId/relations/:eventId', requireAuth(), as
   const params: any[] = [roomId, eventId];
 
   if (from) {
-    if (dir === 'b') {
+    if (dir === "b") {
       query += ` AND e.origin_server_ts < ?`;
     } else {
       query += ` AND e.origin_server_ts > ?`;
@@ -67,19 +70,22 @@ app.get('/_matrix/client/v1/rooms/:roomId/relations/:eventId', requireAuth(), as
     params.push(parseInt(from));
   }
 
-  query += ` ORDER BY e.origin_server_ts ${dir === 'b' ? 'DESC' : 'ASC'} LIMIT ?`;
+  query += ` ORDER BY e.origin_server_ts ${dir === "b" ? "DESC" : "ASC"} LIMIT ?`;
   params.push(limit + 1);
 
-  const results = await db.prepare(query).bind(...params).all<{
-    event_id: string;
-    event_type: string;
-    sender: string;
-    origin_server_ts: number;
-    content: string;
-  }>();
+  const results = await db
+    .prepare(query)
+    .bind(...params)
+    .all<{
+      event_id: string;
+      event_type: string;
+      sender: string;
+      origin_server_ts: number;
+      content: string;
+    }>();
 
   const hasMore = results.results.length > limit;
-  const events = results.results.slice(0, limit).map(e => ({
+  const events = results.results.slice(0, limit).map((e) => ({
     event_id: e.event_id,
     type: e.event_type,
     sender: e.sender,
@@ -100,136 +106,159 @@ app.get('/_matrix/client/v1/rooms/:roomId/relations/:eventId', requireAuth(), as
 });
 
 // GET /_matrix/client/v1/rooms/:roomId/relations/:eventId/:relType - Get relations by type
-app.get('/_matrix/client/v1/rooms/:roomId/relations/:eventId/:relType', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-  const eventId = c.req.param('eventId');
-  const relType = c.req.param('relType');
-  const db = c.env.DB;
+app.get(
+  "/_matrix/client/v1/rooms/:roomId/relations/:eventId/:relType",
+  requireAuth(),
+  async (c) => {
+    const userId = c.get("userId");
+    const roomId = c.req.param("roomId");
+    const eventId = c.req.param("eventId");
+    const relType = c.req.param("relType");
+    const db = c.env.DB;
 
-  // Check membership
-  const membership = await db.prepare(`
+    // Check membership
+    const membership = await db
+      .prepare(`
     SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?
-  `).bind(roomId, userId).first<{ membership: string }>();
+  `)
+      .bind(roomId, userId)
+      .first<{ membership: string }>();
 
-  if (!membership || !['join', 'leave'].includes(membership.membership)) {
-    return Errors.forbidden('Not a member of this room').toResponse();
-  }
+    if (!membership || !["join", "leave"].includes(membership.membership)) {
+      return Errors.forbidden("Not a member of this room").toResponse();
+    }
 
-  // Get pagination params
-  const limit = Math.min(parseInt(c.req.query('limit') || '50'), 100);
-  const dir = c.req.query('dir') || 'b';
+    // Get pagination params
+    const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
+    const dir = c.req.query("dir") || "b";
 
-  // Query relations by type
-  const results = await db.prepare(`
+    // Query relations by type
+    const results = await db
+      .prepare(`
     SELECT e.event_id, e.event_type, e.sender, e.origin_server_ts, e.content
     FROM events e
     WHERE e.room_id = ? AND e.relates_to_event_id = ? AND e.relation_type = ?
-    ORDER BY e.origin_server_ts ${dir === 'b' ? 'DESC' : 'ASC'}
+    ORDER BY e.origin_server_ts ${dir === "b" ? "DESC" : "ASC"}
     LIMIT ?
-  `).bind(roomId, eventId, relType, limit + 1).all<{
-    event_id: string;
-    event_type: string;
-    sender: string;
-    origin_server_ts: number;
-    content: string;
-  }>();
+  `)
+      .bind(roomId, eventId, relType, limit + 1)
+      .all<{
+        event_id: string;
+        event_type: string;
+        sender: string;
+        origin_server_ts: number;
+        content: string;
+      }>();
 
-  const hasMore = results.results.length > limit;
-  const events = results.results.slice(0, limit).map(e => ({
-    event_id: e.event_id,
-    type: e.event_type,
-    sender: e.sender,
-    origin_server_ts: e.origin_server_ts,
-    content: JSON.parse(e.content),
-    room_id: roomId,
-  }));
+    const hasMore = results.results.length > limit;
+    const events = results.results.slice(0, limit).map((e) => ({
+      event_id: e.event_id,
+      type: e.event_type,
+      sender: e.sender,
+      origin_server_ts: e.origin_server_ts,
+      content: JSON.parse(e.content),
+      room_id: roomId,
+    }));
 
-  const response: any = {
-    chunk: events,
-  };
+    const response: any = {
+      chunk: events,
+    };
 
-  if (hasMore && events.length > 0) {
-    response.next_batch = events[events.length - 1].origin_server_ts.toString();
-  }
+    if (hasMore && events.length > 0) {
+      response.next_batch = events[events.length - 1].origin_server_ts.toString();
+    }
 
-  return c.json(response);
-});
+    return c.json(response);
+  },
+);
 
 // GET /_matrix/client/v1/rooms/:roomId/relations/:eventId/:relType/:eventType - Get relations by type and event type
-app.get('/_matrix/client/v1/rooms/:roomId/relations/:eventId/:relType/:eventType', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-  const eventId = c.req.param('eventId');
-  const relType = c.req.param('relType');
-  const eventType = c.req.param('eventType');
-  const db = c.env.DB;
+app.get(
+  "/_matrix/client/v1/rooms/:roomId/relations/:eventId/:relType/:eventType",
+  requireAuth(),
+  async (c) => {
+    const userId = c.get("userId");
+    const roomId = c.req.param("roomId");
+    const eventId = c.req.param("eventId");
+    const relType = c.req.param("relType");
+    const eventType = c.req.param("eventType");
+    const db = c.env.DB;
 
-  // Check membership
-  const membership = await db.prepare(`
+    // Check membership
+    const membership = await db
+      .prepare(`
     SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?
-  `).bind(roomId, userId).first<{ membership: string }>();
+  `)
+      .bind(roomId, userId)
+      .first<{ membership: string }>();
 
-  if (!membership || !['join', 'leave'].includes(membership.membership)) {
-    return Errors.forbidden('Not a member of this room').toResponse();
-  }
+    if (!membership || !["join", "leave"].includes(membership.membership)) {
+      return Errors.forbidden("Not a member of this room").toResponse();
+    }
 
-  const limit = Math.min(parseInt(c.req.query('limit') || '50'), 100);
-  const dir = c.req.query('dir') || 'b';
+    const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
+    const dir = c.req.query("dir") || "b";
 
-  // Query relations by type and event type
-  const results = await db.prepare(`
+    // Query relations by type and event type
+    const results = await db
+      .prepare(`
     SELECT e.event_id, e.event_type, e.sender, e.origin_server_ts, e.content
     FROM events e
     WHERE e.room_id = ? AND e.relates_to_event_id = ? AND e.relation_type = ? AND e.event_type = ?
-    ORDER BY e.origin_server_ts ${dir === 'b' ? 'DESC' : 'ASC'}
+    ORDER BY e.origin_server_ts ${dir === "b" ? "DESC" : "ASC"}
     LIMIT ?
-  `).bind(roomId, eventId, relType, eventType, limit + 1).all<{
-    event_id: string;
-    event_type: string;
-    sender: string;
-    origin_server_ts: number;
-    content: string;
-  }>();
+  `)
+      .bind(roomId, eventId, relType, eventType, limit + 1)
+      .all<{
+        event_id: string;
+        event_type: string;
+        sender: string;
+        origin_server_ts: number;
+        content: string;
+      }>();
 
-  const hasMore = results.results.length > limit;
-  const events = results.results.slice(0, limit).map(e => ({
-    event_id: e.event_id,
-    type: e.event_type,
-    sender: e.sender,
-    origin_server_ts: e.origin_server_ts,
-    content: JSON.parse(e.content),
-    room_id: roomId,
-  }));
+    const hasMore = results.results.length > limit;
+    const events = results.results.slice(0, limit).map((e) => ({
+      event_id: e.event_id,
+      type: e.event_type,
+      sender: e.sender,
+      origin_server_ts: e.origin_server_ts,
+      content: JSON.parse(e.content),
+      room_id: roomId,
+    }));
 
-  const response: any = {
-    chunk: events,
-  };
+    const response: any = {
+      chunk: events,
+    };
 
-  if (hasMore && events.length > 0) {
-    response.next_batch = events[events.length - 1].origin_server_ts.toString();
-  }
+    if (hasMore && events.length > 0) {
+      response.next_batch = events[events.length - 1].origin_server_ts.toString();
+    }
 
-  return c.json(response);
-});
+    return c.json(response);
+  },
+);
 
 // GET /_matrix/client/v1/rooms/:roomId/threads - List threads in room
-app.get('/_matrix/client/v1/rooms/:roomId/threads', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
+app.get("/_matrix/client/v1/rooms/:roomId/threads", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
   const db = c.env.DB;
 
   // Check membership
-  const membership = await db.prepare(`
+  const membership = await db
+    .prepare(`
     SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?
-  `).bind(roomId, userId).first<{ membership: string }>();
+  `)
+    .bind(roomId, userId)
+    .first<{ membership: string }>();
 
-  if (!membership || !['join', 'leave'].includes(membership.membership)) {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!membership || !["join", "leave"].includes(membership.membership)) {
+    return Errors.forbidden("Not a member of this room").toResponse();
   }
 
-  const limit = Math.min(parseInt(c.req.query('limit') || '50'), 100);
-  const include = c.req.query('include') || 'all'; // 'all' or 'participated'
+  const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
+  const include = c.req.query("include") || "all"; // 'all' or 'participated'
 
   // Find thread roots (events that have replies with m.thread relation)
   let query = `
@@ -242,7 +271,7 @@ app.get('/_matrix/client/v1/rooms/:roomId/threads', requireAuth(), async (c) => 
   `;
   const params: any[] = [roomId, roomId];
 
-  if (include === 'participated') {
+  if (include === "participated") {
     query += ` AND (e.sender = ? OR EXISTS (
       SELECT 1 FROM events r WHERE r.relates_to_event_id = e.event_id AND r.sender = ?
     ))`;
@@ -252,15 +281,18 @@ app.get('/_matrix/client/v1/rooms/:roomId/threads', requireAuth(), async (c) => 
   query += ` ORDER BY e.origin_server_ts DESC LIMIT ?`;
   params.push(limit);
 
-  const results = await db.prepare(query).bind(...params).all<{
-    event_id: string;
-    event_type: string;
-    sender: string;
-    origin_server_ts: number;
-    content: string;
-  }>();
+  const results = await db
+    .prepare(query)
+    .bind(...params)
+    .all<{
+      event_id: string;
+      event_type: string;
+      sender: string;
+      origin_server_ts: number;
+      content: string;
+    }>();
 
-  const threads = results.results.map(e => ({
+  const threads = results.results.map((e) => ({
     event_id: e.event_id,
     type: e.event_type,
     sender: e.sender,

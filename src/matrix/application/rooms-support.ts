@@ -1,6 +1,6 @@
-import type { Membership, PDU, RoomCreateContent, RoomMemberContent } from '../../types';
-import { calculateContentHash } from '../../utils/crypto';
-import type { RoomRepository } from '../repositories/interfaces';
+import type { Membership, PDU, RoomCreateContent, RoomMemberContent } from "../../types";
+import { calculateContentHash } from "../../utils/crypto";
+import type { RoomRepository } from "../repositories/interfaces";
 
 export interface StateEventValidation {
   valid: boolean;
@@ -8,7 +8,7 @@ export interface StateEventValidation {
 }
 
 export function validateStateEvent(event: unknown, index: number): StateEventValidation {
-  if (!event || typeof event !== 'object') {
+  if (!event || typeof event !== "object") {
     return { valid: false, error: `initial_state[${index}]: must be an object` };
   }
 
@@ -18,30 +18,46 @@ export function validateStateEvent(event: unknown, index: number): StateEventVal
     content?: unknown;
   };
 
-  if (!typedEvent.type || typeof typedEvent.type !== 'string' || typedEvent.type.trim() === '') {
+  if (!typedEvent.type || typeof typedEvent.type !== "string" || typedEvent.type.trim() === "") {
     return { valid: false, error: `initial_state[${index}]: missing or invalid 'type' property` };
   }
 
-  if (typedEvent.state_key !== undefined && typeof typedEvent.state_key !== 'string') {
+  if (typedEvent.state_key !== undefined && typeof typedEvent.state_key !== "string") {
     return { valid: false, error: `initial_state[${index}]: 'state_key' must be a string` };
   }
 
-  if (!typedEvent.content || typeof typedEvent.content !== 'object' || Array.isArray(typedEvent.content)) {
-    return { valid: false, error: `initial_state[${index}]: missing or invalid 'content' property` };
+  if (
+    !typedEvent.content ||
+    typeof typedEvent.content !== "object" ||
+    Array.isArray(typedEvent.content)
+  ) {
+    return {
+      valid: false,
+      error: `initial_state[${index}]: missing or invalid 'content' property`,
+    };
   }
 
-  const disallowedTypes = ['m.room.create', 'm.room.member', 'm.room.power_levels'];
+  const disallowedTypes = ["m.room.create", "m.room.member", "m.room.power_levels"];
   if (disallowedTypes.includes(typedEvent.type)) {
-    return { valid: false, error: `initial_state[${index}]: '${typedEvent.type}' cannot be set via initial_state` };
+    return {
+      valid: false,
+      error: `initial_state[${index}]: '${typedEvent.type}' cannot be set via initial_state`,
+    };
   }
 
-  if (typedEvent.type === 'm.room.encryption') {
+  if (typedEvent.type === "m.room.encryption") {
     const content = typedEvent.content as { algorithm?: unknown };
-    if (!content.algorithm || typeof content.algorithm !== 'string') {
-      return { valid: false, error: `initial_state[${index}]: m.room.encryption requires 'algorithm'` };
+    if (!content.algorithm || typeof content.algorithm !== "string") {
+      return {
+        valid: false,
+        error: `initial_state[${index}]: m.room.encryption requires 'algorithm'`,
+      };
     }
-    if (content.algorithm !== 'm.megolm.v1.aes-sha2') {
-      return { valid: false, error: `initial_state[${index}]: unsupported algorithm '${content.algorithm}'` };
+    if (content.algorithm !== "m.megolm.v1.aes-sha2") {
+      return {
+        valid: false,
+        error: `initial_state[${index}]: unsupported algorithm '${content.algorithm}'`,
+      };
     }
   }
 
@@ -69,7 +85,7 @@ export async function createInitialRoomEvents(
     room_alias_local_part?: string;
   },
   generateEventId: (serverName: string, roomVersion?: string) => Promise<string>,
-  now: () => number
+  now: () => number,
 ): Promise<string> {
   const createdAt = now();
   let depth = 0;
@@ -79,7 +95,7 @@ export async function createInitialRoomEvents(
   async function createEvent(
     type: string,
     content: Record<string, unknown>,
-    stateKey?: string
+    stateKey?: string,
   ): Promise<string> {
     const eventId = await generateEventId(serverName, roomVersion);
     const event: PDU = {
@@ -114,31 +130,31 @@ export async function createInitialRoomEvents(
     room_version: roomVersion,
   };
   const createEventId = await createEvent(
-    'm.room.create',
+    "m.room.create",
     createContent as unknown as Record<string, unknown>,
-    ''
+    "",
   );
 
   const joinContent: RoomMemberContent = {
-    membership: 'join',
+    membership: "join",
   };
-  const joinEventId = await createEvent('m.room.member', joinContent, creatorId);
-  await repository.updateMembership(roomId, creatorId, 'join', joinEventId);
+  const joinEventId = await createEvent("m.room.member", joinContent, creatorId);
+  await repository.updateMembership(roomId, creatorId, "join", joinEventId);
 
-  const preset = options.preset || 'private_chat';
+  const preset = options.preset || "private_chat";
   await createEvent(
-    'm.room.power_levels',
+    "m.room.power_levels",
     {
       ban: 50,
       events: {
-        'm.room.avatar': 50,
-        'm.room.canonical_alias': 50,
-        'm.room.encryption': 100,
-        'm.room.history_visibility': 100,
-        'm.room.name': 50,
-        'm.room.power_levels': 100,
-        'm.room.server_acl': 100,
-        'm.room.tombstone': 100,
+        "m.room.avatar": 50,
+        "m.room.canonical_alias": 50,
+        "m.room.encryption": 100,
+        "m.room.history_visibility": 100,
+        "m.room.name": 50,
+        "m.room.power_levels": 100,
+        "m.room.server_acl": 100,
+        "m.room.tombstone": 100,
       },
       events_default: 0,
       invite: 0,
@@ -149,38 +165,42 @@ export async function createInitialRoomEvents(
       users: { [creatorId]: 100 },
       users_default: 0,
     },
-    ''
+    "",
   );
 
-  let joinRule = 'invite';
-  if (preset === 'public_chat') joinRule = 'public';
-  await createEvent('m.room.join_rules', { join_rule: joinRule }, '');
+  let joinRule = "invite";
+  if (preset === "public_chat") joinRule = "public";
+  await createEvent("m.room.join_rules", { join_rule: joinRule }, "");
 
-  await createEvent('m.room.history_visibility', { history_visibility: 'shared' }, '');
-  await createEvent('m.room.guest_access', { guest_access: preset === 'public_chat' ? 'can_join' : 'forbidden' }, '');
+  await createEvent("m.room.history_visibility", { history_visibility: "shared" }, "");
+  await createEvent(
+    "m.room.guest_access",
+    { guest_access: preset === "public_chat" ? "can_join" : "forbidden" },
+    "",
+  );
 
   if (options.name) {
-    await createEvent('m.room.name', { name: options.name }, '');
+    await createEvent("m.room.name", { name: options.name }, "");
   }
 
   if (options.topic) {
-    await createEvent('m.room.topic', { topic: options.topic }, '');
+    await createEvent("m.room.topic", { topic: options.topic }, "");
   }
 
   if (options.initial_state) {
     for (const state of options.initial_state) {
-      await createEvent(state.type, state.content, state.state_key ?? '');
+      await createEvent(state.type, state.content, state.state_key ?? "");
     }
   }
 
   if (options.invite) {
     for (const invitee of options.invite) {
       const inviteContent: RoomMemberContent = {
-        membership: 'invite',
+        membership: "invite",
         is_direct: options.is_direct,
       };
-      const inviteEventId = await createEvent('m.room.member', inviteContent, invitee);
-      await repository.updateMembership(roomId, invitee, 'invite', inviteEventId);
+      const inviteEventId = await createEvent("m.room.member", inviteContent, invitee);
+      await repository.updateMembership(roomId, invitee, "invite", inviteEventId);
     }
   }
 
@@ -216,7 +236,7 @@ export async function createMembershipEvent(options: CreateMembershipEventOption
     event_id: await options.generateEventId(options.serverName, options.roomVersion),
     room_id: options.roomId,
     sender: options.sender,
-    type: 'm.room.member',
+    type: "m.room.member",
     state_key: options.userId,
     content: { membership: options.membership },
     origin_server_ts: options.now(),

@@ -1,7 +1,7 @@
 // Federation Durable Object for server-to-server communication
 
-import { DurableObject } from 'cloudflare:workers';
-import type { Env } from '../types';
+import { DurableObject } from "cloudflare:workers";
+import type { Env } from "../types";
 
 interface FederationTarget {
   serverName: string;
@@ -35,32 +35,32 @@ export class FederationDurableObject extends DurableObject<Env> {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (path === '/send') {
+    if (path === "/send") {
       return this.handleSend(request);
     }
 
-    if (path === '/receive') {
+    if (path === "/receive") {
       return this.handleReceive(request);
     }
 
-    if (path === '/status') {
+    if (path === "/status") {
       return this.handleStatus(request);
     }
 
-    if (path === '/keys') {
+    if (path === "/keys") {
       return this.handleKeys(request);
     }
 
-    if (path === '/send-edu') {
+    if (path === "/send-edu") {
       return this.handleSendEdu(request);
     }
 
-    return new Response('Not found', { status: 404 });
+    return new Response("Not found", { status: 404 });
   }
 
   // Queue an event for federation to a remote server
   private async handleSend(request: Request): Promise<Response> {
-    const data = await request.json() as {
+    const data = (await request.json()) as {
       destination: string;
       event_id: string;
       room_id: string;
@@ -83,23 +83,26 @@ export class FederationDurableObject extends DurableObject<Env> {
     // Try to send immediately
     await this.processFederationQueue(data.destination);
 
-    return new Response('Queued');
+    return new Response("Queued");
   }
 
   // Handle incoming federation request
   private async handleReceive(request: Request): Promise<Response> {
-    const origin = request.headers.get('X-Matrix-Origin');
+    const origin = request.headers.get("X-Matrix-Origin");
     if (!origin) {
-      return new Response(JSON.stringify({
-        errcode: 'M_MISSING_PARAM',
-        error: 'Missing origin header',
-      }), { status: 400 });
+      return new Response(
+        JSON.stringify({
+          errcode: "M_MISSING_PARAM",
+          error: "Missing origin header",
+        }),
+        { status: 400 },
+      );
     }
 
     // Verify request signature (simplified)
     // In production, verify against the server's signing keys
 
-    const data = await request.json() as {
+    const data = (await request.json()) as {
       pdus: any[];
       edus?: any[];
     };
@@ -125,47 +128,55 @@ export class FederationDurableObject extends DurableObject<Env> {
     };
     await this.ctx.storage.put(`server:${origin}`, target);
 
-    return new Response(JSON.stringify({
-      pdus: processedPdus.reduce((acc, id) => ({ ...acc, [id]: {} }), {}),
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        pdus: processedPdus.reduce((acc, id) => ({ ...acc, [id]: {} }), {}),
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
   // Get federation status for a server
   private async handleStatus(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    const serverName = url.searchParams.get('server');
+    const serverName = url.searchParams.get("server");
 
     if (serverName) {
-      const target = await this.ctx.storage.get(`server:${serverName}`) as FederationTarget | undefined;
-      return new Response(JSON.stringify(target || { serverName, status: 'unknown' }), {
-        headers: { 'Content-Type': 'application/json' },
+      const target = (await this.ctx.storage.get(`server:${serverName}`)) as
+        | FederationTarget
+        | undefined;
+      return new Response(JSON.stringify(target || { serverName, status: "unknown" }), {
+        headers: { "Content-Type": "application/json" },
       });
     }
 
     // List all known servers
     const servers: FederationTarget[] = [];
-    const allKeys = await this.ctx.storage.list({ prefix: 'server:' });
+    const allKeys = await this.ctx.storage.list({ prefix: "server:" });
     for (const [, value] of allKeys) {
       servers.push(value as FederationTarget);
     }
 
     return new Response(JSON.stringify({ servers }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   }
 
   // Handle server key requests
   private async handleKeys(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    const serverName = url.searchParams.get('server');
+    const serverName = url.searchParams.get("server");
 
     if (!serverName) {
-      return new Response(JSON.stringify({
-        errcode: 'M_MISSING_PARAM',
-        error: 'Missing server parameter',
-      }), { status: 400 });
+      return new Response(
+        JSON.stringify({
+          errcode: "M_MISSING_PARAM",
+          error: "Missing server parameter",
+        }),
+        { status: 400 },
+      );
     }
 
     // Get cached keys
@@ -174,7 +185,7 @@ export class FederationDurableObject extends DurableObject<Env> {
       const keys = cachedKeys as { data: any; expires: number };
       if (keys.expires > Date.now()) {
         return new Response(JSON.stringify(keys.data), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { "Content-Type": "application/json" },
         });
       }
     }
@@ -183,7 +194,7 @@ export class FederationDurableObject extends DurableObject<Env> {
     try {
       const response = await fetch(`https://${serverName}/_matrix/key/v2/server`, {
         headers: {
-          'Accept': 'application/json',
+          Accept: "application/json",
         },
       });
 
@@ -193,26 +204,29 @@ export class FederationDurableObject extends DurableObject<Env> {
         // Cache for 24 hours
         await this.ctx.storage.put(`keys:${serverName}`, {
           data,
-          expires: Date.now() + (24 * 60 * 60 * 1000),
+          expires: Date.now() + 24 * 60 * 60 * 1000,
         });
 
         return new Response(JSON.stringify(data), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { "Content-Type": "application/json" },
         });
       }
     } catch (error) {
       console.error(`Failed to fetch keys from ${serverName}:`, error);
     }
 
-    return new Response(JSON.stringify({
-      errcode: 'M_NOT_FOUND',
-      error: 'Server keys not found',
-    }), { status: 404 });
+    return new Response(
+      JSON.stringify({
+        errcode: "M_NOT_FOUND",
+        error: "Server keys not found",
+      }),
+      { status: 404 },
+    );
   }
 
   // Queue an EDU for federation to a remote server
   private async handleSendEdu(request: Request): Promise<Response> {
-    const data = await request.json() as {
+    const data = (await request.json()) as {
       destination: string;
       edu_type: string;
       content: any;
@@ -232,7 +246,7 @@ export class FederationDurableObject extends DurableObject<Env> {
     // Try to send immediately
     await this.processFederationQueue(data.destination);
 
-    return new Response('Queued');
+    return new Response("Queued");
   }
 
   private async processFederationQueue(destination: string): Promise<void> {
@@ -261,23 +275,26 @@ export class FederationDurableObject extends DurableObject<Env> {
     edus.sort((a, b) => a.created_at - b.created_at);
 
     // Batch events for transmission
-    const pdus = events.map(e => e.pdu);
-    const eduPayloads = edus.map(e => ({
+    const pdus = events.map((e) => e.pdu);
+    const eduPayloads = edus.map((e) => ({
       edu_type: e.edu_type,
       content: e.content,
     }));
 
     try {
-      const response = await fetch(`https://${destination}/_matrix/federation/v1/send/${Date.now()}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `https://${destination}/_matrix/federation/v1/send/${Date.now()}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            pdus,
+            edus: eduPayloads,
+          }),
         },
-        body: JSON.stringify({
-          pdus,
-          edus: eduPayloads,
-        }),
-      });
+      );
 
       if (response.ok) {
         // Remove sent events from queue
@@ -308,7 +325,9 @@ export class FederationDurableObject extends DurableObject<Env> {
   }
 
   private async scheduleRetry(destination: string, events: OutboundEvent[]): Promise<void> {
-    const target = await this.ctx.storage.get(`server:${destination}`) as FederationTarget | undefined;
+    const target = (await this.ctx.storage.get(`server:${destination}`)) as
+      | FederationTarget
+      | undefined;
     const retryCount = (target?.retryCount || 0) + 1;
 
     // Exponential backoff: 1min, 2min, 4min, 8min, 16min, max 1hour
@@ -336,7 +355,7 @@ export class FederationDurableObject extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     // Process all destinations with pending retries
-    const allKeys = await this.ctx.storage.list({ prefix: 'server:' });
+    const allKeys = await this.ctx.storage.list({ prefix: "server:" });
 
     for (const [, value] of allKeys) {
       const target = value as FederationTarget;

@@ -145,15 +145,8 @@ async function main() {
       supplemental: "OpenAPI inventory",
       evidence: "Complement and local interop runs",
     },
-    primaryUnits: [
-      ...clientServerCore,
-      ...clientServerModules,
-      ...serverServerUnits,
-    ],
-    supplementalUnits: [
-      ...clientServerOpenApi,
-      ...serverServerOpenApi,
-    ],
+    primaryUnits: [...clientServerCore, ...clientServerModules, ...serverServerUnits],
+    supplementalUnits: [...clientServerOpenApi, ...serverServerOpenApi],
     evidenceSources: [
       {
         id: "complement",

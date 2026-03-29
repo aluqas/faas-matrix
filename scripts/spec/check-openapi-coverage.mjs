@@ -53,7 +53,11 @@ async function main() {
 
     const allowedSections = getAllowedSectionsForOpenApiSpec(unit.spec);
     const explicitRowIds = mapping.rowIds || [];
-    const resolvedLegacyRows = resolveLegacyRows(checklistIndex, mapping.rows || [], allowedSections);
+    const resolvedLegacyRows = resolveLegacyRows(
+      checklistIndex,
+      mapping.rows || [],
+      allowedSections,
+    );
     const resolvedRowIds = [...new Set([...explicitRowIds, ...resolvedLegacyRows.resolvedRowIds])];
     const unitIds = [...new Set(mapping.unitIds || [])];
     const operationMappings = mapping.operations || {};
@@ -113,16 +117,22 @@ async function main() {
         continue;
       }
 
-      const operationRowIds = [...new Set([
-        ...(operationMapping.rowIds || []),
-        ...(operationMapping.rowId ? [operationMapping.rowId] : []),
-      ])];
-      const operationUnitIds = [...new Set([
-        ...(operationMapping.unitIds || []),
-        ...(operationMapping.unitId ? [operationMapping.unitId] : []),
-      ])];
+      const operationRowIds = [
+        ...new Set([
+          ...(operationMapping.rowIds || []),
+          ...(operationMapping.rowId ? [operationMapping.rowId] : []),
+        ]),
+      ];
+      const operationUnitIds = [
+        ...new Set([
+          ...(operationMapping.unitIds || []),
+          ...(operationMapping.unitId ? [operationMapping.unitId] : []),
+        ]),
+      ];
 
-      const unexpectedOperationRowIds = operationRowIds.filter((rowId) => !resolvedRowIds.includes(rowId));
+      const unexpectedOperationRowIds = operationRowIds.filter(
+        (rowId) => !resolvedRowIds.includes(rowId),
+      );
       if (unexpectedOperationRowIds.length > 0) {
         invalidRowIds.push({
           key,
@@ -133,7 +143,9 @@ async function main() {
         continue;
       }
 
-      const unexpectedOperationUnitIds = operationUnitIds.filter((unitId) => !unitIds.includes(unitId));
+      const unexpectedOperationUnitIds = operationUnitIds.filter(
+        (unitId) => !unitIds.includes(unitId),
+      );
       if (unexpectedOperationUnitIds.length > 0) {
         invalidUnitRefs.push({
           key,
@@ -144,7 +156,9 @@ async function main() {
         continue;
       }
 
-      const invalidOperationRowIds = operationRowIds.filter((rowId) => !checklistIndex.byRowId.has(rowId));
+      const invalidOperationRowIds = operationRowIds.filter(
+        (rowId) => !checklistIndex.byRowId.has(rowId),
+      );
       if (invalidOperationRowIds.length > 0) {
         invalidRowIds.push({
           key,
@@ -154,7 +168,9 @@ async function main() {
         continue;
       }
 
-      const invalidOperationUnitIds = operationUnitIds.filter((unitId) => !primaryUnitIds.has(unitId));
+      const invalidOperationUnitIds = operationUnitIds.filter(
+        (unitId) => !primaryUnitIds.has(unitId),
+      );
       if (invalidOperationUnitIds.length > 0) {
         invalidUnitRefs.push({
           key,

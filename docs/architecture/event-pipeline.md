@@ -22,4 +22,3 @@ The current migrations use this pipeline for:
 
 - local room join
 - room send
-

@@ -1,14 +1,14 @@
 export type FeatureName =
-  | 'adminApi'
-  | 'e2ee'
-  | 'federation'
-  | 'media'
-  | 'mediaPreviews'
-  | 'presence'
-  | 'pushNotifications'
-  | 'slidingSync';
+  | "adminApi"
+  | "e2ee"
+  | "federation"
+  | "media"
+  | "mediaPreviews"
+  | "presence"
+  | "pushNotifications"
+  | "slidingSync";
 
-export type FeatureProfileName = 'full' | 'core' | 'lite' | 'complement';
+export type FeatureProfileName = "full" | "core" | "lite" | "complement";
 
 export interface FeatureProfile {
   name: FeatureProfileName;
@@ -59,11 +59,11 @@ const FEATURE_PROFILES: Record<FeatureProfileName, Record<FeatureName, boolean>>
 };
 
 function isFeatureProfileName(value: string | undefined): value is FeatureProfileName {
-  return value === 'full' || value === 'core' || value === 'lite' || value === 'complement';
+  return value === "full" || value === "core" || value === "lite" || value === "complement";
 }
 
 export function createFeatureProfile(profileName?: string): FeatureProfile {
-  const name = isFeatureProfileName(profileName) ? profileName : 'full';
+  const name = isFeatureProfileName(profileName) ? profileName : "full";
   return {
     name,
     features: { ...FEATURE_PROFILES[name] },
