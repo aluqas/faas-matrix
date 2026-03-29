@@ -11,6 +11,8 @@ import {
   getServerFromRoomId,
   validateStateEvent,
 } from './rooms-support';
+import { sendFederationInvite } from '../../services/federation-invite';
+import { fanoutEventToRemoteServers } from '../../services/federation-fanout';
 
 export interface CreateRoomInput {
   userId: string;
@@ -136,6 +138,26 @@ export class MatrixRoomService {
 
     await this.repository.notifyUsersOfEvent(roomId, roomId, 'm.room.create');
 
+    if (Array.isArray(invite)) {
+      const db = this.appContext.capabilities.sql.connection as D1Database;
+      const cache = this.appContext.capabilities.kv.cache as KVNamespace;
+      for (const invitee of invite) {
+        const inviteEvent = await this.repository.getStateEvent(roomId, 'm.room.member', invitee);
+        if (!inviteEvent) {
+          continue;
+        }
+        this.appContext.defer(sendFederationInvite(
+          db,
+          cache,
+          this.appContext.capabilities.config.serverName,
+          roomId,
+          inviteEvent
+        ).catch((error) => {
+          console.error('[room-service.createRoom] Failed to send federation invite:', error);
+        }));
+      }
+    }
+
     return {
       room_id: roomId,
       room_alias: roomAlias,
@@ -148,8 +170,16 @@ export class MatrixRoomService {
       roomServer && roomServer !== this.appContext.capabilities.config.serverName;
     const preferredRemoteServer = input.remoteServers?.[0] || roomServer || undefined;
     const room = await this.repository.getRoom(input.roomId);
+    const createEvent = room
+      ? await this.repository.getStateEvent(input.roomId, 'm.room.create')
+      : null;
+    const needsRemoteStubJoin = Boolean(
+      room &&
+      (isRemoteRoom || preferredRemoteServer) &&
+      !createEvent
+    );
 
-    if (!room && (isRemoteRoom || preferredRemoteServer)) {
+    if ((!room && (isRemoteRoom || preferredRemoteServer)) || needsRemoteStubJoin) {
       const instance = await this.appContext.capabilities.workflow.createRoomJoin({
         roomId: input.roomId,
         userId: input.userId,
@@ -204,10 +234,23 @@ export class MatrixRoomService {
           return null;
         }
 
+        const currentMembershipEvent = await this.repository.getStateEvent(
+          input.roomId,
+          'm.room.member',
+          auth.userId
+        );
         const joinRulesEvent = await this.repository.getStateEvent(input.roomId, 'm.room.join_rules');
         const createEvent = await this.repository.getStateEvent(input.roomId, 'm.room.create');
         const powerLevelsEvent = await this.repository.getStateEvent(input.roomId, 'm.room.power_levels');
         const latestEvents = await this.repository.getLatestRoomEvents(input.roomId, 1);
+        const currentMembershipContent = currentMembershipEvent?.content as
+          | { membership?: unknown }
+          | undefined;
+        const prevContent =
+          currentMembershipContent?.membership !== undefined
+            ? (currentMembershipEvent?.content as Record<string, unknown>)
+            : undefined;
+        const prevSender = currentMembershipEvent?.sender;
 
         return createMembershipEvent({
           roomId: input.roomId,
@@ -224,6 +267,12 @@ export class MatrixRoomService {
           createEventId: createEvent?.event_id,
           prevEventIds: latestEvents.map((event) => event.event_id),
           depth: (latestEvents[0]?.depth ?? 0) + 1,
+          unsigned: prevContent
+            ? {
+                prev_content: prevContent,
+                prev_sender: prevSender,
+              }
+            : undefined,
         });
       },
       persist: async (_pipelineInput, auth, event) => {
@@ -240,6 +289,15 @@ export class MatrixRoomService {
           return;
         }
         await this.repository.notifyUsersOfEvent(input.roomId, event.event_id, 'm.room.member');
+        const db = this.appContext.capabilities.sql.connection as D1Database;
+        const cache = this.appContext.capabilities.kv.cache as KVNamespace;
+        await fanoutEventToRemoteServers(
+          db,
+          cache,
+          this.appContext.capabilities.config.serverName,
+          input.roomId,
+          event
+        );
       },
     });
 

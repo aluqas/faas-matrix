@@ -265,6 +265,10 @@ function checkMemberEvent(
         return { allowed: true };
       }
 
+      if (targetMembership === 'invite' && targetMemberEvent?.sender !== event.sender) {
+        return { allowed: false, error: 'Only the original inviter can rescind an invite' };
+      }
+
       // Sender needs kick power and higher power than target
       if (senderPower < (powerLevels.kick ?? 50)) {
         return { allowed: false, error: 'Insufficient power level to kick' };

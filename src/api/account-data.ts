@@ -63,25 +63,23 @@ async function putE2EEAccountDataToDO(env: Env, userId: string, eventType: strin
 // Helper Functions
 // ============================================
 
-async function getNextStreamPosition(db: D1Database, streamName: string): Promise<number> {
-  await db.prepare(`
-    UPDATE stream_positions SET position = position + 1 WHERE stream_name = ?
-  `).bind(streamName).run();
-
-  const result = await db.prepare(`
-    SELECT position FROM stream_positions WHERE stream_name = ?
-  `).bind(streamName).first<{ position: number }>();
-
-  return result?.position || 1;
-}
-
 async function recordAccountDataChange(
   db: D1Database,
   userId: string,
   roomId: string,
   eventType: string
 ): Promise<void> {
-  const streamPosition = await getNextStreamPosition(db, 'account_data');
+  // Use the events stream position space so sync token comparisons work correctly.
+  // Take the max of the current events stream position and any existing account_data
+  // stream positions, then add 1 to get the next slot.
+  const pos = await db.prepare(`
+    SELECT MAX(pos) as next_pos FROM (
+      SELECT COALESCE(MAX(stream_ordering), 0) as pos FROM events
+      UNION ALL
+      SELECT COALESCE(MAX(stream_position), 0) as pos FROM account_data_changes
+    )
+  `).first<{ next_pos: number }>();
+  const streamPosition = (pos?.next_pos ?? 0) + 1;
 
   await db.prepare(`
     INSERT INTO account_data_changes (user_id, room_id, event_type, stream_position)
@@ -98,6 +96,21 @@ function isKVAccountData(eventType: string): boolean {
   return eventType.startsWith('m.secret_storage') ||
          eventType.startsWith('m.cross_signing') ||
          eventType === 'm.megolm_backup.v1';
+}
+
+// Helper to mark account data as deleted (used by both DELETE endpoint and PUT with {})
+async function deleteAccountData(
+  db: D1Database,
+  userId: string,
+  roomId: string,
+  eventType: string
+): Promise<void> {
+  await db.prepare(`
+    INSERT INTO account_data (user_id, room_id, event_type, content, deleted)
+    VALUES (?, ?, ?, '{}', 1)
+    ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET content = '{}', deleted = 1
+  `).bind(userId, roomId, eventType).run();
+  await recordAccountDataChange(db, userId, roomId, eventType);
 }
 
 // GET /_matrix/client/v3/user/:userId/account_data/:type
@@ -142,11 +155,11 @@ app.get('/_matrix/client/v3/user/:userId/account_data/:type', requireAuth(), asy
 
   // Fallback 2: D1
   const data = await db.prepare(`
-    SELECT content FROM account_data
+    SELECT content, deleted FROM account_data
     WHERE user_id = ? AND event_type = ? AND room_id = ''
-  `).bind(targetUserId, eventType).first<{ content: string }>();
+  `).bind(targetUserId, eventType).first<{ content: string; deleted: number }>();
 
-  if (!data) {
+  if (!data || data.deleted) {
     return c.json({
       errcode: 'M_NOT_FOUND',
       error: 'Account data not found',
@@ -214,6 +227,16 @@ app.put('/_matrix/client/v3/user/:userId/account_data/:type', requireAuth(), asy
     }
   }
 
+  // MSC3391: PUT with empty {} is equivalent to deleting the account data
+  if (typeof content === 'object' && content !== null && Object.keys(content).length === 0) {
+    // Check if E2EE type needs KV cleanup too
+    if (isKVAccountData(eventType)) {
+      await c.env.ACCOUNT_DATA.delete(`global:${targetUserId}:${eventType}`);
+    }
+    await deleteAccountData(db, targetUserId, '', eventType);
+    return c.json({});
+  }
+
   // For E2EE types, write to Durable Object FIRST (strongly consistent)
   // This is critical for SSSS setup where client writes then immediately reads via sync
   if (isKVAccountData(eventType)) {
@@ -235,17 +258,35 @@ app.put('/_matrix/client/v3/user/:userId/account_data/:type', requireAuth(), asy
     );
   }
 
-  // Also store in D1 as backup
+  // Also store in D1 as backup (reset deleted flag if previously deleted)
   await db.prepare(`
-    INSERT INTO account_data (user_id, room_id, event_type, content)
-    VALUES (?, '', ?, ?)
+    INSERT INTO account_data (user_id, room_id, event_type, content, deleted)
+    VALUES (?, '', ?, ?, 0)
     ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET
-      content = excluded.content
+      content = excluded.content, deleted = 0
   `).bind(targetUserId, eventType, JSON.stringify(content)).run();
 
   // Record change for sync
   await recordAccountDataChange(db, targetUserId, '', eventType);
 
+  return c.json({});
+});
+
+// DELETE /_matrix/client/unstable/org.matrix.msc3391/user/:userId/account_data/:type
+app.delete('/_matrix/client/unstable/org.matrix.msc3391/user/:userId/account_data/:type', requireAuth(), async (c) => {
+  const requestingUserId = c.get('userId');
+  const targetUserId = decodeURIComponent(c.req.param('userId'));
+  const eventType = decodeURIComponent(c.req.param('type'));
+  const db = c.env.DB;
+
+  if (requestingUserId !== targetUserId) {
+    return c.json({ errcode: 'M_FORBIDDEN', error: 'Cannot modify other users account data' }, 403);
+  }
+
+  if (isKVAccountData(eventType)) {
+    await c.env.ACCOUNT_DATA.delete(`global:${targetUserId}:${eventType}`);
+  }
+  await deleteAccountData(db, targetUserId, '', eventType);
   return c.json({});
 });
 
@@ -283,11 +324,11 @@ app.get('/_matrix/client/v3/user/:userId/rooms/:roomId/account_data/:type', requ
   }
 
   const data = await db.prepare(`
-    SELECT content FROM account_data
+    SELECT content, deleted FROM account_data
     WHERE user_id = ? AND room_id = ? AND event_type = ?
-  `).bind(targetUserId, roomId, eventType).first<{ content: string }>();
+  `).bind(targetUserId, roomId, eventType).first<{ content: string; deleted: number }>();
 
-  if (!data) {
+  if (!data || data.deleted) {
     return c.json({
       errcode: 'M_NOT_FOUND',
       error: 'Account data not found',
@@ -337,17 +378,39 @@ app.put('/_matrix/client/v3/user/:userId/rooms/:roomId/account_data/:type', requ
     return Errors.badJson().toResponse();
   }
 
-  // Store account data
+  // MSC3391: PUT with empty {} is equivalent to deleting the room account data
+  if (typeof content === 'object' && content !== null && Object.keys(content).length === 0) {
+    await deleteAccountData(db, targetUserId, roomId, eventType);
+    return c.json({});
+  }
+
+  // Store account data (reset deleted flag if previously deleted)
   await db.prepare(`
-    INSERT INTO account_data (user_id, room_id, event_type, content)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO account_data (user_id, room_id, event_type, content, deleted)
+    VALUES (?, ?, ?, ?, 0)
     ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET
-      content = excluded.content
+      content = excluded.content, deleted = 0
   `).bind(targetUserId, roomId, eventType, JSON.stringify(content)).run();
 
   // Record change for sync
   await recordAccountDataChange(db, targetUserId, roomId, eventType);
 
+  return c.json({});
+});
+
+// DELETE /_matrix/client/unstable/org.matrix.msc3391/user/:userId/rooms/:roomId/account_data/:type
+app.delete('/_matrix/client/unstable/org.matrix.msc3391/user/:userId/rooms/:roomId/account_data/:type', requireAuth(), async (c) => {
+  const requestingUserId = c.get('userId');
+  const targetUserId = decodeURIComponent(c.req.param('userId'));
+  const roomId = decodeURIComponent(c.req.param('roomId'));
+  const eventType = decodeURIComponent(c.req.param('type'));
+  const db = c.env.DB;
+
+  if (requestingUserId !== targetUserId) {
+    return c.json({ errcode: 'M_FORBIDDEN', error: 'Cannot modify other users account data' }, 403);
+  }
+
+  await deleteAccountData(db, targetUserId, roomId, eventType);
   return c.json({});
 });
 
@@ -364,7 +427,7 @@ export async function getGlobalAccountData(
   const params: any[] = [userId];
 
   if (since !== undefined) {
-    // Get only changed account data since the given position
+    // Incremental: include deleted items (clients need {} to know they were deleted)
     query = `
       SELECT ad.event_type, ad.content
       FROM account_data ad
@@ -377,10 +440,10 @@ export async function getGlobalAccountData(
     `;
     params.push(since);
   } else {
-    // Get all account data
+    // Initial sync: exclude deleted items
     query = `
       SELECT event_type, content FROM account_data
-      WHERE user_id = ? AND room_id = ''
+      WHERE user_id = ? AND room_id = '' AND deleted = 0
     `;
   }
 
@@ -405,6 +468,7 @@ export async function getRoomAccountData(
   const params: any[] = [userId, roomId];
 
   if (since !== undefined) {
+    // Incremental: include deleted items (clients need {} to know they were deleted)
     query = `
       SELECT ad.event_type, ad.content
       FROM account_data ad
@@ -417,9 +481,10 @@ export async function getRoomAccountData(
     `;
     params.push(since);
   } else {
+    // Initial sync: exclude deleted items
     query = `
       SELECT event_type, content FROM account_data
-      WHERE user_id = ? AND room_id = ?
+      WHERE user_id = ? AND room_id = ? AND deleted = 0
     `;
   }
 
@@ -448,6 +513,7 @@ export async function getAllRoomAccountData(
   let query: string;
 
   if (since !== undefined) {
+    // Incremental: include deleted items
     query = `
       SELECT ad.room_id, ad.event_type, ad.content
       FROM account_data ad
@@ -460,9 +526,10 @@ export async function getAllRoomAccountData(
     `;
     params.push(since);
   } else {
+    // Initial sync: exclude deleted items
     query = `
       SELECT room_id, event_type, content FROM account_data
-      WHERE user_id = ? AND room_id IN (${placeholders})
+      WHERE user_id = ? AND room_id IN (${placeholders}) AND deleted = 0
     `;
   }
 

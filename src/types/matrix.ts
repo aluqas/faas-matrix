@@ -40,6 +40,7 @@ export interface UnsignedData {
   age?: number;
   transaction_id?: string;
   prev_content?: Record<string, unknown>;
+  prev_sender?: UserId;
   redacted_because?: MatrixEvent;
   'm.relations'?: Record<string, unknown>;
 }

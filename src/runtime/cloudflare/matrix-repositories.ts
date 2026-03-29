@@ -2,6 +2,7 @@ import { discoverServer } from '../../services/server-discovery';
 import {
   createRoom,
   createRoomAlias,
+  getEvent,
   getEventsSince,
   getInviteStrippedState,
   getLatestStreamPosition,
@@ -191,8 +192,16 @@ export class CloudflareSyncRepository implements SyncRepository {
     return getUserRooms(this.env.DB, userId, membership);
   }
 
+  getMembership(roomId: string, userId: string) {
+    return getMembership(this.env.DB, roomId, userId);
+  }
+
   getEventsSince(roomId: string, sincePosition: number) {
     return getEventsSince(this.env.DB, roomId, sincePosition);
+  }
+
+  getEvent(eventId: string) {
+    return getEvent(this.env.DB, eventId);
   }
 
   getRoomState(roomId: string) {
@@ -269,6 +278,10 @@ export class CloudflareFederationRepository implements FederationRepository {
     ).bind(eventId, origin, roomId, Date.now(), accepted ? 1 : 0, rejectionReason || null).run();
   }
 
+  createRoom(roomId: string, roomVersion: string, creatorId: string, isPublic: boolean): Promise<void> {
+    return createRoom(this.env.DB, roomId, roomVersion, creatorId, isPublic);
+  }
+
   getRoom(roomId: string): Promise<Room | null> {
     return getRoom(this.env.DB, roomId);
   }
@@ -277,11 +290,25 @@ export class CloudflareFederationRepository implements FederationRepository {
     return getRoomState(this.env.DB, roomId);
   }
 
+  getInviteStrippedState(roomId: string) {
+    return getInviteStrippedState(this.env.DB, roomId);
+  }
+
   async storeIncomingEvent(event: PDU): Promise<void> {
+    const existing = await this.env.DB.prepare(
+      `SELECT event_id FROM events WHERE event_id = ?`
+    ).bind(event.event_id).first();
+    if (existing) return;
+
+    const lastOrdering = await this.env.DB.prepare(
+      `SELECT MAX(stream_ordering) as max_ordering FROM events`
+    ).first<{ max_ordering: number | null }>();
+    const streamOrdering = (lastOrdering?.max_ordering ?? 0) + 1;
+
     await this.env.DB.prepare(
       `INSERT OR IGNORE INTO events
-       (event_id, room_id, sender, event_type, state_key, content, origin_server_ts, depth, auth_events, prev_events, hashes, signatures)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (event_id, room_id, sender, event_type, state_key, content, origin_server_ts, unsigned, depth, auth_events, prev_events, hashes, signatures, stream_ordering)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       event.event_id,
       event.room_id,
@@ -290,12 +317,29 @@ export class CloudflareFederationRepository implements FederationRepository {
       event.state_key ?? null,
       JSON.stringify(event.content),
       event.origin_server_ts,
+      event.unsigned ? JSON.stringify(event.unsigned) : null,
       event.depth || 0,
       JSON.stringify(event.auth_events || []),
       JSON.stringify(event.prev_events || []),
       event.hashes ? JSON.stringify(event.hashes) : null,
-      event.signatures ? JSON.stringify(event.signatures) : null
+      event.signatures ? JSON.stringify(event.signatures) : null,
+      streamOrdering
     ).run();
+  }
+
+  notifyUsersOfEvent(roomId: string, eventId: string, eventType: string): Promise<void> {
+    return notifyUsersOfEvent(this.env, roomId, eventId, eventType);
+  }
+
+  updateMembership(
+    roomId: string,
+    userId: string,
+    membership: 'join' | 'invite' | 'leave' | 'ban' | 'knock',
+    eventId: string,
+    displayName?: string,
+    avatarUrl?: string
+  ): Promise<void> {
+    return updateMembership(this.env.DB, roomId, userId, membership, eventId, displayName, avatarUrl);
   }
 
   async upsertRoomState(roomId: string, eventType: string, stateKey: string, eventId: string): Promise<void> {
@@ -417,4 +461,3 @@ export function assertValidMatrixServerUrl(url: string): void {
     throw new Error(validation.error || 'Invalid URL');
   }
 }
-

@@ -6,8 +6,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY package.json package-lock.json tsconfig.json ./
-RUN npm install --no-fund --no-audit
+COPY package.json tsconfig.json ./
+RUN npm install --no-fund --no-audit --no-package-lock
 
 COPY src ./src
 COPY migrations ./migrations

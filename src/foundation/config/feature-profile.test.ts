@@ -15,5 +15,12 @@ describe('createFeatureProfile', () => {
     expect(profile.features.slidingSync).toBe(false);
     expect(profile.features.media).toBe(true);
   });
-});
 
+  it('supports the complement profile', () => {
+    const profile = createFeatureProfile('complement');
+    expect(profile.name).toBe('complement');
+    expect(profile.features.federation).toBe(true);
+    expect(profile.features.pushNotifications).toBe(false);
+    expect(profile.features.mediaPreviews).toBe(false);
+  });
+});

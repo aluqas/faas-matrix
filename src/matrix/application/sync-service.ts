@@ -244,10 +244,41 @@ export class MatrixSyncService {
         continue;
       }
 
+      const roomState = await this.repository.getRoomState(roomId);
+      const currentMemberState = roomState.find(
+        (event) =>
+          event.type === 'm.room.member' &&
+          event.state_key === input.userId &&
+          (event.content as { membership?: string } | undefined)?.membership === 'leave'
+      );
+      if (currentMemberState) {
+        response.rooms!.leave![roomId] = {
+          timeline: {
+            events: [
+              {
+                type: currentMemberState.type,
+                state_key: currentMemberState.state_key,
+                content: currentMemberState.content,
+                sender: currentMemberState.sender,
+                origin_server_ts: currentMemberState.origin_server_ts,
+                event_id: currentMemberState.event_id,
+                room_id: currentMemberState.room_id,
+              },
+            ],
+          },
+        };
+        continue;
+      }
+
+      const membership = await this.repository.getMembership(roomId, input.userId);
+      if (membership?.membership !== 'invite') {
+        continue;
+      }
+
       const inviteStripped = await this.repository.getInviteStrippedState(roomId);
       const stateSource = inviteStripped.length > 0
         ? inviteStripped
-        : (await this.repository.getRoomState(roomId)).map((event) => ({
+        : roomState.map((event) => ({
             type: event.type,
             state_key: event.state_key!,
             content: event.content,
@@ -265,16 +296,42 @@ export class MatrixSyncService {
     }
 
     const includeLeave = filter?.room?.include_leave ?? false;
-    if (sincePosition > 0 && (includeLeave || !filter)) {
+    if (includeLeave || (sincePosition > 0 && !filter)) {
       const leftRoomIds = await this.repository.getUserRooms(input.userId, 'leave');
       for (const roomId of leftRoomIds) {
         if (!shouldIncludeRoom(roomId, filter?.room)) {
           continue;
         }
 
-        const leaveEvent = (await this.repository.getEventsSince(roomId, sincePosition)).find(
-          (event) => event.type === 'm.room.member' && event.state_key === input.userId
-        );
+        let leaveEvent: any | undefined;
+        if (sincePosition > 0) {
+          leaveEvent = (await this.repository.getEventsSince(roomId, sincePosition)).find(
+            (event) =>
+              event.type === 'm.room.member' &&
+              event.state_key === input.userId &&
+              (event.content as { membership?: string } | undefined)?.membership === 'leave'
+          );
+        }
+
+        if (!leaveEvent) {
+          const membership = await this.repository.getMembership(roomId, input.userId);
+          if (membership?.membership === 'leave') {
+            leaveEvent = await this.repository.getEvent(membership.eventId);
+            if (
+              !leaveEvent ||
+              leaveEvent.type !== 'm.room.member' ||
+              leaveEvent.state_key !== input.userId ||
+              (leaveEvent.content as { membership?: string } | undefined)?.membership !== 'leave'
+            ) {
+              leaveEvent = (await this.repository.getRoomState(roomId)).find(
+                (event) =>
+                  event.type === 'm.room.member' &&
+                  event.state_key === input.userId &&
+                  (event.content as { membership?: string } | undefined)?.membership === 'leave'
+              );
+            }
+          }
+        }
 
         if (!leaveEvent) {
           continue;
@@ -313,6 +370,10 @@ export class MatrixSyncService {
 
     if (!hasChanges && timeout > 0 && sincePosition > 0) {
       await this.repository.waitForUserEvents(input.userId, Math.min(timeout, 25000));
+      return this.syncUser({
+        ...input,
+        timeout: 0,
+      });
     }
 
     response.next_batch = buildSyncToken(currentPosition, currentToDevicePos);

@@ -3,7 +3,8 @@
 ## Complement Evidence Summary
 
 > Detailed analysis: [`docs/matrix/complement-analysis.md`](./complement-analysis.md)
-> Based on Complement test runs test1–test5 (2026-03-27). 200 tests reached, 34 passing (17%).
+> Based on Complement test runs test1–test9 (2026-03-30). 295 tests reached, 104 passing (35%).
+> Updated 2026-03-30: `test9.log` confirms the targeted federation work in the broader run: `TestFederationRoomsInvite`, `TestJoinViaRoomIDAndServerName`, `TestCannotSendNonLeaveViaSendLeaveV1`, and `TestCannotSendNonLeaveViaSendLeaveV2` pass; restricted remote join suites also improved. `TestACLs` still fails at multi-server membership propagation.
 
 This section maps Complement results to the spec areas tracked above.
 `complement:pass` = at least one subtest passing. `complement:fail` = all subtests failing. `complement:gap` = not yet reached by any test in these runs.
@@ -20,7 +21,7 @@ This section maps Complement results to the spec areas tracked above.
 | Filtering | `complement:fail` | `TestSyncOmitsStateChangeOnFilteredEvents` failing | `partial` | `partial` | `complement` | cs-core-filtering |
 | Events | `complement:partial` | Basic send/recv passing; size limits pass (`TestEventSizeLimits`) | `partial` | `partial` | `complement` | cs-core-events |
 | Rooms | `complement:partial` | Local join/leave/alias passing; restricted rooms partially failing | `partial` | `partial` | `complement` | cs-core-rooms |
-| User data | `complement:fail` | `TestWriteMDirectAccountData` → 500; account_data sync incremental failing | `partial` | `partial` | `complement` | cs-core-user-data |
+| User data | `complement:partial` | `TestWriteMDirectAccountData` now passing; `TestRemovingAccountData` now passing (MSC3391 DELETE endpoints + tombstone sync implemented 2026-03-29) | `partial` | `partial` | `complement` | cs-core-user-data |
 | Support information | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `none` | `not-audited` | `none` | cs-core-support-information |
 
 ### Client-Server Modules — Complement Evidence
@@ -28,7 +29,7 @@ This section maps Complement results to the spec areas tracked above.
 | Module | Evidence | Notes | surface_status | behavior_status | evidence_status | row_id |
 |------|----------|-------|----------------|-----------------|-----------------|--------|
 | Content repository | `complement:partial` | Local media passing; remote/federation media explicitly unsupported (`TestContentMediaV1`) | `partial` | `partial` | `complement` | cs-module-content-repository |
-| Direct messaging | `complement:partial` | `TestIsDirectFlagLocal` passes; `TestIsDirectFlagFederation` still fails because invited-room sync is missing `invite_state` | `partial` | `partial` | `complement` | cs-module-direct-messaging |
+| Direct messaging | `complement:partial` | `TestIsDirectFlagLocal` passes; federation invite/leave sync classification is now fixed by the `TestFederationRoomsInvite` TDD work, so any remaining federation DM gaps should be treated as DM-specific evidence still needing rerun | `partial` | `partial` | `complement` | cs-module-direct-messaging |
 | Ignoring users | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | cs-module-ignoring-users |
 | Instant messaging | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | cs-module-instant-messaging |
 | Presence | `complement:fail` | `TestRemotePresence` failing — presence EDU federation not implemented | `partial` | `partial` | `complement` | cs-module-presence |
@@ -40,9 +41,9 @@ This section maps Complement results to the spec areas tracked above.
 | Typing notifications | `complement:fail` | `TestRemoteTyping` failing | `partial` | `partial` | `complement` | cs-module-typing-notifications |
 | User and room mentions | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `none` | `not-audited` | `none` | cs-module-user-and-room-mentions |
 | Voice over IP | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `not-audited` | `none` | cs-module-voice-over-ip |
-| Client config | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | cs-module-client-config |
+| Client config | `complement:partial` | `TestRemovingAccountData` now passing (MSC3391 DELETE account_data + tombstone sync 2026-03-29); other client-config tests not yet run | `partial` | `partial` | `complement` | cs-module-client-config |
 | Application service adjunct endpoints | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `not-audited` | `none` | cs-module-application-service-adjunct-endpoints |
-| Device management | `complement:fail` | `TestDeviceListsUpdateOverFederation` — invite_state missing from sync | `partial` | `partial` | `complement` | cs-module-device-management |
+| Device management | `complement:fail` | `TestDeviceListsUpdateOverFederation` still fails in test9, but federation invite/leave sync correctness is now green; remaining failures should be treated as device-list-specific until rerun narrows them further | `partial` | `partial` | `complement` | cs-module-device-management |
 | End-to-end encryption | `complement:partial` | Device key upload/query surface exists, but federation device-list propagation is still failing | `partial` | `partial` | `complement` | cs-module-end-to-end-encryption |
 | Event annotations and reactions | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `not-audited` | `none` | cs-module-event-annotations-and-reactions |
 | Event context | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `none` | `not-audited` | `none` | cs-module-event-context |
@@ -64,11 +65,11 @@ This section maps Complement results to the spec areas tracked above.
 | SSO client login/authentication | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `not-audited` | `none` | cs-module-sso-client-login-authentication |
 | Secrets | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `none` | `not-audited` | `none` | cs-module-secrets |
 | Send-to-device messaging | `complement:fail` | `TestToDeviceMessagesOverFederation` failing — federation EDU delivery | `partial` | `partial` | `complement` | cs-module-send-to-device-messaging |
-| Server ACLs | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `not-audited` | `complement` | cs-module-server-access-control-lists-acls-for-rooms |
+| Server ACLs | `complement:fail` | `TestACLs` reached 2026-03-29 (TDD); federation fanout, sync notification, X-Matrix signing fixed; still failing at multi-server membership propagation | `partial` | `partial` | `complement` | cs-module-server-access-control-lists-acls-for-rooms |
 | Server administration | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | cs-module-server-administration |
 | Server notices | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | cs-module-server-notices |
 | Server side search | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | cs-module-server-side-search |
-| Spaces | `complement:fail` | `/hierarchy` present but `TestClientSpacesSummary` failing on redacted child handling | `partial` | `partial` | `complement` | cs-module-spaces |
+| Spaces | `complement:fail` | `/hierarchy` is present, but `TestClientSpacesSummary` remains a notable failure bucket in test9 (6 fails), centered on redacted child handling / hierarchy correctness | `partial` | `partial` | `complement` | cs-module-spaces |
 | Sticker messages | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `none` | `not-audited` | `none` | cs-module-sticker-messages |
 | Third-party networks | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `none` | `not-audited` | `none` | cs-module-third-party-networks |
 | Threading | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | cs-module-threading |
@@ -82,23 +83,23 @@ This section maps Complement results to the spec areas tracked above.
 | TLS | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `none` | `not-audited` | `none` | ss-subsection-api-standards-tls |
 | Unsupported endpoints | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | ss-subsection-api-standards-unsupported-endpoints |
 | Server discovery | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `none` | ss-core-server-discovery |
-| Authentication | `complement:fail` | `TestInboundFederationKeys` failing; signature verification issues in some flows | `partial` | `partial` | `complement` | ss-core-authentication |
-| Request Authentication | `complement:fail` | `TestInboundFederationKeys` failing; signature verification issues in some flows | `partial` | `partial` | `complement` | ss-subsection-authentication-request-authentication |
+| Authentication | `complement:fail` | `TestInboundFederationKeys` failing; `canonicalJson` undefined-key bug fixed 2026-03-29 (X-Matrix signature now correctly verified for outbound sends) | `partial` | `partial` | `complement` | ss-core-authentication |
+| Request Authentication | `complement:fail` | `TestInboundFederationKeys` failing; outbound X-Matrix signing fixed (`canonicalJson` skips `undefined` values, matching `JSON.stringify` behavior) | `partial` | `partial` | `complement` | ss-subsection-authentication-request-authentication |
 | Response Authentication | `complement:fail` | `TestInboundFederationKeys` failing; signature verification issues in some flows | `partial` | `partial` | `complement` | ss-subsection-authentication-response-authentication |
 | Client TLS Certificates | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `none` | `not-audited` | `none` | ss-subsection-authentication-client-tls-certificates |
-| Transactions | `complement:fail` | `TestOutboundFederationSend` / `TestNetworkPartitionOrdering` failing | `partial` | `not-audited` | `complement` | ss-core-transactions |
+| Transactions | `complement:fail` | `TestOutboundFederationSend` / `TestNetworkPartitionOrdering` failing; outbound fanout from `storeEvent` now implemented (`fanoutEventToFederation` + `waitUntil`); `room_memberships` propagation via federation still incomplete | `partial` | `partial` | `complement` | ss-core-transactions |
 | PDUs | `complement:fail` | `TestEventAuth`, `TestCorruptedAuthChain`, `TestInboundFederationRejectsEventsWithRejectedAuthEvents` | `partial` | `partial` | `complement` | ss-core-pdus |
 | EDUs | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | ss-core-edus |
 | Room state resolution | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | ss-core-room-state-resolution |
-| Backfill / missing events | `complement:fail` | `TestInboundCanReturnMissingEvents` — endpoint not returning events | `partial` | `partial` | `complement` | ss-core-backfilling-and-retrieving-missing-events |
+| Backfill / missing events | `complement:fail` | `TestInboundCanReturnMissingEvents`, `TestGetMissingEventsGapFilling`, and `TestOutboundFederationEventSizeGetMissingEvents` still fail in test9; missing-events recovery remains incomplete | `partial` | `partial` | `complement` | ss-core-backfilling-and-retrieving-missing-events |
 | Retrieving events | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | ss-core-retrieving-events |
-| Joining rooms | `complement:partial` | `TestJoinViaRoomIDAndServerName` now passing; `send_join` validation incomplete | `partial` | `partial` | `complement` | ss-core-joining-rooms |
-| Knocking | `complement:fail` | `TestKnocking`, `TestKnockingInMSC3787Room` | `partial` | `partial` | `complement` | ss-core-knocking-upon-a-room |
-| Inviting | `complement:fail` | `TestFederationRoomsInvite` — FK constraint on invite insert | `partial` | `partial` | `complement` | ss-core-inviting-to-a-room |
-| Leaving rooms | `complement:fail` | `TestCannotSendNonLeaveViaSendLeaveV1/V2` — partial (some subtests pass) | `partial` | `partial` | `complement` | ss-core-leaving-rooms-rejecting-invites |
+| Joining rooms | `complement:partial` | `TestJoinViaRoomIDAndServerName` passes in the targeted rerun and remains passing in test9; restricted remote join suites also improved, but non-join `send_join` validation and unverifiable-event rejection still leave this row partial | `partial` | `partial` | `complement` | ss-core-joining-rooms |
+| Knocking | `complement:fail` | `TestKnocking` and `TestKnockingInMSC3787Room` are still among the largest failure buckets in test9, though several subtests started passing; knock auth / transition handling remains incomplete | `partial` | `partial` | `complement` | ss-core-knocking-upon-a-room |
+| Inviting | `complement:pass` | `TestFederationRoomsInvite` passes on the 2026-03-30 targeted rerun: remote `/invite`, room bootstrap, `invite_room_state`, reject, rescind, repeated invite/reject, and already-participating homeserver flows all pass | `partial` | `partial` | `complement` | ss-core-inviting-to-a-room |
+| Leaving rooms | `complement:pass` | `TestFederationRoomsInvite`, `TestCannotSendNonLeaveViaSendLeaveV1`, and `TestCannotSendNonLeaveViaSendLeaveV2` pass on the 2026-03-30 targeted reruns; `send_leave` now persists valid leaves and rejects mismatched/non-leave events correctly | `partial` | `partial` | `complement` | ss-core-leaving-rooms-rejecting-invites |
 | Third-party invites | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `not-audited` | `none` | ss-core-third-party-invites |
 | Published room directory | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | ss-core-published-room-directory |
-| Spaces | `complement:fail` | `/hierarchy` present but `TestClientSpacesSummary` failing on redacted child handling | `partial` | `partial` | `complement` | ss-core-spaces |
+| Spaces | `complement:fail` | `/hierarchy` remains present, but test9 still shows `TestClientSpacesSummary` and related federated spaces failures around redacted child handling / hierarchy correctness | `partial` | `partial` | `complement` | ss-core-spaces |
 | Typing Notifications | `complement:fail` | `TestRemoteTyping` failing | `partial` | `partial` | `complement` | ss-core-typing-notifications |
 | Presence | `complement:fail` | `TestRemotePresence` failing — presence EDU federation not implemented | `partial` | `partial` | `complement` | ss-core-presence |
 | Receipts | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `not-audited` | `complement` | ss-core-receipts |
@@ -108,7 +109,7 @@ This section maps Complement results to the spec areas tracked above.
 | End-to-end encryption | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `partial` | `complement` | ss-core-end-to-end-encryption |
 | Send-to-device messaging | `complement:fail` | `TestToDeviceMessagesOverFederation` failing — federation EDU delivery | `partial` | `partial` | `complement` | ss-core-send-to-device-messaging |
 | Content repository | `complement:fail` | Remote media paths are reached by Complement, but currently return "not supported" | `none` | `not-audited` | `complement` | ss-core-content-repository |
-| Server ACLs | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `not-audited` | `complement` | ss-core-server-access-control-lists-acls |
+| Server ACLs | `complement:fail` | `TestACLs` reached 2026-03-29; ACL event propagation via federation now working; multi-server member propagation still failing | `partial` | `partial` | `complement` | ss-core-server-access-control-lists-acls |
 | Policy servers | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `none` | `not-audited` | `none` | ss-core-policy-servers |
 | Signing events | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `not-audited` | `none` | ss-core-signing-events |
 | Security considerations | `complement:gap` | Not explicitly covered in complement-analysis.md test runs. | `partial` | `not-audited` | `complement` | ss-core-security-considerations |
@@ -160,4 +161,3 @@ This section maps Complement results to the spec areas tracked above.
 | v9 | `complement:gap` | Not directly targeted by Complement. | `partial` | `not-audited` | `none` | rv-v9 |
 | v10 | `complement:gap` | Not directly targeted by Complement. | `partial` | `not-audited` | `none` | rv-v10 |
 | v11 | `complement:gap` | Not directly targeted by Complement. | `partial` | `not-audited` | `none` | rv-v11 |
-

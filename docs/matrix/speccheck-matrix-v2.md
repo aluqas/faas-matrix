@@ -121,7 +121,7 @@ Automation note:
 | SSO client login/authentication | `src/api/oidc-auth.ts`, `src/api/oauth.ts` | SSO login semantics distinct from generic OAuth | `partial` | `not-audited` | `none` | `cs-module-sso-client-login-authentication` |
 | Secrets | no dedicated route/module; implied by E2EE ambition | SSSS and secret-sharing need explicit tracking | `none` | `not-audited` | `none` | `cs-module-secrets` |
 | Send-to-device messaging | `src/api/to-device.ts` | batching, delivery semantics, device targeting | `partial` | `partial` | `complement` | `cs-module-send-to-device-messaging` |
-| Server ACLs | ACL handling is implicit in room-state / federation logic rather than a dedicated route | ACL state handling and federation impact | `partial` | `not-audited` | `complement` | `cs-module-server-access-control-lists-acls-for-rooms` |
+| Server ACLs | ACL handling is implicit in room-state / federation logic rather than a dedicated route | ACL state handling and federation impact | `partial` | `partial` | `complement` | `cs-module-server-access-control-lists-acls-for-rooms` |
 | Server administration | `src/api/admin.ts` | admin API scope should be tracked separately from Matrix core | `partial` | `partial` | `complement` | `cs-module-server-administration` |
 | Server notices | `src/api/server-notices.ts` | room semantics and client impact | `partial` | `partial` | `complement` | `cs-module-server-notices` |
 | Server side search | `src/api/search.ts` | search categories, pagination, ranking/scope limits | `partial` | `partial` | `complement` | `cs-module-server-side-search` |
@@ -143,7 +143,7 @@ Automation note:
 | Request Authentication | `src/middleware/federation-auth.ts`, `src/services/federation-keys.ts`, crypto utils | request auth semantics, verification inputs, and failure-mode mapping | `partial` | `partial` | `complement` | `ss-subsection-authentication-request-authentication` |
 | Response Authentication | `src/middleware/federation-auth.ts`, `src/services/federation-keys.ts`, crypto utils | response auth semantics, signature verification, and response failure handling | `partial` | `partial` | `complement` | `ss-subsection-authentication-response-authentication` |
 | Client TLS Certificates | `src/middleware/federation-auth.ts` | certificate rules, SNI expectations, and client certificate assumptions | `none` | `not-audited` | `none` | `ss-subsection-authentication-client-tls-certificates` |
-| Transactions | `src/api/federation.ts`, `src/services/transactions.ts` | transaction size limits, idempotency, retry semantics | `partial` | `not-audited` | `complement` | `ss-core-transactions` |
+| Transactions | `src/api/federation.ts`, `src/services/transactions.ts`, `src/services/database.ts` | transaction size limits, idempotency, retry semantics, outbound fanout | `partial` | `partial` | `complement` | `ss-core-transactions` |
 | PDUs | `src/api/federation.ts`, `src/services/event-auth.ts`, `src/services/state-resolution*.ts` | receipt checks, reject vs soft-fail, room-version-sensitive validation | `partial` | `partial` | `complement` | `ss-core-pdus` |
 | EDUs | `src/api/federation.ts`, sync/presence/push surfaces | EDU-specific semantics and delivery guarantees | `partial` | `partial` | `complement` | `ss-core-edus` |
 | Room state resolution | `src/services/state-resolution.ts`, `src/services/state-resolution-v1.ts` | room-version-specific state resolution, not generic one-size-fits-all | `partial` | `partial` | `complement` | `ss-core-room-state-resolution` |
@@ -165,7 +165,7 @@ Automation note:
 | End-to-end encryption | `src/api/federation.ts`, `src/api/keys.ts` | device-key query, claim, cross-server key handling | `partial` | `partial` | `complement` | `ss-core-end-to-end-encryption` |
 | Send-to-device messaging | partial via client API and federation surface | remote to-device semantics | `partial` | `partial` | `complement` | `ss-core-send-to-device-messaging` |
 | Content repository | `src/api/federation.ts`, `src/api/media.ts` | media download/thumbnail federation semantics | `none` | `not-audited` | `complement` | `ss-core-content-repository` |
-| Server ACLs | no explicit tracking | ACL enforcement against federation | `partial` | `not-audited` | `complement` | `ss-core-server-access-control-lists-acls` |
+| Server ACLs | ACL state events propagated via federation fanout (`fanoutEventToFederation`) | ACL enforcement against federation | `partial` | `partial` | `complement` | `ss-core-server-access-control-lists-acls` |
 | Policy servers | no explicit tracking | policy-server enablement and signature validation | `none` | `not-audited` | `none` | `ss-core-policy-servers` |
 | Signing events | crypto utils and federation code | content hash, reference hash, signature generation and verification | `partial` | `not-audited` | `none` | `ss-core-signing-events` |
 | Security considerations | spread across middleware/services | explicit threat-model and failure-mode checklist | `partial` | `not-audited` | `complement` | `ss-core-security-considerations` |

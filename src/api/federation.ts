@@ -10,6 +10,13 @@ import {
   type ServerKeyResponse,
 } from '../services/federation-keys';
 import { validateUrl } from '../utils/url-validator';
+import { storeEvent, fanoutEventToFederation, notifyUsersOfEvent } from '../services/database';
+import {
+  applyMembershipTransitionToDatabase,
+  loadMembershipTransitionContext,
+} from '../matrix/application/membership-transition-service';
+import federationQueryRoutes from './federation/query';
+import federationSpaceRoutes from './federation/spaces';
 
 // Supported room versions (v1-v12 per Matrix Spec v1.17)
 const SUPPORTED_ROOM_VERSIONS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
@@ -31,6 +38,8 @@ app.get('/_matrix/federation/v1/version', async (c) => {
 // Key endpoints (/_matrix/key/*) remain unauthenticated as they are used to establish trust
 // Version endpoint is also unauthenticated as it's used for initial contact
 app.use('/_matrix/federation/v1/*', requireFederationAuth());
+app.route('/', federationQueryRoutes);
+app.route('/', federationSpaceRoutes);
 
 // GET /_matrix/key/v2/server - Get server signing keys
 app.get('/_matrix/key/v2/server', async (c) => {
@@ -840,98 +849,6 @@ app.get('/_matrix/federation/v1/backfill/:roomId', async (c) => {
   });
 });
 
-// POST /_matrix/federation/v1/get_missing_events/:roomId - Fill event gaps
-app.post('/_matrix/federation/v1/get_missing_events/:roomId', async (c) => {
-  const roomId = c.req.param('roomId');
-
-  let body: {
-    earliest_events?: string[];
-    latest_events?: string[];
-    limit?: number;
-    min_depth?: number;
-  };
-
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
-  }
-
-  const earliestEvents = body.earliest_events || [];
-  const latestEvents = body.latest_events || [];
-  const limit = Math.min(body.limit || 10, 100);
-  const minDepth = body.min_depth || 0;
-
-  // Verify room exists
-  const room = await c.env.DB.prepare(
-    `SELECT room_id FROM rooms WHERE room_id = ?`
-  ).bind(roomId).first<{ room_id: string }>();
-
-  if (!room) {
-    return Errors.notFound('Room not found').toResponse();
-  }
-
-  // Walk backwards from latest_events to earliest_events
-  const events: any[] = [];
-  const visited = new Set<string>(earliestEvents);
-  const toProcess = [...latestEvents];
-
-  while (toProcess.length > 0 && events.length < limit) {
-    const eventId = toProcess.shift()!;
-    if (visited.has(eventId)) continue;
-    visited.add(eventId);
-
-    const event = await c.env.DB.prepare(
-      `SELECT event_id, room_id, sender, event_type, state_key, content,
-       origin_server_ts, depth, auth_events, prev_events, hashes, signatures
-       FROM events
-       WHERE event_id = ? AND room_id = ? AND depth >= ?`
-    ).bind(eventId, roomId, minDepth).first<{
-      event_id: string;
-      room_id: string;
-      sender: string;
-      event_type: string;
-      state_key: string | null;
-      content: string;
-      origin_server_ts: number;
-      depth: number;
-      auth_events: string;
-      prev_events: string;
-      hashes: string | null;
-      signatures: string | null;
-    }>();
-
-    if (event) {
-      events.push({
-        event_id: event.event_id,
-        room_id: event.room_id,
-        sender: event.sender,
-        type: event.event_type,
-        state_key: event.state_key ?? undefined,
-        content: JSON.parse(event.content),
-        origin_server_ts: event.origin_server_ts,
-        depth: event.depth,
-        auth_events: JSON.parse(event.auth_events),
-        prev_events: JSON.parse(event.prev_events),
-        hashes: event.hashes ? JSON.parse(event.hashes) : undefined,
-        signatures: event.signatures ? JSON.parse(event.signatures) : undefined,
-      });
-
-      // Add prev_events to process
-      const prevEvents = JSON.parse(event.prev_events) as string[];
-      for (const prevId of prevEvents) {
-        if (!visited.has(prevId)) {
-          toProcess.push(prevId);
-        }
-      }
-    }
-  }
-
-  return c.json({
-    events,
-  });
-});
-
 // POST /_matrix/federation/v1/make_join/:roomId/:userId - Prepare join request
 app.get('/_matrix/federation/v1/make_join/:roomId/:userId', async (c) => {
   const roomId = c.req.param('roomId');
@@ -1024,6 +941,15 @@ app.put('/_matrix/federation/v1/send_join/:roomId/:eventId', async (c) => {
     );
   }
 
+  // Check room exists
+  const v1JoinRoom = await c.env.DB.prepare(
+    `SELECT room_id FROM rooms WHERE room_id = ?`
+  ).bind(roomId).first<{ room_id: string }>();
+
+  if (!v1JoinRoom) {
+    return Errors.notFound('Room not found').toResponse();
+  }
+
   // Get current state and auth chain
   const stateEvents = await c.env.DB.prepare(
     `SELECT e.* FROM room_state rs
@@ -1065,6 +991,41 @@ app.put('/_matrix/federation/v1/send_join/:roomId/:eventId', async (c) => {
       });
     }
   }
+
+  // Persist the join event so local sync can observe it
+  const v1JoinEventId = body.event_id || eventId;
+  const v1JoinPdu: PDU = {
+    event_id: v1JoinEventId,
+    room_id: roomId,
+    sender: body.sender,
+    type: body.type,
+    state_key: body.state_key ?? undefined,
+    content: body.content ?? {},
+    origin_server_ts: body.origin_server_ts || Date.now(),
+    unsigned: body.unsigned,
+    depth: body.depth || 0,
+    auth_events: body.auth_events || [],
+    prev_events: body.prev_events || [],
+    hashes: body.hashes,
+    signatures: body.signatures,
+  };
+  const existingV1 = await c.env.DB.prepare(
+    `SELECT event_id FROM events WHERE event_id = ?`
+  ).bind(v1JoinEventId).first();
+  const v1TransitionContext = await loadMembershipTransitionContext(c.env.DB, roomId, v1JoinPdu.state_key);
+  if (!existingV1) {
+    await storeEvent(c.env.DB, v1JoinPdu);
+  }
+
+  await applyMembershipTransitionToDatabase(c.env.DB, {
+    roomId,
+    event: v1JoinPdu,
+    source: 'federation',
+    context: v1TransitionContext,
+  });
+
+  // Fan out the join event to other servers in the room so they learn about the new member
+  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, v1JoinPdu));
 
   return c.json({
     origin: c.env.SERVER_NAME,
@@ -1177,6 +1138,41 @@ app.put('/_matrix/federation/v2/send_join/:roomId/:eventId', async (c) => {
     }
   }
 
+  // Persist the join event so local sync can observe it
+  const v2JoinEventId = body.event_id || eventId;
+  const v2JoinPdu: PDU = {
+    event_id: v2JoinEventId,
+    room_id: roomId,
+    sender: body.sender,
+    type: body.type,
+    state_key: body.state_key ?? undefined,
+    content: body.content ?? {},
+    origin_server_ts: body.origin_server_ts || Date.now(),
+    unsigned: body.unsigned,
+    depth: body.depth || 0,
+    auth_events: body.auth_events || [],
+    prev_events: body.prev_events || [],
+    hashes: body.hashes,
+    signatures: body.signatures,
+  };
+  const existingV2 = await c.env.DB.prepare(
+    `SELECT event_id FROM events WHERE event_id = ?`
+  ).bind(v2JoinEventId).first();
+  const v2TransitionContext = await loadMembershipTransitionContext(c.env.DB, roomId, v2JoinPdu.state_key);
+  if (!existingV2) {
+    await storeEvent(c.env.DB, v2JoinPdu);
+  }
+
+  await applyMembershipTransitionToDatabase(c.env.DB, {
+    roomId,
+    event: v2JoinPdu,
+    source: 'federation',
+    context: v2TransitionContext,
+  });
+
+  // Fan out the join event to other servers in the room so they learn about the new member
+  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, v2JoinPdu));
+
   return c.json({
     origin: c.env.SERVER_NAME,
     auth_chain: authChain,
@@ -1214,16 +1210,13 @@ app.get('/_matrix/federation/v1/make_leave/:roomId/:userId', async (c) => {
     return Errors.notFound('Room not found').toResponse();
   }
 
-  // Check if user is a member of the room
   const membership = await c.env.DB.prepare(
-    `SELECT e.event_id FROM room_state rs
-     JOIN events e ON rs.event_id = e.event_id
-     WHERE rs.room_id = ? AND rs.event_type = 'm.room.member' AND rs.state_key = ?`
-  ).bind(roomId, userId).first<{ event_id: string }>();
+    `SELECT event_id, membership FROM room_memberships WHERE room_id = ? AND user_id = ?`
+  ).bind(roomId, userId).first<{ event_id: string; membership: string }>();
 
-  if (!membership) {
+  if (!membership || !['join', 'invite', 'knock'].includes(membership.membership)) {
     return c.json(
-      { errcode: 'M_FORBIDDEN', error: 'User is not a member of the room' },
+      { errcode: 'M_FORBIDDEN', error: 'User is not joined, invited, or knocking in the room' },
       403
     );
   }
@@ -1244,7 +1237,7 @@ app.get('/_matrix/federation/v1/make_leave/:roomId/:userId', async (c) => {
   const authEvents: string[] = [];
   if (createEvent) authEvents.push(createEvent.event_id);
   if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (membership) authEvents.push(membership.event_id);
+  authEvents.push(membership.event_id);
 
   // Get latest event for prev_events
   const latestEvent = await c.env.DB.prepare(
@@ -1275,6 +1268,75 @@ app.get('/_matrix/federation/v1/make_leave/:roomId/:userId', async (c) => {
   });
 });
 
+async function persistFederationLeave(
+  c: any,
+  roomId: string,
+  fallbackEventId: string,
+  body: any
+): Promise<PDU> {
+  const leaveEventId = body.event_id || fallbackEventId;
+  const leavePdu: PDU = {
+    event_id: leaveEventId,
+    room_id: roomId,
+    sender: body.sender,
+    type: body.type,
+    state_key: body.state_key ?? undefined,
+    content: body.content ?? {},
+    origin_server_ts: body.origin_server_ts || Date.now(),
+    unsigned: body.unsigned,
+    depth: body.depth || 0,
+    auth_events: body.auth_events || [],
+    prev_events: body.prev_events || [],
+    hashes: body.hashes,
+    signatures: body.signatures,
+  };
+
+  const existing = await c.env.DB.prepare(
+    `SELECT event_id FROM events WHERE event_id = ?`
+  ).bind(leaveEventId).first();
+  const leaveTransitionContext = await loadMembershipTransitionContext(c.env.DB, roomId, leavePdu.state_key);
+  if (!existing) {
+    await storeEvent(c.env.DB, leavePdu);
+  }
+
+  await applyMembershipTransitionToDatabase(c.env.DB, {
+    roomId,
+    event: leavePdu,
+    source: 'federation',
+    context: leaveTransitionContext,
+  });
+
+  await notifyUsersOfEvent(c.env, roomId, leaveEventId, 'm.room.member');
+  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, leavePdu));
+
+  return leavePdu;
+}
+
+function validateFederationLeaveRequest(body: any, eventId: string): Response | null {
+  if (body.type !== 'm.room.member' || body.content?.membership !== 'leave') {
+    return Response.json(
+      { errcode: 'M_INVALID_PARAM', error: 'Event is not a leave event' },
+      { status: 400 }
+    );
+  }
+
+  if (body.event_id && body.event_id !== eventId) {
+    return Response.json(
+      { errcode: 'M_INVALID_PARAM', error: 'Event ID mismatch' },
+      { status: 400 }
+    );
+  }
+
+  if (typeof body.sender !== 'string' || typeof body.state_key !== 'string' || body.sender !== body.state_key) {
+    return Response.json(
+      { errcode: 'M_INVALID_PARAM', error: 'Leave events must target the sending user' },
+      { status: 400 }
+    );
+  }
+
+  return null;
+}
+
 // PUT /_matrix/federation/v1/send_leave/:roomId/:eventId - Complete leave
 app.put('/_matrix/federation/v1/send_leave/:roomId/:eventId', async (c) => {
   const roomId = c.req.param('roomId');
@@ -1287,20 +1349,9 @@ app.put('/_matrix/federation/v1/send_leave/:roomId/:eventId', async (c) => {
     return Errors.badJson().toResponse();
   }
 
-  // Validate the event is a leave event
-  if (body.type !== 'm.room.member' || body.content?.membership !== 'leave') {
-    return c.json(
-      { errcode: 'M_INVALID_PARAM', error: 'Event is not a leave event' },
-      400
-    );
-  }
-
-  // Validate the event ID matches
-  if (body.event_id && body.event_id !== eventId) {
-    return c.json(
-      { errcode: 'M_INVALID_PARAM', error: 'Event ID mismatch' },
-      400
-    );
+  const validationError = validateFederationLeaveRequest(body, eventId);
+  if (validationError) {
+    return validationError;
   }
 
   // Verify room exists
@@ -1311,6 +1362,8 @@ app.put('/_matrix/federation/v1/send_leave/:roomId/:eventId', async (c) => {
   if (!room) {
     return Errors.notFound('Room not found').toResponse();
   }
+
+  await persistFederationLeave(c, roomId, eventId, body);
 
   // v1 returns empty array on success [200, {}]
   return c.json([200, {}]);
@@ -1328,20 +1381,9 @@ app.put('/_matrix/federation/v2/send_leave/:roomId/:eventId', async (c) => {
     return Errors.badJson().toResponse();
   }
 
-  // Validate the event is a leave event
-  if (body.type !== 'm.room.member' || body.content?.membership !== 'leave') {
-    return c.json(
-      { errcode: 'M_INVALID_PARAM', error: 'Event is not a leave event' },
-      400
-    );
-  }
-
-  // Validate the event ID matches
-  if (body.event_id && body.event_id !== eventId) {
-    return c.json(
-      { errcode: 'M_INVALID_PARAM', error: 'Event ID mismatch' },
-      400
-    );
+  const validationError = validateFederationLeaveRequest(body, eventId);
+  if (validationError) {
+    return validationError;
   }
 
   // Verify room exists
@@ -1352,6 +1394,8 @@ app.put('/_matrix/federation/v2/send_leave/:roomId/:eventId', async (c) => {
   if (!room) {
     return Errors.notFound('Room not found').toResponse();
   }
+
+  await persistFederationLeave(c, roomId, eventId, body);
 
   // v2 returns empty object on success
   return c.json({});
@@ -1452,10 +1496,35 @@ app.put('/_matrix/federation/v1/invite/:roomId/:eventId', async (c) => {
     `INSERT OR IGNORE INTO rooms (room_id, room_version, creator_id, is_public) VALUES (?, ?, ?, 0)`
   ).bind(roomId, roomVersion, inviteEvent.sender).run();
 
-  await c.env.DB.prepare(
-    `INSERT OR REPLACE INTO room_memberships (room_id, user_id, membership, event_id)
-     VALUES (?, ?, 'invite', ?)`
-  ).bind(roomId, stateKey, inviteEvent.event_id || eventId).run();
+  const invitePdu: PDU = {
+    event_id: signedEvent.event_id || inviteEvent.event_id || eventId,
+    room_id: roomId,
+    sender: signedEvent.sender || inviteEvent.sender,
+    type: signedEvent.type || inviteEvent.type,
+    state_key: signedEvent.state_key ?? inviteEvent.state_key,
+    content: signedEvent.content || inviteEvent.content || {},
+    origin_server_ts: signedEvent.origin_server_ts || inviteEvent.origin_server_ts || Date.now(),
+    depth: signedEvent.depth || inviteEvent.depth || 0,
+    auth_events: signedEvent.auth_events || inviteEvent.auth_events || [],
+    prev_events: signedEvent.prev_events || inviteEvent.prev_events || [],
+    unsigned: signedEvent.unsigned || inviteEvent.unsigned,
+    hashes: signedEvent.hashes as { sha256: string } | undefined,
+    signatures: signedEvent.signatures as Record<string, Record<string, string>> | undefined,
+  };
+  const existingInviteEvent = await c.env.DB.prepare(
+    `SELECT event_id FROM events WHERE event_id = ?`
+  ).bind(invitePdu.event_id).first();
+  const inviteTransitionContext = await loadMembershipTransitionContext(c.env.DB, roomId, invitePdu.state_key);
+  if (!existingInviteEvent) {
+    await storeEvent(c.env.DB, invitePdu);
+  }
+
+  await applyMembershipTransitionToDatabase(c.env.DB, {
+    roomId,
+    event: invitePdu,
+    source: 'federation',
+    context: inviteTransitionContext,
+  });
 
   // Store stripped state for /sync invite_state.events
   const strippedStateEvents: any[] = Array.isArray(body.invite_room_state) ? body.invite_room_state : [];
@@ -1580,10 +1649,35 @@ app.put('/_matrix/federation/v2/invite/:roomId/:eventId', async (c) => {
     `INSERT OR IGNORE INTO rooms (room_id, room_version, creator_id, is_public) VALUES (?, ?, ?, 0)`
   ).bind(inviteRoomId, roomVersion, inviteEvent.sender).run();
 
-  await c.env.DB.prepare(
-    `INSERT OR REPLACE INTO room_memberships (room_id, user_id, membership, event_id)
-     VALUES (?, ?, 'invite', ?)`
-  ).bind(inviteRoomId, stateKey, inviteEvent.event_id || eventId).run();
+  const invitePdu: PDU = {
+    event_id: signedEvent.event_id || inviteEvent.event_id || eventId,
+    room_id: inviteRoomId,
+    sender: signedEvent.sender || inviteEvent.sender,
+    type: signedEvent.type || inviteEvent.type,
+    state_key: signedEvent.state_key ?? inviteEvent.state_key,
+    content: signedEvent.content || inviteEvent.content || {},
+    origin_server_ts: signedEvent.origin_server_ts || inviteEvent.origin_server_ts || Date.now(),
+    depth: signedEvent.depth || inviteEvent.depth || 0,
+    auth_events: signedEvent.auth_events || inviteEvent.auth_events || [],
+    prev_events: signedEvent.prev_events || inviteEvent.prev_events || [],
+    unsigned: signedEvent.unsigned || inviteEvent.unsigned,
+    hashes: signedEvent.hashes as { sha256: string } | undefined,
+    signatures: signedEvent.signatures as Record<string, Record<string, string>> | undefined,
+  };
+  const existingInviteEvent = await c.env.DB.prepare(
+    `SELECT event_id FROM events WHERE event_id = ?`
+  ).bind(invitePdu.event_id).first();
+  const v2InviteTransitionContext = await loadMembershipTransitionContext(c.env.DB, inviteRoomId, invitePdu.state_key);
+  if (!existingInviteEvent) {
+    await storeEvent(c.env.DB, invitePdu);
+  }
+
+  await applyMembershipTransitionToDatabase(c.env.DB, {
+    roomId: inviteRoomId,
+    event: invitePdu,
+    source: 'federation',
+    context: v2InviteTransitionContext,
+  });
 
   // Store stripped state for /sync invite_state.events
   const strippedStateEvents: any[] = Array.isArray(body.invite_room_state) ? body.invite_room_state : [];
@@ -2653,175 +2747,6 @@ async function getRoomPublicInfo(db: D1Database, roomId: string, _serverName: st
     room_type: roomType,
   };
 }
-
-// ============================================
-// Federation Space Hierarchy
-// ============================================
-
-// GET /_matrix/federation/v1/hierarchy/:roomId - Get space hierarchy
-app.get('/_matrix/federation/v1/hierarchy/:roomId', async (c) => {
-  const roomId = c.req.param('roomId');
-  const db = c.env.DB;
-  const serverName = c.env.SERVER_NAME;
-
-  const suggestedOnly = c.req.query('suggested_only') === 'true';
-  const limit = Math.min(parseInt(c.req.query('limit') || '50'), 100);
-  const from = c.req.query('from');
-
-  // Check if room exists
-  const room = await db.prepare(`
-    SELECT room_id FROM rooms WHERE room_id = ?
-  `).bind(roomId).first();
-
-  if (!room) {
-    return Errors.notFound('Room not found').toResponse();
-  }
-
-  // Parse pagination token
-  let offset = 0;
-  if (from && from.startsWith('offset_')) {
-    offset = parseInt(from.substring(7), 10) || 0;
-  }
-
-  // Get space children from m.space.child state events
-  const childEvents = await db.prepare(`
-    SELECT rs.state_key, e.content
-    FROM room_state rs
-    JOIN events e ON rs.event_id = e.event_id
-    WHERE rs.room_id = ? AND rs.event_type = 'm.space.child'
-    LIMIT ? OFFSET ?
-  `).bind(roomId, limit + 1, offset).all<{ state_key: string; content: string }>();
-
-  const hasMore = childEvents.results.length > limit;
-  const childResults = childEvents.results.slice(0, limit);
-
-  const rooms: any[] = [];
-
-  // Add the space itself first (only on first page)
-  if (offset === 0) {
-    const spaceInfo = await getRoomPublicInfo(db, roomId, serverName);
-    if (spaceInfo) {
-      const spaceChildState = await db.prepare(`
-        SELECT rs.state_key, e.content
-        FROM room_state rs
-        JOIN events e ON rs.event_id = e.event_id
-        WHERE rs.room_id = ? AND rs.event_type = 'm.space.child'
-      `).bind(roomId).all<{ state_key: string; content: string }>();
-
-      rooms.push({
-        ...spaceInfo,
-        children_state: spaceChildState.results.map(ce => {
-          try {
-            return {
-              type: 'm.space.child',
-              state_key: ce.state_key,
-              content: JSON.parse(ce.content),
-            };
-          } catch {
-            return null;
-          }
-        }).filter(Boolean),
-      });
-    }
-  }
-
-  // Process each child
-  for (const child of childResults) {
-    const childRoomId = child.state_key;
-
-    try {
-      const content = JSON.parse(child.content);
-
-      // Skip if suggested_only and not suggested
-      if (suggestedOnly && !content.suggested) {
-        continue;
-      }
-
-      // Skip if content has empty via array (deleted child)
-      if (!content.via || content.via.length === 0) {
-        continue;
-      }
-
-      // Get child room info
-      const childInfo = await getRoomPublicInfo(db, childRoomId, serverName);
-      if (childInfo) {
-        rooms.push({
-          ...childInfo,
-          children_state: [], // Grandchildren not included in federation response
-        });
-      }
-    } catch {
-      // Skip invalid child entries
-    }
-  }
-
-  const response: any = {
-    room: rooms[0] || null,
-    children: rooms.slice(1),
-    inaccessible_children: [],
-  };
-
-  if (hasMore) {
-    response.next_batch = `offset_${offset + limit}`;
-  }
-
-  return c.json(response);
-});
-
-// ============================================
-// Miscellaneous Federation Endpoints
-// ============================================
-
-// GET /_matrix/federation/v1/timestamp_to_event/:roomId - Find event closest to timestamp
-app.get('/_matrix/federation/v1/timestamp_to_event/:roomId', async (c) => {
-  const roomId = c.req.param('roomId');
-  const ts = parseInt(c.req.query('ts') || '0', 10);
-  const dir = c.req.query('dir') || 'f'; // 'f' = forward, 'b' = backward
-  const db = c.env.DB;
-
-  if (!ts || ts <= 0) {
-    return Errors.missingParam('ts').toResponse();
-  }
-
-  // Verify room exists
-  const room = await db.prepare(
-    `SELECT room_id FROM rooms WHERE room_id = ?`
-  ).bind(roomId).first<{ room_id: string }>();
-
-  if (!room) {
-    return Errors.notFound('Room not found').toResponse();
-  }
-
-  let event;
-  if (dir === 'b') {
-    // Find closest event at or before timestamp
-    event = await db.prepare(`
-      SELECT event_id, origin_server_ts
-      FROM events
-      WHERE room_id = ? AND origin_server_ts <= ?
-      ORDER BY origin_server_ts DESC
-      LIMIT 1
-    `).bind(roomId, ts).first<{ event_id: string; origin_server_ts: number }>();
-  } else {
-    // Find closest event at or after timestamp
-    event = await db.prepare(`
-      SELECT event_id, origin_server_ts
-      FROM events
-      WHERE room_id = ? AND origin_server_ts >= ?
-      ORDER BY origin_server_ts ASC
-      LIMIT 1
-    `).bind(roomId, ts).first<{ event_id: string; origin_server_ts: number }>();
-  }
-
-  if (!event) {
-    return Errors.notFound('No event found near timestamp').toResponse();
-  }
-
-  return c.json({
-    event_id: event.event_id,
-    origin_server_ts: event.origin_server_ts,
-  });
-});
 
 // GET /_matrix/federation/v1/openid/userinfo - Validate OpenID token and return user info
 app.get('/_matrix/federation/v1/openid/userinfo', async (c) => {

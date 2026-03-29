@@ -37,7 +37,6 @@ coverage/
 .opencode/
 
 # Droplet/infrastructure scripts and configs
-*.sh
 droplet*.json
 register-admin.json
 test-jwt.json

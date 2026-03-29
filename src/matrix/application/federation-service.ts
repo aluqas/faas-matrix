@@ -2,10 +2,14 @@ import type { AppContext } from '../../foundation/app-context';
 import type { DeliveryQueue, DiscoveryService, RemoteKeyCache, SignedTransport } from '../../fedcore/contracts';
 import { checkEventAuth } from '../../services/event-auth';
 import { resolveState } from '../../services/state-resolution';
-import type { PDU, Room } from '../../types';
+import type { PDU } from '../../types';
 import { sha256, verifyContentHash } from '../../utils/crypto';
 import { verifyRemoteSignature } from '../../services/federation-keys';
 import type { FederationRepository } from '../repositories/interfaces';
+import {
+  MembershipTransitionService,
+  resolveMembershipAuthState,
+} from './membership-transition-service';
 
 export interface FederationTransactionInput {
   origin: string;
@@ -22,6 +26,8 @@ interface CachedKeyRecord {
 }
 
 export class MatrixFederationService {
+  private readonly membershipTransitions = new MembershipTransitionService();
+
   constructor(
     private readonly appContext: AppContext,
     private readonly repository: FederationRepository,
@@ -121,9 +127,19 @@ export class MatrixFederationService {
         const room = await this.repository.getRoom(roomId);
         if (room) {
           try {
-            const roomState = await this.repository.getRoomState(roomId);
+            let roomState = await this.repository.getRoomState(roomId);
+            const inviteStrippedState = await this.repository.getInviteStrippedState(roomId);
+            roomState = resolveMembershipAuthState(roomId, roomState, inviteStrippedState);
             const authResult = checkEventAuth(pdu as PDU, roomState, room.room_version);
             if (!authResult.allowed) {
+              console.warn('[FederationService] Rejected PDU', {
+                roomId,
+                eventId,
+                type: pdu.type,
+                sender: pdu.sender,
+                stateKey: pdu.state_key,
+                reason: authResult.error || 'Auth failed',
+              });
               pduResults[eventId] = { error: authResult.error || 'Event authorization failed' };
               await this.repository.recordProcessedPdu(
                 eventId,
@@ -142,9 +158,7 @@ export class MatrixFederationService {
         pduResults[eventId] = {};
         await this.repository.recordProcessedPdu(eventId, pduOrigin, roomId, true);
 
-        if (room) {
-          await this.storeAcceptedPdu(pdu as PDU, room);
-        }
+        await this.storeAcceptedPdu(pdu as PDU);
       } catch (error) {
         pduResults[eventId] = {
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -163,7 +177,11 @@ export class MatrixFederationService {
     }
 
     for (const edu of input.body.edus || []) {
-      await this.processEdu(input.origin, edu);
+      try {
+        await this.processEdu(input.origin, edu);
+      } catch {
+        // EDU processing failures should not abort the transaction
+      }
     }
 
     const response = { pdus: pduResults };
@@ -171,8 +189,65 @@ export class MatrixFederationService {
     return response;
   }
 
-  private async storeAcceptedPdu(pdu: PDU, room: Room): Promise<void> {
+  private async storeAcceptedPdu(pdu: PDU): Promise<void> {
+    const existingRoom = await this.repository.getRoom(pdu.room_id);
+    const priorRoomState =
+      pdu.type === 'm.room.member' && pdu.state_key
+        ? await this.repository.getRoomState(pdu.room_id)
+        : [];
+    const priorInviteStrippedState =
+      pdu.type === 'm.room.member' && pdu.state_key
+        ? await this.repository.getInviteStrippedState(pdu.room_id)
+        : [];
+    if (!existingRoom) {
+      const content = pdu.content as { room_version?: string; creator?: string };
+      const roomVersion = pdu.type === 'm.room.create' ? content.room_version || '10' : '10';
+      await this.repository.createRoom(
+        pdu.room_id,
+        roomVersion,
+        content.creator || pdu.sender || '',
+        false
+      );
+    }
     await this.repository.storeIncomingEvent(pdu);
+
+    if (pdu.type === 'm.room.member' && pdu.state_key) {
+      const currentMemberEvent =
+        resolveMembershipAuthState(
+          pdu.room_id,
+          priorRoomState,
+          priorInviteStrippedState
+        ).find(
+          (event) => event.type === 'm.room.member' && event.state_key === pdu.state_key
+        ) ?? null;
+      const result = this.membershipTransitions.evaluate({
+        event: pdu,
+        roomId: pdu.room_id,
+        source: 'federation',
+        currentMembership: currentMemberEvent
+          ? {
+              membership: ((currentMemberEvent.content as { membership?: any }).membership ?? 'leave'),
+              eventId: currentMemberEvent.event_id,
+            }
+          : null,
+        currentMemberEvent,
+        roomState: priorRoomState,
+        inviteStrippedState: priorInviteStrippedState,
+      });
+      if (result.membershipToPersist) {
+        const memberContent = pdu.content as { displayname?: string; avatar_url?: string };
+        await this.repository.updateMembership(
+          pdu.room_id,
+          pdu.state_key,
+          result.membershipToPersist,
+          pdu.event_id,
+          memberContent.displayname,
+          memberContent.avatar_url
+        );
+      }
+    }
+
+    await this.repository.notifyUsersOfEvent(pdu.room_id, pdu.event_id, pdu.type);
     if (pdu.state_key === undefined) {
       return;
     }
@@ -181,7 +256,7 @@ export class MatrixFederationService {
     if (prevEvents.length > 1) {
       try {
         const currentState = await this.repository.getRoomState(pdu.room_id);
-        const resolved = resolveState(room.room_version, [currentState, [pdu]]);
+        const resolved = resolveState(existingRoom?.room_version || '10', [currentState, [pdu]]);
         for (const stateEvent of resolved) {
           if (stateEvent.state_key !== undefined) {
             await this.repository.upsertRoomState(

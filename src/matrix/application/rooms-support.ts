@@ -141,7 +141,7 @@ export async function createInitialRoomEvents(
         'm.room.tombstone': 100,
       },
       events_default: 0,
-      invite: preset === 'public_chat' ? 0 : 50,
+      invite: 0,
       kick: 50,
       notifications: { room: 50 },
       redact: 50,
@@ -202,6 +202,7 @@ export interface CreateMembershipEventOptions {
   createEventId?: string;
   prevEventIds: string[];
   depth: number;
+  unsigned?: Record<string, unknown>;
 }
 
 export async function createMembershipEvent(options: CreateMembershipEventOptions): Promise<PDU> {
@@ -222,5 +223,6 @@ export async function createMembershipEvent(options: CreateMembershipEventOption
     depth: options.depth,
     auth_events: authEvents,
     prev_events: options.prevEventIds,
+    unsigned: options.unsigned ? options.unsigned : undefined,
   };
 }

@@ -7,17 +7,20 @@
 // - Step persistence for resume on failure
 
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
-import type { Env } from '../types';
+import type { Env, PDU } from '../types';
 import { generateEventId } from '../utils/ids';
 import { federationGet, federationPut } from '../services/federation-keys';
 import {
   storeEvent,
-  updateMembership,
   getRoomMembers,
   getStateEvent,
   getRoomEvents,
   getMembership,
 } from '../services/database';
+import {
+  applyMembershipTransitionToDatabase,
+  loadMembershipTransitionContext,
+} from '../matrix/application/membership-transition-service';
 
 // Parameters passed when triggering the workflow
 export interface JoinParams {
@@ -51,6 +54,7 @@ interface SerializableEvent {
   depth: number;
   auth_events: string[];
   prev_events: string[];
+  unsigned?: Record<string, unknown>;
 }
 
 export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
@@ -87,9 +91,9 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
         });
       }) as SerializableEvent;
 
-      // Step 3: For remote joins, send signed event to remote server
+      // Step 3: For remote joins, send signed event to remote server and process room state
       if (isRemote && remoteServer && joinEventData) {
-        await step.do('send-join', {
+        const sendJoinResponse = await step.do('send-join', {
           retries: {
             limit: 3,
             delay: 5000,
@@ -98,13 +102,109 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
           timeout: 30000,
         }, async () => {
           return await this.sendJoinRequest(remoteServer, roomId, joinEventData);
+        }) as { state?: any[]; auth_chain?: any[] } | null;
+
+        // Process the room state received from the remote server
+        await step.do('process-remote-state', async () => {
+          const roomVersion = remoteEventTemplate?.room_version || '10';
+          // Create the room locally if it doesn't exist yet
+          await this.env.DB.prepare(
+            `INSERT OR IGNORE INTO rooms (room_id, room_version, creator_id, is_public)
+             VALUES (?, ?, '', 0)`
+          ).bind(roomId, roomVersion).run();
+
+          const stateEvents: any[] = sendJoinResponse?.state || [];
+          const authChain: any[] = sendJoinResponse?.auth_chain || [];
+
+          // Store auth chain events first (they're referenced by state events)
+          for (const event of authChain) {
+            if (!event.event_id) continue;
+            const existing = await this.env.DB.prepare(
+              `SELECT event_id FROM events WHERE event_id = ?`
+            ).bind(event.event_id).first();
+            if (!existing) {
+              await storeEvent(this.env.DB, {
+                event_id: event.event_id,
+                room_id: event.room_id || roomId,
+                sender: event.sender,
+                type: event.type || event.event_type,
+                state_key: event.state_key,
+                content: event.content,
+                origin_server_ts: event.origin_server_ts || Date.now(),
+                depth: event.depth || 0,
+                auth_events: event.auth_events || [],
+                prev_events: event.prev_events || [],
+                hashes: event.hashes,
+                signatures: event.signatures,
+              });
+            }
+          }
+
+          // Store current state events (set room state)
+          for (const event of stateEvents) {
+            if (!event.event_id) continue;
+            const transitionContext = await loadMembershipTransitionContext(
+              this.env.DB,
+              roomId,
+              event.state_key
+            );
+            const existing = await this.env.DB.prepare(
+              `SELECT event_id FROM events WHERE event_id = ?`
+            ).bind(event.event_id).first();
+            if (!existing) {
+              await storeEvent(this.env.DB, {
+                event_id: event.event_id,
+                room_id: event.room_id || roomId,
+                sender: event.sender,
+                type: event.type || event.event_type,
+                state_key: event.state_key,
+                content: event.content,
+                origin_server_ts: event.origin_server_ts || Date.now(),
+                depth: event.depth || 0,
+                auth_events: event.auth_events || [],
+                prev_events: event.prev_events || [],
+                hashes: event.hashes,
+                signatures: event.signatures,
+              });
+            }
+
+            // Update memberships for member events
+            if ((event.type || event.event_type) === 'm.room.member' && event.state_key) {
+              await applyMembershipTransitionToDatabase(this.env.DB, {
+                roomId,
+                event: {
+                  event_id: event.event_id,
+                  room_id: event.room_id || roomId,
+                  sender: event.sender,
+                  type: event.type || event.event_type,
+                  state_key: event.state_key,
+                  content: event.content,
+                  origin_server_ts: event.origin_server_ts || Date.now(),
+                  depth: event.depth || 0,
+                  auth_events: event.auth_events || [],
+                  prev_events: event.prev_events || [],
+                  unsigned: event.unsigned,
+                  hashes: event.hashes,
+                  signatures: event.signatures,
+                },
+                source: 'workflow',
+                context: transitionContext,
+              });
+            }
+          }
         });
       }
 
       // Step 4: Persist event and membership locally
       await step.do('persist', async () => {
+        const transitionContext = await loadMembershipTransitionContext(this.env.DB, roomId, userId);
         await storeEvent(this.env.DB, joinEventData);
-        await updateMembership(this.env.DB, roomId, userId, 'join', joinEventData.event_id);
+        await applyMembershipTransitionToDatabase(this.env.DB, {
+          roomId,
+          event: joinEventData as PDU,
+          source: 'workflow',
+          context: transitionContext,
+        });
       });
 
       // Step 5: Get room members for notification
@@ -174,12 +274,23 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
     avatarUrl?: string;
     reason?: string;
     remoteEventTemplate?: { room_version: string; event: any } | null;
-  }): Promise<SerializableEvent> {
+  }): Promise<any> {
     const { roomId, userId, displayName, avatarUrl, reason, remoteEventTemplate } = params;
 
     let authEvents: string[] = [];
     let prevEvents: string[] = [];
     let depth = 1;
+    let prevContent: Record<string, unknown> | undefined;
+    let prevSender: string | undefined;
+
+    const currentMembershipEvent = await getStateEvent(this.env.DB, roomId, 'm.room.member', userId);
+    const currentMembershipContent = currentMembershipEvent?.content as
+      | { membership?: unknown }
+      | undefined;
+    if (currentMembershipContent?.membership !== undefined) {
+      prevContent = currentMembershipContent as Record<string, unknown>;
+      prevSender = currentMembershipEvent?.sender;
+    }
 
     if (remoteEventTemplate?.event) {
       // Use template from remote server
@@ -230,6 +341,12 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       depth,
       auth_events: authEvents,
       prev_events: prevEvents,
+      unsigned: prevContent
+        ? {
+            prev_content: prevContent,
+            prev_sender: prevSender,
+          }
+        : undefined,
     };
 
     return event;
@@ -240,7 +357,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
     remoteServer: string,
     roomId: string,
     joinEvent: SerializableEvent
-  ): Promise<any> {
+  ): Promise<{ state?: any[]; auth_chain?: any[] }> {
     console.log('[RoomJoinWorkflow] Sending send_join request', { remoteServer, roomId, eventId: joinEvent.event_id });
 
     const response = await federationPut(
@@ -257,8 +374,19 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       throw new Error(`send_join failed: ${response.status} ${error}`);
     }
 
-    const result = await response.json();
-    return result;
+    const result = await response.json() as any;
+    if (Array.isArray(result)) {
+      const [state, authChain] = result;
+      return {
+        state: Array.isArray(state) ? state : [],
+        auth_chain: Array.isArray(authChain) ? authChain : [],
+      };
+    }
+
+    return {
+      state: Array.isArray(result?.state) ? result.state : [],
+      auth_chain: Array.isArray(result?.auth_chain) ? result.auth_chain : [],
+    };
   }
 
   // Notify a batch of members about the join

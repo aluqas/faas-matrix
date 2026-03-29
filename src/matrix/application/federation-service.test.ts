@@ -10,9 +10,13 @@ class FakeFederationRepository implements FederationRepository {
   async storeCachedTransaction() {}
   async getProcessedPdu(): Promise<FederationProcessedPdu | null> { return null; }
   async recordProcessedPdu() {}
+  async createRoom() {}
   async getRoom() { return null; }
   async getRoomState() { return []; }
+  async getInviteStrippedState() { return []; }
   async storeIncomingEvent() {}
+  async notifyUsersOfEvent() {}
+  async updateMembership() {}
   async upsertRoomState() {}
   async storeProcessedEdu() {}
   async upsertPresence() {}

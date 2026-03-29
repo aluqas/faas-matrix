@@ -17,6 +17,7 @@ import {
 import { CloudflareIdempotencyStore } from './idempotency-store';
 
 function createRuntimeCapabilities(env: Env, defer: (task: Promise<unknown>) => void): RuntimeCapabilities {
+  const workflowWaitTimeoutMs = env.MATRIX_FEATURE_PROFILE === 'complement' ? 30000 : 15000;
   return {
     sql: { connection: env.DB },
     kv: {
@@ -36,7 +37,22 @@ function createRuntimeCapabilities(env: Env, defer: (task: Promise<unknown>) => 
     workflow: {
       async createRoomJoin(params: unknown) {
         const instance = await env.ROOM_JOIN_WORKFLOW.create({ params });
-        return instance.status();
+        const startedAt = Date.now();
+        let status = await instance.status();
+
+        while (
+          status.status === 'queued' ||
+          status.status === 'running' ||
+          status.status === 'waiting'
+        ) {
+          if (Date.now() - startedAt >= workflowWaitTimeoutMs) {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          status = await instance.status();
+        }
+
+        return status;
       },
       async createPushNotification(params: unknown) {
         return env.PUSH_NOTIFICATION_WORKFLOW.create({ params });

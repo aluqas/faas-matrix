@@ -277,10 +277,12 @@ export function canonicalJson(obj: unknown): string {
 
   if (typeof obj === 'object') {
     const keys = Object.keys(obj).sort();
-    const pairs = keys.map(key => {
-      const value = canonicalJson((obj as Record<string, unknown>)[key]);
-      return `${JSON.stringify(key)}:${value}`;
-    });
+    const pairs = keys
+      .filter(key => (obj as Record<string, unknown>)[key] !== undefined)
+      .map(key => {
+        const value = canonicalJson((obj as Record<string, unknown>)[key]);
+        return `${JSON.stringify(key)}:${value}`;
+      });
     return `{${pairs.join(',')}}`;
   }
 

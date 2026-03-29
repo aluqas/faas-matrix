@@ -98,6 +98,7 @@ function createTestAppContext() {
   let eventCounter = 0;
   let roomCounter = 0;
   const pushCalls: Array<Record<string, unknown>> = [];
+  const roomJoinCalls: Array<Record<string, unknown>> = [];
 
   const appContext = {
     profile: createFeatureProfile('full'),
@@ -107,7 +108,8 @@ function createTestAppContext() {
       blob: {},
       jobs: { defer: (_task: Promise<unknown>) => undefined },
       workflow: {
-        async createRoomJoin() {
+        async createRoomJoin(params: unknown) {
+          roomJoinCalls.push(params as Record<string, unknown>);
           return { status: 'complete', output: { success: true } };
         },
         async createPushNotification(params: unknown) {
@@ -151,7 +153,7 @@ function createTestAppContext() {
     },
   } satisfies AppContext;
 
-  return { appContext, pushCalls };
+  return { appContext, pushCalls, roomJoinCalls };
 }
 
 describe('MatrixRoomService', () => {
@@ -234,6 +236,35 @@ describe('MatrixRoomService', () => {
     expect(repo.memberships.get('!room1:test:@alice:test')?.membership).toBe('join');
   });
 
+  it('uses the federation join workflow for remote invite stubs without create state', async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext, roomJoinCalls } = createTestAppContext();
+    await repo.createRoom('!room1:remote.test', '10', '@creator:remote.test', false);
+    await repo.updateMembership('!room1:remote.test', '@alice:test', 'invite', '$invite');
+
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore()
+    );
+
+    const response = await service.joinRoom({
+      userId: '@alice:test',
+      roomId: '!room1:remote.test',
+    });
+
+    expect(response).toEqual({ room_id: '!room1:remote.test' });
+    expect(roomJoinCalls).toHaveLength(1);
+    expect(roomJoinCalls[0]).toMatchObject({
+      roomId: '!room1:remote.test',
+      userId: '@alice:test',
+      isRemote: true,
+      remoteServer: 'remote.test',
+    });
+    expect(repo.memberships.get('!room1:remote.test:@alice:test')?.membership).toBe('invite');
+  });
+
   it('deduplicates sendEvent by txn id', async () => {
     const repo = new MemoryRoomRepository();
     const { appContext, pushCalls } = createTestAppContext();
@@ -291,4 +322,3 @@ describe('MatrixRoomService', () => {
     expect(pushCalls).toHaveLength(1);
   });
 });
-

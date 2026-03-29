@@ -22,8 +22,19 @@ import {
   deleteRoomAlias,
   getEvent,
   notifyUsersOfEvent,
+  fanoutEventToFederation,
 } from '../services/database';
+import {
+  applyMembershipTransitionToDatabase,
+  loadMembershipTransitionContext,
+} from '../matrix/application/membership-transition-service';
+import { sendFederationInvite } from '../services/federation-invite';
+import roomMembershipRoutes from './rooms/membership';
+import roomQueryRoutes from './rooms/query';
 const app = new Hono<AppEnv>();
+
+app.route('/', roomMembershipRoutes);
+app.route('/', roomQueryRoutes);
 
 // POST /_matrix/client/v3/createRoom - Create a new room
 app.post('/_matrix/client/v3/createRoom', requireAuth(), async (c) => {
@@ -75,8 +86,8 @@ app.post('/_matrix/client/v3/rooms/:roomId/leave', requireAuth(), async (c) => {
 
   // Check current membership
   const currentMembership = await getMembership(c.env.DB, roomId, userId);
-  if (!currentMembership || currentMembership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
+  if (!currentMembership || (currentMembership.membership !== 'join' && currentMembership.membership !== 'invite')) {
+    return Errors.forbidden('Not joined or invited to this room').toResponse();
   }
 
   // Create leave event
@@ -84,6 +95,7 @@ app.post('/_matrix/client/v3/rooms/:roomId/leave', requireAuth(), async (c) => {
 
   const createEvent = await getStateEvent(c.env.DB, roomId, 'm.room.create');
   const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, 'm.room.power_levels');
+  const currentMembershipEvent = await getStateEvent(c.env.DB, roomId, 'm.room.member', userId);
 
   const authEvents: string[] = [];
   if (createEvent) authEvents.push(createEvent.event_id);
@@ -97,6 +109,8 @@ app.post('/_matrix/client/v3/rooms/:roomId/leave', requireAuth(), async (c) => {
     membership: 'leave',
   };
 
+  const prevContent = currentMembershipEvent?.content as Record<string, unknown> | undefined;
+
   const event: PDU = {
     event_id: eventId,
     room_id: roomId,
@@ -105,190 +119,31 @@ app.post('/_matrix/client/v3/rooms/:roomId/leave', requireAuth(), async (c) => {
     state_key: userId,
     content: memberContent,
     origin_server_ts: Date.now(),
+    unsigned: prevContent
+      ? {
+          prev_content: prevContent,
+          prev_sender: currentMembershipEvent?.sender,
+        }
+      : undefined,
     depth: (latestEvents[0]?.depth ?? 0) + 1,
     auth_events: authEvents,
     prev_events: prevEvents,
   };
 
+  const transitionContext = await loadMembershipTransitionContext(c.env.DB, roomId, userId);
   await storeEvent(c.env.DB, event);
-  await updateMembership(c.env.DB, roomId, userId, 'leave', eventId);
+  await applyMembershipTransitionToDatabase(c.env.DB, {
+    roomId,
+    event,
+    source: 'client',
+    context: transitionContext,
+  });
 
   // Notify room members about the leave
   await notifyUsersOfEvent(c.env, roomId, eventId, 'm.room.member');
+  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
 
   return c.json({});
-});
-
-// POST /_matrix/client/v3/rooms/:roomId/knock - Knock on a room (MSC2403)
-app.post('/_matrix/client/v3/rooms/:roomId/knock', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-  const db = c.env.DB;
-
-  let body: { reason?: string };
-  try {
-    body = await c.req.json();
-  } catch {
-    body = {};
-  }
-
-  // Check if room exists
-  const room = await getRoom(db, roomId);
-  if (!room) {
-    return Errors.notFound('Room not found').toResponse();
-  }
-
-  // Check current membership
-  const currentMembership = await getMembership(db, roomId, userId);
-  if (currentMembership?.membership === 'join') {
-    return c.json({ room_id: roomId }); // Already joined
-  }
-  if (currentMembership?.membership === 'ban') {
-    return Errors.forbidden('User is banned from this room').toResponse();
-  }
-
-  // Check join rules - knock only allowed if join_rule is 'knock' or 'knock_restricted'
-  const joinRulesEvent = await getStateEvent(db, roomId, 'm.room.join_rules');
-  const joinRule = (joinRulesEvent?.content as any)?.join_rule || 'invite';
-
-  if (!['knock', 'knock_restricted'].includes(joinRule)) {
-    return Errors.forbidden('Room does not allow knocking').toResponse();
-  }
-
-  // Create knock event
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  const createEvent = await getStateEvent(db, roomId, 'm.room.create');
-  const powerLevelsEvent = await getStateEvent(db, roomId, 'm.room.power_levels');
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (joinRulesEvent) authEvents.push(joinRulesEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (currentMembership) authEvents.push(currentMembership.eventId);
-
-  const { events: latestEvents } = await getRoomEvents(db, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
-
-  const memberContent: RoomMemberContent = {
-    membership: 'knock',
-    reason: body.reason,
-  };
-
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: 'm.room.member',
-    state_key: userId,
-    content: memberContent,
-    origin_server_ts: Date.now(),
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
-
-  await storeEvent(db, event);
-  await updateMembership(db, roomId, userId, 'knock', eventId);
-
-  // Store in room_knocks table for easy querying
-  await db.prepare(`
-    INSERT OR REPLACE INTO room_knocks (room_id, user_id, reason, event_id, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).bind(roomId, userId, body.reason || null, eventId, Date.now()).run();
-
-  return c.json({ room_id: roomId });
-});
-
-// POST /_matrix/client/v3/knock/:roomIdOrAlias - Knock by ID or alias
-app.post('/_matrix/client/v3/knock/:roomIdOrAlias', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomIdOrAlias = c.req.param('roomIdOrAlias');
-  const db = c.env.DB;
-
-  let body: { reason?: string; server_name?: string[] };
-  try {
-    body = await c.req.json();
-  } catch {
-    body = {};
-  }
-
-  let roomId = roomIdOrAlias;
-
-  // If it's an alias, resolve it
-  if (roomIdOrAlias.startsWith('#')) {
-    const resolved = await getRoomByAlias(db, roomIdOrAlias);
-    if (!resolved) {
-      return Errors.notFound('Room alias not found').toResponse();
-    }
-    roomId = resolved;
-  }
-
-  // Check if room exists
-  const room = await getRoom(db, roomId);
-  if (!room) {
-    return Errors.notFound('Room not found').toResponse();
-  }
-
-  // Check join rules
-  const joinRulesEvent = await getStateEvent(db, roomId, 'm.room.join_rules');
-  const joinRule = (joinRulesEvent?.content as any)?.join_rule || 'invite';
-
-  if (!['knock', 'knock_restricted'].includes(joinRule)) {
-    return Errors.forbidden('Room does not allow knocking').toResponse();
-  }
-
-  // Check current membership
-  const currentMembership = await getMembership(db, roomId, userId);
-  if (currentMembership?.membership === 'join') {
-    return c.json({ room_id: roomId });
-  }
-  if (currentMembership?.membership === 'ban') {
-    return Errors.forbidden('User is banned from this room').toResponse();
-  }
-
-  // Create knock event
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  const createEvent = await getStateEvent(db, roomId, 'm.room.create');
-  const powerLevelsEvent = await getStateEvent(db, roomId, 'm.room.power_levels');
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (joinRulesEvent) authEvents.push(joinRulesEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (currentMembership) authEvents.push(currentMembership.eventId);
-
-  const { events: latestEvents } = await getRoomEvents(db, roomId, undefined, 1);
-  const prevEvents = latestEvents.map(e => e.event_id);
-
-  const memberContent: RoomMemberContent = {
-    membership: 'knock',
-    reason: body.reason,
-  };
-
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: 'm.room.member',
-    state_key: userId,
-    content: memberContent,
-    origin_server_ts: Date.now(),
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
-
-  await storeEvent(db, event);
-  await updateMembership(db, roomId, userId, 'knock', eventId);
-
-  await db.prepare(`
-    INSERT OR REPLACE INTO room_knocks (room_id, user_id, reason, event_id, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).bind(roomId, userId, body.reason || null, eventId, Date.now()).run();
-
-  return c.json({ room_id: roomId });
 });
 
 // GET /_matrix/client/v3/rooms/:roomId/state - Get all current state
@@ -409,6 +264,9 @@ app.put('/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey?', requireA
 
   // Notify room members about the state change (wakes up long-polling syncs)
   await notifyUsersOfEvent(c.env, roomId, eventId, eventType);
+
+  // Fan out to remote federation peers (kept alive via waitUntil)
+  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
 
   return c.json({ event_id: eventId });
 });
@@ -533,13 +391,25 @@ app.get('/_matrix/client/v3/rooms/:roomId/event/:eventId', requireAuth(), async 
 app.put('/_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId', requireAuth(), async (c) => {
   try {
     const content = await c.req.json();
+    const roomId = c.req.param('roomId');
     const response = await c.get('appContext').services.rooms.sendEvent({
       userId: c.get('userId'),
-      roomId: c.req.param('roomId'),
+      roomId,
       eventType: c.req.param('eventType'),
       txnId: c.req.param('txnId'),
       content,
     });
+
+    // Fan out to federation peers (kept alive via waitUntil)
+    if (response.event_id) {
+      c.executionCtx.waitUntil(
+        getEvent(c.env.DB, response.event_id).then(pdu => {
+          if (pdu) return fanoutEventToFederation(c.env, roomId, pdu);
+          return undefined;
+        }).catch(() => undefined)
+      );
+    }
+
     return c.json(response);
   } catch (error) {
     if (error instanceof SyntaxError) {
@@ -624,11 +494,30 @@ app.post('/_matrix/client/v3/rooms/:roomId/invite', requireAuth(), async (c) => 
     prev_events: prevEvents,
   };
 
+  const transitionContext = await loadMembershipTransitionContext(c.env.DB, roomId, inviteeId);
   await storeEvent(c.env.DB, event);
-  await updateMembership(c.env.DB, roomId, inviteeId, 'invite', eventId);
+  await applyMembershipTransitionToDatabase(c.env.DB, {
+    roomId,
+    event,
+    source: 'client',
+    context: transitionContext,
+  });
 
   // Notify room members and the invitee about the invite
   await notifyUsersOfEvent(c.env, roomId, eventId, 'm.room.member');
+
+  c.executionCtx.waitUntil(sendFederationInvite(
+    c.env.DB,
+    c.env.CACHE,
+    c.env.SERVER_NAME,
+    roomId,
+    event
+  ).catch((error) => {
+    console.error('[rooms.invite] Failed to send federation invite:', error);
+  }));
+
+  // Fan out the invite to existing federation peers already in the room.
+  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
 
   return c.json({});
 });
@@ -658,8 +547,8 @@ app.post('/_matrix/client/v3/rooms/:roomId/kick', requireAuth(), async (c) => {
 
   // Check target membership
   const targetMembership = await getMembership(c.env.DB, roomId, targetId);
-  if (!targetMembership || targetMembership.membership !== 'join') {
-    return Errors.forbidden('User is not in the room').toResponse();
+  if (!targetMembership || (targetMembership.membership !== 'join' && targetMembership.membership !== 'invite')) {
+    return Errors.forbidden('User is not joined or invited').toResponse();
   }
 
   // Check power levels
@@ -677,6 +566,7 @@ app.post('/_matrix/client/v3/rooms/:roomId/kick', requireAuth(), async (c) => {
   const eventId = await generateEventId(c.env.SERVER_NAME);
 
   const createEvent = await getStateEvent(c.env.DB, roomId, 'm.room.create');
+  const targetMembershipEvent = await getStateEvent(c.env.DB, roomId, 'm.room.member', targetId);
 
   const authEvents: string[] = [];
   if (createEvent) authEvents.push(createEvent.event_id);
@@ -692,6 +582,8 @@ app.post('/_matrix/client/v3/rooms/:roomId/kick', requireAuth(), async (c) => {
     reason,
   };
 
+  const prevTargetContent = targetMembershipEvent?.content as Record<string, unknown> | undefined;
+
   const event: PDU = {
     event_id: eventId,
     room_id: roomId,
@@ -700,16 +592,29 @@ app.post('/_matrix/client/v3/rooms/:roomId/kick', requireAuth(), async (c) => {
     state_key: targetId,
     content: memberContent,
     origin_server_ts: Date.now(),
+    unsigned: prevTargetContent
+      ? {
+          prev_content: prevTargetContent,
+          prev_sender: targetMembershipEvent?.sender,
+        }
+      : undefined,
     depth: (latestEvents[0]?.depth ?? 0) + 1,
     auth_events: authEvents,
     prev_events: prevEvents,
   };
 
+  const transitionContext = await loadMembershipTransitionContext(c.env.DB, roomId, targetId);
   await storeEvent(c.env.DB, event);
-  await updateMembership(c.env.DB, roomId, targetId, 'leave', eventId);
+  await applyMembershipTransitionToDatabase(c.env.DB, {
+    roomId,
+    event,
+    source: 'client',
+    context: transitionContext,
+  });
 
   // Notify room members about the kick
   await notifyUsersOfEvent(c.env, roomId, eventId, 'm.room.member');
+  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
 
   return c.json({});
 });
@@ -1337,82 +1242,6 @@ app.get('/_matrix/client/v1/room_summary/:roomIdOrAlias', async (c) => {
   }
 
   return c.json(response);
-});
-
-// ============================================
-// Timestamp to Event (MSC3030)
-// ============================================
-
-// GET /_matrix/client/v3/rooms/:roomId/timestamp_to_event
-// Finds the closest event to a given timestamp
-app.get('/_matrix/client/v3/rooms/:roomId/timestamp_to_event', requireAuth(), async (c) => {
-  const userId = c.get('userId');
-  const roomId = c.req.param('roomId');
-  const db = c.env.DB;
-
-  // Parse required parameters
-  const tsParam = c.req.query('ts');
-  const dirParam = c.req.query('dir');
-
-  if (!tsParam) {
-    return Errors.missingParam('ts').toResponse();
-  }
-  if (!dirParam) {
-    return Errors.missingParam('dir').toResponse();
-  }
-
-  const ts = parseInt(tsParam, 10);
-  if (isNaN(ts)) {
-    return c.json({
-      errcode: 'M_INVALID_PARAM',
-      error: 'ts must be a valid integer timestamp in milliseconds',
-    }, 400);
-  }
-
-  if (dirParam !== 'f' && dirParam !== 'b') {
-    return c.json({
-      errcode: 'M_INVALID_PARAM',
-      error: "dir must be 'f' (forward) or 'b' (backward)",
-    }, 400);
-  }
-
-  // Check membership - user must be joined to the room
-  const membership = await getMembership(db, roomId, userId);
-  if (!membership || membership.membership !== 'join') {
-    return Errors.forbidden('Not a member of this room').toResponse();
-  }
-
-  // Query for the closest event
-  let event: { event_id: string; origin_server_ts: number } | null = null;
-
-  if (dirParam === 'f') {
-    // Forward: find the closest event at or after the timestamp
-    event = await db.prepare(`
-      SELECT event_id, origin_server_ts
-      FROM events
-      WHERE room_id = ? AND origin_server_ts >= ?
-      ORDER BY origin_server_ts ASC
-      LIMIT 1
-    `).bind(roomId, ts).first<{ event_id: string; origin_server_ts: number }>();
-  } else {
-    // Backward: find the closest event at or before the timestamp
-    event = await db.prepare(`
-      SELECT event_id, origin_server_ts
-      FROM events
-      WHERE room_id = ? AND origin_server_ts <= ?
-      ORDER BY origin_server_ts DESC
-      LIMIT 1
-    `).bind(roomId, ts).first<{ event_id: string; origin_server_ts: number }>();
-  }
-
-  if (!event) {
-    return Errors.notFound('No event found for the given timestamp').toResponse();
-  }
-
-  return c.json({
-    event_id: event.event_id,
-    origin_server_ts: event.origin_server_ts,
-  });
 });
 
 // ============================================

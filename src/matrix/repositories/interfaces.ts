@@ -102,7 +102,9 @@ export interface SyncRepository {
   getGlobalAccountData(userId: string, since?: number): Promise<any[]>;
   getRoomAccountData(userId: string, roomId: string, since?: number): Promise<any[]>;
   getUserRooms(userId: string, membership?: Membership): Promise<string[]>;
+  getMembership(roomId: string, userId: string): Promise<MembershipRecord | null>;
   getEventsSince(roomId: string, sincePosition: number): Promise<PDU[]>;
+  getEvent(eventId: string): Promise<PDU | null>;
   getRoomState(roomId: string): Promise<PDU[]>;
   getInviteStrippedState(roomId: string): Promise<{ type: string; state_key: string; content: any; sender: string }[]>;
   getReceiptsForRoom(roomId: string, userId: string): Promise<ReceiptEvent>;
@@ -126,9 +128,20 @@ export interface FederationRepository {
     accepted: boolean,
     rejectionReason?: string
   ): Promise<void>;
+  createRoom(roomId: string, roomVersion: string, creatorId: string, isPublic: boolean): Promise<void>;
   getRoom(roomId: string): Promise<Room | null>;
   getRoomState(roomId: string): Promise<PDU[]>;
+  getInviteStrippedState(roomId: string): Promise<{ type: string; state_key: string; content: any; sender: string }[]>;
   storeIncomingEvent(event: PDU): Promise<void>;
+  notifyUsersOfEvent(roomId: string, eventId: string, eventType: string): Promise<void>;
+  updateMembership(
+    roomId: string,
+    userId: string,
+    membership: 'join' | 'invite' | 'leave' | 'ban' | 'knock',
+    eventId: string,
+    displayName?: string,
+    avatarUrl?: string
+  ): Promise<void>;
   upsertRoomState(roomId: string, eventType: string, stateKey: string, eventId: string): Promise<void>;
   storeProcessedEdu(origin: string, eduType: string, content: Record<string, unknown>): Promise<void>;
   upsertPresence(
@@ -147,4 +160,3 @@ export interface FederationRepository {
     deleted?: boolean
   ): Promise<void>;
 }
-

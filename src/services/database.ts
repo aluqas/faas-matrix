@@ -1,6 +1,7 @@
 // Database service layer for D1
 
 import type { User, Device, Room, PDU, Membership, Env } from '../types';
+import { fanoutEventToRemoteServers } from './federation-fanout';
 
 // User operations
 export async function createUser(
@@ -253,6 +254,19 @@ export async function getRoom(db: D1Database, roomId: string): Promise<Room | nu
 
 // Event operations
 export async function storeEvent(db: D1Database, event: PDU): Promise<number> {
+  const existing = await db.prepare(
+    `SELECT stream_ordering FROM events WHERE event_id = ?`
+  ).bind(event.event_id).first<{ stream_ordering: number }>();
+  if (existing) {
+    if (event.state_key !== undefined) {
+      await db.prepare(
+        `INSERT OR REPLACE INTO room_state (room_id, event_type, state_key, event_id)
+         VALUES (?, ?, ?, ?)`
+      ).bind(event.room_id, event.type, event.state_key, event.event_id).run();
+    }
+    return existing.stream_ordering;
+  }
+
   // Get the next stream ordering
   const lastOrdering = await db.prepare(
     `SELECT MAX(stream_ordering) as max_ordering FROM events`
@@ -261,7 +275,7 @@ export async function storeEvent(db: D1Database, event: PDU): Promise<number> {
   const streamOrdering = (lastOrdering?.max_ordering ?? 0) + 1;
 
   await db.prepare(
-    `INSERT INTO events (event_id, room_id, sender, event_type, state_key, content,
+    `INSERT OR IGNORE INTO events (event_id, room_id, sender, event_type, state_key, content,
      origin_server_ts, unsigned, depth, auth_events, prev_events, hashes, signatures, stream_ordering)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
@@ -494,6 +508,19 @@ export async function updateMembership(
     `INSERT OR REPLACE INTO room_memberships (room_id, user_id, membership, event_id, display_name, avatar_url)
      VALUES (?, ?, ?, ?, ?, ?)`
   ).bind(roomId, userId, membership, eventId, displayName ?? null, avatarUrl ?? null).run();
+
+  if (membership !== 'invite') {
+    const remainingInvites = await db.prepare(
+      `SELECT COUNT(*) AS count FROM room_memberships WHERE room_id = ? AND membership = 'invite'`
+    ).bind(roomId).first<{ count: number | string }>();
+
+    const count = Number(remainingInvites?.count ?? 0);
+    if (count === 0) {
+      await db.prepare(
+        `DELETE FROM invite_stripped_state WHERE room_id = ?`
+      ).bind(roomId).run();
+    }
+  }
 }
 
 export async function getMembership(
@@ -607,11 +634,15 @@ export async function deleteRoomAlias(db: D1Database, alias: string): Promise<vo
 
 // Stream position for sync
 export async function getLatestStreamPosition(db: D1Database): Promise<number> {
-  const result = await db.prepare(
-    `SELECT MAX(stream_ordering) as max_ordering FROM events`
-  ).first<{ max_ordering: number | null }>();
+  const result = await db.prepare(`
+    SELECT MAX(pos) as max_pos FROM (
+      SELECT COALESCE(MAX(stream_ordering), 0) as pos FROM events
+      UNION ALL
+      SELECT COALESCE(MAX(stream_position), 0) as pos FROM account_data_changes
+    )
+  `).first<{ max_pos: number | null }>();
 
-  return result?.max_ordering ?? 0;
+  return result?.max_pos ?? 0;
 }
 
 export async function getEventsSince(
@@ -774,10 +805,13 @@ export async function notifyUsersOfEvent(
   eventType: string
 ): Promise<void> {
   try {
-    // Get all joined members of the room
+    const memberships = eventType === 'm.room.member'
+      ? ['join', 'invite']
+      : ['join'];
+    const placeholders = memberships.map(() => '?').join(', ');
     const members = await env.DB.prepare(
-      `SELECT user_id FROM room_memberships WHERE room_id = ? AND membership = 'join'`
-    ).bind(roomId).all<{ user_id: string }>();
+      `SELECT user_id FROM room_memberships WHERE room_id = ? AND membership IN (${placeholders})`
+    ).bind(roomId, ...memberships).all<{ user_id: string }>();
 
     console.log('[database] Notifying', members.results.length, 'users of event', eventId,
       'users:', members.results.map(m => m.user_id).join(', '));
@@ -806,5 +840,19 @@ export async function notifyUsersOfEvent(
   } catch (error) {
     // Log but don't fail - event storage was successful
     console.error('[database] Failed to notify users of event:', error);
+  }
+}
+
+// Fan out a stored event to all remote federation peers that have joined members in the room.
+// Non-blocking — errors are logged but do not propagate to the caller.
+export async function fanoutEventToFederation(
+  env: Env,
+  roomId: string,
+  event: PDU
+): Promise<void> {
+  try {
+    await fanoutEventToRemoteServers(env.DB, env.CACHE, env.SERVER_NAME, roomId, event);
+  } catch (err) {
+    console.error('[federation-fanout] Error during fanout:', err);
   }
 }
