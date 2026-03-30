@@ -24,8 +24,14 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Complement build cache
+.saqula/.last-image-hash
+
 # Test coverage
 coverage/
+
+# Test output
+/logs
 
 # TypeScript
 *.tsbuildinfo

@@ -17,8 +17,10 @@ NGINX_TEMPLATE="/etc/faas-matrix/complement-nginx.conf.template"
 NGINX_CONFIG="/etc/nginx/nginx.conf"
 WRANGLER_BIN="${APP_DIR}/node_modules/.bin/wrangler"
 
-# Always start with a clean DB for Complement test environments
-rm -rf "${PERSIST_DIR}"
+# Clean DB unless dirty-run mode is enabled
+if [ "${COMPLEMENT_ENABLE_DIRTY_RUNS:-0}" != "1" ]; then
+  rm -rf "${PERSIST_DIR}"
+fi
 mkdir -p "${PERSIST_DIR}" "${TLS_DIR}"
 
 if [ -f /complement/ca/ca.crt ]; then

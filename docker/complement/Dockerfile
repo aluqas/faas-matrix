@@ -1,8 +1,5 @@
-FROM node:20-bookworm-slim AS base
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates curl nginx openssl \
-  && rm -rf /var/lib/apt/lists/*
+# Stage 1: build — compile TypeScript bundle (rebuilds only when src/migrations change)
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -20,10 +17,28 @@ RUN node_modules/.bin/wrangler deploy \
       --config wrangler.complement.jsonc \
   && sed -i 's|"main": "src/index.ts"|"main": "dist/index.js"|' wrangler.complement.jsonc
 
+# Stage 2: runtime — nginx/cert setup; only rebuilds when docker/complement changes
+FROM node:20-bookworm-slim AS runtime
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends bash ca-certificates curl nginx openssl \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/wrangler.complement.jsonc ./wrangler.complement.jsonc
+COPY package.json ./
+COPY migrations ./migrations
+
 COPY docker/complement/entrypoint.sh /usr/local/bin/complement-entrypoint
 COPY docker/complement/nginx.conf.template /etc/faas-matrix/complement-nginx.conf.template
 
 RUN chmod +x /usr/local/bin/complement-entrypoint
+
+ARG DIRTY_RUNS=0
+ENV COMPLEMENT_ENABLE_DIRTY_RUNS=$DIRTY_RUNS
 
 EXPOSE 8008 8448
 
