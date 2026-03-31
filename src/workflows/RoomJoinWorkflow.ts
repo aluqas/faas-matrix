@@ -21,6 +21,7 @@ import {
   applyMembershipTransitionToDatabase,
   loadMembershipTransitionContext,
 } from "../matrix/application/membership-transition-service";
+import { persistFederationStateSnapshot } from "../matrix/application/federation-handler-service";
 
 // Parameters passed when triggering the workflow
 export interface JoinParams {
@@ -30,6 +31,7 @@ export interface JoinParams {
   avatarUrl?: string;
   isRemote: boolean;
   remoteServer?: string;
+  remoteServers?: string[];
   reason?: string;
 }
 
@@ -59,27 +61,45 @@ interface SerializableEvent {
 
 export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
   async run(event: WorkflowEvent<JoinParams>, step: WorkflowStep): Promise<JoinResult> {
-    const { roomId, userId, isRemote, remoteServer, displayName, avatarUrl, reason } =
+    const { roomId, userId, isRemote, remoteServer, remoteServers, displayName, avatarUrl, reason } =
       event.payload;
 
     console.log("[RoomJoinWorkflow] Starting join", { roomId, userId, isRemote, remoteServer });
 
     try {
       // Step 1: For remote joins, get join template from remote server
+      // Try each candidate server in order until one succeeds
       let remoteEventTemplate: { room_version: string; event: any } | null = null;
-      if (isRemote && remoteServer) {
+      let successfulRemoteServer: string | undefined = remoteServer;
+      if (isRemote && (remoteServer || remoteServers?.length)) {
+        const candidates = remoteServers?.length
+          ? remoteServers
+          : remoteServer
+            ? [remoteServer]
+            : [];
         remoteEventTemplate = (await step.do(
           "make-join",
           {
             retries: {
               limit: 3,
-              delay: 5000, // 5 seconds in milliseconds
+              delay: 5000,
               backoff: "exponential",
             },
-            timeout: 30000, // 30 seconds in milliseconds
+            timeout: 30000,
           },
           async () => {
-            return await this.makeJoinRequest(remoteServer, roomId, userId);
+            let lastError: Error | undefined;
+            for (const candidate of candidates) {
+              try {
+                const result = await this.makeJoinRequest(candidate, roomId, userId);
+                successfulRemoteServer = candidate;
+                return result;
+              } catch (err) {
+                lastError = err instanceof Error ? err : new Error(String(err));
+                console.warn("[RoomJoinWorkflow] make_join failed for", candidate, lastError.message);
+              }
+            }
+            throw lastError ?? new Error("All remote servers failed for make_join");
           },
         )) as { room_version: string; event: any } | null;
       }
@@ -97,7 +117,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       })) as SerializableEvent;
 
       // Step 3: For remote joins, send signed event to remote server and process room state
-      if (isRemote && remoteServer && joinEventData) {
+      if (isRemote && successfulRemoteServer && joinEventData) {
         const sendJoinResponse = (await step.do(
           "send-join",
           {
@@ -109,104 +129,20 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
             timeout: 30000,
           },
           async () => {
-            return await this.sendJoinRequest(remoteServer, roomId, joinEventData);
+            return await this.sendJoinRequest(successfulRemoteServer!, roomId, joinEventData);
           },
         )) as { state?: any[]; auth_chain?: any[] } | null;
 
         // Process the room state received from the remote server
         await step.do("process-remote-state", async () => {
           const roomVersion = remoteEventTemplate?.room_version || "10";
-          // Create the room locally if it doesn't exist yet
-          await this.env.DB.prepare(
-            `INSERT OR IGNORE INTO rooms (room_id, room_version, creator_id, is_public)
-             VALUES (?, ?, '', 0)`,
-          )
-            .bind(roomId, roomVersion)
-            .run();
-
-          const stateEvents: any[] = sendJoinResponse?.state || [];
-          const authChain: any[] = sendJoinResponse?.auth_chain || [];
-
-          // Store auth chain events first (they're referenced by state events)
-          for (const event of authChain) {
-            if (!event.event_id) continue;
-            const existing = await this.env.DB.prepare(
-              `SELECT event_id FROM events WHERE event_id = ?`,
-            )
-              .bind(event.event_id)
-              .first();
-            if (!existing) {
-              await storeEvent(this.env.DB, {
-                event_id: event.event_id,
-                room_id: event.room_id || roomId,
-                sender: event.sender,
-                type: event.type || event.event_type,
-                state_key: event.state_key,
-                content: event.content,
-                origin_server_ts: event.origin_server_ts || Date.now(),
-                depth: event.depth || 0,
-                auth_events: event.auth_events || [],
-                prev_events: event.prev_events || [],
-                hashes: event.hashes,
-                signatures: event.signatures,
-              });
-            }
-          }
-
-          // Store current state events (set room state)
-          for (const event of stateEvents) {
-            if (!event.event_id) continue;
-            const transitionContext = await loadMembershipTransitionContext(
-              this.env.DB,
-              roomId,
-              event.state_key,
-            );
-            const existing = await this.env.DB.prepare(
-              `SELECT event_id FROM events WHERE event_id = ?`,
-            )
-              .bind(event.event_id)
-              .first();
-            if (!existing) {
-              await storeEvent(this.env.DB, {
-                event_id: event.event_id,
-                room_id: event.room_id || roomId,
-                sender: event.sender,
-                type: event.type || event.event_type,
-                state_key: event.state_key,
-                content: event.content,
-                origin_server_ts: event.origin_server_ts || Date.now(),
-                depth: event.depth || 0,
-                auth_events: event.auth_events || [],
-                prev_events: event.prev_events || [],
-                hashes: event.hashes,
-                signatures: event.signatures,
-              });
-            }
-
-            // Update memberships for member events
-            if ((event.type || event.event_type) === "m.room.member" && event.state_key) {
-              await applyMembershipTransitionToDatabase(this.env.DB, {
-                roomId,
-                event: {
-                  event_id: event.event_id,
-                  room_id: event.room_id || roomId,
-                  sender: event.sender,
-                  type: event.type || event.event_type,
-                  state_key: event.state_key,
-                  content: event.content,
-                  origin_server_ts: event.origin_server_ts || Date.now(),
-                  depth: event.depth || 0,
-                  auth_events: event.auth_events || [],
-                  prev_events: event.prev_events || [],
-                  unsigned: event.unsigned,
-                  hashes: event.hashes,
-                  signatures: event.signatures,
-                },
-                source: "workflow",
-                context: transitionContext,
-              });
-            }
-          }
+          await persistFederationStateSnapshot(this.env.DB, {
+            roomId,
+            roomVersion,
+            stateEvents: sendJoinResponse?.state || [],
+            authChain: sendJoinResponse?.auth_chain || [],
+            source: "workflow",
+          });
         });
       }
 
@@ -392,14 +328,27 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       eventId: joinEvent.event_id,
     });
 
-    const response = await federationPut(
+    // Try v2 first (Matrix v1.1+), fall back to v1 if server returns 400/404
+    let response = await federationPut(
       remoteServer,
-      `/_matrix/federation/v1/send_join/${encodeURIComponent(roomId)}/${encodeURIComponent(joinEvent.event_id)}`,
+      `/_matrix/federation/v2/send_join/${encodeURIComponent(roomId)}/${encodeURIComponent(joinEvent.event_id)}`,
       joinEvent,
       this.env.SERVER_NAME,
       this.env.DB,
       this.env.CACHE,
     );
+
+    if (response.status === 400 || response.status === 404) {
+      console.log("[RoomJoinWorkflow] v2 send_join not supported, falling back to v1");
+      response = await federationPut(
+        remoteServer,
+        `/_matrix/federation/v1/send_join/${encodeURIComponent(roomId)}/${encodeURIComponent(joinEvent.event_id)}`,
+        joinEvent,
+        this.env.SERVER_NAME,
+        this.env.DB,
+        this.env.CACHE,
+      );
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -407,6 +356,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
     }
 
     const result = (await response.json()) as any;
+    // v1 returns [200, {...}] array; v2 returns {...} directly
     if (Array.isArray(result)) {
       const [state, authChain] = result;
       return {

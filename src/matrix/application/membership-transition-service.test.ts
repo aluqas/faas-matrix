@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PDU } from "../../types";
 import {
   MembershipTransitionService,
+  toMembershipCommand,
   resolveMembershipAuthState,
 } from "./membership-transition-service";
 
@@ -209,6 +210,34 @@ describe("MembershipTransitionService", () => {
       shouldUpsertKnockState: true,
       shouldClearKnockState: false,
       syncCategory: "knock",
+    });
+  });
+
+  it("builds a membership command for supported membership events", () => {
+    const inviteEvent = createMemberEvent({
+      eventId: "$invite",
+      sender: "@alice:test",
+      stateKey: "@bob:test",
+      membership: "invite",
+    });
+
+    expect(
+      toMembershipCommand({
+        event: inviteEvent,
+        roomId: "!room:test",
+        source: "federation",
+        currentMembership: null,
+        currentMemberEvent: null,
+        roomState: [],
+        inviteStrippedState: [],
+      }),
+    ).toEqual({
+      kind: "invite",
+      roomId: "!room:test",
+      sender: "@alice:test",
+      targetUserId: "@bob:test",
+      source: "federation",
+      event: inviteEvent,
     });
   });
 

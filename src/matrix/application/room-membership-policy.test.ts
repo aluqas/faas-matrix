@@ -1,0 +1,89 @@
+import { describe, expect, it } from "vitest";
+import { Effect } from "effect";
+import {
+  authorizeLocalJoin,
+  authorizeLocalKnock,
+  validateLeavePreconditions,
+  validateKnockPreconditions,
+} from "./room-membership-policy";
+
+describe("room-membership-policy", () => {
+  it("allows public joins without an invite", async () => {
+    const effect = authorizeLocalJoin({
+      roomVersion: "10",
+      joinRule: "public",
+      currentMembership: null,
+    });
+
+    await expect(Effect.runPromise(effect)).resolves.toMatchObject({
+      alreadyJoined: false,
+      joinRule: "public",
+    });
+  });
+
+  it("rejects restricted joins without an authorising server", async () => {
+    const effect = authorizeLocalJoin({
+      roomVersion: "10",
+      joinRule: "restricted",
+      currentMembership: null,
+    });
+
+    await expect(Effect.runPromise(effect)).rejects.toThrow(
+      "Cannot join restricted room without authorization",
+    );
+  });
+
+  it("allows restricted joins when authorization metadata is present", async () => {
+    const effect = authorizeLocalJoin({
+      roomVersion: "10",
+      joinRule: "restricted",
+      currentMembership: null,
+      joinAuthorisedViaUsersServer: "@authoriser:test",
+    });
+
+    await expect(Effect.runPromise(effect)).resolves.toMatchObject({
+      alreadyJoined: false,
+      joinRule: "restricted",
+    });
+  });
+
+  it("rejects knock rules that the room version does not support", async () => {
+    const effect = authorizeLocalKnock({
+      roomVersion: "6",
+      joinRule: "knock",
+      currentMembership: null,
+    });
+
+    await expect(Effect.runPromise(effect)).rejects.toThrow(
+      "Join rule 'knock' is not supported in room version '6'",
+    );
+  });
+
+  it("rejects knocking when the user is already invited", async () => {
+    const effect = validateKnockPreconditions("invite");
+
+    await expect(Effect.runPromise(effect)).rejects.toThrow(
+      "User is already invited to this room",
+    );
+  });
+
+  it("allows knock_restricted when the room version supports it", async () => {
+    const effect = authorizeLocalKnock({
+      roomVersion: "10",
+      joinRule: "knock_restricted",
+      currentMembership: null,
+    });
+
+    await expect(Effect.runPromise(effect)).resolves.toMatchObject({
+      joinRule: "knock_restricted",
+    });
+  });
+
+  it("rejects leave when the user is not in a leavable membership state", async () => {
+    const effect = validateLeavePreconditions(null);
+
+    await expect(Effect.runPromise(effect)).rejects.toThrow(
+      "Not joined, invited, or knocking in this room",
+    );
+  });
+});

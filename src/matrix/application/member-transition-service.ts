@@ -44,6 +44,40 @@ export interface MembershipTransitionResult {
   syncCategory: MembershipSyncCategory;
 }
 
+export type MembershipCommand =
+  | {
+      kind: "invite";
+      roomId: string;
+      sender: string;
+      targetUserId: string;
+      source: MembershipTransitionSource;
+      event: PDU;
+    }
+  | {
+      kind: "join";
+      roomId: string;
+      sender: string;
+      targetUserId: string;
+      source: MembershipTransitionSource;
+      event: PDU;
+    }
+  | {
+      kind: "leave";
+      roomId: string;
+      sender: string;
+      targetUserId: string;
+      source: MembershipTransitionSource;
+      event: PDU;
+    }
+  | {
+      kind: "knock";
+      roomId: string;
+      sender: string;
+      targetUserId: string;
+      source: MembershipTransitionSource;
+      event: PDU;
+    };
+
 export type TransitionContextLoader = (
   db: D1Database,
   roomId: string,
@@ -132,6 +166,29 @@ function toSyncCategory(membership: Membership | null | undefined): MembershipSy
   return "join";
 }
 
+export function toMembershipCommand(
+  input: MembershipTransitionInput,
+): MembershipCommand | null {
+  const membership = (input.event.content as { membership?: Membership } | undefined)?.membership;
+  if (
+    input.event.type !== "m.room.member" ||
+    input.event.state_key === undefined ||
+    !membership ||
+    !["invite", "join", "leave", "knock"].includes(membership)
+  ) {
+    return null;
+  }
+
+  return {
+    kind: membership as MembershipCommand["kind"],
+    roomId: input.roomId,
+    sender: input.event.sender,
+    targetUserId: input.event.state_key,
+    source: input.source,
+    event: input.event,
+  };
+}
+
 async function upsertKnockRecord(
   db: D1Database,
   roomId: string,
@@ -170,12 +227,8 @@ async function clearKnockRecord(db: D1Database, roomId: string, userId: string):
 
 export class MemberTransitionService {
   evaluate(input: MembershipTransitionInput): MembershipTransitionResult {
-    const membership = (input.event.content as { membership?: Membership } | undefined)?.membership;
-    if (
-      input.event.type !== "m.room.member" ||
-      input.event.state_key === undefined ||
-      !membership
-    ) {
+    const command = toMembershipCommand(input);
+    if (!command) {
       return {
         membershipToPersist: null,
         shouldUpsertRoomState: false,
@@ -187,8 +240,8 @@ export class MemberTransitionService {
     }
 
     const currentMemberEvent = getCurrentMemberEvent(
-      input.roomId,
-      input.event.state_key,
+      command.roomId,
+      command.targetUserId,
       input.roomState,
       input.inviteStrippedState,
       input.currentMemberEvent,
@@ -199,17 +252,17 @@ export class MemberTransitionService {
       previousMembership === "invite"
         ? (currentMemberEvent?.sender ??
           input.inviteStrippedState.find(
-            (event) => event.type === "m.room.member" && event.state_key === input.event.state_key,
+            (event) => event.type === "m.room.member" && event.state_key === command.targetUserId,
           )?.sender)
         : undefined;
 
     if (
-      input.source === "federation" &&
-      membership === "leave" &&
+      command.source === "federation" &&
+      command.kind === "leave" &&
       previousMembership === "invite" &&
-      input.event.sender !== input.event.state_key &&
+      command.sender !== command.targetUserId &&
       previousInviteSender &&
-      previousInviteSender !== input.event.sender
+      previousInviteSender !== command.sender
     ) {
       return {
         membershipToPersist: null,
@@ -221,24 +274,13 @@ export class MemberTransitionService {
       };
     }
 
-    if (!["invite", "join", "leave", "knock"].includes(membership)) {
-      return {
-        membershipToPersist: null,
-        shouldUpsertRoomState: false,
-        shouldClearInviteStrippedState: false,
-        shouldUpsertKnockState: false,
-        shouldClearKnockState: false,
-        syncCategory: toSyncCategory(previousMembership),
-      };
-    }
-
     return {
-      membershipToPersist: membership as "invite" | "join" | "leave" | "knock",
+      membershipToPersist: command.kind,
       shouldUpsertRoomState: input.event.state_key !== undefined,
-      shouldClearInviteStrippedState: membership !== "invite" && previousMembership === "invite",
-      shouldUpsertKnockState: membership === "knock",
-      shouldClearKnockState: membership !== "knock" && previousMembership === "knock",
-      syncCategory: toSyncCategory(membership),
+      shouldClearInviteStrippedState: command.kind !== "invite" && previousMembership === "invite",
+      shouldUpsertKnockState: command.kind === "knock",
+      shouldClearKnockState: command.kind !== "knock" && previousMembership === "knock",
+      syncCategory: toSyncCategory(command.kind),
     };
   }
 }

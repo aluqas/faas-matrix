@@ -1,7 +1,7 @@
 import type { AppContext } from "../../foundation/app-context";
 import { withIdempotency, type IdempotencyStore } from "../../foundation/idempotency";
 import { Errors, MatrixApiError } from "../../utils/errors";
-import { isRoomVersionSupported, getDefaultRoomVersion } from "../../services/room-versions";
+import { getDefaultRoomVersion } from "../../services/room-versions";
 import type { PDU } from "../../types";
 import type { EventPipeline } from "../domain/event-pipeline";
 import type { RoomRepository } from "../repositories/interfaces";
@@ -9,14 +9,20 @@ import {
   createInitialRoomEvents,
   createMembershipEvent,
   getServerFromRoomId,
-  validateStateEvent,
 } from "./rooms-support";
 import { sendFederationInvite } from "../../services/federation-invite";
 import { fanoutEventToRemoteServers } from "../../services/federation-fanout";
+import {
+  authorizeLocalJoin,
+  getJoinRuleFromContent,
+  validateLeavePreconditions,
+} from "./room-membership-policy";
+import { runDomainEffect } from "./domain-error";
+import { validateCreateRoomRequest, validateJoinRoomRequest } from "./room-validation";
 
 export interface CreateRoomInput {
   userId: string;
-  body: Record<string, any>;
+  body: unknown;
 }
 
 export interface JoinRoomInput {
@@ -33,6 +39,11 @@ export interface SendEventInput {
   content: Record<string, unknown>;
 }
 
+export interface LeaveRoomInput {
+  userId: string;
+  roomId: string;
+}
+
 type TransactionResponse = Record<string, unknown>;
 
 export class MatrixRoomService {
@@ -44,6 +55,7 @@ export class MatrixRoomService {
   ) {}
 
   async createRoom(input: CreateRoomInput): Promise<{ room_id: string; room_alias?: string }> {
+    const validated = await runDomainEffect(validateCreateRoomRequest(input.body));
     const {
       room_alias_local_part,
       name,
@@ -54,7 +66,7 @@ export class MatrixRoomService {
       preset,
       is_direct,
       visibility,
-    } = input.body;
+    } = validated;
 
     if (room_alias_local_part) {
       const alias = this.appContext.capabilities.id.formatRoomAlias(
@@ -67,33 +79,7 @@ export class MatrixRoomService {
       }
     }
 
-    if (initial_state !== undefined) {
-      if (!Array.isArray(initial_state)) {
-        throw Errors.invalidParam("initial_state", "initial_state must be an array");
-      }
-
-      const encryptionEvents = initial_state.filter(
-        (state: { type?: string }) => state.type === "m.room.encryption",
-      );
-      if (encryptionEvents.length > 1) {
-        throw Errors.invalidParam(
-          "initial_state",
-          "Cannot specify multiple m.room.encryption events in initial_state",
-        );
-      }
-
-      for (let i = 0; i < initial_state.length; i++) {
-        const validation = validateStateEvent(initial_state[i], i);
-        if (!validation.valid) {
-          throw Errors.invalidParam("initial_state", validation.error);
-        }
-      }
-    }
-
     const version = room_version || getDefaultRoomVersion();
-    if (!isRoomVersionSupported(version)) {
-      throw Errors.unsupportedRoomVersion(`Room version '${version}' is not supported`);
-    }
 
     const roomId = await this.appContext.capabilities.id.generateRoomId(
       this.appContext.capabilities.config.serverName,
@@ -112,8 +98,12 @@ export class MatrixRoomService {
         topic,
         preset,
         is_direct,
-        initial_state,
-        invite,
+        initial_state: initial_state?.map((state) => ({
+          type: state.type,
+          state_key: state.state_key,
+          content: { ...state.content },
+        })),
+        invite: invite ? [...invite] : undefined,
         room_alias_local_part,
       },
       this.appContext.capabilities.id.generateEventId,
@@ -164,13 +154,24 @@ export class MatrixRoomService {
   }
 
   async joinRoom(input: JoinRoomInput): Promise<{ room_id: string }> {
-    const roomServer = getServerFromRoomId(input.roomId);
+    const validated = await runDomainEffect(
+      validateJoinRoomRequest({
+        roomId: input.roomId,
+        remoteServers: input.remoteServers,
+      }),
+    );
+    const roomServer = getServerFromRoomId(validated.roomId);
     const isRemoteRoom =
       roomServer && roomServer !== this.appContext.capabilities.config.serverName;
-    const preferredRemoteServer = input.remoteServers?.[0] || roomServer || undefined;
-    const room = await this.repository.getRoom(input.roomId);
+    // Build ordered candidate list: explicit server_name hints first, then room ID server
+    const explicitServers = validated.remoteServers;
+    const roomServerIfDifferent =
+      roomServer && !explicitServers.includes(roomServer) ? [roomServer] : [];
+    const allRemoteServers = [...explicitServers, ...roomServerIfDifferent];
+    const preferredRemoteServer = allRemoteServers[0] || undefined;
+    const room = await this.repository.getRoom(validated.roomId);
     const createEvent = room
-      ? await this.repository.getStateEvent(input.roomId, "m.room.create")
+      ? await this.repository.getStateEvent(validated.roomId, "m.room.create")
       : null;
     const needsRemoteStubJoin = Boolean(
       room && (isRemoteRoom || preferredRemoteServer) && !createEvent,
@@ -178,10 +179,11 @@ export class MatrixRoomService {
 
     if ((!room && (isRemoteRoom || preferredRemoteServer)) || needsRemoteStubJoin) {
       const instance = await this.appContext.capabilities.workflow.createRoomJoin({
-        roomId: input.roomId,
+        roomId: validated.roomId,
         userId: input.userId,
         isRemote: true,
         remoteServer: preferredRemoteServer,
+        remoteServers: allRemoteServers.length > 0 ? allRemoteServers : undefined,
       });
 
       const status = (await instance) as
@@ -189,11 +191,11 @@ export class MatrixRoomService {
         | undefined;
 
       if (!status || status.status === "running" || status.status === "queued") {
-        return { room_id: input.roomId };
+        return { room_id: validated.roomId };
       }
 
       if (status.status === "complete" && status.output?.success) {
-        return { room_id: input.roomId };
+        return { room_id: validated.roomId };
       }
 
       throw Errors.unknown("Failed to join remote room");
@@ -208,48 +210,42 @@ export class MatrixRoomService {
       validate: () => undefined,
       resolveAuth: async () => ({ userId: input.userId, roomVersion: room.room_version }),
       authorize: async (_pipelineInput, auth) => {
-        const currentMembership = await this.repository.getMembership(input.roomId, auth.userId);
+        const currentMembership = await this.repository.getMembership(validated.roomId, auth.userId);
         const joinRulesEvent = await this.repository.getStateEvent(
-          input.roomId,
+          validated.roomId,
           "m.room.join_rules",
         );
-        const joinRule =
-          (joinRulesEvent?.content as { join_rule?: string } | undefined)?.join_rule || "invite";
-
-        const canJoin =
-          joinRule === "public" ||
-          currentMembership?.membership === "invite" ||
-          currentMembership?.membership === "join";
-
-        if (currentMembership?.membership === "join") {
-          return;
-        }
-
-        if (!canJoin) {
-          throw Errors.forbidden("Cannot join room");
-        }
+        await runDomainEffect(
+          authorizeLocalJoin({
+            roomVersion: auth.roomVersion,
+            joinRule: getJoinRuleFromContent(
+              joinRulesEvent?.content as { join_rule?: string } | undefined,
+            ),
+            currentMembership: currentMembership?.membership,
+          }),
+        );
       },
       buildEvent: async (_pipelineInput, auth) => {
-        const currentMembership = await this.repository.getMembership(input.roomId, auth.userId);
+        const currentMembership = await this.repository.getMembership(validated.roomId, auth.userId);
         if (currentMembership?.membership === "join") {
           return null;
         }
 
         const currentMembershipEvent = await this.repository.getStateEvent(
-          input.roomId,
+          validated.roomId,
           "m.room.member",
           auth.userId,
         );
         const joinRulesEvent = await this.repository.getStateEvent(
-          input.roomId,
+          validated.roomId,
           "m.room.join_rules",
         );
-        const createEvent = await this.repository.getStateEvent(input.roomId, "m.room.create");
+        const createEvent = await this.repository.getStateEvent(validated.roomId, "m.room.create");
         const powerLevelsEvent = await this.repository.getStateEvent(
-          input.roomId,
+          validated.roomId,
           "m.room.power_levels",
         );
-        const latestEvents = await this.repository.getLatestRoomEvents(input.roomId, 1);
+        const latestEvents = await this.repository.getLatestRoomEvents(validated.roomId, 1);
         const currentMembershipContent = currentMembershipEvent?.content as
           | { membership?: unknown }
           | undefined;
@@ -260,7 +256,7 @@ export class MatrixRoomService {
         const prevSender = currentMembershipEvent?.sender;
 
         return createMembershipEvent({
-          roomId: input.roomId,
+          roomId: validated.roomId,
           userId: auth.userId,
           sender: auth.userId,
           membership: "join",
@@ -282,19 +278,95 @@ export class MatrixRoomService {
             : undefined,
         });
       },
-      persist: async (_pipelineInput, auth, event) => {
+      persist: async (_pipelineInput, _auth, event) => {
         if (!event) {
           return { alreadyJoined: true };
         }
 
-        await this.repository.storeEvent(event);
-        await this.repository.updateMembership(input.roomId, auth.userId, "join", event.event_id);
+        await this.repository.persistMembershipEvent(validated.roomId, event, "client");
         return { eventId: event.event_id, alreadyJoined: false };
       },
       fanout: async (_pipelineInput, _auth, event, persisted) => {
         if (!event || persisted.alreadyJoined) {
           return;
         }
+        await this.repository.notifyUsersOfEvent(validated.roomId, event.event_id, "m.room.member");
+        const db = this.appContext.capabilities.sql.connection as D1Database;
+        const cache = this.appContext.capabilities.kv.cache as KVNamespace;
+        this.appContext.defer(
+          fanoutEventToRemoteServers(
+            db,
+            cache,
+            this.appContext.capabilities.config.serverName,
+            validated.roomId,
+            event,
+          ).catch((error) => {
+            console.error("[room-service.joinRoom] Failed to fan out join event:", error);
+          }),
+        );
+      },
+    });
+
+    return { room_id: validated.roomId };
+  }
+
+  async leaveRoom(input: LeaveRoomInput): Promise<void> {
+    await this.eventPipeline.execute({
+      input,
+      validate: () => undefined,
+      resolveAuth: async () => ({ userId: input.userId }),
+      authorize: async (_pipelineInput, auth) => {
+        const membership = await this.repository.getMembership(input.roomId, auth.userId);
+        await runDomainEffect(validateLeavePreconditions(membership?.membership));
+      },
+      buildEvent: async (_pipelineInput, auth) => {
+        const currentMembership = await this.repository.getMembership(input.roomId, auth.userId);
+        const createEvent = await this.repository.getStateEvent(input.roomId, "m.room.create");
+        const powerLevelsEvent = await this.repository.getStateEvent(
+          input.roomId,
+          "m.room.power_levels",
+        );
+        const currentMembershipEvent = await this.repository.getStateEvent(
+          input.roomId,
+          "m.room.member",
+          auth.userId,
+        );
+        const latestEvents = await this.repository.getLatestRoomEvents(input.roomId, 1);
+        const currentMembershipContent = currentMembershipEvent?.content as
+          | { membership?: unknown }
+          | undefined;
+        const prevContent =
+          currentMembershipContent?.membership !== undefined
+            ? (currentMembershipEvent?.content as Record<string, unknown>)
+            : undefined;
+        const prevSender = currentMembershipEvent?.sender;
+
+        return createMembershipEvent({
+          roomId: input.roomId,
+          userId: auth.userId,
+          sender: auth.userId,
+          membership: "leave",
+          serverName: this.appContext.capabilities.config.serverName,
+          generateEventId: this.appContext.capabilities.id.generateEventId,
+          now: this.appContext.capabilities.clock.now,
+          currentMembershipEventId: currentMembership?.eventId,
+          powerLevelsEventId: powerLevelsEvent?.event_id,
+          createEventId: createEvent?.event_id,
+          prevEventIds: latestEvents.map((event) => event.event_id),
+          depth: (latestEvents[0]?.depth ?? 0) + 1,
+          unsigned: prevContent
+            ? {
+                prev_content: prevContent,
+                prev_sender: prevSender,
+              }
+            : undefined,
+        });
+      },
+      persist: async (_pipelineInput, _auth, event) => {
+        await this.repository.persistMembershipEvent(input.roomId, event, "client");
+        return { eventId: event.event_id };
+      },
+      fanout: async (_pipelineInput, _auth, event) => {
         await this.repository.notifyUsersOfEvent(input.roomId, event.event_id, "m.room.member");
         const db = this.appContext.capabilities.sql.connection as D1Database;
         const cache = this.appContext.capabilities.kv.cache as KVNamespace;
@@ -306,13 +378,11 @@ export class MatrixRoomService {
             input.roomId,
             event,
           ).catch((error) => {
-            console.error("[room-service.joinRoom] Failed to fan out join event:", error);
+            console.error("[room-service.leaveRoom] Failed to fan out leave event:", error);
           }),
         );
       },
     });
-
-    return { room_id: input.roomId };
   }
 
   async sendEvent(input: SendEventInput): Promise<{ event_id: string }> {

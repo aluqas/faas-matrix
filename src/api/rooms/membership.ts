@@ -5,9 +5,15 @@ import { requireAuth } from "../../middleware/auth";
 import { generateEventId } from "../../utils/ids";
 import { federationGet, federationPut } from "../../services/federation-keys";
 import {
-  applyMembershipTransitionToDatabase,
-  loadMembershipTransitionContext,
-} from "../../matrix/application/member-transition-service";
+  ensureFederatedRoomStub,
+  persistFederationMembershipEvent,
+  persistInviteStrippedState,
+} from "../../matrix/application/federation-handler-service";
+import {
+  authorizeLocalKnock,
+  validateKnockPreconditions,
+} from "../../matrix/application/room-membership-policy";
+import { runDomainEffect } from "../../matrix/application/domain-error";
 import { getServerFromRoomId } from "../../matrix/application/rooms-support";
 import { fanoutEventToRemoteServers } from "../../services/federation-fanout";
 import {
@@ -17,8 +23,8 @@ import {
   getRoomEvents,
   notifyUsersOfEvent,
   getStateEvent,
-  storeEvent,
 } from "../../services/database";
+import { checkEventAuth } from "../../services/event-auth";
 
 const app = new Hono<AppEnv>();
 
@@ -32,14 +38,13 @@ async function handleKnock(
   const db = c.env.DB;
 
   const currentMembership = await getMembership(db, roomId, userId);
-  if (currentMembership?.membership === "join") {
-    return Errors.forbidden("User is already joined to this room").toResponse();
-  }
-  if (currentMembership?.membership === "invite") {
-    return Errors.forbidden("User is already invited to this room").toResponse();
-  }
-  if (currentMembership?.membership === "ban") {
-    return Errors.forbidden("User is banned from this room").toResponse();
+  try {
+    await runDomainEffect(validateKnockPreconditions(currentMembership?.membership));
+  } catch (error) {
+    if (error instanceof Error && "toResponse" in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
   }
 
   const room = await getRoom(db, roomId);
@@ -117,51 +122,32 @@ async function handleKnock(
       }>;
     };
 
-    await db
-      .prepare(`
-      INSERT OR IGNORE INTO rooms (room_id, room_version, creator_id, is_public)
-      VALUES (?, ?, '', 0)
-    `)
-      .bind(roomId, makeKnock.room_version || "10")
-      .run();
-
-    const transitionContext = await loadMembershipTransitionContext(db, roomId, userId);
-    await storeEvent(db, event);
-    await applyMembershipTransitionToDatabase(db, {
+    await ensureFederatedRoomStub(db, roomId, makeKnock.room_version || "10", "");
+    await persistFederationMembershipEvent(db, {
       roomId,
       event,
       source: "client",
-      context: transitionContext,
     });
     await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
-
-    for (const stripped of sendKnock.knock_room_state || []) {
-      if (!stripped.type || !stripped.sender) {
-        continue;
-      }
-      await db
-        .prepare(`
-        INSERT OR REPLACE INTO invite_stripped_state (room_id, event_type, state_key, content, sender)
-        VALUES (?, ?, ?, ?, ?)
-      `)
-        .bind(
-          roomId,
-          stripped.type,
-          stripped.state_key ?? "",
-          JSON.stringify(stripped.content ?? {}),
-          stripped.sender,
-        )
-        .run();
-    }
+    await persistInviteStrippedState(db, roomId, sendKnock.knock_room_state || []);
 
     return c.json({ room_id: roomId });
   }
 
   const joinRulesEvent = await getStateEvent(db, roomId, "m.room.join_rules");
-  const joinRule =
-    (joinRulesEvent?.content as { join_rule?: string } | null)?.join_rule || "invite";
-  if (!["knock", "knock_restricted"].includes(joinRule)) {
-    return Errors.forbidden("Room does not allow knocking").toResponse();
+  try {
+    await runDomainEffect(
+      authorizeLocalKnock({
+        roomVersion: room.room_version,
+        joinRule: (joinRulesEvent?.content as { join_rule?: string } | null)?.join_rule,
+        currentMembership: currentMembership?.membership,
+      }),
+    );
+  } catch (error) {
+    if (error instanceof Error && "toResponse" in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
   }
 
   const eventId = await generateEventId(c.env.SERVER_NAME);
@@ -195,13 +181,25 @@ async function handleKnock(
     prev_events: prevEvents,
   };
 
-  const transitionContext = await loadMembershipTransitionContext(db, roomId, userId);
-  await storeEvent(db, event);
-  await applyMembershipTransitionToDatabase(db, {
+  // Collect current room state for auth check
+  const roomStateForAuth: PDU[] = [];
+  for (const stateEvent of [createEvent, joinRulesEvent, powerLevelsEvent]) {
+    if (stateEvent) roomStateForAuth.push(stateEvent);
+  }
+  if (currentMembership) {
+    const memberEvent = await getStateEvent(db, roomId, "m.room.member", userId);
+    if (memberEvent) roomStateForAuth.push(memberEvent);
+  }
+
+  const authResult = checkEventAuth(event, roomStateForAuth, room.room_version);
+  if (!authResult.allowed) {
+    return Errors.forbidden(authResult.error ?? "Event not authorized").toResponse();
+  }
+
+  await persistFederationMembershipEvent(db, {
     roomId,
     event,
     source: "client",
-    context: transitionContext,
   });
   await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
   c.executionCtx.waitUntil(

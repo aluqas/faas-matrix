@@ -78,6 +78,11 @@ export interface RoomRepository {
     content: Record<string, unknown>,
   ): Promise<void>;
   storeEvent(event: PDU): Promise<void>;
+  persistMembershipEvent(
+    roomId: string,
+    event: PDU,
+    source: "client" | "federation" | "workflow",
+  ): Promise<void>;
   updateMembership(
     roomId: string,
     userId: string,

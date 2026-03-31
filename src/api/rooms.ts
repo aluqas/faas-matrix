@@ -81,74 +81,18 @@ app.post("/_matrix/client/v3/rooms/:roomId/join", requireAuth(), async (c) => {
 
 // POST /_matrix/client/v3/rooms/:roomId/leave - Leave a room
 app.post("/_matrix/client/v3/rooms/:roomId/leave", requireAuth(), async (c) => {
-  const userId = c.get("userId");
-  const roomId = c.req.param("roomId");
-
-  // Check current membership
-  const currentMembership = await getMembership(c.env.DB, roomId, userId);
-  if (
-    !currentMembership ||
-    (currentMembership.membership !== "join" &&
-      currentMembership.membership !== "invite" &&
-      currentMembership.membership !== "knock")
-  ) {
-    return Errors.forbidden("Not joined, invited, or knocking in this room").toResponse();
+  try {
+    await c.get("appContext").services.rooms.leaveRoom({
+      userId: c.get("userId"),
+      roomId: c.req.param("roomId"),
+    });
+    return c.json({});
+  } catch (error) {
+    if (error instanceof Error && "toResponse" in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
   }
-
-  // Create leave event
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
-  const currentMembershipEvent = await getStateEvent(c.env.DB, roomId, "m.room.member", userId);
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (currentMembership) authEvents.push(currentMembership.eventId);
-
-  const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map((e) => e.event_id);
-
-  const memberContent: RoomMemberContent = {
-    membership: "leave",
-  };
-
-  const prevContent = currentMembershipEvent?.content as Record<string, unknown> | undefined;
-
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: "m.room.member",
-    state_key: userId,
-    content: memberContent,
-    origin_server_ts: Date.now(),
-    unsigned: prevContent
-      ? {
-          prev_content: prevContent,
-          prev_sender: currentMembershipEvent?.sender,
-        }
-      : undefined,
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
-
-  const transitionContext = await loadMembershipTransitionContext(c.env.DB, roomId, userId);
-  await storeEvent(c.env.DB, event);
-  await applyMembershipTransitionToDatabase(c.env.DB, {
-    roomId,
-    event,
-    source: "client",
-    context: transitionContext,
-  });
-
-  // Notify room members about the leave
-  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
-  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
-
-  return c.json({});
 });
 
 // GET /_matrix/client/v3/rooms/:roomId/state - Get all current state

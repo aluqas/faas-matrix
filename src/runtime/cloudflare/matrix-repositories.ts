@@ -37,6 +37,7 @@ import type {
   RemoteKeyCache,
   SignedTransport,
 } from "../../fedcore/contracts";
+import { persistFederationMembershipEvent } from "../../matrix/application/federation-handler-service";
 
 export class CloudflareRoomRepository implements RoomRepository {
   constructor(private readonly env: Env) {}
@@ -75,6 +76,18 @@ export class CloudflareRoomRepository implements RoomRepository {
 
   storeEvent(event: PDU): Promise<void> {
     return storeEvent(this.env.DB, event).then(() => undefined);
+  }
+
+  persistMembershipEvent(
+    roomId: string,
+    event: PDU,
+    source: "client" | "federation" | "workflow",
+  ): Promise<void> {
+    return persistFederationMembershipEvent(this.env.DB, {
+      roomId,
+      event,
+      source,
+    });
   }
 
   updateMembership(

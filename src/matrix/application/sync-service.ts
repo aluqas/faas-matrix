@@ -1,14 +1,7 @@
 import type { AppContext } from "../../foundation/app-context";
 import type { JoinedRoom, InvitedRoom, KnockedRoom, LeftRoom, SyncResponse } from "../../types";
-import type { FilterDefinition, SyncRepository } from "../repositories/interfaces";
-
-interface EventFilter {
-  types?: string[];
-  not_types?: string[];
-  senders?: string[];
-  not_senders?: string[];
-  limit?: number;
-}
+import type { SyncRepository } from "../repositories/interfaces";
+import { applyEventFilter, projectMembershipRooms, shouldIncludeRoom } from "./sync-projection";
 
 export interface SyncUserInput {
   userId: string;
@@ -17,58 +10,6 @@ export interface SyncUserInput {
   fullState?: boolean;
   filterParam?: string;
   timeout?: number;
-}
-
-function applyEventFilter(events: any[], filter?: EventFilter): any[] {
-  if (!filter) return events;
-
-  let filtered = events.filter((event) => {
-    if (filter.types && filter.types.length > 0) {
-      const matches = filter.types.some((pattern) =>
-        pattern.endsWith("*")
-          ? event.type.startsWith(pattern.slice(0, -1))
-          : event.type === pattern,
-      );
-      if (!matches) return false;
-    }
-
-    if (filter.not_types && filter.not_types.length > 0) {
-      const excluded = filter.not_types.some((pattern) =>
-        pattern.endsWith("*")
-          ? event.type.startsWith(pattern.slice(0, -1))
-          : event.type === pattern,
-      );
-      if (excluded) return false;
-    }
-
-    if (filter.senders && filter.senders.length > 0 && !filter.senders.includes(event.sender)) {
-      return false;
-    }
-
-    if (
-      filter.not_senders &&
-      filter.not_senders.length > 0 &&
-      filter.not_senders.includes(event.sender)
-    ) {
-      return false;
-    }
-
-    return true;
-  });
-
-  if (filter.limit && filter.limit > 0) {
-    filtered = filtered.slice(0, filter.limit);
-  }
-
-  return filtered;
-}
-
-function shouldIncludeRoom(roomId: string, filter?: FilterDefinition["room"]): boolean {
-  if (!filter) return true;
-  if (filter.rooms && filter.rooms.length > 0 && !filter.rooms.includes(roomId)) return false;
-  if (filter.not_rooms && filter.not_rooms.length > 0 && filter.not_rooms.includes(roomId))
-    return false;
-  return true;
 }
 
 export function parseSyncToken(token: string | undefined): { events: number; toDevice: number } {
@@ -245,173 +186,16 @@ export class MatrixSyncService {
       response.rooms!.join![roomId] = joinedRoom;
     }
 
-    const invitedRoomIds = await this.repository.getUserRooms(input.userId, "invite");
-    for (const roomId of invitedRoomIds) {
-      if (!shouldIncludeRoom(roomId, filter?.room)) {
-        continue;
-      }
-
-      const roomState = await this.repository.getRoomState(roomId);
-      const currentMemberState = roomState.find(
-        (event) =>
-          event.type === "m.room.member" &&
-          event.state_key === input.userId &&
-          (event.content as { membership?: string } | undefined)?.membership === "leave",
-      );
-      if (currentMemberState) {
-        response.rooms!.leave![roomId] = {
-          timeline: {
-            events: [
-              {
-                type: currentMemberState.type,
-                state_key: currentMemberState.state_key,
-                content: currentMemberState.content,
-                sender: currentMemberState.sender,
-                origin_server_ts: currentMemberState.origin_server_ts,
-                event_id: currentMemberState.event_id,
-                room_id: currentMemberState.room_id,
-              },
-            ],
-          },
-        };
-        continue;
-      }
-
-      const membership = await this.repository.getMembership(roomId, input.userId);
-      if (membership?.membership !== "invite") {
-        continue;
-      }
-
-      const inviteStripped = await this.repository.getInviteStrippedState(roomId);
-      const stateSource =
-        inviteStripped.length > 0
-          ? inviteStripped
-          : roomState.map((event) => ({
-              type: event.type,
-              state_key: event.state_key!,
-              content: event.content,
-              sender: event.sender,
-            }));
-      const strippedState = applyEventFilter(stateSource, filter?.room?.state);
-
-      const invitedRoom: InvitedRoom = {
-        invite_state: {
-          events: strippedState,
-        },
-      };
-
-      response.rooms!.invite![roomId] = invitedRoom;
-    }
-
-    const knockedRoomIds = await this.repository.getUserRooms(input.userId, "knock");
-    for (const roomId of knockedRoomIds) {
-      if (!shouldIncludeRoom(roomId, filter?.room)) {
-        continue;
-      }
-
-      const membership = await this.repository.getMembership(roomId, input.userId);
-      if (membership?.membership !== "knock") {
-        continue;
-      }
-
-      const roomState = await this.repository.getRoomState(roomId);
-      const stripped = await this.repository.getInviteStrippedState(roomId);
-      const stateSource =
-        stripped.length > 0
-          ? stripped
-          : roomState.map((event) => ({
-              type: event.type,
-              state_key: event.state_key!,
-              content: event.content,
-              sender: event.sender,
-            }));
-      const knockEvent = await this.repository.getEvent(membership.eventId);
-      if (
-        knockEvent &&
-        knockEvent.type === "m.room.member" &&
-        knockEvent.state_key === input.userId &&
-        !stateSource.some(
-          (event) => event.type === knockEvent.type && event.state_key === knockEvent.state_key,
-        )
-      ) {
-        stateSource.push({
-          type: knockEvent.type,
-          state_key: knockEvent.state_key!,
-          content: knockEvent.content,
-          sender: knockEvent.sender,
-        });
-      }
-
-      const knockedRoom: KnockedRoom = {
-        knock_state: {
-          events: applyEventFilter(stateSource, filter?.room?.state),
-        },
-      };
-
-      response.rooms!.knock![roomId] = knockedRoom;
-    }
-
     const includeLeave = filter?.room?.include_leave ?? false;
-    if (includeLeave || (sincePosition > 0 && !filter)) {
-      const leftRoomIds = await this.repository.getUserRooms(input.userId, "leave");
-      for (const roomId of leftRoomIds) {
-        if (!shouldIncludeRoom(roomId, filter?.room)) {
-          continue;
-        }
-
-        let leaveEvent: any | undefined;
-        if (sincePosition > 0) {
-          leaveEvent = (await this.repository.getEventsSince(roomId, sincePosition)).find(
-            (event) =>
-              event.type === "m.room.member" &&
-              event.state_key === input.userId &&
-              (event.content as { membership?: string } | undefined)?.membership === "leave",
-          );
-        }
-
-        if (!leaveEvent) {
-          const membership = await this.repository.getMembership(roomId, input.userId);
-          if (membership?.membership === "leave") {
-            leaveEvent = await this.repository.getEvent(membership.eventId);
-            if (
-              !leaveEvent ||
-              leaveEvent.type !== "m.room.member" ||
-              leaveEvent.state_key !== input.userId ||
-              (leaveEvent.content as { membership?: string } | undefined)?.membership !== "leave"
-            ) {
-              leaveEvent = (await this.repository.getRoomState(roomId)).find(
-                (event) =>
-                  event.type === "m.room.member" &&
-                  event.state_key === input.userId &&
-                  (event.content as { membership?: string } | undefined)?.membership === "leave",
-              );
-            }
-          }
-        }
-
-        if (!leaveEvent) {
-          continue;
-        }
-
-        const leftRoom: LeftRoom = {
-          timeline: {
-            events: [
-              {
-                type: leaveEvent.type,
-                state_key: leaveEvent.state_key,
-                content: leaveEvent.content,
-                sender: leaveEvent.sender,
-                origin_server_ts: leaveEvent.origin_server_ts,
-                event_id: leaveEvent.event_id,
-                room_id: leaveEvent.room_id,
-              },
-            ],
-          },
-        };
-
-        response.rooms!.leave![roomId] = leftRoom;
-      }
-    }
+    const membershipProjection = await projectMembershipRooms(this.repository, {
+      userId: input.userId,
+      sincePosition,
+      roomFilter: filter?.room,
+      includeLeave: includeLeave || (sincePosition > 0 && !filter),
+    });
+    response.rooms!.invite = membershipProjection.inviteRooms as Record<string, InvitedRoom>;
+    response.rooms!.knock = membershipProjection.knockRooms as Record<string, KnockedRoom>;
+    response.rooms!.leave = membershipProjection.leaveRooms as Record<string, LeftRoom>;
 
     const hasRoomChanges = Object.keys(response.rooms!.join!).some((roomId) => {
       const room = response.rooms!.join![roomId];
