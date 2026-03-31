@@ -5,6 +5,7 @@ import { ErrorCodes } from "../../types";
 import { calculateReferenceHashEventId } from "../../utils/crypto";
 import { MatrixApiError } from "../../utils/errors";
 import { DomainError, toMatrixApiError } from "./domain-error";
+import { runFederationEffect } from "./effect-runtime";
 
 const UnknownRecordSchema = Schema.Record({ key: Schema.String, value: Schema.Unknown });
 const StringRecordSchema = Schema.Record({ key: Schema.String, value: Schema.String });
@@ -125,7 +126,7 @@ export async function validateIncomingPdu(
   roomVersion?: string,
 ): Promise<PDU> {
   try {
-    return await Effect.runPromise(validateIncomingPduEffect(event, context, roomVersion));
+    return await runFederationEffect(validateIncomingPduEffect(event, context, roomVersion));
   } catch (error) {
     if (error instanceof DomainError) {
       throw toMatrixApiError(error);
@@ -143,9 +144,12 @@ export async function tryValidateIncomingPdu(
   context?: string,
   roomVersion?: string,
 ): Promise<PDU | null> {
-  try {
-    return await Effect.runPromise(validateIncomingPduEffect(event, context, roomVersion));
-  } catch {
-    return null;
-  }
+  return await runFederationEffect(
+    validateIncomingPduEffect(event, context, roomVersion).pipe(
+      Effect.match({
+        onSuccess: (validated) => validated,
+        onFailure: () => null,
+      }),
+    ),
+  );
 }

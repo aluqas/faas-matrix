@@ -40,6 +40,18 @@ import type {
 } from "../../fedcore/contracts";
 import { persistFederationMembershipEvent } from "../../matrix/application/federation-handler-service";
 
+function parseJsonWithFallback<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export class CloudflareRoomRepository implements RoomRepository {
   constructor(private readonly env: Env) {}
 
@@ -139,7 +151,7 @@ export class CloudflareSyncRepository implements SyncRepository {
     if (!filterParam) return null;
     if (filterParam.startsWith("{")) {
       try {
-        return JSON.parse(filterParam) as FilterDefinition;
+        return parseJsonWithFallback<FilterDefinition | null>(filterParam, null);
       } catch {
         return null;
       }
@@ -149,7 +161,7 @@ export class CloudflareSyncRepository implements SyncRepository {
     if (!filterJson) return null;
 
     try {
-      return JSON.parse(filterJson) as FilterDefinition;
+      return parseJsonWithFallback<FilterDefinition | null>(filterJson, null);
     } catch {
       return null;
     }
@@ -286,7 +298,9 @@ export class CloudflareFederationRepository implements FederationRepository {
       .bind(origin, txnId)
       .first<{ response: string | null }>();
 
-    return result?.response ? JSON.parse(result.response) : null;
+    return result?.response
+      ? parseJsonWithFallback<Record<string, unknown> | null>(result.response, null)
+      : null;
   }
 
   async storeCachedTransaction(
@@ -433,7 +447,7 @@ export class CloudflareFederationRepository implements FederationRepository {
       `INSERT OR REPLACE INTO processed_edus (edu_id, edu_type, origin, processed_at, content)
        VALUES (?, ?, ?, ?, ?)`,
     )
-      .bind(String(content.edu_id || ""), eduType, origin, Date.now(), JSON.stringify(content))
+      .bind(String(content["edu_id"] || ""), eduType, origin, Date.now(), JSON.stringify(content))
       .run();
   }
 
@@ -533,7 +547,7 @@ export class CloudflareRemoteKeyCache implements RemoteKeyCache<{ keyId: string;
   async get(serverName: string, keyId: string): Promise<{ keyId: string; key: string } | null> {
     const raw = await this.env.CACHE.get(`fedkey:${serverName}:${keyId}`);
     if (!raw) return null;
-    return JSON.parse(raw) as { keyId: string; key: string };
+    return parseJsonWithFallback<{ keyId: string; key: string } | null>(raw, null);
   }
 
   async put(serverName: string, keyId: string, key: { keyId: string; key: string }): Promise<void> {

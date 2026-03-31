@@ -1,14 +1,19 @@
-import type { Membership, PDU, Room } from "../../types";
+import type {
+  AccountDataEvent,
+  EphemeralEvent,
+  Membership,
+  PDU,
+  Room,
+  StrippedStateEvent,
+  ToDeviceEvent,
+} from "../../types";
 
 export interface MembershipRecord {
   membership: Membership;
   eventId: string;
 }
 
-export interface ReceiptEvent {
-  type: string;
-  content: Record<string, unknown>;
-}
+export type ReceiptEvent = EphemeralEvent;
 
 export interface FilterDefinition {
   room?: {
@@ -105,23 +110,21 @@ export interface SyncRepository {
     userId: string,
     deviceId: string,
     since: string,
-  ): Promise<{ events: unknown[]; nextBatch: string }>;
+  ): Promise<{ events: ToDeviceEvent[]; nextBatch: string }>;
   getOneTimeKeyCounts(userId: string, deviceId: string): Promise<Record<string, number>>;
   getUnusedFallbackKeyTypes(userId: string, deviceId: string): Promise<string[]>;
   getDeviceListChanges(
     userId: string,
     sincePosition: number,
   ): Promise<{ changed: string[]; left: string[] }>;
-  getGlobalAccountData(userId: string, since?: number): Promise<any[]>;
-  getRoomAccountData(userId: string, roomId: string, since?: number): Promise<any[]>;
+  getGlobalAccountData(userId: string, since?: number): Promise<AccountDataEvent[]>;
+  getRoomAccountData(userId: string, roomId: string, since?: number): Promise<AccountDataEvent[]>;
   getUserRooms(userId: string, membership?: Membership): Promise<string[]>;
   getMembership(roomId: string, userId: string): Promise<MembershipRecord | null>;
   getEventsSince(roomId: string, sincePosition: number): Promise<PDU[]>;
   getEvent(eventId: string): Promise<PDU | null>;
   getRoomState(roomId: string): Promise<PDU[]>;
-  getInviteStrippedState(
-    roomId: string,
-  ): Promise<{ type: string; state_key: string; content: any; sender: string }[]>;
+  getInviteStrippedState(roomId: string): Promise<StrippedStateEvent[]>;
   getReceiptsForRoom(roomId: string, userId: string): Promise<ReceiptEvent>;
   getTypingUsers(roomId: string): Promise<string[]>;
   waitForUserEvents(userId: string, timeoutMs: number): Promise<{ hasEvents: boolean }>;
@@ -155,9 +158,7 @@ export interface FederationRepository {
   ): Promise<void>;
   getRoom(roomId: string): Promise<Room | null>;
   getRoomState(roomId: string): Promise<PDU[]>;
-  getInviteStrippedState(
-    roomId: string,
-  ): Promise<{ type: string; state_key: string; content: any; sender: string }[]>;
+  getInviteStrippedState(roomId: string): Promise<StrippedStateEvent[]>;
   storeIncomingEvent(event: PDU): Promise<void>;
   notifyUsersOfEvent(roomId: string, eventId: string, eventType: string): Promise<void>;
   updateMembership(

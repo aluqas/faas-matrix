@@ -1,4 +1,6 @@
 import { extractServerNameFromMatrixId, isLocalMatrixId } from "../shared/matrix-id";
+import { runClientEffect } from "../../effect-runtime";
+import { withLogContext } from "../../logging";
 import type { ToDeviceCommandInput, ToDeviceCommandPorts, ToDeviceDispatchPlan } from "./contracts";
 
 function ensureObject(value: unknown): Record<string, unknown> {
@@ -9,6 +11,20 @@ export async function dispatchToDeviceMessages(
   input: ToDeviceCommandInput,
   ports: ToDeviceCommandPorts,
 ): Promise<ToDeviceDispatchPlan> {
+  const logger = withLogContext({
+    component: "to-device",
+    operation: "command",
+    user_id: input.senderUserId,
+    txn_id: input.txnId,
+    debugEnabled: ports.debugEnabled,
+  });
+  await runClientEffect(
+    logger.info("to_device.command.start", {
+      recipient_count: Object.keys(input.messages).length,
+      event_type: input.eventType,
+    }),
+  );
+
   const localMessages: ToDeviceDispatchPlan["localMessages"] = [];
   const remoteMessageMap = new Map<
     string,
@@ -74,13 +90,13 @@ export async function dispatchToDeviceMessages(
   }
 
   const remoteMessages = Array.from(remoteMessageMap.values());
-  console.log("[to-device] dispatch plan", {
-    localMessages: localMessages.length,
-    remoteMessages: remoteMessages.map((message) => ({
-      destination: message.destination,
-      recipients: Object.keys(message.messages),
-    })),
-  });
+  await runClientEffect(
+    logger.debug("to_device.command.dispatch_plan", {
+      local_message_count: localMessages.length,
+      remote_batch_count: remoteMessages.length,
+      remote_destinations: remoteMessages.map((message) => message.destination),
+    }),
+  );
   await Promise.all(
     remoteMessages.map((remoteMessage) =>
       ports.queueEdu(remoteMessage.destination, {
@@ -90,6 +106,12 @@ export async function dispatchToDeviceMessages(
         messages: remoteMessage.messages,
       }),
     ),
+  );
+  await runClientEffect(
+    logger.info("to_device.command.success", {
+      local_message_count: localMessages.length,
+      remote_batch_count: remoteMessages.length,
+    }),
   );
 
   return {

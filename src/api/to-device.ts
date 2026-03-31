@@ -15,6 +15,10 @@ import { requireAuth } from "../middleware/auth";
 import { dispatchToDeviceMessages } from "../matrix/application/features/to-device/command";
 import { projectToDeviceMessages } from "../matrix/application/features/to-device/project";
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
+import type {
+  DirectToDeviceEduContent,
+  ToDeviceBatch,
+} from "../matrix/application/features/to-device/contracts";
 
 const app = new Hono<AppEnv>();
 
@@ -23,7 +27,7 @@ const app = new Hono<AppEnv>();
 // ============================================
 
 interface ToDeviceRequest {
-  messages: Record<string, Record<string, any>>;
+  messages: Record<string, Record<string, Record<string, unknown>>>;
   // messages[user_id][device_id] = content
   // device_id can be "*" to send to all devices
 }
@@ -139,9 +143,10 @@ app.put("/_matrix/client/v3/sendToDevice/:eventType/:txnId", requireAuth(), asyn
           )
           .run();
       },
-      async queueEdu(destination: string, content: Record<string, unknown>) {
+      async queueEdu(destination: string, content: DirectToDeviceEduContent) {
         await queueFederationEdu(c.env, destination, "m.direct_to_device", content);
       },
+      debugEnabled: c.get("appContext").profile.name === "complement",
     },
   );
 
@@ -168,7 +173,7 @@ export async function getToDeviceMessages(
   deviceId: string,
   since?: string,
   limit: number = 100,
-): Promise<{ events: any[]; nextBatch: string }> {
+): Promise<ToDeviceBatch> {
   return projectToDeviceMessages(db, userId, deviceId, since, limit);
 }
 

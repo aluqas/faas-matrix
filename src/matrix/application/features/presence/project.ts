@@ -1,6 +1,8 @@
 import type { PresenceState } from "../../../../types";
 import type { SyncEventFilter } from "../../sync-projection";
 import { applyEventFilter } from "../../sync-projection";
+import { runClientEffect } from "../../effect-runtime";
+import { withLogContext } from "../../logging";
 import type { PresenceProjectionQuery, PresenceSyncProjection } from "./contracts";
 
 const PRESENCE_TIMEOUT = 5 * 60 * 1000;
@@ -40,9 +42,9 @@ export async function getPresenceForUsers(
     string,
     {
       presence: PresenceState;
-      status_msg?: string;
-      last_active_ago?: number;
-      currently_active?: boolean;
+      status_msg?: string | undefined;
+      last_active_ago?: number | undefined;
+      currently_active?: boolean | undefined;
     }
   >
 > {
@@ -55,9 +57,9 @@ export async function getPresenceForUsers(
     string,
     {
       presence: PresenceState;
-      status_msg?: string;
-      last_active_ago?: number;
-      currently_active?: boolean;
+      status_msg?: string | undefined;
+      last_active_ago?: number | undefined;
+      currently_active?: boolean | undefined;
     }
   > = {};
   const uncachedUserIds: string[] = [];
@@ -127,6 +129,12 @@ export async function projectPresenceEvents(
   cache: KVNamespace | undefined,
   query: PresenceProjectionQuery,
 ): Promise<PresenceSyncProjection> {
+  const logger = withLogContext({
+    component: "presence",
+    operation: "project",
+    user_id: query.userId,
+    debugEnabled: query.debugEnabled,
+  });
   const visibleUsers = await listVisibleUsers(db, query.userId, query.roomIds);
   const presenceByUser = await getPresenceForUsers(db, visibleUsers, cache);
 
@@ -141,7 +149,16 @@ export async function projectPresenceEvents(
     },
   }));
 
-  return {
+  const projection = {
     events: applyEventFilter(events, query.filter as SyncEventFilter | undefined),
   };
+  await runClientEffect(
+    logger.debug("presence.project.result", {
+      room_count: query.roomIds.length,
+      visible_user_count: visibleUsers.length,
+      event_count: projection.events.length,
+    }),
+  );
+
+  return projection;
 }

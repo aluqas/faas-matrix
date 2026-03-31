@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": true,
+    "ignoreDeprecations": "6.0",
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "useUnknownInCatchVariables": true
+  },
+  "include": [
+    "src/matrix/application/domain-error.ts",
+    "src/matrix/application/effect-debug.ts",
+    "src/matrix/application/effect-runtime.ts",
+    "src/matrix/application/logging.ts",
+    "src/matrix/application/features/presence/**/*.ts",
+    "src/matrix/application/features/to-device/**/*.ts",
+    "src/matrix/application/features/typing/**/*.ts",
+    "src/api/presence.ts",
+    "src/api/typing.ts",
+    "src/api/to-device.ts"
+  ],
+  "exclude": ["node_modules", "src/**/*.test.ts"]
+}

@@ -1,13 +1,12 @@
+import type { ToDeviceBatch } from "./contracts";
+
 export async function projectToDeviceMessages(
   db: D1Database,
   userId: string,
   deviceId: string,
   since?: string,
   limit: number = 100,
-): Promise<{
-  events: Array<{ sender: string; type: string; content: Record<string, unknown> }>;
-  nextBatch: string;
-}> {
+): Promise<ToDeviceBatch> {
   let sincePos = 0;
   if (since) {
     const parsed = Number.parseInt(since, 10);
@@ -61,7 +60,7 @@ export async function projectToDeviceMessages(
 
   const nextBatch =
     messages.results.length > 0
-      ? String(messages.results[messages.results.length - 1].stream_position)
+      ? String(messages.results[messages.results.length - 1]?.stream_position ?? sincePos)
       : String(maxPos?.max_pos || 0);
 
   return { events, nextBatch };

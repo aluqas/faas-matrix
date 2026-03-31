@@ -8,7 +8,7 @@ import type {
 import { checkEventAuth } from "../../services/event-auth";
 import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
 import { resolveState } from "../../services/state-resolution";
-import type { PDU } from "../../types";
+import type { PDU, RoomMemberContent } from "../../types";
 import {
   calculateContentHash,
   calculateReferenceHashEventId,
@@ -26,18 +26,29 @@ import {
   handleFederationPresenceEdu,
   handleFederationTypingEdu,
 } from "./federation-handler-service";
+import type { PresenceEduContent } from "./features/presence/contracts";
+import type { TypingEduContent } from "./features/typing/contracts";
+import type { DirectToDeviceEduContent } from "./features/to-device/contracts";
+import {
+  extractRawFederationPduFields,
+  getRoomScopedEduRoomIds,
+  toRawFederationEdu,
+  toRawFederationPdu,
+} from "./features/federation/contracts";
 import {
   MembershipTransitionService,
   resolveMembershipAuthState,
 } from "./membership-transition-service";
 import { emitEffectWarning } from "./effect-debug";
+import { runFederationEffect } from "./effect-runtime";
+import { withLogContext } from "./logging";
 
 export interface FederationTransactionInput {
   origin: string;
   txnId: string;
   body: {
-    pdus?: Array<Record<string, any>>;
-    edus?: Array<Record<string, any>>;
+    pdus?: Array<Record<string, unknown>>;
+    edus?: Array<Record<string, unknown>>;
   };
 }
 
@@ -46,16 +57,35 @@ interface CachedKeyRecord {
   key: string;
 }
 
-function getRoomScopedEduRoomIds(eduType: string, content: Record<string, unknown>): string[] {
-  if (eduType === "m.typing") {
-    return typeof content.room_id === "string" ? [content.room_id] : [];
-  }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 
-  if (eduType === "m.receipt" && content && typeof content === "object") {
-    return Object.keys(content);
-  }
+function isPresenceEduContent(
+  content: Record<string, unknown>,
+): content is Record<string, unknown> & PresenceEduContent {
+  return Array.isArray(content["push"]);
+}
 
-  return [];
+function isTypingEduContent(
+  content: Record<string, unknown>,
+): content is Record<string, unknown> & TypingEduContent {
+  return (
+    typeof content["room_id"] === "string" &&
+    typeof content["user_id"] === "string" &&
+    typeof content["typing"] === "boolean"
+  );
+}
+
+function isDirectToDeviceEduContent(
+  content: Record<string, unknown>,
+): content is Record<string, unknown> & DirectToDeviceEduContent {
+  return (
+    typeof content["sender"] === "string" &&
+    typeof content["type"] === "string" &&
+    typeof content["message_id"] === "string" &&
+    isRecord(content["messages"])
+  );
 }
 
 export class MatrixFederationService {
@@ -78,6 +108,19 @@ export class MatrixFederationService {
   async processTransaction(
     input: FederationTransactionInput,
   ): Promise<{ pdus: Record<string, unknown> }> {
+    const logger = withLogContext({
+      component: "federation",
+      operation: "transaction",
+      origin: input.origin,
+      txn_id: input.txnId,
+      debugEnabled: this.appContext.profile.name === "complement",
+    });
+    await runFederationEffect(
+      logger.info("federation.transaction.start", {
+        pdu_count: input.body.pdus?.length ?? 0,
+        edu_count: input.body.edus?.length ?? 0,
+      }),
+    );
     await emitEffectWarning("[federation-service] processing transaction", {
       origin: input.origin,
       txnId: input.txnId,
@@ -91,51 +134,49 @@ export class MatrixFederationService {
     }
 
     const pduResults: Record<string, unknown> = {};
+    let acceptedPduCount = 0;
+    let rejectedPduCount = 0;
+    let processedEduCount = 0;
 
-    for (const pdu of input.body.pdus || []) {
-      const roomId = pdu.room_id || "";
+    for (const rawPdu of input.body.pdus || []) {
+      const pdu = toRawFederationPdu(rawPdu);
+      const {
+        roomId,
+        sender,
+        eventType,
+        content,
+        eventId: incomingEventId,
+      } = extractRawFederationPduFields(pdu);
 
       try {
-        if (!pdu.room_id || !pdu.sender || !pdu.type || !pdu.content) {
-          const malformedEventId = pdu.event_id || "unknown";
+        if (!roomId || !sender || !eventType || !content) {
+          const malformedEventId = incomingEventId ?? "unknown";
           pduResults[malformedEventId] = { error: "Invalid PDU structure" };
+          rejectedPduCount += 1;
           continue;
         }
 
         const room = await this.repository.getRoom(roomId);
         const roomVersion =
           room?.room_version ||
-          (pdu.type === "m.room.create" &&
-          pdu.content &&
-          typeof pdu.content === "object" &&
-          typeof pdu.content.room_version === "string"
-            ? pdu.content.room_version
+          (eventType === "m.room.create" && typeof content["room_version"] === "string"
+            ? content["room_version"]
             : getDefaultRoomVersion());
         const eventIdFormat = getRoomVersion(roomVersion)?.eventIdFormat ?? "v4";
         const urlsafeEventId =
           eventIdFormat === "v1"
-            ? typeof pdu.event_id === "string"
-              ? pdu.event_id
-              : null
-            : await calculateReferenceHashEventId(pdu as Record<string, unknown>, roomVersion);
+            ? (incomingEventId ?? null)
+            : await calculateReferenceHashEventId(rawPdu, roomVersion);
         const standardEventId =
           eventIdFormat === "v1"
-            ? typeof pdu.event_id === "string"
-              ? pdu.event_id
-              : null
-            : await calculateReferenceHashEventIdStandard(
-                pdu as Record<string, unknown>,
-                roomVersion,
-              );
+            ? (incomingEventId ?? null)
+            : await calculateReferenceHashEventIdStandard(rawPdu, roomVersion);
         const normalizedEventId =
-          eventIdFormat === "v1"
-            ? typeof pdu.event_id === "string"
-              ? pdu.event_id
-              : null
-            : urlsafeEventId;
-        const eventId = normalizedEventId || pdu.event_id || "unknown";
+          eventIdFormat === "v1" ? (incomingEventId ?? null) : urlsafeEventId;
+        const eventId = normalizedEventId || incomingEventId || "unknown";
         if (!normalizedEventId) {
           pduResults[eventId] = { error: "Invalid PDU structure" };
+          rejectedPduCount += 1;
           continue;
         }
         if (eventIdFormat !== "v1") {
@@ -143,16 +184,20 @@ export class MatrixFederationService {
             origin: input.origin,
             roomId,
             roomVersion,
-            eventType: pdu.type,
+            eventType,
             stateKey: typeof pdu.state_key === "string" ? pdu.state_key : undefined,
-            incomingEventId: typeof pdu.event_id === "string" ? pdu.event_id : undefined,
+            incomingEventId,
             urlsafeEventId,
             standardEventId,
             normalizedEventId,
           });
         }
         const normalizedPdu = {
-          ...(pdu as Record<string, unknown>),
+          ...rawPdu,
+          room_id: roomId,
+          sender,
+          type: eventType,
+          content,
           event_id: normalizedEventId,
         } as PDU;
 
@@ -164,9 +209,10 @@ export class MatrixFederationService {
           continue;
         }
 
-        const pduOrigin = extractServerNameFromMatrixId(String(pdu.sender));
+        const pduOrigin = extractServerNameFromMatrixId(sender);
         if (!pduOrigin) {
           pduResults[eventId] = { error: "Invalid sender format" };
+          rejectedPduCount += 1;
           continue;
         }
 
@@ -203,6 +249,7 @@ export class MatrixFederationService {
 
           if (!signatureValid && pduOrigin !== input.origin) {
             pduResults[eventId] = { error: "Invalid signature" };
+            rejectedPduCount += 1;
             await this.repository.recordProcessedPdu(
               eventId,
               pduOrigin,
@@ -224,7 +271,6 @@ export class MatrixFederationService {
             normalizedPdu.hashes.sha256,
           );
           if (!hashValid) {
-            const rawPdu = pdu as Record<string, unknown>;
             const rawHash = await calculateContentHash(rawPdu);
             const normalizedHash = await calculateContentHash(
               normalizedPdu as unknown as Record<string, unknown>,
@@ -253,6 +299,7 @@ export class MatrixFederationService {
                   : [],
             });
             pduResults[eventId] = { error: "Content hash mismatch" };
+            rejectedPduCount += 1;
             await this.repository.recordProcessedPdu(
               eventId,
               pduOrigin,
@@ -276,6 +323,7 @@ export class MatrixFederationService {
               reason: aclDecision.reason,
             });
             pduResults[eventId] = { error: aclDecision.reason };
+            rejectedPduCount += 1;
             await this.repository.recordProcessedPdu(
               eventId,
               pduOrigin,
@@ -301,6 +349,7 @@ export class MatrixFederationService {
                 reason: authResult.error || "Auth failed",
               });
               pduResults[eventId] = { error: authResult.error || "Event authorization failed" };
+              rejectedPduCount += 1;
               await this.repository.recordProcessedPdu(
                 eventId,
                 pduOrigin,
@@ -316,20 +365,22 @@ export class MatrixFederationService {
         }
 
         pduResults[eventId] = {};
+        acceptedPduCount += 1;
         await this.repository.recordProcessedPdu(normalizedEventId, pduOrigin, roomId, true);
 
         await this.storeAcceptedPdu(normalizedPdu);
       } catch (error) {
-        const eventId = pdu.event_id || "unknown";
+        const eventId = incomingEventId || "unknown";
         pduResults[eventId] = {
           error: error instanceof Error ? error.message : "Unknown error",
         };
-        if (pdu.event_id && pdu.room_id) {
-          const pduOrigin = extractServerNameFromMatrixId(String(pdu.sender)) || input.origin;
+        rejectedPduCount += 1;
+        if (incomingEventId && roomId) {
+          const pduOrigin = extractServerNameFromMatrixId(sender ?? "") || input.origin;
           await this.repository.recordProcessedPdu(
-            pdu.event_id,
+            incomingEventId,
             pduOrigin,
-            pdu.room_id,
+            roomId,
             false,
             error instanceof Error ? error.message : "Unknown error",
           );
@@ -340,10 +391,17 @@ export class MatrixFederationService {
     for (const edu of input.body.edus || []) {
       try {
         await this.processEdu(input.origin, edu);
+        processedEduCount += 1;
       } catch (error) {
+        await runFederationEffect(
+          logger.warn("federation.transaction.edu_error", {
+            edu_type: typeof edu["edu_type"] === "string" ? edu["edu_type"] : undefined,
+            error_message: error instanceof Error ? error.message : String(error),
+          }),
+        );
         await emitEffectWarning("[federation-service] failed to process EDU", {
           origin: input.origin,
-          eduType: edu.edu_type,
+          eduType: typeof edu["edu_type"] === "string" ? edu["edu_type"] : undefined,
           error: error instanceof Error ? error.message : String(error),
         });
         // EDU processing failures should not abort the transaction
@@ -352,6 +410,13 @@ export class MatrixFederationService {
 
     const response = { pdus: pduResults };
     await this.repository.storeCachedTransaction(input.origin, input.txnId, response);
+    await runFederationEffect(
+      logger.info("federation.transaction.result", {
+        accepted_pdu_count: acceptedPduCount,
+        rejected_pdu_count: rejectedPduCount,
+        processed_edu_count: processedEduCount,
+      }),
+    );
     return response;
   }
 
@@ -388,8 +453,7 @@ export class MatrixFederationService {
         source: "federation",
         currentMembership: currentMemberEvent
           ? {
-              membership:
-                (currentMemberEvent.content as { membership?: any }).membership ?? "leave",
+              membership: (currentMemberEvent.content as RoomMemberContent).membership ?? "leave",
               eventId: currentMemberEvent.event_id,
             }
           : null,
@@ -439,9 +503,13 @@ export class MatrixFederationService {
     await this.repository.upsertRoomState(pdu.room_id, pdu.type, pdu.state_key, pdu.event_id);
   }
 
-  private async processEdu(origin: string, edu: Record<string, any>): Promise<void> {
-    const eduType = edu.edu_type;
-    const content = edu.content as Record<string, any>;
+  private async processEdu(origin: string, rawEdu: Record<string, unknown>): Promise<void> {
+    const edu = toRawFederationEdu(rawEdu);
+    const eduType = typeof edu.edu_type === "string" ? edu.edu_type : "";
+    const content =
+      edu.content && typeof edu.content === "object" && !Array.isArray(edu.content)
+        ? edu.content
+        : {};
     const roomScopedRoomIds = getRoomScopedEduRoomIds(eduType, content);
 
     for (const roomId of roomScopedRoomIds) {
@@ -469,11 +537,13 @@ export class MatrixFederationService {
 
     switch (eduType) {
       case "m.presence": {
-        await handleFederationPresenceEdu(
-          this.repository,
-          this.appContext.capabilities.clock.now(),
-          content,
-        );
+        if (isPresenceEduContent(content)) {
+          await handleFederationPresenceEdu(
+            this.repository,
+            this.appContext.capabilities.clock.now(),
+            content,
+          );
+        }
         break;
       }
       case "m.device_list_update": {
@@ -481,20 +551,24 @@ export class MatrixFederationService {
         break;
       }
       case "m.typing": {
-        await handleFederationTypingEdu(
-          this.appContext.capabilities.sql.connection as D1Database,
-          origin,
-          this.appContext.capabilities.realtime,
-          content,
-        );
+        if (isTypingEduContent(content)) {
+          await handleFederationTypingEdu(
+            this.appContext.capabilities.sql.connection as D1Database,
+            origin,
+            this.appContext.capabilities.realtime,
+            content,
+          );
+        }
         break;
       }
       case "m.direct_to_device": {
-        await handleFederationDirectToDeviceEdu(
-          this.appContext.capabilities.sql.connection as D1Database,
-          origin,
-          content,
-        );
+        if (isDirectToDeviceEduContent(content)) {
+          await handleFederationDirectToDeviceEdu(
+            this.appContext.capabilities.sql.connection as D1Database,
+            origin,
+            content,
+          );
+        }
         break;
       }
       default:

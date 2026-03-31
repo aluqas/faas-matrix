@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { PresenceCommandInput } from "./contracts";
+import type { PresenceCommandInput, PresenceEduContent } from "./contracts";
 import { executePresenceCommand } from "./command";
 
 describe("presence command", () => {
   it("persists presence locally and queues remote EDUs once per remote server", async () => {
     const persisted: PresenceCommandInput[] = [];
-    const queued: Array<{ destination: string; content: Record<string, unknown> }> = [];
+    const queued: Array<{ destination: string; content: PresenceEduContent }> = [];
 
     await executePresenceCommand(
       {
@@ -22,7 +22,7 @@ describe("presence command", () => {
         async resolveInterestedServers() {
           return ["test", "remote-a", "remote-a", "remote-b"];
         },
-        async queueEdu(destination: string, content: Record<string, unknown>) {
+        async queueEdu(destination: string, content: PresenceEduContent) {
           queued.push({ destination, content });
         },
       },

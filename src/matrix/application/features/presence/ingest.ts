@@ -1,25 +1,16 @@
 import type { FederationRepository } from "../../../repositories/interfaces";
+import type { PresenceEduContent } from "./contracts";
 
 export async function ingestPresenceEdu(
   repository: Pick<FederationRepository, "upsertPresence">,
   now: number,
-  content: Record<string, unknown>,
+  content: PresenceEduContent,
 ): Promise<void> {
-  const presencePush = content.push as
-    | Array<{
-        user_id: string;
-        presence: string;
-        status_msg?: string;
-        last_active_ago?: number;
-        currently_active?: boolean;
-      }>
-    | undefined;
-
-  if (!presencePush) {
+  if (!Array.isArray(content.push)) {
     return;
   }
 
-  for (const update of presencePush) {
+  for (const update of content.push) {
     if (!update.user_id || !update.presence) {
       continue;
     }

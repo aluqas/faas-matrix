@@ -1,3 +1,5 @@
+import type { RoomJoinWorkflowParams, RoomJoinWorkflowStatus } from "../types";
+
 export interface SqlCapability<TConnection = unknown> {
   connection: TConnection;
 }
@@ -20,7 +22,7 @@ export interface JobsCapability {
 }
 
 export interface WorkflowCapability {
-  createRoomJoin(params: unknown): Promise<unknown>;
+  createRoomJoin(params: RoomJoinWorkflowParams): Promise<RoomJoinWorkflowStatus>;
   createPushNotification(params: unknown): Promise<unknown>;
 }
 

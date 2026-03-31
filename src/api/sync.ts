@@ -4,19 +4,21 @@ import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
+import type { SyncUserInput } from "../matrix/application/features/sync/contracts";
 
 const app = new Hono<AppEnv>();
 
 app.get("/_matrix/client/v3/sync", requireAuth(), async (c) => {
   try {
-    const response = await c.get("appContext").services.sync.syncUser({
+    const input: SyncUserInput = {
       userId: c.get("userId"),
       deviceId: c.get("deviceId"),
       since: c.req.query("since"),
       fullState: c.req.query("full_state") === "true",
       filterParam: c.req.query("filter"),
       timeout: Number.parseInt(c.req.query("timeout") || "0", 10) || 0,
-    });
+    };
+    const response = await c.get("appContext").services.sync.syncUser(input);
     return c.json(response);
   } catch (error) {
     if (error instanceof Error && "toResponse" in error) {

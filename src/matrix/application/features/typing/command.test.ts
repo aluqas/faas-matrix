@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { TypingEduContent } from "./contracts";
 import { executeTypingCommand } from "./command";
 
 describe("typing command", () => {
   it("updates local typing state and queues remote typing EDUs", async () => {
     const calls: Array<{ roomId: string; userId: string; typing: boolean; timeoutMs?: number }> =
       [];
-    const queued: Array<{ destination: string; content: Record<string, unknown> }> = [];
+    const queued: Array<{ destination: string; content: TypingEduContent }> = [];
 
     await executeTypingCommand(
       {

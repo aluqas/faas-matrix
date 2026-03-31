@@ -1,3 +1,10 @@
+export interface DirectToDeviceEduContent {
+  sender: string;
+  type: string;
+  message_id: string;
+  messages: Record<string, Record<string, Record<string, unknown>>>;
+}
+
 export interface ToDeviceDispatchPlan {
   localMessages: Array<{
     recipientUserId: string;
@@ -36,5 +43,11 @@ export interface ToDeviceCommandPorts {
     messageId: string;
     streamPosition: number;
   }): Promise<void>;
-  queueEdu(destination: string, content: Record<string, unknown>): Promise<void>;
+  queueEdu(destination: string, content: DirectToDeviceEduContent): Promise<void>;
+  debugEnabled?: boolean | undefined;
+}
+
+export interface ToDeviceBatch {
+  events: Array<{ sender: string; type: string; content: Record<string, unknown> }>;
+  nextBatch: string;
 }

@@ -12,6 +12,7 @@ import { requireAuth } from "../middleware/auth";
 import { getServersInRoomsWithUser } from "../services/database";
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
 import { executePresenceCommand } from "../matrix/application/features/presence/command";
+import type { PresenceEduContent } from "../matrix/application/features/presence/contracts";
 import { getPresenceForUsers as loadPresenceForUsers } from "../matrix/application/features/presence/project";
 
 const app = new Hono<AppEnv>();
@@ -94,9 +95,10 @@ app.put("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
         async resolveInterestedServers(userId: string) {
           return getServersInRoomsWithUser(db, userId);
         },
-        async queueEdu(destination: string, content: Record<string, unknown>) {
+        async queueEdu(destination: string, content: PresenceEduContent) {
           await queueFederationEdu(c.env, destination, "m.presence", content);
         },
+        debugEnabled: c.get("appContext").profile.name === "complement",
       },
     );
   } catch (err) {

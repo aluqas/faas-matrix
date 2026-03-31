@@ -11,8 +11,11 @@ import {
 import { EventQueryService, type MissingEventsQuery } from "./event-query-service";
 import { tryValidateIncomingPdu } from "./pdu-validator";
 import { ingestPresenceEdu } from "./features/presence/ingest";
+import type { PresenceEduContent } from "./features/presence/contracts";
 import { ingestTypingEdu } from "./features/typing/ingest";
+import type { TypingEduContent } from "./features/typing/contracts";
 import { ingestDirectToDeviceEdu } from "./features/to-device/ingest";
+import type { DirectToDeviceEduContent } from "./features/to-device/contracts";
 
 type StoredEventRow = {
   event_id: string;
@@ -307,7 +310,7 @@ export async function getMissingFederationEvents(
 export async function handleFederationPresenceEdu(
   repository: Pick<FederationRepository, "upsertPresence">,
   now: number,
-  content: Record<string, unknown>,
+  content: PresenceEduContent,
 ): Promise<void> {
   await ingestPresenceEdu(repository, now, content);
 }
@@ -336,7 +339,7 @@ export async function handleFederationTypingEdu(
   db: D1Database,
   origin: string,
   realtime: RealtimeCapability,
-  content: Record<string, unknown>,
+  content: TypingEduContent,
 ): Promise<void> {
   if (!realtime.setRoomTyping) {
     return;
@@ -379,7 +382,7 @@ export async function handleFederationTypingEdu(
 export async function handleFederationDirectToDeviceEdu(
   db: D1Database,
   origin: string,
-  content: Record<string, unknown>,
+  content: DirectToDeviceEduContent,
 ): Promise<void> {
   await ingestDirectToDeviceEdu(db, origin, content);
 }

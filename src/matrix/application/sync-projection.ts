@@ -1,4 +1,5 @@
 import type {
+  AccountDataEvent,
   InvitedRoom,
   JoinedRoom,
   KnockedRoom,
@@ -81,7 +82,7 @@ function isLeaveMembershipEvent(event: PDU | null | undefined, userId: string): 
 
 function toStrippedStateSource(
   roomState: PDU[],
-  strippedState: Array<{ type: string; state_key: string; content: any; sender: string }>,
+  strippedState: StrippedStateEvent[],
 ): StrippedStateEvent[] {
   if (strippedState.length > 0) {
     return strippedState;
@@ -161,7 +162,7 @@ export async function projectGlobalAccountData(
   userId: string,
   sincePosition: number,
   filter?: SyncEventFilter,
-): Promise<any[]> {
+): Promise<AccountDataEvent[]> {
   return applyEventFilter(
     await repository.getGlobalAccountData(userId, sincePosition > 0 ? sincePosition : undefined),
     filter,
@@ -239,7 +240,7 @@ export async function projectJoinedRoom(
 
   const receipts = await repository.getReceiptsForRoom(query.roomId, query.userId);
   if (Object.keys(receipts.content).length > 0) {
-    joinedRoom.ephemeral!.events.push(receipts as any);
+    joinedRoom.ephemeral!.events.push(receipts);
   }
 
   joinedRoom.ephemeral!.events.push(

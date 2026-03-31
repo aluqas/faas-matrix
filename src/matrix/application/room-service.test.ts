@@ -4,7 +4,7 @@ import { createFeatureProfile } from "../../foundation/config/feature-profile";
 import { DefaultEventPipeline } from "../domain/event-pipeline";
 import { MatrixRoomService } from "./room-service";
 import type { MembershipRecord, RoomRepository } from "../repositories/interfaces";
-import type { PDU, Room } from "../../types";
+import type { PDU, Room, RoomJoinWorkflowParams } from "../../types";
 
 class MemoryIdempotencyStore {
   private readonly entries = new Map<string, Record<string, unknown>>();
@@ -125,7 +125,7 @@ function createTestAppContext() {
   let eventCounter = 0;
   let roomCounter = 0;
   const pushCalls: Array<Record<string, unknown>> = [];
-  const roomJoinCalls: Array<Record<string, unknown>> = [];
+  const roomJoinCalls: RoomJoinWorkflowParams[] = [];
 
   const appContext = {
     profile: createFeatureProfile("full"),
@@ -135,8 +135,8 @@ function createTestAppContext() {
       blob: {},
       jobs: { defer: (_task: Promise<unknown>) => undefined },
       workflow: {
-        async createRoomJoin(params: unknown) {
-          roomJoinCalls.push(params as Record<string, unknown>);
+        async createRoomJoin(params: RoomJoinWorkflowParams) {
+          roomJoinCalls.push(params);
           return { status: "complete", output: { success: true } };
         },
         async createPushNotification(params: unknown) {

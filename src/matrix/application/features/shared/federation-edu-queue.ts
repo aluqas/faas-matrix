@@ -17,7 +17,7 @@ export async function queueFederationEdu(
   env: Env,
   destination: string,
   eduType: string,
-  content: Record<string, unknown>,
+  content: object,
 ): Promise<void> {
   await emitEffectWarning("[federation-edu-queue] queue", {
     destination,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getRoomState } from "./database";
+import { getEvent, getRoomState } from "./database";
 
 class MockD1Database {
   constructor(
@@ -70,5 +70,37 @@ describe("database state helpers", () => {
     const state = await getRoomState(db as unknown as D1Database, "!room:test");
 
     expect(state.map((event) => event.type)).toContain("m.room.create");
+  });
+
+  it("falls back safely when stored event JSON is malformed", async () => {
+    const db = new MockD1Database([
+      {
+        match: /FROM events WHERE event_id = \?/,
+        first: {
+          event_id: "$bad",
+          room_id: "!room:test",
+          sender: "@alice:test",
+          event_type: "m.room.message",
+          state_key: null,
+          content: "{invalid",
+          origin_server_ts: 2,
+          unsigned: "{invalid",
+          depth: 3,
+          auth_events: "{invalid",
+          prev_events: "{invalid",
+          hashes: "{invalid",
+          signatures: "{invalid",
+        },
+      },
+    ]);
+
+    const event = await getEvent(db as unknown as D1Database, "$bad");
+
+    expect(event).not.toBeNull();
+    expect(event?.content).toEqual({});
+    expect(event?.auth_events).toEqual([]);
+    expect(event?.prev_events).toEqual([]);
+    expect(event?.hashes).toEqual({ sha256: "" });
+    expect(event?.signatures).toEqual({});
   });
 });

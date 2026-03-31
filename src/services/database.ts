@@ -1,7 +1,73 @@
 // Database service layer for D1
 
-import type { User, Device, Room, PDU, Membership, Env } from "../types";
+import type { User, Device, Room, PDU, Membership, Env, StrippedStateEvent } from "../types";
 import { fanoutEventToRemoteServers } from "./federation-fanout";
+
+type StoredEventRow = {
+  event_id: string;
+  room_id: string;
+  sender: string;
+  event_type: string;
+  state_key: string | null;
+  content: string;
+  origin_server_ts: number;
+  unsigned: string | null;
+  depth: number;
+  auth_events: string;
+  prev_events: string;
+  hashes?: string | null;
+  signatures?: string | null;
+  stream_ordering?: number;
+};
+
+function parseJsonWithFallback<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function toStoredPdu(row: StoredEventRow): PDU {
+  return {
+    event_id: row.event_id,
+    room_id: row.room_id,
+    sender: row.sender,
+    type: row.event_type,
+    ...(row.state_key !== null ? { state_key: row.state_key } : {}),
+    content: parseJsonWithFallback<Record<string, unknown>>(row.content, {}),
+    origin_server_ts: row.origin_server_ts,
+    ...(row.unsigned
+      ? { unsigned: parseJsonWithFallback<Record<string, unknown>>(row.unsigned, {}) }
+      : {}),
+    depth: row.depth,
+    auth_events: parseJsonWithFallback<string[]>(row.auth_events, []),
+    prev_events: parseJsonWithFallback<string[]>(row.prev_events, []),
+    ...(row.hashes
+      ? { hashes: parseJsonWithFallback<{ sha256: string }>(row.hashes, { sha256: "" }) }
+      : {}),
+    ...(row.signatures
+      ? {
+          signatures: parseJsonWithFallback<Record<string, Record<string, string>>>(
+            row.signatures,
+            {},
+          ),
+        }
+      : {}),
+  };
+}
+
+function withOptionalValue<K extends string, V>(key: K, value: V | undefined): { [P in K]?: V } {
+  if (value === undefined) {
+    return {};
+  }
+
+  return { [key]: value } as { [P in K]?: V };
+}
 
 // User operations
 export async function createUser(
@@ -58,8 +124,8 @@ export async function getUserById(db: D1Database, userId: string): Promise<User 
   return {
     user_id: result.user_id,
     localpart: result.localpart,
-    display_name: result.display_name ?? undefined,
-    avatar_url: result.avatar_url ?? undefined,
+    ...withOptionalValue("display_name", result.display_name ?? undefined),
+    ...withOptionalValue("avatar_url", result.avatar_url ?? undefined),
     is_guest: result.is_guest === 1,
     is_deactivated: result.is_deactivated === 1,
     admin: result.admin === 1,
@@ -90,8 +156,8 @@ export async function getUserByLocalpart(db: D1Database, localpart: string): Pro
   return {
     user_id: result.user_id,
     localpart: result.localpart,
-    display_name: result.display_name ?? undefined,
-    avatar_url: result.avatar_url ?? undefined,
+    ...withOptionalValue("display_name", result.display_name ?? undefined),
+    ...withOptionalValue("avatar_url", result.avatar_url ?? undefined),
     is_guest: result.is_guest === 1,
     is_deactivated: result.is_deactivated === 1,
     admin: result.admin === 1,
@@ -169,9 +235,9 @@ export async function getDevice(
   return {
     device_id: result.device_id,
     user_id: result.user_id,
-    display_name: result.display_name ?? undefined,
-    last_seen_ts: result.last_seen_ts ?? undefined,
-    last_seen_ip: result.last_seen_ip ?? undefined,
+    ...withOptionalValue("display_name", result.display_name ?? undefined),
+    ...withOptionalValue("last_seen_ts", result.last_seen_ts ?? undefined),
+    ...withOptionalValue("last_seen_ip", result.last_seen_ip ?? undefined),
   };
 }
 
@@ -193,9 +259,9 @@ export async function getUserDevices(db: D1Database, userId: string): Promise<De
   return result.results.map((r) => ({
     device_id: r.device_id,
     user_id: r.user_id,
-    display_name: r.display_name ?? undefined,
-    last_seen_ts: r.last_seen_ts ?? undefined,
-    last_seen_ip: r.last_seen_ip ?? undefined,
+    ...withOptionalValue("display_name", r.display_name ?? undefined),
+    ...withOptionalValue("last_seen_ts", r.last_seen_ts ?? undefined),
+    ...withOptionalValue("last_seen_ip", r.last_seen_ip ?? undefined),
   }));
 }
 
@@ -290,7 +356,7 @@ export async function getRoom(db: D1Database, roomId: string): Promise<Room | nu
     room_id: result.room_id,
     room_version: result.room_version,
     is_public: result.is_public === 1,
-    creator_id: result.creator_id ?? undefined,
+    ...withOptionalValue("creator_id", result.creator_id ?? undefined),
     created_at: result.created_at,
   };
 }
@@ -367,39 +433,11 @@ export async function getEvent(db: D1Database, eventId: string): Promise<PDU | n
      FROM events WHERE event_id = ?`,
     )
     .bind(eventId)
-    .first<{
-      event_id: string;
-      room_id: string;
-      sender: string;
-      event_type: string;
-      state_key: string | null;
-      content: string;
-      origin_server_ts: number;
-      unsigned: string | null;
-      depth: number;
-      auth_events: string;
-      prev_events: string;
-      hashes: string | null;
-      signatures: string | null;
-    }>();
+    .first<StoredEventRow>();
 
   if (!result) return null;
 
-  return {
-    event_id: result.event_id,
-    room_id: result.room_id,
-    sender: result.sender,
-    type: result.event_type,
-    state_key: result.state_key ?? undefined,
-    content: JSON.parse(result.content),
-    origin_server_ts: result.origin_server_ts,
-    unsigned: result.unsigned ? JSON.parse(result.unsigned) : undefined,
-    depth: result.depth,
-    auth_events: JSON.parse(result.auth_events),
-    prev_events: JSON.parse(result.prev_events),
-    hashes: result.hashes ? JSON.parse(result.hashes) : undefined,
-    signatures: result.signatures ? JSON.parse(result.signatures) : undefined,
-  };
+  return toStoredPdu(result);
 }
 
 export async function getRoomEvents(
@@ -435,34 +473,9 @@ export async function getRoomEvents(
   const result = await db
     .prepare(query)
     .bind(...params)
-    .all<{
-      event_id: string;
-      room_id: string;
-      sender: string;
-      event_type: string;
-      state_key: string | null;
-      content: string;
-      origin_server_ts: number;
-      unsigned: string | null;
-      depth: number;
-      auth_events: string;
-      prev_events: string;
-      stream_ordering: number;
-    }>();
+    .all<StoredEventRow>();
 
-  const events = result.results.map((r) => ({
-    event_id: r.event_id,
-    room_id: r.room_id,
-    sender: r.sender,
-    type: r.event_type,
-    state_key: r.state_key ?? undefined,
-    content: JSON.parse(r.content),
-    origin_server_ts: r.origin_server_ts,
-    unsigned: r.unsigned ? JSON.parse(r.unsigned) : undefined,
-    depth: r.depth,
-    auth_events: JSON.parse(r.auth_events),
-    prev_events: JSON.parse(r.prev_events),
-  }));
+  const events = result.results.map(toStoredPdu);
 
   const lastEvent = result.results[result.results.length - 1];
   const end = lastEvent?.stream_ordering ?? fromToken ?? 0;
@@ -481,33 +494,9 @@ export async function getRoomState(db: D1Database, roomId: string): Promise<PDU[
      WHERE rs.room_id = ?`,
     )
     .bind(roomId)
-    .all<{
-      event_id: string;
-      room_id: string;
-      sender: string;
-      event_type: string;
-      state_key: string | null;
-      content: string;
-      origin_server_ts: number;
-      unsigned: string | null;
-      depth: number;
-      auth_events: string;
-      prev_events: string;
-    }>();
+    .all<StoredEventRow>();
 
-  const events = result.results.map((r) => ({
-    event_id: r.event_id,
-    room_id: r.room_id,
-    sender: r.sender,
-    type: r.event_type,
-    state_key: r.state_key ?? undefined,
-    content: JSON.parse(r.content),
-    origin_server_ts: r.origin_server_ts,
-    unsigned: r.unsigned ? JSON.parse(r.unsigned) : undefined,
-    depth: r.depth,
-    auth_events: JSON.parse(r.auth_events),
-    prev_events: JSON.parse(r.prev_events),
-  }));
+  const events = result.results.map(toStoredPdu);
 
   if (!events.some((event) => event.type === "m.room.create")) {
     const createEvent = await db
@@ -519,34 +508,10 @@ export async function getRoomState(db: D1Database, roomId: string): Promise<PDU[
        LIMIT 1`,
       )
       .bind(roomId)
-      .first<{
-        event_id: string;
-        room_id: string;
-        sender: string;
-        event_type: string;
-        state_key: string | null;
-        content: string;
-        origin_server_ts: number;
-        unsigned: string | null;
-        depth: number;
-        auth_events: string;
-        prev_events: string;
-      }>();
+      .first<StoredEventRow>();
 
     if (createEvent) {
-      events.push({
-        event_id: createEvent.event_id,
-        room_id: createEvent.room_id,
-        sender: createEvent.sender,
-        type: createEvent.event_type,
-        state_key: createEvent.state_key ?? undefined,
-        content: JSON.parse(createEvent.content),
-        origin_server_ts: createEvent.origin_server_ts,
-        unsigned: createEvent.unsigned ? JSON.parse(createEvent.unsigned) : undefined,
-        depth: createEvent.depth,
-        auth_events: JSON.parse(createEvent.auth_events),
-        prev_events: JSON.parse(createEvent.prev_events),
-      });
+      events.push(toStoredPdu(createEvent));
     }
   }
 
@@ -568,19 +533,7 @@ export async function getStateEvent(
      WHERE rs.room_id = ? AND rs.event_type = ? AND rs.state_key = ?`,
     )
     .bind(roomId, eventType, stateKey)
-    .first<{
-      event_id: string;
-      room_id: string;
-      sender: string;
-      event_type: string;
-      state_key: string | null;
-      content: string;
-      origin_server_ts: number;
-      unsigned: string | null;
-      depth: number;
-      auth_events: string;
-      prev_events: string;
-    }>();
+    .first<StoredEventRow>();
 
   if (!result && eventType === "m.room.create" && stateKey === "") {
     const createEvent = await db
@@ -592,52 +545,16 @@ export async function getStateEvent(
        LIMIT 1`,
       )
       .bind(roomId)
-      .first<{
-        event_id: string;
-        room_id: string;
-        sender: string;
-        event_type: string;
-        state_key: string | null;
-        content: string;
-        origin_server_ts: number;
-        unsigned: string | null;
-        depth: number;
-        auth_events: string;
-        prev_events: string;
-      }>();
+      .first<StoredEventRow>();
 
     if (createEvent) {
-      return {
-        event_id: createEvent.event_id,
-        room_id: createEvent.room_id,
-        sender: createEvent.sender,
-        type: createEvent.event_type,
-        state_key: createEvent.state_key ?? undefined,
-        content: JSON.parse(createEvent.content),
-        origin_server_ts: createEvent.origin_server_ts,
-        unsigned: createEvent.unsigned ? JSON.parse(createEvent.unsigned) : undefined,
-        depth: createEvent.depth,
-        auth_events: JSON.parse(createEvent.auth_events),
-        prev_events: JSON.parse(createEvent.prev_events),
-      };
+      return toStoredPdu(createEvent);
     }
   }
 
   if (!result) return null;
 
-  return {
-    event_id: result.event_id,
-    room_id: result.room_id,
-    sender: result.sender,
-    type: result.event_type,
-    state_key: result.state_key ?? undefined,
-    content: JSON.parse(result.content),
-    origin_server_ts: result.origin_server_ts,
-    unsigned: result.unsigned ? JSON.parse(result.unsigned) : undefined,
-    depth: result.depth,
-    auth_events: JSON.parse(result.auth_events),
-    prev_events: JSON.parse(result.prev_events),
-  };
+  return toStoredPdu(result);
 }
 
 // Membership operations
@@ -691,13 +608,6 @@ export async function getMembership(
   };
 }
 
-export type StrippedStateEvent = {
-  type: string;
-  state_key: string;
-  content: any;
-  sender: string;
-};
-
 export async function getInviteStrippedState(
   db: D1Database,
   roomId: string,
@@ -711,7 +621,7 @@ export async function getInviteStrippedState(
   return result.results.map((r) => ({
     type: r.event_type,
     state_key: r.state_key,
-    content: JSON.parse(r.content),
+    content: parseJsonWithFallback<Record<string, unknown>>(r.content, {}),
     sender: r.sender,
   }));
 }
@@ -764,8 +674,8 @@ export async function getRoomMembers(
   return result.results.map((r) => ({
     userId: r.user_id,
     membership: r.membership,
-    displayName: r.display_name ?? undefined,
-    avatarUrl: r.avatar_url ?? undefined,
+    ...withOptionalValue("displayName", r.display_name ?? undefined),
+    ...withOptionalValue("avatarUrl", r.avatar_url ?? undefined),
   }));
 }
 
@@ -829,33 +739,9 @@ export async function getEventsSince(
      LIMIT ?`,
     )
     .bind(roomId, since, limit)
-    .all<{
-      event_id: string;
-      room_id: string;
-      sender: string;
-      event_type: string;
-      state_key: string | null;
-      content: string;
-      origin_server_ts: number;
-      unsigned: string | null;
-      depth: number;
-      auth_events: string;
-      prev_events: string;
-    }>();
+    .all<StoredEventRow>();
 
-  return result.results.map((r) => ({
-    event_id: r.event_id,
-    room_id: r.room_id,
-    sender: r.sender,
-    type: r.event_type,
-    state_key: r.state_key ?? undefined,
-    content: JSON.parse(r.content),
-    origin_server_ts: r.origin_server_ts,
-    unsigned: r.unsigned ? JSON.parse(r.unsigned) : undefined,
-    depth: r.depth,
-    auth_events: JSON.parse(r.auth_events),
-    prev_events: JSON.parse(r.prev_events),
-  }));
+  return result.results.map(toStoredPdu);
 }
 
 // Batch retrieve events by IDs
@@ -871,37 +757,9 @@ export async function getEventsByIds(db: D1Database, eventIds: string[]): Promis
      FROM events WHERE event_id IN (${placeholders})`,
     )
     .bind(...eventIds)
-    .all<{
-      event_id: string;
-      room_id: string;
-      sender: string;
-      event_type: string;
-      state_key: string | null;
-      content: string;
-      origin_server_ts: number;
-      unsigned: string | null;
-      depth: number;
-      auth_events: string;
-      prev_events: string;
-      hashes: string | null;
-      signatures: string | null;
-    }>();
+    .all<StoredEventRow>();
 
-  return result.results.map((r) => ({
-    event_id: r.event_id,
-    room_id: r.room_id,
-    sender: r.sender,
-    type: r.event_type,
-    state_key: r.state_key ?? undefined,
-    content: JSON.parse(r.content),
-    origin_server_ts: r.origin_server_ts,
-    unsigned: r.unsigned ? JSON.parse(r.unsigned) : undefined,
-    depth: r.depth,
-    auth_events: JSON.parse(r.auth_events),
-    prev_events: JSON.parse(r.prev_events),
-    hashes: r.hashes ? JSON.parse(r.hashes) : undefined,
-    signatures: r.signatures ? JSON.parse(r.signatures) : undefined,
-  }));
+  return result.results.map(toStoredPdu);
 }
 
 // Get the auth chain for an event (all auth_events recursively)
@@ -992,7 +850,7 @@ export async function getServersInRoomsWithUser(db: D1Database, userId: string):
 }
 
 // Notify all room members' SyncDurableObjects when a new event is stored
-// This wakes up any long-polling sync requests waiting for events
+// This wakes up long-polling sync requests waiting for events
 export async function notifyUsersOfEvent(
   env: Env,
   roomId: string,

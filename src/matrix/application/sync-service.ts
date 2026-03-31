@@ -1,12 +1,8 @@
 import type { AppContext } from "../../foundation/app-context";
 import type { SyncResponse } from "../../types";
 import type { SyncRepository } from "../repositories/interfaces";
-import {
-  buildSyncToken,
-  parseSyncToken,
-  projectSyncResponse,
-  type SyncUserInput,
-} from "./features/sync/project";
+import { projectSyncResponse } from "./features/sync/project";
+import { buildSyncToken, parseSyncToken, type SyncUserInput } from "./features/sync/contracts";
 
 export { buildSyncToken, parseSyncToken, type SyncUserInput };
 

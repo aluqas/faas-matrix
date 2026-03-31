@@ -1,3 +1,5 @@
+import type { DirectToDeviceEduContent } from "./contracts";
+
 async function getNextStreamPosition(db: D1Database, streamName: string): Promise<number> {
   const result = await db
     .prepare(`
@@ -38,15 +40,12 @@ async function getLocalDeviceIds(db: D1Database, userId: string): Promise<string
 export async function ingestDirectToDeviceEdu(
   db: D1Database,
   origin: string,
-  content: Record<string, unknown>,
+  content: DirectToDeviceEduContent,
 ): Promise<void> {
   const sender = typeof content.sender === "string" ? content.sender : origin;
   const eventType = typeof content.type === "string" ? content.type : undefined;
   const messageId = typeof content.message_id === "string" ? content.message_id : undefined;
-  const messages =
-    content.messages && typeof content.messages === "object"
-      ? (content.messages as Record<string, Record<string, unknown>>)
-      : undefined;
+  const messages = content.messages;
 
   if (!eventType || !messageId || !messages) {
     return;

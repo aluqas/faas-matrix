@@ -8,11 +8,24 @@ export interface PresenceCommandInput {
   now: number;
 }
 
+export interface PresenceEduUpdate {
+  user_id: string;
+  presence: PresenceState;
+  status_msg?: string | undefined;
+  last_active_ago?: number | undefined;
+  currently_active?: boolean | undefined;
+}
+
+export interface PresenceEduContent {
+  push: PresenceEduUpdate[];
+}
+
 export interface PresenceCommandPorts {
   persistPresence(input: PresenceCommandInput): Promise<void>;
   resolveInterestedServers(userId: string): Promise<string[]>;
-  queueEdu(destination: string, content: Record<string, unknown>): Promise<void>;
+  queueEdu(destination: string, content: PresenceEduContent): Promise<void>;
   localServerName: string;
+  debugEnabled?: boolean | undefined;
 }
 
 export interface PresenceSyncProjection {
@@ -21,9 +34,9 @@ export interface PresenceSyncProjection {
     sender: string;
     content: {
       presence: PresenceState;
-      status_msg?: string;
-      last_active_ago?: number;
-      currently_active?: boolean;
+      status_msg?: string | undefined;
+      last_active_ago?: number | undefined;
+      currently_active?: boolean | undefined;
     };
   }>;
 }
@@ -31,5 +44,6 @@ export interface PresenceSyncProjection {
 export interface PresenceProjectionQuery {
   userId: string;
   roomIds: string[];
-  filter?: SyncEventFilter;
+  filter?: SyncEventFilter | undefined;
+  debugEnabled?: boolean | undefined;
 }

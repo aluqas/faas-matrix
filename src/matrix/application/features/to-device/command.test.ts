@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import type { DirectToDeviceEduContent } from "./contracts";
 import { dispatchToDeviceMessages } from "./command";
 
 describe("to-device command", () => {
   it("splits local persistence from remote federation dispatch", async () => {
     const stored: Array<Record<string, unknown>> = [];
-    const queued: Array<{ destination: string; content: Record<string, unknown> }> = [];
+    const queued: Array<{ destination: string; content: DirectToDeviceEduContent }> = [];
     let streamPosition = 0;
 
     const result = await dispatchToDeviceMessages(

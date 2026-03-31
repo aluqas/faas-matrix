@@ -7,10 +7,18 @@ export interface TypingCommandInput {
   timeoutMs: number;
 }
 
+export interface TypingEduContent {
+  room_id: string;
+  user_id: string;
+  typing: boolean;
+  timeout?: number | undefined;
+}
+
 export interface TypingCommandPorts {
   setRoomTyping(roomId: string, userId: string, typing: boolean, timeoutMs?: number): Promise<void>;
   resolveInterestedServers(roomId: string): Promise<string[]>;
-  queueEdu(destination: string, content: Record<string, unknown>): Promise<void>;
+  queueEdu(destination: string, content: TypingEduContent): Promise<void>;
+  debugEnabled?: boolean | undefined;
 }
 
 export interface TypingIngestPorts {
@@ -24,5 +32,6 @@ export interface TypingProjectionRepository {
 
 export interface TypingProjectionQuery {
   roomId: string;
-  filter?: SyncEventFilter;
+  filter?: SyncEventFilter | undefined;
+  debugEnabled?: boolean | undefined;
 }

@@ -46,3 +46,18 @@ describe("CloudflareFederationRepository", () => {
     expect(db.statements[1]?.args[0]).toBe("@alice:hs1");
   });
 });
+
+describe("CloudflareSyncRepository", () => {
+  it("returns null for malformed cached filters", async () => {
+    const repositoryModule = await import("./matrix-repositories");
+    const repository = new repositoryModule.CloudflareSyncRepository({
+      CACHE: {
+        async get() {
+          return "{invalid";
+        },
+      },
+    } as never);
+
+    await expect(repository.loadFilter("@alice:test", "filter-id")).resolves.toBeNull();
+  });
+});

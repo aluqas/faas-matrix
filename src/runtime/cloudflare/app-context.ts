@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import type { AppEnv, Env } from "../../types";
+import type { AppEnv, Env, RoomJoinWorkflowParams, RoomJoinWorkflowStatus } from "../../types";
 import type { AppContext } from "../../foundation/app-context";
 import { createFeatureProfile } from "../../foundation/config/feature-profile";
 import type { RuntimeCapabilities } from "../../foundation/runtime-capabilities";
@@ -43,7 +43,7 @@ function createRuntimeCapabilities(
       defer,
     },
     workflow: {
-      async createRoomJoin(params: unknown) {
+      async createRoomJoin(params: RoomJoinWorkflowParams): Promise<RoomJoinWorkflowStatus> {
         const instance = await env.ROOM_JOIN_WORKFLOW.create({ params });
         const startedAt = Date.now();
         let status = await instance.status();
@@ -60,7 +60,7 @@ function createRuntimeCapabilities(
           status = await instance.status();
         }
 
-        return status;
+        return status as RoomJoinWorkflowStatus;
       },
       async createPushNotification(params: unknown) {
         return env.PUSH_NOTIFICATION_WORKFLOW.create({ params });

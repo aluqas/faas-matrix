@@ -12,6 +12,7 @@ import { requireAuth } from "../middleware/auth";
 import { getRoomState } from "../services/database";
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
 import { executeTypingCommand } from "../matrix/application/features/typing/command";
+import type { TypingEduContent } from "../matrix/application/features/typing/contracts";
 
 const app = new Hono<AppEnv>();
 
@@ -42,7 +43,7 @@ async function getRemoteJoinedServers(db: D1Database, roomId: string, localServe
             event.state_key &&
             event.content &&
             typeof event.content === "object" &&
-            event.content.membership === "join",
+            event.content["membership"] === "join",
         )
         .map((event) => extractServerNameFromMatrixId(event.state_key))
         .filter((server): server is string => Boolean(server) && server !== localServerName),
@@ -137,9 +138,10 @@ app.put("/_matrix/client/v3/rooms/:roomId/typing/:userId", requireAuth(), async 
       async resolveInterestedServers(targetRoomId: string) {
         return getRemoteJoinedServers(db, targetRoomId, c.env.SERVER_NAME);
       },
-      async queueEdu(destination: string, content: Record<string, unknown>) {
+      async queueEdu(destination: string, content: TypingEduContent) {
         await queueFederationEdu(c.env, destination, "m.typing", content);
       },
+      debugEnabled: c.get("appContext").profile.name === "complement",
     },
   );
 

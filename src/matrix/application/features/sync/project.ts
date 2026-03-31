@@ -1,6 +1,8 @@
 import type { AppContext } from "../../../../foundation/app-context";
 import type { SyncResponse } from "../../../../types";
 import type { SyncRepository } from "../../../repositories/interfaces";
+import { runClientEffect } from "../../effect-runtime";
+import { withLogContext } from "../../logging";
 import {
   projectDeviceLists,
   projectGlobalAccountData,
@@ -9,46 +11,34 @@ import {
   shouldIncludeRoom,
 } from "../../sync-projection";
 import { projectPresenceEvents } from "../presence/project";
-
-export interface SyncUserInput {
-  userId: string;
-  deviceId: string | null;
-  since?: string;
-  fullState?: boolean;
-  filterParam?: string;
-  timeout?: number;
-}
-
-export function parseSyncToken(token: string | undefined): { events: number; toDevice: number } {
-  if (!token) {
-    return { events: 0, toDevice: 0 };
-  }
-
-  const match = token.match(/^s(\d+)_td(\d+)$/);
-  if (match) {
-    return {
-      events: Number.parseInt(match[1], 10),
-      toDevice: Number.parseInt(match[2], 10),
-    };
-  }
-
-  const fallback = Number.parseInt(token, 10);
-  if (!Number.isNaN(fallback)) {
-    return { events: fallback, toDevice: fallback };
-  }
-
-  return { events: 0, toDevice: 0 };
-}
-
-export function buildSyncToken(eventsPos: number, toDevicePos: number): string {
-  return `s${eventsPos}_td${toDevicePos}`;
-}
+import {
+  buildSyncToken,
+  parseSyncToken,
+  summarizeSyncResponse,
+  type SyncUserInput,
+} from "./contracts";
 
 export async function projectSyncResponse(
   appContext: AppContext,
   repository: SyncRepository,
   input: SyncUserInput,
 ): Promise<SyncResponse> {
+  const logger = withLogContext({
+    component: "sync",
+    operation: "project",
+    user_id: input.userId,
+    device_id: input.deviceId ?? undefined,
+    debugEnabled: appContext.profile.name === "complement",
+  });
+  await runClientEffect(
+    logger.debug("sync.project.start", {
+      has_device_id: Boolean(input.deviceId),
+      since: input.since,
+      full_state: Boolean(input.fullState),
+      has_filter: Boolean(input.filterParam),
+      timeout_ms: input.timeout ?? 0,
+    }),
+  );
   const filter = await repository.loadFilter(input.userId, input.filterParam);
   const { events: sincePosition, toDevice: sinceToDevice } = parseSyncToken(input.since);
   const currentPosition = await repository.getLatestStreamPosition();
@@ -70,7 +60,7 @@ export async function projectSyncResponse(
       input.deviceId,
       String(sinceToDevice),
     );
-    response.to_device!.events = toDeviceResult.events as any[];
+    response.to_device!.events = toDeviceResult.events;
     currentToDevicePos = Number.parseInt(toDeviceResult.nextBatch, 10) || sinceToDevice;
     response.device_one_time_keys_count = await repository.getOneTimeKeyCounts(
       input.userId,
@@ -127,6 +117,7 @@ export async function projectSyncResponse(
       userId: input.userId,
       roomIds: joinedRoomIds,
       filter: filter?.presence,
+      debugEnabled: appContext.profile.name === "complement",
     },
   );
 
@@ -158,6 +149,12 @@ export async function projectSyncResponse(
   const timeout = Math.min(input.timeout || 0, 30000);
 
   if (!hasChanges && timeout > 0 && sincePosition > 0) {
+    await runClientEffect(
+      logger.debug("sync.project.long_poll", {
+        timeout_ms: timeout,
+        since_position: sincePosition,
+      }),
+    );
     await repository.waitForUserEvents(input.userId, Math.min(timeout, 25000));
     return projectSyncResponse(appContext, repository, {
       ...input,
@@ -166,5 +163,19 @@ export async function projectSyncResponse(
   }
 
   response.next_batch = buildSyncToken(currentPosition, currentToDevicePos);
+  const summary = summarizeSyncResponse(response);
+  await runClientEffect(
+    logger.info("sync.project.result", {
+      joined_room_count: summary.joinedRoomCount,
+      invite_room_count: summary.inviteRoomCount,
+      leave_room_count: summary.leaveRoomCount,
+      knock_room_count: summary.knockRoomCount,
+      to_device_count: summary.toDeviceCount,
+      account_data_count: summary.accountDataCount,
+      presence_count: summary.presenceCount,
+      device_list_changed_count: summary.deviceListChangedCount,
+      device_list_left_count: summary.deviceListLeftCount,
+    }),
+  );
   return response;
 }

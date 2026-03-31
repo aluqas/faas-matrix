@@ -98,7 +98,9 @@ function createTestAppContext(): AppContext {
       blob: {},
       jobs: { defer() {} },
       workflow: {
-        async createRoomJoin() {},
+        async createRoomJoin() {
+          return { status: "complete", output: { success: true } };
+        },
         async createPushNotification() {},
       },
       rateLimit: {},

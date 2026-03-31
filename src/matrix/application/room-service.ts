@@ -2,7 +2,7 @@ import type { AppContext } from "../../foundation/app-context";
 import { withIdempotency, type IdempotencyStore } from "../../foundation/idempotency";
 import { Errors, MatrixApiError } from "../../utils/errors";
 import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
-import type { PDU } from "../../types";
+import type { PDU, RoomJoinWorkflowStatus } from "../../types";
 import type { EventPipeline } from "../domain/event-pipeline";
 import type { RoomRepository } from "../repositories/interfaces";
 import {
@@ -23,8 +23,9 @@ import {
   authorizeUnban,
   validateLeavePreconditions,
 } from "./room-membership-policy";
-import { runDomainEffect } from "./domain-error";
+import { runClientEffect } from "./effect-runtime";
 import { emitEffectWarning } from "./effect-debug";
+import { withLogContext, type LogContext } from "./logging";
 import {
   validateCreateRoomRequest,
   validateInviteRoomRequest,
@@ -72,6 +73,14 @@ export interface ModerateRoomInput {
 
 type TransactionResponse = Record<string, unknown>;
 
+function withOptionalValue<K extends string, V>(key: K, value: V | undefined): { [P in K]?: V } {
+  if (value === undefined) {
+    return {};
+  }
+
+  return { [key]: value } as { [P in K]?: V };
+}
+
 async function attachFederationMetadata(
   db: D1Database,
   serverName: string,
@@ -96,7 +105,7 @@ async function attachFederationMetadata(
     hashes: { sha256: hash },
   };
   if (roomVersionBehavior?.eventIdFormat !== "v1") {
-    delete signingPayload.event_id;
+    delete signingPayload["event_id"];
   }
 
   const signed = await signJson(
@@ -106,10 +115,12 @@ async function attachFederationMetadata(
     signingKey.privateKeyJwk,
   );
 
+  const signatures = signed["signatures"] as Record<string, Record<string, string>> | undefined;
+
   return {
     ...event,
     hashes: { sha256: hash },
-    signatures: signed.signatures as Record<string, Record<string, string>> | undefined,
+    ...withOptionalValue("signatures", signatures),
   };
 }
 
@@ -121,8 +132,21 @@ export class MatrixRoomService {
     private readonly idempotencyStore: IdempotencyStore<TransactionResponse>,
   ) {}
 
+  private createLogger(
+    operation: string,
+    context: Omit<LogContext, "component" | "operation" | "debugEnabled"> = {},
+  ) {
+    return withLogContext({
+      component: "room-service",
+      operation,
+      debugEnabled: this.appContext.profile.name !== "lite",
+      ...context,
+    });
+  }
+
   async createRoom(input: CreateRoomInput): Promise<{ room_id: string; room_alias?: string }> {
-    const validated = await runDomainEffect(validateCreateRoomRequest(input.body));
+    const logger = this.createLogger("create_room", { user_id: input.userId });
+    const validated = await runClientEffect(validateCreateRoomRequest(input.body));
     const {
       room_alias_local_part,
       name,
@@ -134,6 +158,15 @@ export class MatrixRoomService {
       is_direct,
       visibility,
     } = validated;
+    await runClientEffect(
+      logger.info("room.command.start", {
+        command: "create_room",
+        invite_count: invite?.length ?? 0,
+        room_version: room_version ?? getDefaultRoomVersion(),
+        visibility,
+        has_alias: Boolean(room_alias_local_part),
+      }),
+    );
 
     if (room_alias_local_part) {
       const alias = this.appContext.capabilities.id.formatRoomAlias(
@@ -161,17 +194,20 @@ export class MatrixRoomService {
       version,
       input.userId,
       {
-        name,
-        topic,
-        preset,
-        is_direct,
-        initial_state: initial_state?.map((state) => ({
-          type: state.type,
-          state_key: state.state_key,
-          content: { ...state.content },
-        })),
-        invite: invite ? [...invite] : undefined,
-        room_alias_local_part,
+        ...withOptionalValue("name", name),
+        ...withOptionalValue("topic", topic),
+        ...withOptionalValue("preset", preset),
+        ...withOptionalValue("is_direct", is_direct),
+        ...withOptionalValue(
+          "initial_state",
+          initial_state?.map((state) => ({
+            type: state.type,
+            content: { ...state.content },
+            ...withOptionalValue("state_key", state.state_key),
+          })),
+        ),
+        ...withOptionalValue("invite", invite ? [...invite] : undefined),
+        ...withOptionalValue("room_alias_local_part", room_alias_local_part),
       },
       this.appContext.capabilities.id.generateEventId,
       this.appContext.capabilities.clock.now,
@@ -208,23 +244,39 @@ export class MatrixRoomService {
             roomId,
             inviteEvent,
           ).catch((error) => {
-            console.error("[room-service.createRoom] Failed to send federation invite:", error);
+            void runClientEffect(
+              logger.error("room.command.async_error", error, {
+                command: "create_room",
+                room_id: roomId,
+                target_user_id: invitee,
+                phase: "send_federation_invite",
+              }),
+            );
           }),
         );
       }
     }
 
-    return {
-      room_id: roomId,
-      room_alias: roomAlias,
-    };
+    await runClientEffect(
+      logger.info("room.command.success", {
+        command: "create_room",
+        room_id: roomId,
+        room_alias: roomAlias,
+      }),
+    );
+
+    return { room_id: roomId, ...withOptionalValue("room_alias", roomAlias) };
   }
 
   async joinRoom(input: JoinRoomInput): Promise<{ room_id: string }> {
-    const validated = await runDomainEffect(
+    const logger = this.createLogger("join_room", {
+      room_id: input.roomId,
+      user_id: input.userId,
+    });
+    const validated = await runClientEffect(
       validateJoinRoomRequest({
         roomId: input.roomId,
-        remoteServers: input.remoteServers,
+        ...withOptionalValue("remoteServers", input.remoteServers),
       }),
     );
     const roomServer = getServerFromRoomId(validated.roomId);
@@ -243,25 +295,47 @@ export class MatrixRoomService {
     const needsRemoteStubJoin = Boolean(
       room && (isRemoteRoom || preferredRemoteServer) && !createEvent,
     );
+    await runClientEffect(
+      logger.info("room.command.start", {
+        command: "join_room",
+        is_remote_room: isRemoteRoom,
+        remote_server_count: allRemoteServers.length,
+        needs_remote_stub_join: needsRemoteStubJoin,
+      }),
+    );
 
     if ((!room && (isRemoteRoom || preferredRemoteServer)) || needsRemoteStubJoin) {
-      const instance = await this.appContext.capabilities.workflow.createRoomJoin({
-        roomId: validated.roomId,
-        userId: input.userId,
-        isRemote: true,
-        remoteServer: preferredRemoteServer,
-        remoteServers: allRemoteServers.length > 0 ? allRemoteServers : undefined,
-      });
-
-      const status = (await instance) as
-        | { status?: string; output?: { success?: boolean } }
-        | undefined;
+      const status: RoomJoinWorkflowStatus =
+        await this.appContext.capabilities.workflow.createRoomJoin({
+          roomId: validated.roomId,
+          userId: input.userId,
+          isRemote: true,
+          ...withOptionalValue("remoteServer", preferredRemoteServer),
+          ...withOptionalValue(
+            "remoteServers",
+            allRemoteServers.length > 0 ? allRemoteServers : undefined,
+          ),
+        });
 
       if (!status || status.status === "running" || status.status === "queued") {
+        await runClientEffect(
+          logger.info("room.command.success", {
+            command: "join_room",
+            room_id: validated.roomId,
+            workflow_status: status?.status ?? "unknown",
+          }),
+        );
         return { room_id: validated.roomId };
       }
 
       if (status.status === "complete" && status.output?.success) {
+        await runClientEffect(
+          logger.info("room.command.success", {
+            command: "join_room",
+            room_id: validated.roomId,
+            workflow_status: status.status,
+          }),
+        );
         return { room_id: validated.roomId };
       }
 
@@ -285,7 +359,7 @@ export class MatrixRoomService {
           validated.roomId,
           "m.room.join_rules",
         );
-        await runDomainEffect(
+        await runClientEffect(
           authorizeLocalJoin({
             roomVersion: auth.roomVersion,
             joinRule: getJoinRuleFromContent(
@@ -336,19 +410,22 @@ export class MatrixRoomService {
           serverName: this.appContext.capabilities.config.serverName,
           generateEventId: this.appContext.capabilities.id.generateEventId,
           now: this.appContext.capabilities.clock.now,
-          roomVersion: auth.roomVersion,
-          currentMembershipEventId: currentMembership?.eventId,
-          joinRulesEventId: joinRulesEvent?.event_id,
-          powerLevelsEventId: powerLevelsEvent?.event_id,
-          createEventId: createEvent?.event_id,
+          ...withOptionalValue("roomVersion", auth.roomVersion),
+          ...withOptionalValue("currentMembershipEventId", currentMembership?.eventId),
+          ...withOptionalValue("joinRulesEventId", joinRulesEvent?.event_id),
+          ...withOptionalValue("powerLevelsEventId", powerLevelsEvent?.event_id),
+          ...withOptionalValue("createEventId", createEvent?.event_id),
           prevEventIds: latestEvents.map((event) => event.event_id),
           depth: (latestEvents[0]?.depth ?? 0) + 1,
-          unsigned: prevContent
-            ? {
-                prev_content: prevContent,
-                prev_sender: prevSender,
-              }
-            : undefined,
+          ...withOptionalValue(
+            "unsigned",
+            prevContent
+              ? {
+                  prev_content: prevContent,
+                  ...withOptionalValue("prev_sender", prevSender),
+                }
+              : undefined,
+          ),
         });
       },
       persist: async (_pipelineInput, _auth, event) => {
@@ -374,23 +451,46 @@ export class MatrixRoomService {
             validated.roomId,
             event,
           ).catch((error) => {
-            console.error("[room-service.joinRoom] Failed to fan out join event:", error);
+            void runClientEffect(
+              logger.error("room.command.async_error", error, {
+                command: "join_room",
+                room_id: validated.roomId,
+                event_id: event.event_id,
+                phase: "fanout_join",
+              }),
+            );
           }),
         );
       },
     });
 
+    await runClientEffect(
+      logger.info("room.command.success", {
+        command: "join_room",
+        room_id: validated.roomId,
+      }),
+    );
+
     return { room_id: validated.roomId };
   }
 
   async leaveRoom(input: LeaveRoomInput): Promise<void> {
+    const logger = this.createLogger("leave_room", {
+      room_id: input.roomId,
+      user_id: input.userId,
+    });
+    await runClientEffect(
+      logger.info("room.command.start", {
+        command: "leave_room",
+      }),
+    );
     await this.eventPipeline.execute({
       input,
       validate: () => undefined,
       resolveAuth: async () => ({ userId: input.userId }),
       authorize: async (_pipelineInput, auth) => {
         const membership = await this.repository.getMembership(input.roomId, auth.userId);
-        await runDomainEffect(validateLeavePreconditions(membership?.membership));
+        await runClientEffect(validateLeavePreconditions(membership?.membership));
       },
       buildEvent: async (_pipelineInput, auth) => {
         const currentMembership = await this.repository.getMembership(input.roomId, auth.userId);
@@ -422,17 +522,20 @@ export class MatrixRoomService {
           serverName: this.appContext.capabilities.config.serverName,
           generateEventId: this.appContext.capabilities.id.generateEventId,
           now: this.appContext.capabilities.clock.now,
-          currentMembershipEventId: currentMembership?.eventId,
-          powerLevelsEventId: powerLevelsEvent?.event_id,
-          createEventId: createEvent?.event_id,
+          ...withOptionalValue("currentMembershipEventId", currentMembership?.eventId),
+          ...withOptionalValue("powerLevelsEventId", powerLevelsEvent?.event_id),
+          ...withOptionalValue("createEventId", createEvent?.event_id),
           prevEventIds: latestEvents.map((event) => event.event_id),
           depth: (latestEvents[0]?.depth ?? 0) + 1,
-          unsigned: prevContent
-            ? {
-                prev_content: prevContent,
-                prev_sender: prevSender,
-              }
-            : undefined,
+          ...withOptionalValue(
+            "unsigned",
+            prevContent
+              ? {
+                  prev_content: prevContent,
+                  ...withOptionalValue("prev_sender", prevSender),
+                }
+              : undefined,
+          ),
         });
       },
       persist: async (_pipelineInput, _auth, event) => {
@@ -451,18 +554,40 @@ export class MatrixRoomService {
             input.roomId,
             event,
           ).catch((error) => {
-            console.error("[room-service.leaveRoom] Failed to fan out leave event:", error);
+            void runClientEffect(
+              logger.error("room.command.async_error", error, {
+                command: "leave_room",
+                room_id: input.roomId,
+                event_id: event.event_id,
+                phase: "fanout_leave",
+              }),
+            );
           }),
         );
       },
     });
+    await runClientEffect(
+      logger.info("room.command.success", {
+        command: "leave_room",
+      }),
+    );
   }
 
   async inviteRoom(input: InviteRoomInput): Promise<void> {
-    const validated = await runDomainEffect(
+    const logger = this.createLogger("invite_room", {
+      room_id: input.roomId,
+      user_id: input.userId,
+    });
+    const validated = await runClientEffect(
       validateInviteRoomRequest({
         roomId: input.roomId,
         targetUserId: input.targetUserId,
+      }),
+    );
+    await runClientEffect(
+      logger.info("room.command.start", {
+        command: "invite_room",
+        target_user_id: validated.targetUserId,
       }),
     );
 
@@ -485,17 +610,17 @@ export class MatrixRoomService {
         );
         const powerLevels =
           (powerLevelsEvent?.content as Record<string, unknown> | undefined) ?? {};
-        const users = (powerLevels.users as Record<string, number> | undefined) ?? {};
+        const users = (powerLevels["users"] as Record<string, number> | undefined) ?? {};
         const usersDefault =
-          typeof powerLevels.users_default === "number" ? powerLevels.users_default : 0;
+          typeof powerLevels["users_default"] === "number" ? powerLevels["users_default"] : 0;
         const inviterPower = users[auth.userId] ?? usersDefault;
-        const invitePower = typeof powerLevels.invite === "number" ? powerLevels.invite : 50;
+        const invitePower = typeof powerLevels["invite"] === "number" ? powerLevels["invite"] : 50;
 
         if (inviteeMembership?.membership === "invite") {
           return;
         }
 
-        await runDomainEffect(
+        await runClientEffect(
           authorizeLocalInvite({
             inviterMembership: inviterMembership?.membership,
             inviteeMembership: inviteeMembership?.membership,
@@ -532,9 +657,9 @@ export class MatrixRoomService {
           serverName: this.appContext.capabilities.config.serverName,
           generateEventId: this.appContext.capabilities.id.generateEventId,
           now: this.appContext.capabilities.clock.now,
-          createEventId: createEvent?.event_id,
-          powerLevelsEventId: powerLevelsEvent?.event_id,
-          currentMembershipEventId: inviterMembership?.eventId,
+          ...withOptionalValue("createEventId", createEvent?.event_id),
+          ...withOptionalValue("powerLevelsEventId", powerLevelsEvent?.event_id),
+          ...withOptionalValue("currentMembershipEventId", inviterMembership?.eventId),
           prevEventIds: latestEvents.map((event) => event.event_id),
           depth: (latestEvents[0]?.depth ?? 0) + 1,
         });
@@ -564,7 +689,15 @@ export class MatrixRoomService {
             validated.roomId,
             event,
           ).catch((error) => {
-            console.error("[room-service.inviteRoom] Failed to send federation invite:", error);
+            void runClientEffect(
+              logger.error("room.command.async_error", error, {
+                command: "invite_room",
+                room_id: validated.roomId,
+                event_id: event.event_id,
+                target_user_id: validated.targetUserId,
+                phase: "send_federation_invite",
+              }),
+            );
           }),
         );
 
@@ -576,23 +709,37 @@ export class MatrixRoomService {
             validated.roomId,
             event,
           ).catch((error) => {
-            console.error("[room-service.inviteRoom] Failed to fan out invite event:", error);
+            void runClientEffect(
+              logger.error("room.command.async_error", error, {
+                command: "invite_room",
+                room_id: validated.roomId,
+                event_id: event.event_id,
+                target_user_id: validated.targetUserId,
+                phase: "fanout_invite",
+              }),
+            );
           }),
         );
       },
     });
+    await runClientEffect(
+      logger.info("room.command.success", {
+        command: "invite_room",
+        target_user_id: validated.targetUserId,
+      }),
+    );
   }
 
   async kickUser(input: ModerateRoomInput): Promise<void> {
-    const validated = await runDomainEffect(validateModerationRequest(input));
+    const validated = await runClientEffect(validateModerationRequest(input));
     await this.executeModerationAction({
       actorUserId: input.userId,
       roomId: validated.roomId,
       targetUserId: validated.targetUserId,
       membership: "leave",
-      reason: validated.reason,
+      ...withOptionalValue("reason", validated.reason),
       authorize: async (context) => {
-        await runDomainEffect(
+        await runClientEffect(
           authorizeKick({
             actorMembership: context.actorMembership?.membership,
             targetMembership: context.targetMembership?.membership,
@@ -607,15 +754,15 @@ export class MatrixRoomService {
   }
 
   async banUser(input: ModerateRoomInput): Promise<void> {
-    const validated = await runDomainEffect(validateModerationRequest(input));
+    const validated = await runClientEffect(validateModerationRequest(input));
     await this.executeModerationAction({
       actorUserId: input.userId,
       roomId: validated.roomId,
       targetUserId: validated.targetUserId,
       membership: "ban",
-      reason: validated.reason,
+      ...withOptionalValue("reason", validated.reason),
       authorize: async (context) => {
-        await runDomainEffect(
+        await runClientEffect(
           authorizeBan({
             actorMembership: context.actorMembership?.membership,
             actorPower: context.actorPower,
@@ -628,15 +775,15 @@ export class MatrixRoomService {
   }
 
   async unbanUser(input: ModerateRoomInput): Promise<void> {
-    const validated = await runDomainEffect(validateModerationRequest(input));
+    const validated = await runClientEffect(validateModerationRequest(input));
     await this.executeModerationAction({
       actorUserId: input.userId,
       roomId: validated.roomId,
       targetUserId: validated.targetUserId,
       membership: "leave",
-      reason: validated.reason,
+      ...withOptionalValue("reason", validated.reason),
       authorize: async (context) => {
-        await runDomainEffect(
+        await runClientEffect(
           authorizeUnban({
             actorMembership: context.actorMembership?.membership,
             targetMembership: context.targetMembership?.membership,
@@ -649,6 +796,18 @@ export class MatrixRoomService {
   }
 
   async sendEvent(input: SendEventInput): Promise<{ event_id: string }> {
+    const logger = this.createLogger("send_event", {
+      room_id: input.roomId,
+      user_id: input.userId,
+    });
+    await runClientEffect(
+      logger.info("room.command.start", {
+        command: "send_event",
+        event_type: input.eventType,
+        state_key: input.stateKey,
+        txn_id: input.txnId,
+      }),
+    );
     const response = await withIdempotency(
       this.idempotencyStore,
       input.userId,
@@ -695,7 +854,7 @@ export class MatrixRoomService {
               room_id: input.roomId,
               sender: auth.userId,
               type: input.eventType,
-              state_key: input.stateKey,
+              ...withOptionalValue("state_key", input.stateKey),
               content: input.content,
               origin_server_ts: this.appContext.capabilities.clock.now(),
               unsigned: { transaction_id: input.txnId },
@@ -778,7 +937,15 @@ export class MatrixRoomService {
                 federatedEvent,
               );
             } catch (error) {
-              console.error("[room-service.sendEvent] Failed to fan out event:", error);
+              await runClientEffect(
+                logger.error("room.command.async_error", error, {
+                  command: "send_event",
+                  room_id: input.roomId,
+                  event_id: federatedEvent.event_id,
+                  event_type: input.eventType,
+                  phase: "fanout_event",
+                }),
+              );
             }
           },
         });
@@ -787,6 +954,13 @@ export class MatrixRoomService {
         if (typeof eventId !== "string") {
           throw new MatrixApiError("M_UNKNOWN", "Event persistence failed", 500);
         }
+        await runClientEffect(
+          logger.info("room.command.success", {
+            command: "send_event",
+            event_id: eventId,
+            event_type: input.eventType,
+          }),
+        );
         return { event_id: eventId };
       },
     );
@@ -809,6 +983,17 @@ export class MatrixRoomService {
       banPower: number;
     }) => Promise<void>;
   }): Promise<void> {
+    const logger = this.createLogger("moderate_membership", {
+      room_id: input.roomId,
+      user_id: input.actorUserId,
+    });
+    await runClientEffect(
+      logger.info("room.command.start", {
+        command: "moderate_membership",
+        membership: input.membership,
+        target_user_id: input.targetUserId,
+      }),
+    );
     await this.eventPipeline.execute({
       input,
       validate: () => undefined,
@@ -833,9 +1018,9 @@ export class MatrixRoomService {
         );
         const powerLevels =
           (powerLevelsEvent?.content as Record<string, unknown> | undefined) ?? {};
-        const users = (powerLevels.users as Record<string, number> | undefined) ?? {};
+        const users = (powerLevels["users"] as Record<string, number> | undefined) ?? {};
         const usersDefault =
-          typeof powerLevels.users_default === "number" ? powerLevels.users_default : 0;
+          typeof powerLevels["users_default"] === "number" ? powerLevels["users_default"] : 0;
 
         await input.authorize({
           actorMembership,
@@ -843,8 +1028,8 @@ export class MatrixRoomService {
           targetMembershipEvent,
           actorPower: users[input.actorUserId] ?? usersDefault,
           targetPower: users[input.targetUserId] ?? usersDefault,
-          kickPower: typeof powerLevels.kick === "number" ? powerLevels.kick : 50,
-          banPower: typeof powerLevels.ban === "number" ? powerLevels.ban : 50,
+          kickPower: typeof powerLevels["kick"] === "number" ? powerLevels["kick"] : 50,
+          banPower: typeof powerLevels["ban"] === "number" ? powerLevels["ban"] : 50,
         });
       },
       buildEvent: async () => {
@@ -880,21 +1065,27 @@ export class MatrixRoomService {
           userId: input.targetUserId,
           sender: input.actorUserId,
           membership: input.membership,
-          content: input.reason ? { reason: input.reason } : undefined,
+          ...withOptionalValue("content", input.reason ? { reason: input.reason } : undefined),
           serverName: this.appContext.capabilities.config.serverName,
           generateEventId: this.appContext.capabilities.id.generateEventId,
           now: this.appContext.capabilities.clock.now,
-          createEventId: createEvent?.event_id,
-          powerLevelsEventId: powerLevelsEvent?.event_id,
-          currentMembershipEventId: targetMembership?.eventId ?? actorMembership?.eventId,
+          ...withOptionalValue("createEventId", createEvent?.event_id),
+          ...withOptionalValue("powerLevelsEventId", powerLevelsEvent?.event_id),
+          ...withOptionalValue(
+            "currentMembershipEventId",
+            targetMembership?.eventId ?? actorMembership?.eventId,
+          ),
           prevEventIds: latestEvents.map((event) => event.event_id),
           depth: (latestEvents[0]?.depth ?? 0) + 1,
-          unsigned: prevContent
-            ? {
-                prev_content: prevContent,
-                prev_sender: prevSender,
-              }
-            : undefined,
+          ...withOptionalValue(
+            "unsigned",
+            prevContent
+              ? {
+                  prev_content: prevContent,
+                  ...withOptionalValue("prev_sender", prevSender),
+                }
+              : undefined,
+          ),
         });
         return event;
       },
@@ -906,5 +1097,12 @@ export class MatrixRoomService {
         await this.repository.notifyUsersOfEvent(input.roomId, event.event_id, "m.room.member");
       },
     });
+    await runClientEffect(
+      logger.info("room.command.success", {
+        command: "moderate_membership",
+        membership: input.membership,
+        target_user_id: input.targetUserId,
+      }),
+    );
   }
 }

@@ -1,14 +1,14 @@
 import { extractServerNameFromMatrixId } from "../shared/matrix-id";
-import type { TypingIngestPorts } from "./contracts";
+import type { TypingEduContent, TypingIngestPorts } from "./contracts";
 
 export async function ingestTypingEdu(
   origin: string,
-  content: Record<string, unknown>,
+  content: TypingEduContent,
   ports: TypingIngestPorts,
 ): Promise<void> {
-  const roomId = typeof content.room_id === "string" ? content.room_id : undefined;
-  const userId = typeof content.user_id === "string" ? content.user_id : undefined;
-  const typing = typeof content.typing === "boolean" ? content.typing : undefined;
+  const roomId = content.room_id;
+  const userId = content.user_id;
+  const typing = content.typing;
   const timeoutMs =
     typeof content.timeout === "number" && content.timeout > 0 ? content.timeout : undefined;
 

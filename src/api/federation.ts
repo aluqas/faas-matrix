@@ -19,6 +19,7 @@ import {
   loadMembershipTransitionContext,
 } from "../matrix/application/membership-transition-service";
 import { DomainError, toMatrixApiError } from "../matrix/application/domain-error";
+import { runFederationEffect } from "../matrix/application/effect-runtime";
 import {
   ensureFederatedRoomStub,
   getMissingFederationEvents,
@@ -60,7 +61,7 @@ app.route("/", federationQueryRoutes);
 app.route("/", federationSpaceRoutes);
 
 async function runDomainValidation<A>(effect: Effect.Effect<A, DomainError>): Promise<A> {
-  return Effect.runPromise(effect);
+  return runFederationEffect(effect);
 }
 
 function toFederationErrorResponse(error: unknown): Response | null {

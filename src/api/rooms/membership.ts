@@ -13,7 +13,7 @@ import {
   authorizeLocalKnock,
   validateKnockPreconditions,
 } from "../../matrix/application/room-membership-policy";
-import { runDomainEffect } from "../../matrix/application/domain-error";
+import { runClientEffect } from "../../matrix/application/effect-runtime";
 import { getServerFromRoomId } from "../../matrix/application/rooms-support";
 import { fanoutEventToRemoteServers } from "../../services/federation-fanout";
 import {
@@ -39,7 +39,7 @@ async function handleKnock(
 
   const currentMembership = await getMembership(db, roomId, userId);
   try {
-    await runDomainEffect(validateKnockPreconditions(currentMembership?.membership));
+    await runClientEffect(validateKnockPreconditions(currentMembership?.membership));
   } catch (error) {
     if (error instanceof Error && "toResponse" in error) {
       return (error as { toResponse(): Response }).toResponse();
@@ -136,7 +136,7 @@ async function handleKnock(
 
   const joinRulesEvent = await getStateEvent(db, roomId, "m.room.join_rules");
   try {
-    await runDomainEffect(
+    await runClientEffect(
       authorizeLocalKnock({
         roomVersion: room.room_version,
         joinRule: (joinRulesEvent?.content as { join_rule?: string } | null)?.join_rule,
