@@ -596,8 +596,33 @@ export async function getMembership(
   userId: string,
 ): Promise<{ membership: Membership; eventId: string } | null> {
   const result = await db
-    .prepare(`SELECT membership, event_id FROM room_memberships WHERE room_id = ? AND user_id = ?`)
-    .bind(roomId, userId)
+    .prepare(
+      `
+      WITH membership_sources AS (
+        SELECT
+          json_extract(e.content, '$.membership') AS membership,
+          rs.event_id AS event_id,
+          0 AS precedence
+        FROM room_state rs
+        JOIN events e ON rs.event_id = e.event_id
+        WHERE rs.room_id = ?
+          AND rs.event_type = 'm.room.member'
+          AND rs.state_key = ?
+
+        UNION ALL
+
+        SELECT membership, event_id, 1 AS precedence
+        FROM room_memberships
+        WHERE room_id = ? AND user_id = ?
+      )
+      SELECT membership, event_id
+      FROM membership_sources
+      WHERE membership IN ('join', 'invite', 'leave', 'ban', 'knock')
+      ORDER BY precedence
+      LIMIT 1
+    `,
+    )
+    .bind(roomId, userId, roomId, userId)
     .first<{ membership: Membership; event_id: string }>();
 
   if (!result) return null;
@@ -631,8 +656,27 @@ export async function getUserRooms(
   userId: string,
   membership?: Membership,
 ): Promise<string[]> {
-  let query = `SELECT room_id FROM room_memberships WHERE user_id = ?`;
-  const params: string[] = [userId];
+  let query = `
+    WITH membership_sources AS (
+      SELECT room_id, membership
+      FROM room_memberships
+      WHERE user_id = ?
+
+      UNION
+
+      SELECT
+        rs.room_id,
+        json_extract(e.content, '$.membership') AS membership
+      FROM room_state rs
+      JOIN events e ON rs.event_id = e.event_id
+      WHERE rs.event_type = 'm.room.member'
+        AND rs.state_key = ?
+    )
+    SELECT DISTINCT room_id
+    FROM membership_sources
+    WHERE membership IN ('join', 'invite', 'leave', 'ban', 'knock')
+  `;
+  const params: string[] = [userId, userId];
 
   if (membership) {
     query += ` AND membership = ?`;

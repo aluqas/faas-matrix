@@ -12,6 +12,7 @@ export interface SyncUserInput {
 export interface SyncTokenPosition {
   events: number;
   toDevice: number;
+  deviceKeys: number;
 }
 
 export interface SyncProjectionSummary {
@@ -28,27 +29,34 @@ export interface SyncProjectionSummary {
 
 export function parseSyncToken(token: string | undefined): SyncTokenPosition {
   if (!token) {
-    return { events: 0, toDevice: 0 };
+    return { events: 0, toDevice: 0, deviceKeys: 0 };
   }
 
-  const match = token.match(/^s(\d+)_td(\d+)$/);
+  const match = token.match(/^s(\d+)_td(\d+)(?:_dk(\d+))?$/);
   if (match) {
+    const events = Number.parseInt(match[1] ?? "0", 10);
+    const toDevice = Number.parseInt(match[2] ?? "0", 10);
     return {
-      events: Number.parseInt(match[1] ?? "0", 10),
-      toDevice: Number.parseInt(match[2] ?? "0", 10),
+      events,
+      toDevice,
+      deviceKeys: Number.parseInt(match[3] ?? String(events), 10),
     };
   }
 
   const fallback = Number.parseInt(token, 10);
   if (!Number.isNaN(fallback)) {
-    return { events: fallback, toDevice: fallback };
+    return { events: fallback, toDevice: fallback, deviceKeys: fallback };
   }
 
-  return { events: 0, toDevice: 0 };
+  return { events: 0, toDevice: 0, deviceKeys: 0 };
 }
 
-export function buildSyncToken(eventsPos: number, toDevicePos: number): string {
-  return `s${eventsPos}_td${toDevicePos}`;
+export function buildSyncToken(
+  eventsPos: number,
+  toDevicePos: number,
+  deviceKeyPos: number,
+): string {
+  return `s${eventsPos}_td${toDevicePos}_dk${deviceKeyPos}`;
 }
 
 export function summarizeSyncResponse(response: SyncResponse): SyncProjectionSummary {

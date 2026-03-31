@@ -29,6 +29,79 @@ class RecordingD1Database {
   }
 }
 
+class QueryResultD1Database {
+  prepare(query: string) {
+    return {
+      bind: (..._boundArgs: unknown[]) => {
+        return {
+          run: async () => ({ success: true }),
+          first: async <T>() => null as T | null,
+          all: async <T>() => {
+            if (query.includes("FROM device_key_changes")) {
+              return {
+                results: [{ user_id: "@alice:test" }, { user_id: "@bob:test" }] as T[],
+              };
+            }
+            if (query.includes("FROM remote_device_list_streams")) {
+              return {
+                results: [{ user_id: "@carol:test" }] as T[],
+              };
+            }
+            if (query.includes("FROM events requester_join_event")) {
+              return {
+                results: [{ user_id: "@frank:test" }] as T[],
+              };
+            }
+            if (query.includes("json_extract(e.content, '$.membership') = 'join'")) {
+              return {
+                results: [{ user_id: "@dave:test" }] as T[],
+              };
+            }
+            if (query.includes("json_extract(e.content, '$.membership') IN ('leave', 'ban')")) {
+              return {
+                results: [{ user_id: "@erin:test" }, { user_id: "@bob:test" }] as T[],
+              };
+            }
+
+            return { results: [] as T[] };
+          },
+        };
+      },
+      run: async () => ({ success: true }),
+      first: async <T>() => null as T | null,
+      all: async <T>() => {
+        if (query.includes("FROM device_key_changes")) {
+          return {
+            results: [{ user_id: "@alice:test" }, { user_id: "@bob:test" }] as T[],
+          };
+        }
+        if (query.includes("FROM remote_device_list_streams")) {
+          return {
+            results: [{ user_id: "@carol:test" }] as T[],
+          };
+        }
+        if (query.includes("FROM events requester_join_event")) {
+          return {
+            results: [{ user_id: "@frank:test" }] as T[],
+          };
+        }
+        if (query.includes("json_extract(e.content, '$.membership') = 'join'")) {
+          return {
+            results: [{ user_id: "@dave:test" }] as T[],
+          };
+        }
+        if (query.includes("json_extract(e.content, '$.membership') IN ('leave', 'ban')")) {
+          return {
+            results: [{ user_id: "@erin:test" }, { user_id: "@bob:test" }] as T[],
+          };
+        }
+
+        return { results: [] as T[] };
+      },
+    };
+  }
+}
+
 describe("CloudflareFederationRepository", () => {
   it("ensures a user stub exists before storing remote presence", async () => {
     const db = new RecordingD1Database();
@@ -59,5 +132,17 @@ describe("CloudflareSyncRepository", () => {
     } as never);
 
     await expect(repository.loadFilter("@alice:test", "filter-id")).resolves.toBeNull();
+  });
+
+  it("merges local, remote, membership-join, and left device-list changes", async () => {
+    const repositoryModule = await import("./matrix-repositories");
+    const repository = new repositoryModule.CloudflareSyncRepository({
+      DB: new QueryResultD1Database() as unknown as D1Database,
+    } as never);
+
+    await expect(repository.getDeviceListChanges("@alice:test", 5, 7)).resolves.toEqual({
+      changed: ["@alice:test", "@bob:test", "@carol:test", "@dave:test", "@frank:test"],
+      left: ["@erin:test"],
+    });
   });
 });

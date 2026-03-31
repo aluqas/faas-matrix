@@ -106,6 +106,7 @@ export interface RoomRepository {
 export interface SyncRepository {
   loadFilter(userId: string, filterParam?: string): Promise<FilterDefinition | null>;
   getLatestStreamPosition(): Promise<number>;
+  getLatestDeviceKeyPosition(): Promise<number>;
   getToDeviceMessages(
     userId: string,
     deviceId: string,
@@ -115,7 +116,8 @@ export interface SyncRepository {
   getUnusedFallbackKeyTypes(userId: string, deviceId: string): Promise<string[]>;
   getDeviceListChanges(
     userId: string,
-    sincePosition: number,
+    sinceEventPosition: number,
+    sinceDeviceKeyPosition: number,
   ): Promise<{ changed: string[]; left: string[] }>;
   getGlobalAccountData(userId: string, since?: number): Promise<AccountDataEvent[]>;
   getRoomAccountData(userId: string, roomId: string, since?: number): Promise<AccountDataEvent[]>;

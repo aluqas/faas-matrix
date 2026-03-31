@@ -22,6 +22,9 @@ class FakeSyncRepository implements SyncRepository {
   async getLatestStreamPosition() {
     return 5;
   }
+  async getLatestDeviceKeyPosition() {
+    return 7;
+  }
   async getToDeviceMessages() {
     return { events: [], nextBatch: "0" };
   }
@@ -150,7 +153,7 @@ describe("MatrixSyncService", () => {
     });
 
     expect(repo.waitCalls).toBe(1);
-    expect(response.next_batch).toBe("s5_td0");
+    expect(response.next_batch).toBe("s5_td0_dk7");
   });
 
   it("projects invite rooms with a current leave state into rooms.leave", async () => {
@@ -177,7 +180,7 @@ describe("MatrixSyncService", () => {
     const response = await service.syncUser({
       userId: "@alice:test",
       deviceId: null,
-      since: "s1_td0",
+      since: "s1_td0_dk0",
     });
 
     expect(response.rooms?.invite?.[roomId]).toBeUndefined();

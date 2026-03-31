@@ -20,6 +20,7 @@ import {
   CloudflareSyncRepository,
 } from "./matrix-repositories";
 import { CloudflareIdempotencyStore } from "./idempotency-store";
+import { queueFederationEdu } from "../../matrix/application/features/shared/federation-edu-queue";
 
 function createRuntimeCapabilities(
   env: Env,
@@ -102,6 +103,11 @@ function createRuntimeCapabilities(
           }),
         );
         return response.json() as Promise<{ hasEvents: boolean }>;
+      },
+    },
+    federation: {
+      async queueEdu(destination: string, eduType: string, content: Record<string, unknown>) {
+        await queueFederationEdu(env, destination, eduType, content);
       },
     },
     metrics: {

@@ -3,19 +3,20 @@ import { buildSyncToken, parseSyncToken, summarizeSyncResponse } from "./contrac
 
 describe("sync contracts", () => {
   it("parses composite sync tokens", () => {
-    expect(parseSyncToken("s42_td9")).toEqual({ events: 42, toDevice: 9 });
-    expect(parseSyncToken("17")).toEqual({ events: 17, toDevice: 17 });
-    expect(parseSyncToken(undefined)).toEqual({ events: 0, toDevice: 0 });
+    expect(parseSyncToken("s42_td9_dk12")).toEqual({ events: 42, toDevice: 9, deviceKeys: 12 });
+    expect(parseSyncToken("s42_td9")).toEqual({ events: 42, toDevice: 9, deviceKeys: 42 });
+    expect(parseSyncToken("17")).toEqual({ events: 17, toDevice: 17, deviceKeys: 17 });
+    expect(parseSyncToken(undefined)).toEqual({ events: 0, toDevice: 0, deviceKeys: 0 });
   });
 
   it("builds composite sync tokens", () => {
-    expect(buildSyncToken(5, 8)).toBe("s5_td8");
+    expect(buildSyncToken(5, 8, 13)).toBe("s5_td8_dk13");
   });
 
   it("summarizes response counts", () => {
     expect(
       summarizeSyncResponse({
-        next_batch: "s10_td4",
+        next_batch: "s10_td4_dk7",
         rooms: {
           join: { "!a:test": { timeline: { events: [] } } },
           invite: { "!b:test": {} },

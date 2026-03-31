@@ -28,7 +28,9 @@ export interface SyncProjectionQuery {
 
 export interface DeviceListProjectionQuery {
   userId: string;
-  sincePosition: number;
+  isInitialSync: boolean;
+  sinceEventPosition: number;
+  sinceDeviceKeyPosition: number;
 }
 
 export interface SyncProjectionResult {
@@ -173,13 +175,14 @@ export async function projectDeviceLists(
   repository: SyncRepository,
   query: DeviceListProjectionQuery,
 ): Promise<{ changed: string[]; left: string[] } | undefined> {
-  if (query.sincePosition <= 0) {
+  if (query.isInitialSync) {
     return { changed: [query.userId], left: [] };
   }
 
   const deviceListChanges = await repository.getDeviceListChanges(
     query.userId,
-    query.sincePosition,
+    query.sinceEventPosition,
+    query.sinceDeviceKeyPosition,
   );
   if (deviceListChanges.changed.length > 0 || deviceListChanges.left.length > 0) {
     return deviceListChanges;

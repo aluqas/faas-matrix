@@ -16,6 +16,8 @@ import {
   getStateEvent,
   getRoomEvents,
   getMembership,
+  getServersInRoomsWithUser,
+  getUserDevices,
 } from "../services/database";
 import {
   applyMembershipTransitionToDatabase,
@@ -33,6 +35,9 @@ import {
 } from "../types/workflows";
 import { runWorkflowEffect } from "../matrix/application/effect-runtime";
 import { withLogContext } from "../matrix/application/logging";
+import { parseDeviceKeysPayload } from "../api/keys-contracts";
+import { publishDeviceListUpdatesForNewlySharedServers } from "../matrix/application/features/device-lists/command";
+import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
 
 export type JoinParams = RoomJoinWorkflowParams;
 export type JoinResult = RoomJoinWorkflowResult;
@@ -57,6 +62,10 @@ function parseWorkflowJson<T>(payload: string): T {
   return JSON.parse(payload) as T;
 }
 
+async function getStoredDeviceKeysFromKv(kv: KVNamespace, userId: string, deviceId: string) {
+  return parseDeviceKeysPayload(await kv.get(`device:${userId}:${deviceId}`, "json"));
+}
+
 export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
   async run(event: WorkflowEvent<JoinParams>, step: WorkflowStep): Promise<JoinResult> {
     const {
@@ -69,6 +78,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       avatarUrl,
       reason,
     } = event.payload;
+    const preJoinSharedServers = await getServersInRoomsWithUser(this.env.DB, userId);
     const logger = withLogContext({
       component: "room-join-workflow",
       operation: "join",
@@ -191,6 +201,42 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
           source: "workflow",
           context: transitionContext,
         });
+      });
+
+      await step.do("publish-device-lists", async () => {
+        try {
+          const published = await publishDeviceListUpdatesForNewlySharedServers(
+            {
+              userId,
+              previouslySharedServers: preJoinSharedServers,
+            },
+            {
+              localServerName: this.env.SERVER_NAME,
+              now: () => Date.now(),
+              getSharedRemoteServers: (sharedUserId) =>
+                getServersInRoomsWithUser(this.env.DB, sharedUserId),
+              getUserDevices: (deviceUserId) => getUserDevices(this.env.DB, deviceUserId),
+              getStoredDeviceKeys: (deviceUserId, deviceId) =>
+                getStoredDeviceKeysFromKv(this.env.DEVICE_KEYS, deviceUserId, deviceId),
+              queueEdu: (destination, eduType, content) =>
+                queueFederationEdu(this.env, destination, eduType, content),
+            },
+          );
+
+          if (published.sentCount > 0) {
+            await runWorkflowEffect(
+              logger.info("room_join.workflow.device_list_shared", {
+                destination_count: published.destinations.length,
+                device_count: published.deviceCount,
+                sent_count: published.sentCount,
+              }),
+            );
+          }
+        } catch (error) {
+          await runWorkflowEffect(
+            logger.error("room_join.workflow.device_list_share_error", error),
+          );
+        }
       });
 
       // Step 5: Get room members for notification

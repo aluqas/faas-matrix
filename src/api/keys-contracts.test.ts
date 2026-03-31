@@ -7,6 +7,7 @@ import {
   parseJsonObject,
   parseKeysClaimRequest,
   parseKeysQueryRequest,
+  parseKeysQueryResponse,
   parseKeysUploadRequest,
   parseSignaturesUploadRequest,
   parseStoredOneTimeKeyBuckets,
@@ -32,6 +33,45 @@ describe("keys contracts", () => {
       device_keys: { "@alice:test": ["A"] },
     });
     expect(parseKeysQueryRequest({ device_keys: { "@alice:test": [1] } })).toBeNull();
+
+    expect(
+      parseKeysQueryResponse({
+        device_keys: {
+          "@alice:test": {
+            DEVICE: {
+              user_id: "@alice:test",
+              device_id: "DEVICE",
+              algorithms: ["m.olm.v1.curve25519-aes-sha2"],
+            },
+          },
+        },
+        master_keys: {
+          "@alice:test": {
+            user_id: "@alice:test",
+            usage: ["master"],
+            keys: { "ed25519:master": "pub" },
+          },
+        },
+      }),
+    ).toEqual({
+      device_keys: {
+        "@alice:test": {
+          DEVICE: {
+            user_id: "@alice:test",
+            device_id: "DEVICE",
+            algorithms: ["m.olm.v1.curve25519-aes-sha2"],
+          },
+        },
+      },
+      master_keys: {
+        "@alice:test": {
+          user_id: "@alice:test",
+          usage: ["master"],
+          keys: { "ed25519:master": "pub" },
+        },
+      },
+    });
+    expect(parseKeysQueryResponse({ device_keys: { "@alice:test": { DEVICE: 1 } } })).toBeNull();
 
     expect(
       parseKeysClaimRequest({ one_time_keys: { "@alice:test": { DEVICE: "signed_curve25519" } } }),

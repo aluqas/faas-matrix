@@ -40,8 +40,13 @@ export async function projectSyncResponse(
     }),
   );
   const filter = await repository.loadFilter(input.userId, input.filterParam);
-  const { events: sincePosition, toDevice: sinceToDevice } = parseSyncToken(input.since);
+  const {
+    events: sincePosition,
+    toDevice: sinceToDevice,
+    deviceKeys: sinceDeviceKeys,
+  } = parseSyncToken(input.since);
   const currentPosition = await repository.getLatestStreamPosition();
+  const currentDeviceKeyPosition = await repository.getLatestDeviceKeyPosition();
   let currentToDevicePos = sinceToDevice;
 
   const response: SyncResponse = {
@@ -74,7 +79,9 @@ export async function projectSyncResponse(
 
   response.device_lists = await projectDeviceLists(repository, {
     userId: input.userId,
-    sincePosition,
+    isInitialSync: !input.since,
+    sinceEventPosition: sincePosition,
+    sinceDeviceKeyPosition: sinceDeviceKeys,
   });
 
   response.account_data!.events = await projectGlobalAccountData(
@@ -162,7 +169,11 @@ export async function projectSyncResponse(
     });
   }
 
-  response.next_batch = buildSyncToken(currentPosition, currentToDevicePos);
+  response.next_batch = buildSyncToken(
+    currentPosition,
+    currentToDevicePos,
+    currentDeviceKeyPosition,
+  );
   const summary = summarizeSyncResponse(response);
   await runClientEffect(
     logger.info("sync.project.result", {

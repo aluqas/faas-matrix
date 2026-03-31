@@ -16,16 +16,20 @@ import type { AppEnv, Env } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { FEDERATION_OUTBOUND_DO_NAME } from "../matrix/application/features/shared/federation-edu-queue";
+import { federationPost } from "../services/federation-keys";
 import { verifyPassword } from "../utils/crypto";
 import { generateOpaqueId } from "../utils/ids";
 import { getPasswordHash } from "../services/database";
 import { runClientEffect } from "../matrix/application/effect-runtime";
 import { withLogContext } from "../matrix/application/logging";
+import { parseSyncToken } from "../matrix/application/features/sync/contracts";
+import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
 import {
   type CrossSigningKeyPayload,
   type CrossSigningKeysStore,
   type DeviceKeysPayload,
   type JsonObject,
+  type KeysQueryResponse,
   type SignaturesUploadRequest,
   type TokenSubmitRequest,
   type UiaSessionData,
@@ -36,6 +40,7 @@ import {
   parseJsonObject,
   parseKeysClaimRequest,
   parseKeysQueryRequest,
+  parseKeysQueryResponse,
   parseKeysUploadRequest,
   parseSignaturesUploadRequest,
   parseStoredOneTimeKeyBuckets,
@@ -206,6 +211,86 @@ async function getDeviceKeyFromDO(
   }
 
   return parsed;
+}
+
+async function queryRemoteDeviceKeys(
+  env: Env,
+  requesterUserId: string,
+  serverName: string,
+  requestedKeys: Record<string, string[]>,
+): Promise<{ response: KeysQueryResponse | null; failure?: JsonObject }> {
+  const logger = createKeysLogger("query", { user_id: requesterUserId });
+
+  try {
+    await runClientEffect(
+      logger.info("keys.command.remote_query_start", {
+        destination: serverName,
+        requested_user_count: Object.keys(requestedKeys).length,
+      }),
+    );
+
+    const response = await federationPost(
+      serverName,
+      "/_matrix/federation/v1/user/keys/query",
+      { device_keys: requestedKeys },
+      env.SERVER_NAME,
+      env.DB,
+      env.CACHE,
+    );
+
+    if (!response.ok) {
+      await runClientEffect(
+        logger.warn("keys.command.remote_query_failed", {
+          destination: serverName,
+          status: response.status,
+        }),
+      );
+      return {
+        response: null,
+        failure: {
+          errcode: "M_UNAVAILABLE",
+          error: `Remote server ${serverName} returned HTTP ${response.status} for /user/keys/query`,
+        },
+      };
+    }
+
+    const parsed = parseKeysQueryResponse(await response.json().catch(() => null));
+    if (!parsed) {
+      await runClientEffect(
+        logger.warn("keys.command.remote_query_invalid_payload", {
+          destination: serverName,
+        }),
+      );
+      return {
+        response: null,
+        failure: {
+          errcode: "M_UNAVAILABLE",
+          error: `Remote server ${serverName} returned an invalid /user/keys/query payload`,
+        },
+      };
+    }
+
+    await runClientEffect(
+      logger.info("keys.command.remote_query_success", {
+        destination: serverName,
+        returned_user_count: Object.keys(parsed.device_keys).length,
+      }),
+    );
+    return { response: parsed };
+  } catch (error) {
+    await runClientEffect(
+      logger.error("keys.command.remote_query_error", error, {
+        destination: serverName,
+      }),
+    );
+    return {
+      response: null,
+      failure: {
+        errcode: "M_UNAVAILABLE",
+        error: `Remote server ${serverName} could not be reached for /user/keys/query`,
+      },
+    };
+  }
 }
 
 // Store device keys in Durable Object (strongly consistent)
@@ -552,8 +637,17 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
   }
 
   if (requestedKeys) {
+    const localServerName = c.env.SERVER_NAME;
+    const remoteRequestsByServer: Record<string, Record<string, string[]>> = {};
+
     for (const [userId, devices] of Object.entries(requestedKeys)) {
       deviceKeys[userId] = {};
+      const userServerName = extractServerNameFromMatrixId(userId);
+      if (userServerName && userServerName !== localServerName) {
+        remoteRequestsByServer[userServerName] = remoteRequestsByServer[userServerName] || {};
+        remoteRequestsByServer[userServerName]![userId] = devices;
+        continue;
+      }
 
       // Get device keys from Durable Object (strongly consistent)
       // Critical for E2EE bootstrap where client uploads then immediately queries
@@ -595,6 +689,32 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
       if (csKeys.user_signing && userId === requesterUserId) {
         userSigningKeys[userId] = csKeys.user_signing;
       }
+    }
+
+    for (const [serverName, remoteRequests] of Object.entries(remoteRequestsByServer)) {
+      const { response, failure } = await queryRemoteDeviceKeys(
+        c.env,
+        requesterUserId,
+        serverName,
+        remoteRequests,
+      );
+
+      if (failure) {
+        failures[serverName] = failure;
+        continue;
+      }
+      if (!response) {
+        continue;
+      }
+
+      for (const [userId, remoteDeviceMap] of Object.entries(response.device_keys)) {
+        deviceKeys[userId] = {
+          ...deviceKeys[userId],
+          ...remoteDeviceMap,
+        };
+      }
+      Object.assign(masterKeys, response.master_keys ?? {});
+      Object.assign(selfSigningKeys, response.self_signing_keys ?? {});
     }
   }
 
@@ -779,8 +899,8 @@ app.get("/_matrix/client/v3/keys/changes", requireAuth(), async (c) => {
     return Errors.missingParam("from and to required").toResponse();
   }
 
-  const fromPosition = parseInt(from, 10) || 0;
-  const toPosition = parseInt(to, 10) || Number.MAX_SAFE_INTEGER;
+  const fromPosition = parseSyncToken(from).deviceKeys;
+  const toPosition = to ? parseSyncToken(to).deviceKeys : Number.MAX_SAFE_INTEGER;
 
   // Get users whose keys changed in this range
   // Only return users that share rooms with the requesting user

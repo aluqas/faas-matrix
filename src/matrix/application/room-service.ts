@@ -13,7 +13,9 @@ import {
 import { sendFederationInvite } from "../../services/federation-invite";
 import { getServerSigningKey } from "../../services/federation-keys";
 import { fanoutEventToRemoteServers } from "../../services/federation-fanout";
+import { getServersInRoomsWithUser, getUserDevices } from "../../services/database";
 import { calculateContentHash, calculateReferenceHashEventId, signJson } from "../../utils/crypto";
+import { parseDeviceKeysPayload } from "../../api/keys-contracts";
 import {
   authorizeBan,
   authorizeKick,
@@ -32,6 +34,7 @@ import {
   validateJoinRoomRequest,
   validateModerationRequest,
 } from "./room-validation";
+import { publishDeviceListUpdatesForNewlySharedServers } from "./features/device-lists/command";
 
 export interface CreateRoomInput {
   userId: string;
@@ -79,6 +82,18 @@ function withOptionalValue<K extends string, V>(key: K, value: V | undefined): {
   }
 
   return { [key]: value } as { [P in K]?: V };
+}
+
+async function getStoredDeviceKeysFromKv(
+  kv: KVNamespace | undefined,
+  userId: string,
+  deviceId: string,
+) {
+  if (!kv) {
+    return null;
+  }
+
+  return parseDeviceKeysPayload(await kv.get(`device:${userId}:${deviceId}`, "json"));
 }
 
 async function attachFederationMetadata(
@@ -273,6 +288,10 @@ export class MatrixRoomService {
       room_id: input.roomId,
       user_id: input.userId,
     });
+    const db = this.appContext.capabilities.sql.connection as D1Database;
+    const cache = this.appContext.capabilities.kv.cache as KVNamespace;
+    const deviceKeysKv = this.appContext.capabilities.kv.deviceKeys as KVNamespace | undefined;
+    const preJoinSharedServers = await getServersInRoomsWithUser(db, input.userId);
     const validated = await runClientEffect(
       validateJoinRoomRequest({
         roomId: input.roomId,
@@ -441,25 +460,61 @@ export class MatrixRoomService {
           return;
         }
         await this.repository.notifyUsersOfEvent(validated.roomId, event.event_id, "m.room.member");
-        const db = this.appContext.capabilities.sql.connection as D1Database;
-        const cache = this.appContext.capabilities.kv.cache as KVNamespace;
         this.appContext.defer(
-          fanoutEventToRemoteServers(
-            db,
-            cache,
-            this.appContext.capabilities.config.serverName,
-            validated.roomId,
-            event,
-          ).catch((error) => {
-            void runClientEffect(
-              logger.error("room.command.async_error", error, {
-                command: "join_room",
-                room_id: validated.roomId,
-                event_id: event.event_id,
-                phase: "fanout_join",
-              }),
-            );
-          }),
+          (async () => {
+            try {
+              await fanoutEventToRemoteServers(
+                db,
+                cache,
+                this.appContext.capabilities.config.serverName,
+                validated.roomId,
+                event,
+              );
+
+              const queueEdu = this.appContext.capabilities.federation?.queueEdu;
+              if (!queueEdu) {
+                return;
+              }
+
+              const published = await publishDeviceListUpdatesForNewlySharedServers(
+                {
+                  userId: input.userId,
+                  previouslySharedServers: preJoinSharedServers,
+                },
+                {
+                  localServerName: this.appContext.capabilities.config.serverName,
+                  now: () => this.appContext.capabilities.clock.now(),
+                  getSharedRemoteServers: (userId) => getServersInRoomsWithUser(db, userId),
+                  getUserDevices: (userId) => getUserDevices(db, userId),
+                  getStoredDeviceKeys: (userId, deviceId) =>
+                    getStoredDeviceKeysFromKv(deviceKeysKv, userId, deviceId),
+                  queueEdu,
+                },
+              );
+
+              if (published.sentCount > 0) {
+                await runClientEffect(
+                  logger.info("room.command.device_list_shared", {
+                    command: "join_room",
+                    room_id: validated.roomId,
+                    user_id: input.userId,
+                    destination_count: published.destinations.length,
+                    device_count: published.deviceCount,
+                    sent_count: published.sentCount,
+                  }),
+                );
+              }
+            } catch (error) {
+              void runClientEffect(
+                logger.error("room.command.async_error", error, {
+                  command: "join_room",
+                  room_id: validated.roomId,
+                  event_id: event.event_id,
+                  phase: "fanout_join",
+                }),
+              );
+            }
+          })(),
         );
       },
     });

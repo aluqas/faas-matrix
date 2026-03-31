@@ -10,6 +10,7 @@ const targets = [
   "src/matrix/application/features/presence",
   "src/matrix/application/features/typing",
   "src/matrix/application/features/to-device",
+  "src/matrix/application/features/device-lists",
   "src/matrix/application/room-service.ts",
   "src/matrix/application/room-validation.ts",
   "src/matrix/application/room-membership-policy.ts",

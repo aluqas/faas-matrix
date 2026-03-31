@@ -36,6 +36,9 @@ class FakeSyncRepository implements SyncRepository {
   async getLatestStreamPosition() {
     return 5;
   }
+  async getLatestDeviceKeyPosition() {
+    return 0;
+  }
   async getToDeviceMessages() {
     return { events: [], nextBatch: "0" };
   }
@@ -354,7 +357,9 @@ describe("sync-projection", () => {
     await expect(
       projectDeviceLists(repo, {
         userId: "@alice:test",
-        sincePosition: 0,
+        isInitialSync: true,
+        sinceEventPosition: 0,
+        sinceDeviceKeyPosition: 0,
       }),
     ).resolves.toEqual({ changed: ["@alice:test"], left: [] });
 
@@ -362,7 +367,9 @@ describe("sync-projection", () => {
     await expect(
       projectDeviceLists(repo, {
         userId: "@alice:test",
-        sincePosition: 5,
+        isInitialSync: false,
+        sinceEventPosition: 5,
+        sinceDeviceKeyPosition: 5,
       }),
     ).resolves.toBeUndefined();
 
@@ -370,8 +377,20 @@ describe("sync-projection", () => {
     await expect(
       projectDeviceLists(repo, {
         userId: "@alice:test",
-        sincePosition: 5,
+        isInitialSync: false,
+        sinceEventPosition: 5,
+        sinceDeviceKeyPosition: 5,
       }),
     ).resolves.toEqual({ changed: ["@bob:hs1"], left: ["@carol:hs1"] });
+
+    repo.deviceListChanges = { changed: [], left: [] };
+    await expect(
+      projectDeviceLists(repo, {
+        userId: "@alice:test",
+        isInitialSync: false,
+        sinceEventPosition: 0,
+        sinceDeviceKeyPosition: 0,
+      }),
+    ).resolves.toBeUndefined();
   });
 });

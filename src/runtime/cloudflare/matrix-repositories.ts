@@ -52,6 +52,28 @@ function parseJsonWithFallback<T>(value: string | null | undefined, fallback: T)
   }
 }
 
+async function getNextStreamPosition(db: D1Database, streamName: string): Promise<number> {
+  await db
+    .prepare(
+      `
+      UPDATE stream_positions SET position = position + 1 WHERE stream_name = ?
+    `,
+    )
+    .bind(streamName)
+    .run();
+
+  const result = await db
+    .prepare(
+      `
+      SELECT position FROM stream_positions WHERE stream_name = ?
+    `,
+    )
+    .bind(streamName)
+    .first<{ position: number }>();
+
+  return result?.position ?? 1;
+}
+
 export class CloudflareRoomRepository implements RoomRepository {
   constructor(private readonly env: Env) {}
 
@@ -171,6 +193,13 @@ export class CloudflareSyncRepository implements SyncRepository {
     return getLatestStreamPosition(this.env.DB);
   }
 
+  async getLatestDeviceKeyPosition(): Promise<number> {
+    const result = await this.env.DB.prepare(
+      `SELECT position FROM stream_positions WHERE stream_name = 'device_keys'`,
+    ).first<{ position: number }>();
+    return result?.position ?? 0;
+  }
+
   getToDeviceMessages(userId: string, deviceId: string, since: string) {
     return getToDeviceMessages(this.env.DB, userId, deviceId, since);
   }
@@ -205,28 +234,207 @@ export class CloudflareSyncRepository implements SyncRepository {
 
   async getDeviceListChanges(
     userId: string,
-    sincePosition: number,
+    sinceEventPosition: number,
+    sinceDeviceKeyPosition: number,
   ): Promise<{ changed: string[]; left: string[] }> {
-    const changed = await this.env.DB.prepare(`
-      SELECT DISTINCT user_id
-      FROM remote_device_list_streams
-      WHERE updated_at > ?
-        AND user_id IN (
-          SELECT DISTINCT rm2.user_id
-          FROM room_memberships rm1
-          JOIN room_memberships rm2 ON rm1.room_id = rm2.room_id
-          WHERE rm1.user_id = ?
-            AND rm1.membership = 'join'
-            AND rm2.membership = 'join'
-            AND rm2.user_id != ?
+    const [localChanged, remoteChanged, newlyShared, currentMembersInJoinedRooms, noLongerShared] =
+      await Promise.all([
+        this.env.DB.prepare(`
+        SELECT DISTINCT dkc.user_id
+        FROM device_key_changes dkc
+        WHERE dkc.stream_position > ?
+          AND (
+            dkc.user_id = ?
+            OR EXISTS (
+              SELECT 1
+              FROM room_memberships rm1
+              JOIN room_memberships rm2 ON rm1.room_id = rm2.room_id
+              WHERE rm1.user_id = ?
+                AND rm1.membership = 'join'
+                AND rm2.user_id = dkc.user_id
+                AND rm2.membership = 'join'
+            )
+          )
+      `)
+          .bind(sinceDeviceKeyPosition, userId, userId)
+          .all<{ user_id: string }>(),
+        this.env.DB.prepare(`
+        SELECT DISTINCT rdls.user_id
+        FROM remote_device_list_streams rdls
+        WHERE rdls.stream_id > ?
+          AND EXISTS (
+            WITH joined_members AS (
+              SELECT room_id, user_id
+              FROM room_memberships
+              WHERE membership = 'join'
+
+              UNION
+
+              SELECT rs.room_id, rs.state_key AS user_id
+              FROM room_state rs
+              JOIN events e ON rs.event_id = e.event_id
+              WHERE rs.event_type = 'm.room.member'
+                AND json_extract(e.content, '$.membership') = 'join'
+            ),
+            requester_joined_rooms AS (
+              SELECT room_id
+              FROM joined_members
+              WHERE user_id = ?
+            )
+            SELECT 1
+            FROM requester_joined_rooms jr
+            JOIN joined_members jm ON jr.room_id = jm.room_id
+            WHERE jm.user_id = rdls.user_id
+          )
+      `)
+          .bind(sinceDeviceKeyPosition, userId)
+          .all<{ user_id: string }>(),
+        this.env.DB.prepare(`
+        SELECT DISTINCT e.state_key as user_id
+        FROM events e
+        JOIN room_memberships requester_membership
+          ON requester_membership.room_id = e.room_id
+         AND requester_membership.user_id = ?
+         AND requester_membership.membership = 'join'
+        JOIN room_memberships target_membership
+          ON target_membership.room_id = e.room_id
+         AND target_membership.user_id = e.state_key
+         AND target_membership.membership = 'join'
+        WHERE e.event_type = 'm.room.member'
+          AND e.stream_ordering > ?
+          AND e.state_key IS NOT NULL
+          AND e.state_key != ?
+          AND json_extract(e.content, '$.membership') = 'join'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM room_memberships shared_requester
+            JOIN room_memberships shared_target
+              ON shared_requester.room_id = shared_target.room_id
+            WHERE shared_requester.user_id = ?
+              AND shared_requester.membership = 'join'
+              AND shared_target.user_id = e.state_key
+              AND shared_target.membership = 'join'
+              AND shared_requester.room_id != e.room_id
+          )
+      `)
+          .bind(userId, sinceEventPosition, userId, userId)
+          .all<{ user_id: string }>(),
+        this.env.DB.prepare(`
+        WITH joined_members AS (
+          SELECT room_id, user_id
+          FROM room_memberships
+          WHERE membership = 'join'
+
+          UNION
+
+          SELECT rs.room_id, rs.state_key AS user_id
+          FROM room_state rs
+          JOIN events e ON rs.event_id = e.event_id
+          WHERE rs.event_type = 'm.room.member'
+            AND json_extract(e.content, '$.membership') = 'join'
         )
-    `)
-      .bind(sincePosition, userId, userId)
-      .all<{ user_id: string }>();
+        SELECT DISTINCT joined_members.user_id
+        FROM events requester_join_event
+        JOIN joined_members
+          ON joined_members.room_id = requester_join_event.room_id
+        WHERE requester_join_event.event_type = 'm.room.member'
+          AND requester_join_event.stream_ordering > ?
+          AND requester_join_event.state_key = ?
+          AND json_extract(requester_join_event.content, '$.membership') = 'join'
+      `)
+          .bind(sinceEventPosition, userId)
+          .all<{ user_id: string }>(),
+        this.env.DB.prepare(`
+        SELECT DISTINCT left_user_id as user_id
+        FROM (
+          SELECT e.state_key as left_user_id
+          FROM events e
+          JOIN room_memberships requester_membership
+            ON requester_membership.room_id = e.room_id
+           AND requester_membership.user_id = ?
+           AND requester_membership.membership = 'join'
+          WHERE e.event_type = 'm.room.member'
+            AND e.stream_ordering > ?
+            AND e.state_key IS NOT NULL
+            AND e.state_key != ?
+            AND json_extract(e.content, '$.membership') IN ('leave', 'ban')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM room_memberships shared_requester
+              JOIN room_memberships shared_target
+                ON shared_requester.room_id = shared_target.room_id
+              WHERE shared_requester.user_id = ?
+                AND shared_requester.membership = 'join'
+                AND shared_target.user_id = e.state_key
+                AND shared_target.membership = 'join'
+            )
+
+          UNION
+
+          SELECT other_membership.user_id as left_user_id
+          FROM events e
+          JOIN room_memberships requester_membership
+            ON requester_membership.room_id = e.room_id
+           AND requester_membership.user_id = ?
+           AND requester_membership.membership IN ('leave', 'ban')
+          JOIN room_memberships other_membership
+            ON other_membership.room_id = e.room_id
+           AND other_membership.membership = 'join'
+          WHERE e.event_type = 'm.room.member'
+            AND e.stream_ordering > ?
+            AND e.state_key = ?
+            AND other_membership.user_id != ?
+            AND json_extract(e.content, '$.membership') IN ('leave', 'ban')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM room_memberships shared_requester
+              JOIN room_memberships shared_target
+                ON shared_requester.room_id = shared_target.room_id
+              WHERE shared_requester.user_id = ?
+                AND shared_requester.membership = 'join'
+                AND shared_target.user_id = other_membership.user_id
+                AND shared_target.membership = 'join'
+            )
+        )
+      `)
+          .bind(
+            userId,
+            sinceEventPosition,
+            userId,
+            userId,
+            userId,
+            sinceEventPosition,
+            userId,
+            userId,
+            userId,
+          )
+          .all<{ user_id: string }>(),
+      ]);
+
+    const changed = new Set<string>();
+    const left = new Set<string>();
+
+    for (const row of localChanged.results) {
+      changed.add(row.user_id);
+    }
+    for (const row of remoteChanged.results) {
+      changed.add(row.user_id);
+    }
+    for (const row of newlyShared.results) {
+      changed.add(row.user_id);
+    }
+    for (const row of currentMembersInJoinedRooms.results) {
+      changed.add(row.user_id);
+    }
+    for (const row of noLongerShared.results) {
+      if (!changed.has(row.user_id)) {
+        left.add(row.user_id);
+      }
+    }
 
     return {
-      changed: changed.results.map((row) => row.user_id),
-      left: [],
+      changed: [...changed],
+      left: [...left],
     };
   }
 
@@ -480,6 +688,8 @@ export class CloudflareFederationRepository implements FederationRepository {
     displayName?: string,
     deleted?: boolean,
   ): Promise<void> {
+    const localStreamPosition = await getNextStreamPosition(this.env.DB, "device_keys");
+
     if (deleted) {
       await this.env.DB.prepare(
         `DELETE FROM remote_device_lists WHERE user_id = ? AND device_id = ?`,
@@ -514,7 +724,7 @@ export class CloudflareFederationRepository implements FederationRepository {
         stream_id = MAX(remote_device_list_streams.stream_id, excluded.stream_id),
         updated_at = excluded.updated_at
     `)
-      .bind(userId, streamId, Date.now())
+      .bind(userId, localStreamPosition, Date.now())
       .run();
   }
 }

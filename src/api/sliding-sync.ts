@@ -8,6 +8,8 @@ import { requireAuth } from "../middleware/auth";
 import { getTypingForRooms } from "./typing";
 import { getReceiptsForRooms } from "./receipts";
 import { countNotificationsWithRules } from "../services/push-rule-evaluator";
+import { projectDeviceLists } from "../matrix/application/sync-projection";
+import { CloudflareSyncRepository } from "../runtime/cloudflare/matrix-repositories";
 // Room cache helper available for future optimizations
 // import { getRoomMetadata, invalidateRoomCache, type RoomMetadata } from '../services/room-cache';
 
@@ -1154,6 +1156,7 @@ app.post("/_matrix/client/unstable/org.matrix.msc3575/sync", requireAuth(), asyn
   if (body.extensions) {
     const extensionKeys = Object.keys(body.extensions);
     console.log("[sliding-sync] Extensions requested:", extensionKeys, "by user:", userId);
+    const syncRepository = new CloudflareSyncRepository(c.env);
 
     // To-device messages
     // to_device: enabled if key exists (MSC4186) or enabled=true (MSC3575)
@@ -1181,93 +1184,20 @@ app.post("/_matrix/client/unstable/org.matrix.msc3575/sync", requireAuth(), asyn
     // e2ee: enabled if key exists (MSC4186) or enabled=true (MSC3575)
     if (body.extensions.e2ee) {
       const deviceId = c.get("deviceId");
-
-      // Get one-time key counts from database
-      const keyCounts: Record<string, number> = {};
-      if (deviceId) {
-        const counts = await db
-          .prepare(`
-          SELECT algorithm, COUNT(*) as count
-          FROM one_time_keys
-          WHERE user_id = ? AND device_id = ? AND claimed = 0
-          GROUP BY algorithm
-        `)
-          .bind(userId, deviceId)
-          .all();
-        for (const row of counts.results as { algorithm: string; count: number }[]) {
-          keyCounts[row.algorithm] = row.count;
-        }
-      }
-
-      // Get unused fallback key types
-      const unusedFallbackTypes: string[] = [];
-      if (deviceId) {
-        const fallbackKeys = await db
-          .prepare(`
-          SELECT DISTINCT algorithm
-          FROM fallback_keys
-          WHERE user_id = ? AND device_id = ? AND used = 0
-        `)
-          .bind(userId, deviceId)
-          .all();
-        unusedFallbackTypes.push(
-          ...(fallbackKeys.results as { algorithm: string }[]).map((row) => row.algorithm),
-        );
-      }
-
-      // Get device list changes
-      // Include the current user's own changes (important for cross-signing verification)
-      // AND other users who share rooms with the current user
       const sincePos = body.pos ? parseInt(body.pos) : 0;
-      const deviceListChanged: string[] = [];
-
-      if (sincePos === 0) {
-        // CRITICAL FIX: On first sync, include user's own ID if they have device keys
-        // This is essential for E2EE bootstrap - Element X needs to see its own user
-        // in device_lists.changed to know cross-signing keys were uploaded successfully
-        const userKeysDO = c.env.USER_KEYS.get(c.env.USER_KEYS.idFromName(userId));
-        const deviceIdsResp = await userKeysDO.fetch(
-          new Request("http://internal/device-keys/list"),
-        );
-        const deviceIds = (await deviceIdsResp.json()) as string[];
-
-        // Also check for cross-signing keys
-        const crossSigningResp = await userKeysDO.fetch(
-          new Request("http://internal/cross-signing/get"),
-        );
-        const crossSigningKeys = (await crossSigningResp.json()) as Record<string, any>;
-
-        if (deviceIds.length > 0 || Object.keys(crossSigningKeys).length > 0) {
-          deviceListChanged.push(userId);
-        }
-      } else {
-        const changes = await db
-          .prepare(`
-          SELECT DISTINCT dkc.user_id
-          FROM device_key_changes dkc
-          WHERE dkc.stream_position > ?
-            AND (
-              dkc.user_id = ?
-              OR EXISTS (
-                SELECT 1 FROM room_memberships rm1
-                JOIN room_memberships rm2 ON rm1.room_id = rm2.room_id
-                WHERE rm1.user_id = ? AND rm1.membership = 'join'
-                  AND rm2.user_id = dkc.user_id AND rm2.membership = 'join'
-              )
-            )
-        `)
-          .bind(sincePos, userId, userId)
-          .all();
-        deviceListChanged.push(
-          ...(changes.results as { user_id: string }[]).map((row) => row.user_id),
-        );
-      }
+      const keyCounts = deviceId ? await syncRepository.getOneTimeKeyCounts(userId, deviceId) : {};
+      const unusedFallbackTypes = deviceId
+        ? await syncRepository.getUnusedFallbackKeyTypes(userId, deviceId)
+        : [];
+      const deviceLists = await projectDeviceLists(syncRepository, {
+        userId,
+        isInitialSync: !body.pos,
+        sinceEventPosition: sincePos,
+        sinceDeviceKeyPosition: sincePos,
+      });
 
       response.extensions.e2ee = {
-        device_lists: {
-          changed: deviceListChanged,
-          left: [],
-        },
+        device_lists: deviceLists ?? { changed: [], left: [] },
         device_one_time_keys_count: keyCounts,
         device_unused_fallback_key_types: unusedFallbackTypes,
       };
@@ -1907,6 +1837,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
       return ext !== undefined && ext !== null;
     });
     console.log("[sliding-sync] Extensions requested:", enabledExtensions);
+    const syncRepository = new CloudflareSyncRepository(c.env);
 
     // to_device: enabled if key exists (MSC4186) or enabled=true (MSC3575)
     if (body.extensions.to_device) {
@@ -1932,90 +1863,20 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
     // e2ee: enabled if key exists (MSC4186) or enabled=true (MSC3575)
     if (body.extensions.e2ee) {
       const deviceId = c.get("deviceId");
-
-      // Get one-time key counts from database
-      const keyCounts: Record<string, number> = {};
-      if (deviceId) {
-        const counts = await db
-          .prepare(`
-          SELECT algorithm, COUNT(*) as count
-          FROM one_time_keys
-          WHERE user_id = ? AND device_id = ? AND claimed = 0
-          GROUP BY algorithm
-        `)
-          .bind(userId, deviceId)
-          .all();
-        for (const row of counts.results as { algorithm: string; count: number }[]) {
-          keyCounts[row.algorithm] = row.count;
-        }
-      }
-
-      // Get unused fallback key types
-      const unusedFallbackTypes: string[] = [];
-      if (deviceId) {
-        const fallbackKeys = await db
-          .prepare(`
-          SELECT DISTINCT algorithm
-          FROM fallback_keys
-          WHERE user_id = ? AND device_id = ? AND used = 0
-        `)
-          .bind(userId, deviceId)
-          .all();
-        unusedFallbackTypes.push(
-          ...(fallbackKeys.results as { algorithm: string }[]).map((row) => row.algorithm),
-        );
-      }
-
-      // Get device list changes
-      // Include the current user's own changes (important for cross-signing verification)
-      // AND other users who share rooms with the current user
       const sincePos = body.pos ? parseInt(body.pos) : 0;
-      const deviceListChanged: string[] = [];
-
-      if (sincePos === 0) {
-        // CRITICAL FIX: On first sync, include user's own ID if they have device keys
-        // This is essential for E2EE bootstrap - Element X needs to see its own user
-        // in device_lists.changed to know cross-signing keys were uploaded successfully
-        const userKeysDO = c.env.USER_KEYS.get(c.env.USER_KEYS.idFromName(userId));
-        const deviceIdsResp = await userKeysDO.fetch(
-          new Request("http://internal/device-keys/list"),
-        );
-        const deviceIds = (await deviceIdsResp.json()) as string[];
-
-        // Also check for cross-signing keys
-        const crossSigningResp = await userKeysDO.fetch(
-          new Request("http://internal/cross-signing/get"),
-        );
-        const crossSigningKeys = (await crossSigningResp.json()) as Record<string, any>;
-
-        if (deviceIds.length > 0 || Object.keys(crossSigningKeys).length > 0) {
-          deviceListChanged.push(userId);
-        }
-      } else {
-        const changes = await db
-          .prepare(`
-          SELECT DISTINCT dkc.user_id
-          FROM device_key_changes dkc
-          WHERE dkc.stream_position > ?
-            AND (
-              dkc.user_id = ?
-              OR EXISTS (
-                SELECT 1 FROM room_memberships rm1
-                JOIN room_memberships rm2 ON rm1.room_id = rm2.room_id
-                WHERE rm1.user_id = ? AND rm1.membership = 'join'
-                  AND rm2.user_id = dkc.user_id AND rm2.membership = 'join'
-              )
-            )
-        `)
-          .bind(sincePos, userId, userId)
-          .all();
-        deviceListChanged.push(
-          ...(changes.results as { user_id: string }[]).map((row) => row.user_id),
-        );
-      }
+      const keyCounts = deviceId ? await syncRepository.getOneTimeKeyCounts(userId, deviceId) : {};
+      const unusedFallbackTypes = deviceId
+        ? await syncRepository.getUnusedFallbackKeyTypes(userId, deviceId)
+        : [];
+      const deviceLists = await projectDeviceLists(syncRepository, {
+        userId,
+        isInitialSync: !body.pos,
+        sinceEventPosition: sincePos,
+        sinceDeviceKeyPosition: sincePos,
+      });
 
       response.extensions.e2ee = {
-        device_lists: { changed: deviceListChanged, left: [] },
+        device_lists: deviceLists ?? { changed: [], left: [] },
         device_one_time_keys_count: keyCounts,
         device_unused_fallback_key_types: unusedFallbackTypes,
       };

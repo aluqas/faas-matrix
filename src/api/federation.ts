@@ -8,6 +8,7 @@ import { generateSigningKeyPair, signJson, sha256, verifySignature } from "../ut
 import { isLocalServerName, parseUserId } from "../utils/ids";
 import { requireFederationAuth } from "../middleware/federation-auth";
 import {
+  getServerSigningKey,
   getRemoteKeysWithNotarySignature,
   type ServerKeyResponse,
 } from "../services/federation-keys";
@@ -208,20 +209,7 @@ async function getNotarySigningKey(db: D1Database): Promise<{
   keyId: string;
   privateKeyJwk: JsonWebKey;
 } | null> {
-  const key = await db
-    .prepare(
-      `SELECT key_id, private_key_jwk FROM server_keys WHERE is_current = 1 AND key_version = 2`,
-    )
-    .first<{ key_id: string; private_key_jwk: string | null }>();
-
-  if (!key || !key.private_key_jwk) {
-    return null;
-  }
-
-  return {
-    keyId: key.key_id,
-    privateKeyJwk: JSON.parse(key.private_key_jwk),
-  };
+  return getServerSigningKey(db);
 }
 
 // Helper function to validate server name
@@ -1376,18 +1364,16 @@ async function handleFederationInvite(c: any, version: "v1" | "v2"): Promise<Res
       return c.json({ errcode: "M_NOT_FOUND", error: "User not found" }, 404);
     }
 
-    const key = (await c.env.DB.prepare(
-      `SELECT key_id, private_key_jwk FROM server_keys WHERE is_current = 1 AND key_version = 2`,
-    ).first()) as { key_id: string; private_key_jwk: string | null } | null;
-    if (!key || !key.private_key_jwk) {
+    const key = await getServerSigningKey(c.env.DB);
+    if (!key) {
       return c.json({ errcode: "M_UNKNOWN", error: "Server signing key not configured" }, 500);
     }
 
     const signedEvent = (await signJson(
       validated.event as unknown as Record<string, unknown>,
       c.env.SERVER_NAME,
-      key.key_id,
-      JSON.parse(key.private_key_jwk),
+      key.keyId,
+      key.privateKeyJwk,
     )) as Record<string, any>;
 
     await ensureFederatedRoomStub(
@@ -2835,13 +2821,9 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
 
   // Verify the mxid matches the state_key
   // Get our signing key
-  const key = await db
-    .prepare(
-      `SELECT key_id, private_key_jwk FROM server_keys WHERE is_current = 1 AND key_version = 2`,
-    )
-    .first<{ key_id: string; private_key_jwk: string | null }>();
+  const key = await getServerSigningKey(db);
 
-  if (!key || !key.private_key_jwk) {
+  if (!key) {
     return c.json(
       {
         errcode: "M_UNKNOWN",
@@ -2938,8 +2920,8 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
   const signedEvent = await signJson(
     { ...inviteEvent, event_id: eventId },
     serverName,
-    key.key_id,
-    JSON.parse(key.private_key_jwk),
+    key.keyId,
+    key.privateKeyJwk,
   );
 
   // Store the event

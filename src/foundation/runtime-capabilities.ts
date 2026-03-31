@@ -41,6 +41,10 @@ export interface RealtimeCapability {
   waitForUserEvents(userId: string, timeoutMs: number): Promise<{ hasEvents: boolean }>;
 }
 
+export interface FederationCapability {
+  queueEdu?(destination: string, eduType: string, content: Record<string, unknown>): Promise<void>;
+}
+
 export interface MetricsCapability {
   writePoint?(metric: string, value: number, tags?: Record<string, string>): void;
 }
@@ -74,6 +78,7 @@ export interface RuntimeCapabilities<
   workflow: WorkflowCapability;
   rateLimit: RateLimitCapability<TRateLimit>;
   realtime: RealtimeCapability;
+  federation?: FederationCapability;
   metrics: MetricsCapability;
   clock: ClockCapability;
   id: IdCapability;
