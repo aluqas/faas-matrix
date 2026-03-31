@@ -8,6 +8,7 @@ import type {
   StrippedStateEvent,
 } from "../../types";
 import type { FilterDefinition, SyncRepository } from "../repositories/interfaces";
+import { projectTypingEphemeral } from "./features/typing/project";
 
 export interface SyncEventFilter {
   types?: string[];
@@ -203,8 +204,7 @@ export async function projectJoinedRoom(
 
   for (const event of events) {
     const clientEvent = toClientEvent(event);
-    const timelineIncluded =
-      applyEventFilter([clientEvent], query.roomFilter?.timeline).length > 0;
+    const timelineIncluded = applyEventFilter([clientEvent], query.roomFilter?.timeline).length > 0;
 
     if (event.state_key !== undefined && timelineIncluded) {
       stateEvents.push(clientEvent);
@@ -242,13 +242,12 @@ export async function projectJoinedRoom(
     joinedRoom.ephemeral!.events.push(receipts as any);
   }
 
-  const typingUsers = await repository.getTypingUsers(query.roomId);
-  if (typingUsers.length > 0) {
-    joinedRoom.ephemeral!.events.push({
-      type: "m.typing",
-      content: { user_ids: typingUsers },
-    } as any);
-  }
+  joinedRoom.ephemeral!.events.push(
+    ...(await projectTypingEphemeral(repository, {
+      roomId: query.roomId,
+      filter: query.roomFilter?.ephemeral,
+    })),
+  );
 
   joinedRoom.ephemeral!.events = applyEventFilter(
     joinedRoom.ephemeral!.events,

@@ -6,9 +6,13 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { PresenceState } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { getServersInRoomsWithUser } from "../services/database";
+import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
+import { executePresenceCommand } from "../matrix/application/features/presence/command";
+import { getPresenceForUsers as loadPresenceForUsers } from "../matrix/application/features/presence/project";
 
 const app = new Hono<AppEnv>();
 
@@ -54,62 +58,47 @@ app.put("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
     );
   }
 
-  const now = Date.now();
-
-  // Store presence in D1
-  await db
-    .prepare(`
-    INSERT INTO presence (user_id, presence, status_msg, last_active_ts)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT (user_id) DO UPDATE SET
-      presence = excluded.presence,
-      status_msg = excluded.status_msg,
-      last_active_ts = excluded.last_active_ts
-  `)
-    .bind(requestingUserId, presence, status_msg || null, now)
-    .run();
-
-  // Write-through to KV cache for fast reads (5 minute TTL)
-  await c.env.CACHE.put(
-    `presence:${requestingUserId}`,
-    JSON.stringify({
-      presence,
-      status_msg: status_msg || null,
-      last_active_ts: now,
-    }),
-    { expirationTtl: 5 * 60 }, // 5 minutes
-  );
-
-  // Queue outbound m.presence EDUs to federated servers
   try {
-    const remoteServers = await getServersInRoomsWithUser(db, requestingUserId);
-    const localServer = c.env.SERVER_NAME;
-    const uniqueServers = [...new Set(remoteServers)].filter((s) => s !== localServer);
+    await executePresenceCommand(
+      {
+        userId: requestingUserId,
+        presence: presence as PresenceState,
+        statusMessage: status_msg || null,
+        now: Date.now(),
+      },
+      {
+        localServerName: c.env.SERVER_NAME,
+        async persistPresence(input) {
+          await db
+            .prepare(`
+              INSERT INTO presence (user_id, presence, status_msg, last_active_ts)
+              VALUES (?, ?, ?, ?)
+              ON CONFLICT (user_id) DO UPDATE SET
+                presence = excluded.presence,
+                status_msg = excluded.status_msg,
+                last_active_ts = excluded.last_active_ts
+            `)
+            .bind(input.userId, input.presence, input.statusMessage || null, input.now)
+            .run();
 
-    for (const server of uniqueServers) {
-      const fedDO = c.env.FEDERATION.get(c.env.FEDERATION.idFromName(server));
-      await fedDO.fetch(
-        new Request("http://internal/send-edu", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            destination: server,
-            edu_type: "m.presence",
-            content: {
-              push: [
-                {
-                  user_id: requestingUserId,
-                  presence,
-                  status_msg: status_msg || undefined,
-                  last_active_ago: 0,
-                  currently_active: presence === "online",
-                },
-              ],
-            },
-          }),
-        }),
-      );
-    }
+          await c.env.CACHE.put(
+            `presence:${input.userId}`,
+            JSON.stringify({
+              presence: input.presence,
+              status_msg: input.statusMessage || null,
+              last_active_ts: input.now,
+            }),
+            { expirationTtl: 5 * 60 },
+          );
+        },
+        async resolveInterestedServers(userId: string) {
+          return getServersInRoomsWithUser(db, userId);
+        },
+        async queueEdu(destination: string, content: Record<string, unknown>) {
+          await queueFederationEdu(c.env, destination, "m.presence", content);
+        },
+      },
+    );
   } catch (err) {
     console.warn("[presence] Failed to queue federation EDUs:", err);
   }
@@ -194,101 +183,8 @@ app.get("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
 
 // Get presence for multiple users (for sync)
 // This function requires KVNamespace to be passed for caching
-export async function getPresenceForUsers(
-  db: D1Database,
-  userIds: string[],
-  cache?: KVNamespace,
-): Promise<
-  Record<
-    string,
-    {
-      presence: string;
-      status_msg?: string;
-      last_active_ago?: number;
-      currently_active?: boolean;
-    }
-  >
-> {
-  if (userIds.length === 0) return {};
-
-  const now = Date.now();
-  const byUser: Record<
-    string,
-    {
-      presence: string;
-      status_msg?: string;
-      last_active_ago?: number;
-      currently_active?: boolean;
-    }
-  > = {};
-
-  const uncachedUserIds: string[] = [];
-
-  // Try to get from KV cache first
-  if (cache) {
-    for (const userId of userIds) {
-      const cached = (await cache.get(`presence:${userId}`, "json")) as {
-        presence: string;
-        status_msg: string | null;
-        last_active_ts: number;
-      } | null;
-
-      if (cached) {
-        const isActive = now - cached.last_active_ts < PRESENCE_TIMEOUT;
-        let effectivePresence = cached.presence;
-        if (cached.presence === "online" && !isActive) {
-          effectivePresence = "unavailable";
-        }
-
-        byUser[userId] = {
-          presence: effectivePresence,
-          status_msg: cached.status_msg || undefined,
-          last_active_ago: now - cached.last_active_ts,
-          currently_active: isActive && cached.presence === "online",
-        };
-      } else {
-        uncachedUserIds.push(userId);
-      }
-    }
-  } else {
-    uncachedUserIds.push(...userIds);
-  }
-
-  // Fall back to D1 for uncached users
-  if (uncachedUserIds.length > 0) {
-    const placeholders = uncachedUserIds.map(() => "?").join(",");
-
-    const results = await db
-      .prepare(`
-      SELECT user_id, presence, status_msg, last_active_ts
-      FROM presence
-      WHERE user_id IN (${placeholders})
-    `)
-      .bind(...uncachedUserIds)
-      .all<{
-        user_id: string;
-        presence: string;
-        status_msg: string | null;
-        last_active_ts: number;
-      }>();
-
-    for (const row of results.results) {
-      const isActive = now - row.last_active_ts < PRESENCE_TIMEOUT;
-      let effectivePresence = row.presence;
-      if (row.presence === "online" && !isActive) {
-        effectivePresence = "unavailable";
-      }
-
-      byUser[row.user_id] = {
-        presence: effectivePresence,
-        status_msg: row.status_msg || undefined,
-        last_active_ago: now - row.last_active_ts,
-        currently_active: isActive && row.presence === "online",
-      };
-    }
-  }
-
-  return byUser;
+export async function getPresenceForUsers(db: D1Database, userIds: string[], cache?: KVNamespace) {
+  return loadPresenceForUsers(db, userIds, cache);
 }
 
 // Update last active timestamp (call this on API activity)

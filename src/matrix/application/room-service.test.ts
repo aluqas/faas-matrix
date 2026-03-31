@@ -682,6 +682,10 @@ describe("MatrixRoomService", () => {
 
     expect(first).toEqual(second);
     expect(repo.storedEvents.filter((event) => event.type === "m.room.message")).toHaveLength(1);
+    expect(first.event_id).not.toBe("$event1");
+    expect(
+      repo.storedEvents.find((event) => event.type === "m.room.message")?.hashes?.sha256,
+    ).toBeDefined();
     expect(pushCalls).toHaveLength(1);
   });
 });

@@ -12,6 +12,9 @@ import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
+import { dispatchToDeviceMessages } from "../matrix/application/features/to-device/command";
+import { projectToDeviceMessages } from "../matrix/application/features/to-device/project";
+import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
 
 const app = new Hono<AppEnv>();
 
@@ -105,45 +108,42 @@ app.put("/_matrix/client/v3/sendToDevice/:eventType/:txnId", requireAuth(), asyn
     return Errors.missingParam("messages").toResponse();
   }
 
-  // Process each recipient user
-  for (const [recipientUserId, deviceMessages] of Object.entries(body.messages)) {
-    // Get list of device IDs to send to
-    let targetDevices: string[];
-
-    for (const [deviceId, content] of Object.entries(deviceMessages)) {
-      if (deviceId === "*") {
-        // Send to all devices for this user
-        targetDevices = await getUserDevices(db, recipientUserId);
-      } else {
-        targetDevices = [deviceId];
-      }
-
-      // Create a message for each target device
-      for (const targetDeviceId of targetDevices) {
-        const streamPosition = await getNextStreamPosition(db, "to_device");
-        const messageId = `${userId}_${txnId}_${recipientUserId}_${targetDeviceId}_${Date.now()}`;
-
+  await dispatchToDeviceMessages(
+    {
+      senderUserId: userId,
+      eventType,
+      txnId,
+      messages: body.messages,
+    },
+    {
+      localServerName: c.env.SERVER_NAME,
+      getUserDevices: (recipientUserId: string) => getUserDevices(db, recipientUserId),
+      nextStreamPosition: (streamName: string) => getNextStreamPosition(db, streamName),
+      async storeLocalMessage(input) {
         await db
           .prepare(`
-          INSERT INTO to_device_messages (
-            recipient_user_id, recipient_device_id, sender_user_id,
-            event_type, content, message_id, stream_position
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (recipient_user_id, recipient_device_id, message_id) DO NOTHING
-        `)
+            INSERT INTO to_device_messages (
+              recipient_user_id, recipient_device_id, sender_user_id,
+              event_type, content, message_id, stream_position
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (recipient_user_id, recipient_device_id, message_id) DO NOTHING
+          `)
           .bind(
-            recipientUserId,
-            targetDeviceId,
-            userId,
-            eventType,
-            JSON.stringify(content),
-            messageId,
-            streamPosition,
+            input.recipientUserId,
+            input.recipientDeviceId,
+            input.senderUserId,
+            input.eventType,
+            JSON.stringify(input.content),
+            input.messageId,
+            input.streamPosition,
           )
           .run();
-      }
-    }
-  }
+      },
+      async queueEdu(destination: string, content: Record<string, unknown>) {
+        await queueFederationEdu(c.env, destination, "m.direct_to_device", content);
+      },
+    },
+  );
 
   // Store transaction for idempotency
   await db
@@ -169,125 +169,7 @@ export async function getToDeviceMessages(
   since?: string,
   limit: number = 100,
 ): Promise<{ events: any[]; nextBatch: string }> {
-  // Parse the since token - it's a stream position
-  // IMPORTANT: Validate that since is a reasonable stream position (not a timestamp)
-  let sincePos = 0;
-  if (since) {
-    const parsed = parseInt(since);
-    // Stream positions should be reasonable numbers (< 1 billion)
-    // Timestamps would be > 1 trillion (milliseconds since epoch)
-    if (!isNaN(parsed) && parsed > 0 && parsed < 1000000000) {
-      sincePos = parsed;
-    } else if (parsed >= 1000000000) {
-      // This looks like a timestamp, ignore it and treat as first sync
-      console.log("[to-device] Ignoring invalid since token (looks like timestamp):", since);
-    }
-  }
-
-  // STEP 1: Get undelivered messages FIRST (before any acknowledgment)
-  // This ensures we have a snapshot of what exists before any modifications
-  // and prevents race conditions where messages are marked delivered before being fetched
-  const messages = await db
-    .prepare(`
-    SELECT id, sender_user_id, event_type, content, stream_position
-    FROM to_device_messages
-    WHERE recipient_user_id = ?
-      AND recipient_device_id = ?
-      AND delivered = 0
-      AND stream_position > ?
-    ORDER BY stream_position ASC
-    LIMIT ?
-  `)
-    .bind(userId, deviceId, sincePos, limit)
-    .all<{
-      id: number;
-      sender_user_id: string;
-      event_type: string;
-      content: string;
-      stream_position: number;
-    }>();
-
-  // STEP 2: NOW acknowledge previously sent messages
-  // Only acknowledge up to the sincePos the client sent back
-  // This means the client has confirmed receipt of everything <= sincePos
-  if (sincePos > 0) {
-    const ackResult = await db
-      .prepare(`
-      UPDATE to_device_messages
-      SET delivered = 1
-      WHERE recipient_user_id = ?
-        AND recipient_device_id = ?
-        AND stream_position <= ?
-        AND delivered = 0
-    `)
-      .bind(userId, deviceId, sincePos)
-      .run();
-
-    if (ackResult.meta.changes > 0) {
-      console.log(
-        "[to-device] Acknowledged",
-        ackResult.meta.changes,
-        "messages up to position",
-        sincePos,
-        "for",
-        userId,
-        "device:",
-        deviceId,
-      );
-    }
-  }
-
-  // Debug: Log to-device retrieval
-  if (messages.results.length > 0) {
-    console.log(
-      "[to-device] Returning",
-      messages.results.length,
-      "messages to",
-      userId,
-      "device:",
-      deviceId,
-    );
-    for (const msg of messages.results) {
-      console.log(
-        "[to-device]   -",
-        msg.event_type,
-        "from",
-        msg.sender_user_id,
-        "pos:",
-        msg.stream_position,
-      );
-    }
-  }
-
-  // Format events
-  const events = messages.results.map((msg) => ({
-    sender: msg.sender_user_id,
-    type: msg.event_type,
-    content: JSON.parse(msg.content),
-  }));
-
-  // Get the current max stream position for to-device messages
-  // This ensures we always return a valid next_batch, even on first sync
-  const currentPos = await db
-    .prepare(`
-    SELECT COALESCE(MAX(stream_position), 0) as max_pos FROM to_device_messages
-  `)
-    .first<{ max_pos: number }>();
-  const maxStreamPos = currentPos?.max_pos || 0;
-
-  // Return the appropriate next_batch:
-  // - If we returned messages: use the max position of those messages
-  // - Otherwise: use the current max stream position (client is caught up)
-  let nextBatch: string;
-  if (messages.results.length > 0) {
-    const maxReturnedPos = Math.max(...messages.results.map((m) => m.stream_position));
-    nextBatch = String(maxReturnedPos);
-  } else {
-    // No messages to return - use current max position so client knows where we are
-    nextBatch = String(maxStreamPos);
-  }
-
-  return { events, nextBatch };
+  return projectToDeviceMessages(db, userId, deviceId, since, limit);
 }
 
 // ============================================

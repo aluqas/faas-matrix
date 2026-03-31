@@ -7,7 +7,11 @@
 import { Hono } from "hono";
 import type { AppEnv, Env } from "../types";
 import { Errors } from "../utils/errors";
+import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
 import { requireAuth } from "../middleware/auth";
+import { getRoomState } from "../services/database";
+import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
+import { executeTypingCommand } from "../matrix/application/features/typing/command";
 
 const app = new Hono<AppEnv>();
 
@@ -25,6 +29,25 @@ const MAX_TYPING_TIMEOUT = 120000; // 2 minutes
 function getRoomDO(env: Env, roomId: string) {
   const id = env.ROOMS.idFromName(roomId);
   return env.ROOMS.get(id);
+}
+
+async function getRemoteJoinedServers(db: D1Database, roomId: string, localServerName: string) {
+  const state = await getRoomState(db, roomId);
+  return Array.from(
+    new Set(
+      state
+        .filter(
+          (event) =>
+            event.type === "m.room.member" &&
+            event.state_key &&
+            event.content &&
+            typeof event.content === "object" &&
+            event.content.membership === "join",
+        )
+        .map((event) => extractServerNameFromMatrixId(event.state_key))
+        .filter((server): server is string => Boolean(server) && server !== localServerName),
+    ),
+  );
 }
 
 // ============================================
@@ -89,18 +112,35 @@ app.put("/_matrix/client/v3/rooms/:roomId/typing/:userId", requireAuth(), async 
     timeout = Math.min(requestedTimeout, MAX_TYPING_TIMEOUT);
   }
 
-  // Set typing status in Room Durable Object
-  const roomDO = getRoomDO(c.env, roomId);
-  await roomDO.fetch(
-    new Request("https://room/typing", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: requestingUserId,
-        typing,
-        timeout,
-      }),
-    }),
+  await executeTypingCommand(
+    {
+      roomId,
+      userId: requestingUserId,
+      typing,
+      timeoutMs: timeout,
+    },
+    {
+      async setRoomTyping(targetRoomId, userId, isTyping, timeoutMs = DEFAULT_TYPING_TIMEOUT) {
+        const roomDO = getRoomDO(c.env, targetRoomId);
+        await roomDO.fetch(
+          new Request("https://room/typing", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id: userId,
+              typing: isTyping,
+              timeout: timeoutMs,
+            }),
+          }),
+        );
+      },
+      async resolveInterestedServers(targetRoomId: string) {
+        return getRemoteJoinedServers(db, targetRoomId, c.env.SERVER_NAME);
+      },
+      async queueEdu(destination: string, content: Record<string, unknown>) {
+        await queueFederationEdu(c.env, destination, "m.typing", content);
+      },
+    },
   );
 
   console.log(

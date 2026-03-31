@@ -2,6 +2,7 @@ import { discoverServer } from "../../services/server-discovery";
 import {
   createRoom,
   createRoomAlias,
+  ensureUserStub,
   getEvent,
   getEventsSince,
   getInviteStrippedState,
@@ -443,6 +444,7 @@ export class CloudflareFederationRepository implements FederationRepository {
     lastActiveTs: number,
     currentlyActive: boolean,
   ): Promise<void> {
+    await ensureUserStub(this.env.DB, userId);
     await this.env.DB.prepare(`
       INSERT INTO presence (user_id, presence, status_msg, last_active_ts, currently_active)
       VALUES (?, ?, ?, ?, ?)

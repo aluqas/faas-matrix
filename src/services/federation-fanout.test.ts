@@ -58,4 +58,32 @@ describe("federation-fanout", () => {
       "remote-target",
     ]);
   });
+
+  it("always includes the remote room server for non-membership events", () => {
+    const servers = collectRemoteServersForEvent(
+      "local",
+      "!room:remote-host",
+      createEvent({
+        room_id: "!room:remote-host",
+        sender: "@alice:local",
+      }),
+      [],
+    );
+
+    expect(servers).toEqual(["remote-host"]);
+  });
+
+  it("preserves explicit ports in remote room server names", () => {
+    const servers = collectRemoteServersForEvent(
+      "local",
+      "!room:remote-host:8448",
+      createEvent({
+        room_id: "!room:remote-host:8448",
+        sender: "@alice:local",
+      }),
+      [],
+    );
+
+    expect(servers).toEqual(["remote-host:8448"]);
+  });
 });

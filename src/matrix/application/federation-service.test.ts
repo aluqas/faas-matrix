@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
 import type { AppContext } from "../../foundation/app-context";
+import { calculateContentHash, calculateReferenceHashEventId } from "../../utils/crypto";
 import { MatrixFederationService } from "./federation-service";
 import type { FederationProcessedPdu, FederationRepository } from "../repositories/interfaces";
 
 class FakeFederationRepository implements FederationRepository {
   cachedResponse: Record<string, unknown> | null = null;
+  roomState: any[] = [];
+  room: { room_id: string; room_version: string; is_public: boolean; created_at: number } | null =
+    null;
+  recordedPdus: Array<{
+    eventId: string;
+    origin: string;
+    roomId: string;
+    accepted: boolean;
+    rejectionReason?: string;
+  }> = [];
 
   async getCachedTransaction() {
     return this.cachedResponse;
@@ -13,13 +24,21 @@ class FakeFederationRepository implements FederationRepository {
   async getProcessedPdu(): Promise<FederationProcessedPdu | null> {
     return null;
   }
-  async recordProcessedPdu() {}
+  async recordProcessedPdu(
+    eventId: string,
+    origin: string,
+    roomId: string,
+    accepted: boolean,
+    rejectionReason?: string,
+  ) {
+    this.recordedPdus.push({ eventId, origin, roomId, accepted, rejectionReason });
+  }
   async createRoom() {}
   async getRoom() {
-    return null;
+    return this.room;
   }
   async getRoomState() {
-    return [];
+    return this.roomState;
   }
   async getInviteStrippedState() {
     return [];
@@ -140,6 +159,110 @@ describe("MatrixFederationService", () => {
 
     expect(response.pdus).toEqual({
       $broken: { error: "Invalid PDU structure" },
+    });
+  });
+
+  it("rejects PDUs from ACL-denied servers", async () => {
+    const repo = new FakeFederationRepository();
+    repo.room = {
+      room_id: "!room:test",
+      room_version: "1",
+      is_public: true,
+      created_at: 1,
+    };
+    repo.roomState = [
+      {
+        event_id: "$acl",
+        room_id: "!room:test",
+        sender: "@alice:test",
+        type: "m.room.server_acl",
+        state_key: "",
+        content: {
+          allow: ["*"],
+          deny: ["blocked.example"],
+        },
+        origin_server_ts: 1,
+        depth: 1,
+        auth_events: [],
+        prev_events: [],
+      },
+    ];
+    const service = createFederationService(repo);
+
+    const response = await service.processTransaction({
+      origin: "blocked.example",
+      txnId: "txn-3",
+      body: {
+        pdus: [
+          {
+            event_id: "$blocked",
+            room_id: "!room:test",
+            sender: "@bob:blocked.example",
+            type: "m.room.message",
+            content: { body: "blocked" },
+            origin_server_ts: 2,
+            depth: 2,
+            auth_events: [],
+            prev_events: [],
+          },
+        ],
+      },
+    });
+
+    expect(response.pdus).toEqual({
+      $blocked: {
+        error: "Server blocked.example is denied by m.room.server_acl for PDU in !room:test",
+      },
+    });
+    expect(repo.recordedPdus).toContainEqual({
+      eventId: "$blocked",
+      origin: "blocked.example",
+      roomId: "!room:test",
+      accepted: false,
+      rejectionReason:
+        "Server blocked.example is denied by m.room.server_acl for PDU in !room:test",
+    });
+  });
+
+  it("derives event IDs for room v10 PDUs without event_id", async () => {
+    const repo = new FakeFederationRepository();
+    const service = createFederationService(repo);
+    const createEvent = {
+      room_id: "!room:test",
+      sender: "@alice:remote.example",
+      type: "m.room.create",
+      state_key: "",
+      content: { creator: "@alice:remote.example", room_version: "10" },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    };
+    const createEventWithHash = {
+      ...createEvent,
+      hashes: {
+        sha256: await calculateContentHash(createEvent),
+      },
+    };
+    const expectedEventId = await calculateReferenceHashEventId(createEventWithHash, "10");
+
+    const response = await service.processTransaction({
+      origin: "remote.example",
+      txnId: "txn-4",
+      body: {
+        pdus: [createEventWithHash],
+      },
+    });
+
+    expect(response.pdus).toEqual({
+      [expectedEventId]: {},
+    });
+    expect(repo.recordedPdus).toContainEqual({
+      eventId: expectedEventId,
+      origin: "remote.example",
+      roomId: "!room:test",
+      accepted: true,
+      rejectionReason: undefined,
     });
   });
 });

@@ -8,6 +8,7 @@ WRANGLER_IP="${WRANGLER_IP:-0.0.0.0}"
 CLIENT_PORT="${CLIENT_PORT:-8008}"
 FEDERATION_PORT="${FEDERATION_PORT:-8448}"
 PERSIST_DIR="${PERSIST_DIR:-/data/wrangler}"
+PERSIST_SENTINEL="${PERSIST_DIR}/.container-hostname"
 SERVER_NAME="${SERVER_NAME:-hs1}"
 SERVER_VERSION="${SERVER_VERSION:-0.1.0-complement}"
 MATRIX_FEATURE_PROFILE="${MATRIX_FEATURE_PROFILE:-core}"
@@ -17,11 +18,24 @@ NGINX_TEMPLATE="/etc/faas-matrix/complement-nginx.conf.template"
 NGINX_CONFIG="/etc/nginx/nginx.conf"
 WRANGLER_BIN="${APP_DIR}/node_modules/.bin/wrangler"
 
-# Clean DB unless dirty-run mode is enabled
-if [ "${COMPLEMENT_ENABLE_DIRTY_RUNS:-0}" != "1" ]; then
-  rm -rf "${PERSIST_DIR}"
+# Keep Wrangler state only across restarts of the same container. Complement
+# reuses persistent storage across fresh deployments, so we must clear old state
+# when a new container instance starts while preserving restart-sensitive state
+# within the same test run.
+PREVIOUS_CONTAINER_HOSTNAME=""
+if [ -f "${PERSIST_SENTINEL}" ]; then
+  PREVIOUS_CONTAINER_HOSTNAME="$(cat "${PERSIST_SENTINEL}" 2>/dev/null || true)"
 fi
+
+CURRENT_CONTAINER_HOSTNAME="$(hostname)"
+NEEDS_INIT=0
+if [ -z "${PREVIOUS_CONTAINER_HOSTNAME}" ] || [ "${PREVIOUS_CONTAINER_HOSTNAME}" != "${CURRENT_CONTAINER_HOSTNAME}" ]; then
+  rm -rf "${PERSIST_DIR}"
+  NEEDS_INIT=1
+fi
+
 mkdir -p "${PERSIST_DIR}" "${TLS_DIR}"
+printf '%s' "${CURRENT_CONTAINER_HOSTNAME}" > "${PERSIST_SENTINEL}"
 
 if [ -f /complement/ca/ca.crt ]; then
   cp /complement/ca/ca.crt /usr/local/share/ca-certificates/complement.crt
@@ -78,15 +92,17 @@ sed \
 
 cd "${APP_DIR}"
 
-# Concatenate all migrations into one file and run in a single wrangler call
-COMBINED_SQL=$(mktemp /tmp/migrations-XXXXXX.sql)
-cat ./migrations/schema.sql ./migrations/[0-9]*.sql > "${COMBINED_SQL}"
-"${WRANGLER_BIN}" d1 execute tuwunel-db \
-  --config "${WRANGLER_CONFIG}" \
-  --local \
-  --persist-to "${PERSIST_DIR}" \
-  --file "${COMBINED_SQL}" >/dev/null
-rm -f "${COMBINED_SQL}"
+if [ "${NEEDS_INIT}" = "1" ]; then
+  # Concatenate all migrations into one file and run in a single wrangler call
+  COMBINED_SQL=$(mktemp /tmp/migrations-XXXXXX.sql)
+  cat ./migrations/schema.sql ./migrations/[0-9]*.sql > "${COMBINED_SQL}"
+  "${WRANGLER_BIN}" d1 execute tuwunel-db \
+    --config "${WRANGLER_CONFIG}" \
+    --local \
+    --persist-to "${PERSIST_DIR}" \
+    --file "${COMBINED_SQL}" >/dev/null
+  rm -f "${COMBINED_SQL}"
+fi
 
 "${WRANGLER_BIN}" dev \
   --config "${WRANGLER_CONFIG}" \
@@ -119,6 +135,8 @@ until curl -fsS "http://127.0.0.1:${WRANGLER_PORT}/_matrix/client/versions" >/de
   fi
   sleep 1
 done
+
+curl -fsS -X POST "http://127.0.0.1:${WRANGLER_PORT}/_internal/federation/recover" >/dev/null 2>&1 || true
 
 nginx -g 'daemon off;' &
 NGINX_PID=$!

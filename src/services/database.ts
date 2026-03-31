@@ -20,6 +20,21 @@ export async function createUser(
     .run();
 }
 
+export async function ensureUserStub(
+  db: D1Database,
+  userId: string,
+  localpart: string = userId,
+): Promise<void> {
+  const now = Date.now();
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO users (user_id, localpart, created_at, updated_at)
+     VALUES (?, ?, ?, ?)`,
+    )
+    .bind(userId, localpart, now, now)
+    .run();
+}
+
 export async function getUserById(db: D1Database, userId: string): Promise<User | null> {
   const result = await db
     .prepare(
@@ -480,7 +495,7 @@ export async function getRoomState(db: D1Database, roomId: string): Promise<PDU[
       prev_events: string;
     }>();
 
-  return result.results.map((r) => ({
+  const events = result.results.map((r) => ({
     event_id: r.event_id,
     room_id: r.room_id,
     sender: r.sender,
@@ -493,6 +508,49 @@ export async function getRoomState(db: D1Database, roomId: string): Promise<PDU[
     auth_events: JSON.parse(r.auth_events),
     prev_events: JSON.parse(r.prev_events),
   }));
+
+  if (!events.some((event) => event.type === "m.room.create")) {
+    const createEvent = await db
+      .prepare(
+        `SELECT event_id, room_id, sender, event_type, state_key, content,
+       origin_server_ts, unsigned, depth, auth_events, prev_events
+       FROM events
+       WHERE room_id = ? AND event_type = 'm.room.create'
+       LIMIT 1`,
+      )
+      .bind(roomId)
+      .first<{
+        event_id: string;
+        room_id: string;
+        sender: string;
+        event_type: string;
+        state_key: string | null;
+        content: string;
+        origin_server_ts: number;
+        unsigned: string | null;
+        depth: number;
+        auth_events: string;
+        prev_events: string;
+      }>();
+
+    if (createEvent) {
+      events.push({
+        event_id: createEvent.event_id,
+        room_id: createEvent.room_id,
+        sender: createEvent.sender,
+        type: createEvent.event_type,
+        state_key: createEvent.state_key ?? undefined,
+        content: JSON.parse(createEvent.content),
+        origin_server_ts: createEvent.origin_server_ts,
+        unsigned: createEvent.unsigned ? JSON.parse(createEvent.unsigned) : undefined,
+        depth: createEvent.depth,
+        auth_events: JSON.parse(createEvent.auth_events),
+        prev_events: JSON.parse(createEvent.prev_events),
+      });
+    }
+  }
+
+  return events;
 }
 
 export async function getStateEvent(
@@ -523,6 +581,47 @@ export async function getStateEvent(
       auth_events: string;
       prev_events: string;
     }>();
+
+  if (!result && eventType === "m.room.create" && stateKey === "") {
+    const createEvent = await db
+      .prepare(
+        `SELECT event_id, room_id, sender, event_type, state_key, content,
+       origin_server_ts, unsigned, depth, auth_events, prev_events
+       FROM events
+       WHERE room_id = ? AND event_type = 'm.room.create'
+       LIMIT 1`,
+      )
+      .bind(roomId)
+      .first<{
+        event_id: string;
+        room_id: string;
+        sender: string;
+        event_type: string;
+        state_key: string | null;
+        content: string;
+        origin_server_ts: number;
+        unsigned: string | null;
+        depth: number;
+        auth_events: string;
+        prev_events: string;
+      }>();
+
+    if (createEvent) {
+      return {
+        event_id: createEvent.event_id,
+        room_id: createEvent.room_id,
+        sender: createEvent.sender,
+        type: createEvent.event_type,
+        state_key: createEvent.state_key ?? undefined,
+        content: JSON.parse(createEvent.content),
+        origin_server_ts: createEvent.origin_server_ts,
+        unsigned: createEvent.unsigned ? JSON.parse(createEvent.unsigned) : undefined,
+        depth: createEvent.depth,
+        auth_events: JSON.parse(createEvent.auth_events),
+        prev_events: JSON.parse(createEvent.prev_events),
+      };
+    }
+  }
 
   if (!result) return null;
 
@@ -854,19 +953,39 @@ export async function getStateAtEvent(db: D1Database, eventId: string): Promise<
 export async function getServersInRoomsWithUser(db: D1Database, userId: string): Promise<string[]> {
   const result = await db
     .prepare(`
+    WITH joined_rooms AS (
+      SELECT room_id
+      FROM room_memberships
+      WHERE user_id = ? AND membership = 'join'
+      UNION
+      SELECT rs.room_id
+      FROM room_state rs
+      JOIN events e ON rs.event_id = e.event_id
+      WHERE rs.event_type = 'm.room.member'
+        AND rs.state_key = ?
+        AND json_extract(e.content, '$.membership') = 'join'
+    ),
+    joined_members AS (
+      SELECT room_id, user_id
+      FROM room_memberships
+      WHERE membership = 'join'
+      UNION
+      SELECT rs.room_id, rs.state_key AS user_id
+      FROM room_state rs
+      JOIN events e ON rs.event_id = e.event_id
+      WHERE rs.event_type = 'm.room.member'
+        AND json_extract(e.content, '$.membership') = 'join'
+    )
     SELECT DISTINCT
       CASE
-        WHEN INSTR(rm2.user_id, ':') > 0 THEN SUBSTR(rm2.user_id, INSTR(rm2.user_id, ':') + 1)
+        WHEN INSTR(jm.user_id, ':') > 0 THEN SUBSTR(jm.user_id, INSTR(jm.user_id, ':') + 1)
         ELSE NULL
-      END as server_name
-    FROM room_memberships rm1
-    JOIN room_memberships rm2 ON rm1.room_id = rm2.room_id
-    WHERE rm1.user_id = ?
-      AND rm1.membership = 'join'
-      AND rm2.membership = 'join'
-      AND rm2.user_id != ?
+      END AS server_name
+    FROM joined_rooms jr
+    JOIN joined_members jm ON jr.room_id = jm.room_id
+    WHERE jm.user_id != ?
   `)
-    .bind(userId, userId)
+    .bind(userId, userId, userId)
     .all<{ server_name: string | null }>();
 
   return result.results.map((r) => r.server_name).filter((s): s is string => s !== null);

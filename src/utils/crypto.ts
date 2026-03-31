@@ -1,5 +1,6 @@
 // Cryptographic utilities for Matrix homeserver
 
+import { getDefaultRoomVersion } from "../services/room-versions";
 import { base64UrlEncode, base64UrlDecode } from "./ids";
 
 // Re-export for convenience
@@ -79,6 +80,23 @@ export async function sha256(data: string | Uint8Array): Promise<string> {
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=/g, "");
+}
+
+export function encodeUnpaddedBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes)).replace(/=/g, "");
+}
+
+function decodeUnpaddedBase64(str: string): Uint8Array {
+  const padded = str + "=".repeat((4 - (str.length % 4)) % 4);
+  const binary = atob(padded);
+  return new Uint8Array([...binary].map((c) => c.charCodeAt(0)));
+}
+
+async function sha256UnpaddedBase64(data: string | Uint8Array): Promise<string> {
+  const encoder = new TextEncoder();
+  const bytes = typeof data === "string" ? encoder.encode(data) : data;
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return encodeUnpaddedBase64(new Uint8Array(hash));
 }
 
 // Hash an access token for storage
@@ -288,15 +306,284 @@ export function canonicalJson(obj: unknown): string {
   return "null";
 }
 
+type ReferenceHashRedactionVariant = "v1" | "v2" | "v3" | "v4" | "v5";
+
+function getReferenceHashRedactionVariant(roomVersion?: string): ReferenceHashRedactionVariant {
+  const version = roomVersion ?? getDefaultRoomVersion();
+  switch (version) {
+    case "1":
+    case "2":
+    case "3":
+    case "4":
+    case "5":
+      return "v1";
+    case "6":
+    case "7":
+      return "v2";
+    case "8":
+      return "v3";
+    case "9":
+    case "10":
+      return "v4";
+    default:
+      return "v5";
+  }
+}
+
+function getReferenceHashTopLevelKeys(roomVersion?: string): string[] {
+  const variant = getReferenceHashRedactionVariant(roomVersion);
+  if (variant === "v5") {
+    return [
+      "type",
+      "room_id",
+      "sender",
+      "state_key",
+      "content",
+      "hashes",
+      "signatures",
+      "depth",
+      "prev_events",
+      "auth_events",
+      "origin_server_ts",
+    ];
+  }
+
+  return [
+    "event_id",
+    "type",
+    "room_id",
+    "sender",
+    "state_key",
+    "content",
+    "hashes",
+    "signatures",
+    "depth",
+    "prev_events",
+    "auth_events",
+    "origin_server_ts",
+    "prev_state",
+    "origin",
+    "membership",
+  ];
+}
+
+function getReferenceHashContentKeys(eventType: string, roomVersion?: string): string[] | "all" {
+  switch (getReferenceHashRedactionVariant(roomVersion)) {
+    case "v1":
+      switch (eventType) {
+        case "m.room.member":
+          return ["membership"];
+        case "m.room.create":
+          return ["creator"];
+        case "m.room.join_rules":
+          return ["join_rule"];
+        case "m.room.power_levels":
+          return [
+            "ban",
+            "events",
+            "events_default",
+            "kick",
+            "redact",
+            "state_default",
+            "users",
+            "users_default",
+          ];
+        case "m.room.aliases":
+          return ["aliases"];
+        case "m.room.history_visibility":
+          return ["history_visibility"];
+        default:
+          return [];
+      }
+    case "v2":
+      switch (eventType) {
+        case "m.room.member":
+          return ["membership"];
+        case "m.room.create":
+          return ["creator"];
+        case "m.room.join_rules":
+          return ["join_rule"];
+        case "m.room.power_levels":
+          return [
+            "ban",
+            "events",
+            "events_default",
+            "kick",
+            "redact",
+            "state_default",
+            "users",
+            "users_default",
+          ];
+        case "m.room.history_visibility":
+          return ["history_visibility"];
+        default:
+          return [];
+      }
+    case "v3":
+      switch (eventType) {
+        case "m.room.member":
+          return ["membership"];
+        case "m.room.create":
+          return ["creator"];
+        case "m.room.join_rules":
+          return ["join_rule", "allow"];
+        case "m.room.power_levels":
+          return [
+            "ban",
+            "events",
+            "events_default",
+            "kick",
+            "redact",
+            "state_default",
+            "users",
+            "users_default",
+          ];
+        case "m.room.history_visibility":
+          return ["history_visibility"];
+        default:
+          return [];
+      }
+    case "v4":
+      switch (eventType) {
+        case "m.room.member":
+          return ["membership", "join_authorised_via_users_server"];
+        case "m.room.create":
+          return ["creator"];
+        case "m.room.join_rules":
+          return ["join_rule", "allow"];
+        case "m.room.power_levels":
+          return [
+            "ban",
+            "events",
+            "events_default",
+            "kick",
+            "redact",
+            "state_default",
+            "users",
+            "users_default",
+          ];
+        case "m.room.history_visibility":
+          return ["history_visibility"];
+        default:
+          return [];
+      }
+    case "v5":
+      switch (eventType) {
+        case "m.room.member":
+          return ["membership", "join_authorised_via_users_server"];
+        case "m.room.create":
+          return "all";
+        case "m.room.join_rules":
+          return ["join_rule", "allow"];
+        case "m.room.power_levels":
+          return [
+            "ban",
+            "events",
+            "events_default",
+            "invite",
+            "kick",
+            "redact",
+            "state_default",
+            "users",
+            "users_default",
+          ];
+        case "m.room.history_visibility":
+          return ["history_visibility"];
+        case "m.room.redaction":
+          return ["redacts"];
+        default:
+          return [];
+      }
+  }
+}
+
+function redactEventForReferenceHash(
+  event: Record<string, unknown>,
+  roomVersion?: string,
+): Record<string, unknown> {
+  const redacted: Record<string, unknown> = {};
+  const topLevelKeys = getReferenceHashTopLevelKeys(roomVersion);
+
+  for (const key of topLevelKeys) {
+    if (event[key] !== undefined) {
+      redacted[key] = event[key];
+    }
+  }
+
+  if ("content" in event) {
+    const content =
+      event.content && typeof event.content === "object" && !Array.isArray(event.content)
+        ? (event.content as Record<string, unknown>)
+        : {};
+    const allowedContentKeys = getReferenceHashContentKeys(
+      typeof event.type === "string" ? event.type : "",
+      roomVersion,
+    );
+    redacted.content =
+      allowedContentKeys === "all"
+        ? { ...content }
+        : Object.fromEntries(
+            allowedContentKeys
+              .filter((key) => content[key] !== undefined)
+              .map((key) => [key, content[key]]),
+          );
+  }
+
+  return redacted;
+}
+
+export async function calculateReferenceHash(
+  event: Record<string, unknown>,
+  roomVersion?: string,
+): Promise<string> {
+  return calculateReferenceHashWithEncoding(event, roomVersion, "urlsafe");
+}
+
+export async function calculateReferenceHashStandard(
+  event: Record<string, unknown>,
+  roomVersion?: string,
+): Promise<string> {
+  return calculateReferenceHashWithEncoding(event, roomVersion, "standard");
+}
+
+async function calculateReferenceHashWithEncoding(
+  event: Record<string, unknown>,
+  roomVersion: string | undefined,
+  encoding: "urlsafe" | "standard",
+): Promise<string> {
+  const toHash = redactEventForReferenceHash(event, roomVersion);
+  delete toHash["signatures"];
+  delete toHash["unsigned"];
+  delete toHash["event_id"];
+
+  const canonical = canonicalJson(toHash);
+  return encoding === "standard" ? sha256UnpaddedBase64(canonical) : sha256(canonical);
+}
+
+export async function calculateReferenceHashEventId(
+  event: Record<string, unknown>,
+  roomVersion?: string,
+): Promise<string> {
+  return `$${await calculateReferenceHash(event, roomVersion)}`;
+}
+
+export async function calculateReferenceHashEventIdStandard(
+  event: Record<string, unknown>,
+  roomVersion?: string,
+): Promise<string> {
+  return `$${await calculateReferenceHashStandard(event, roomVersion)}`;
+}
+
 // Calculate content hash for PDU
 export async function calculateContentHash(content: Record<string, unknown>): Promise<string> {
   // Remove signatures and unsigned before hashing
   const toHash = { ...content };
   delete toHash["signatures"];
   delete toHash["unsigned"];
+  delete toHash["hashes"];
 
   const canonical = canonicalJson(toHash);
-  return sha256(canonical);
+  return sha256UnpaddedBase64(canonical);
 }
 
 // Verify content hash
@@ -305,7 +592,16 @@ export async function verifyContentHash(
   expectedHash: string,
 ): Promise<boolean> {
   const actualHash = await calculateContentHash(content);
-  return actualHash === expectedHash;
+  try {
+    const actualBytes = decodeUnpaddedBase64(actualHash);
+    const expectedBytes = decodeUnpaddedBase64(expectedHash.replace(/-/g, "+").replace(/_/g, "/"));
+    if (actualBytes.length !== expectedBytes.length) {
+      return false;
+    }
+    return actualBytes.every((value, index) => value === expectedBytes[index]);
+  } catch {
+    return false;
+  }
 }
 
 // Generate a random string for CSRF tokens, etc.

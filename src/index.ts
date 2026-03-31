@@ -46,6 +46,7 @@ import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { requireAuth } from "./middleware/auth";
 import { analyticsMiddleware } from "./middleware/analytics";
 import { appContextMiddleware } from "./runtime/cloudflare/app-context";
+import { FEDERATION_OUTBOUND_DO_NAME } from "./matrix/application/features/shared/federation-edu-queue";
 
 // Import Durable Objects
 export {
@@ -96,6 +97,13 @@ app.use("/_matrix/*", rateLimitMiddleware);
 
 // Health check
 app.get("/health", (c) => c.json({ status: "ok", server: "matrix-worker" }));
+
+// Complement startup hook to re-arm outbound federation retries after a worker restart.
+app.post("/_internal/federation/recover", async (c) => {
+  const stub = c.env.FEDERATION.get(c.env.FEDERATION.idFromName(FEDERATION_OUTBOUND_DO_NAME));
+  await stub.fetch(new Request("http://internal/recover", { method: "POST" }));
+  return c.json({ recovered: true });
+});
 
 // Admin dashboard - serve HTML with security headers
 app.get("/admin", (c) => {

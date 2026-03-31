@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect";
 import type { PDU } from "../../types";
 import { ErrorCodes } from "../../types";
+import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
 import { DomainError } from "./domain-error";
 import { requireRoomVersionPolicy } from "./room-version-policy";
 
@@ -280,7 +281,7 @@ export function validateInviteRequest(input: {
       if (!event.state_key || !event.state_key.includes(":")) {
         return Effect.fail(invalidParam("Invalid state_key for invite"));
       }
-      const invitedServer = event.state_key.split(":")[1];
+      const invitedServer = extractServerNameFromMatrixId(event.state_key);
       if (invitedServer !== input.serverName) {
         return Effect.fail(forbidden("User is not local to this server"));
       }

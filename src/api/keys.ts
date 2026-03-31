@@ -15,6 +15,7 @@ import { Hono } from "hono";
 import type { AppEnv, Env } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
+import { FEDERATION_OUTBOUND_DO_NAME } from "../matrix/application/features/shared/federation-edu-queue";
 import { verifyPassword } from "../utils/crypto";
 import { generateOpaqueId } from "../utils/ids";
 import { getPasswordHash } from "../services/database";
@@ -225,7 +226,9 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
       const uniqueServers = [...new Set(remoteServers)].filter((s) => s !== localServer);
 
       for (const server of uniqueServers) {
-        const fedDO = c.env.FEDERATION.get(c.env.FEDERATION.idFromName(server));
+        const fedDO = c.env.FEDERATION.get(
+          c.env.FEDERATION.idFromName(FEDERATION_OUTBOUND_DO_NAME),
+        );
         await fedDO.fetch(
           new Request("http://internal/send-edu", {
             method: "POST",

@@ -66,6 +66,7 @@ class FakeFederationRepository implements Pick<
 class FakeD1Database {
   streamPosition = 0;
   devicesByUser = new Map<string, string[]>();
+  memberships = new Map<string, string>();
   toDeviceMessages: Array<{
     recipientUserId: string;
     recipientDeviceId: string;
@@ -88,6 +89,13 @@ class FakeD1Database {
         if (query.includes("UPDATE stream_positions")) {
           this.streamPosition += 1;
           return { position: this.streamPosition };
+        }
+
+        if (query.includes("SELECT membership FROM room_memberships")) {
+          const roomId = boundArgs[0] as string;
+          const userId = boundArgs[1] as string;
+          const membership = this.memberships.get(`${roomId}:${userId}`);
+          return membership ? { membership } : null;
         }
 
         return null;
@@ -175,10 +183,14 @@ describe("federation-handler-service", () => {
   });
 
   it("routes typing EDUs to realtime room state", async () => {
+    const db = new FakeD1Database();
+    db.memberships.set("!room:hs1:@alice:remote", "join");
     const calls: Array<{ roomId: string; userId: string; typing: boolean; timeoutMs?: number }> =
       [];
 
     await handleFederationTypingEdu(
+      db as unknown as D1Database,
+      "remote",
       {
         async notifyRoomEvent() {},
         async waitForUserEvents() {

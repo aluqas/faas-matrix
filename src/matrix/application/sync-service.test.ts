@@ -76,10 +76,69 @@ class FakeSyncRepository implements SyncRepository {
   }
 }
 
+function createTestAppContext(): AppContext {
+  const db = {
+    prepare() {
+      return {
+        bind() {
+          return {
+            async all() {
+              return { results: [] };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as D1Database;
+
+  return {
+    capabilities: {
+      sql: { connection: db },
+      kv: {},
+      blob: {},
+      jobs: { defer() {} },
+      workflow: {
+        async createRoomJoin() {},
+        async createPushNotification() {},
+      },
+      rateLimit: {},
+      realtime: {
+        async notifyRoomEvent() {},
+        async waitForUserEvents() {
+          return { hasEvents: false };
+        },
+      },
+      metrics: {},
+      clock: { now: () => Date.now() },
+      id: {
+        async generateRoomId() {
+          return "!room:test";
+        },
+        async generateEventId() {
+          return "$event:test";
+        },
+        async generateOpaqueId() {
+          return "opaque";
+        },
+        formatRoomAlias(localpart: string, serverName: string) {
+          return `#${localpart}:${serverName}`;
+        },
+      },
+      config: {
+        serverName: "test",
+        serverVersion: "test",
+      },
+    },
+    profile: {} as AppContext["profile"],
+    services: {},
+    defer() {},
+  };
+}
+
 describe("MatrixSyncService", () => {
   it("preserves composite sync tokens and waits when idle", async () => {
     const repo = new FakeSyncRepository();
-    const service = new MatrixSyncService({} as AppContext, repo);
+    const service = new MatrixSyncService(createTestAppContext(), repo);
 
     const response = await service.syncUser({
       userId: "@alice:test",
@@ -112,7 +171,7 @@ describe("MatrixSyncService", () => {
       },
     ]);
 
-    const service = new MatrixSyncService({} as AppContext, repo);
+    const service = new MatrixSyncService(createTestAppContext(), repo);
     const response = await service.syncUser({
       userId: "@alice:test",
       deviceId: null,
@@ -160,7 +219,7 @@ describe("MatrixSyncService", () => {
       leaveEvent,
     ]);
 
-    const service = new MatrixSyncService({} as AppContext, repo);
+    const service = new MatrixSyncService(createTestAppContext(), repo);
     const response = await service.syncUser({
       userId: "@alice:test",
       deviceId: null,

@@ -1,6 +1,8 @@
 import { Effect, Schema } from "effect";
+import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
 import type { PDU } from "../../types";
 import { ErrorCodes } from "../../types";
+import { calculateReferenceHashEventId } from "../../utils/crypto";
 import { MatrixApiError } from "../../utils/errors";
 import { DomainError, toMatrixApiError } from "./domain-error";
 
@@ -8,7 +10,7 @@ const UnknownRecordSchema = Schema.Record({ key: Schema.String, value: Schema.Un
 const StringRecordSchema = Schema.Record({ key: Schema.String, value: Schema.String });
 
 const IncomingPduSchema = Schema.Struct({
-  event_id: Schema.String,
+  event_id: Schema.optional(Schema.String),
   room_id: Schema.String,
   sender: Schema.String,
   type: Schema.optional(Schema.String),
@@ -26,9 +28,9 @@ const IncomingPduSchema = Schema.Struct({
 
 type IncomingPdu = Schema.Schema.Type<typeof IncomingPduSchema>;
 
-function toIncomingPdu(event: IncomingPdu): PDU {
+function toIncomingPdu(event: IncomingPdu, eventId: string): PDU {
   return {
-    event_id: event.event_id,
+    event_id: eventId,
     room_id: event.room_id,
     sender: event.sender,
     type: event.type ?? event.event_type ?? "",
@@ -47,6 +49,7 @@ function toIncomingPdu(event: IncomingPdu): PDU {
 export function validateIncomingPduEffect(
   event: unknown,
   context?: string,
+  roomVersion?: string,
 ): Effect.Effect<PDU, DomainError> {
   return Schema.decodeUnknown(IncomingPduSchema)(event).pipe(
     Effect.mapError(
@@ -71,7 +74,43 @@ export function validateIncomingPduEffect(
         );
       }
 
-      return Effect.succeed(toIncomingPdu(decoded));
+      const eventIdFormat = getRoomVersion(roomVersion ?? getDefaultRoomVersion())?.eventIdFormat;
+      if (eventIdFormat === "v1") {
+        if (!decoded.event_id) {
+          return Effect.fail(
+            new DomainError({
+              kind: "spec_violation",
+              errcode: ErrorCodes.M_BAD_JSON,
+              message: `${context ?? "PDU"}: missing event_id`,
+              status: 400,
+            }),
+          );
+        }
+
+        return Effect.succeed(toIncomingPdu(decoded, decoded.event_id));
+      }
+
+      return Effect.tryPromise({
+        try: async () => {
+          const eventId =
+            decoded.event_id ??
+            (await calculateReferenceHashEventId(
+              {
+                ...decoded,
+                type,
+              } as unknown as Record<string, unknown>,
+              roomVersion,
+            ));
+          return toIncomingPdu(decoded, eventId);
+        },
+        catch: () =>
+          new DomainError({
+            kind: "spec_violation",
+            errcode: ErrorCodes.M_BAD_JSON,
+            message: `${context ?? "PDU"}: invalid event_id`,
+            status: 400,
+          }),
+      });
     }),
   );
 }
@@ -80,9 +119,13 @@ export function validateIncomingPduEffect(
  * Validate an incoming PDU (from federation) for required fields.
  * Throws MatrixApiError on validation failure so callers get a standardized error.
  */
-export function validateIncomingPdu(event: unknown, context?: string): PDU {
+export async function validateIncomingPdu(
+  event: unknown,
+  context?: string,
+  roomVersion?: string,
+): Promise<PDU> {
   try {
-    return Effect.runSync(validateIncomingPduEffect(event, context));
+    return await Effect.runPromise(validateIncomingPduEffect(event, context, roomVersion));
   } catch (error) {
     if (error instanceof DomainError) {
       throw toMatrixApiError(error);
@@ -95,9 +138,13 @@ export function validateIncomingPdu(event: unknown, context?: string): PDU {
  * Filter-style variant: returns null for malformed events instead of throwing.
  * Useful when processing batches where individual malformed events should be skipped.
  */
-export function tryValidateIncomingPdu(event: unknown, context?: string): PDU | null {
+export async function tryValidateIncomingPdu(
+  event: unknown,
+  context?: string,
+  roomVersion?: string,
+): Promise<PDU | null> {
   try {
-    return validateIncomingPdu(event, context);
+    return await Effect.runPromise(validateIncomingPduEffect(event, context, roomVersion));
   } catch {
     return null;
   }

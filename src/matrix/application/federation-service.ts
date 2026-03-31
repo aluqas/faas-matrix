@@ -6,11 +6,20 @@ import type {
   SignedTransport,
 } from "../../fedcore/contracts";
 import { checkEventAuth } from "../../services/event-auth";
+import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
 import { resolveState } from "../../services/state-resolution";
 import type { PDU } from "../../types";
-import { sha256, verifyContentHash } from "../../utils/crypto";
+import {
+  calculateContentHash,
+  calculateReferenceHashEventId,
+  calculateReferenceHashEventIdStandard,
+  sha256,
+  verifyContentHash,
+} from "../../utils/crypto";
 import { verifyRemoteSignature } from "../../services/federation-keys";
 import type { FederationRepository } from "../repositories/interfaces";
+import { createServerAclPolicy } from "./features/server-acl/policy";
+import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
 import {
   handleFederationDeviceListEdu,
   handleFederationDirectToDeviceEdu,
@@ -21,6 +30,7 @@ import {
   MembershipTransitionService,
   resolveMembershipAuthState,
 } from "./membership-transition-service";
+import { emitEffectWarning } from "./effect-debug";
 
 export interface FederationTransactionInput {
   origin: string;
@@ -34,6 +44,18 @@ export interface FederationTransactionInput {
 interface CachedKeyRecord {
   keyId: string;
   key: string;
+}
+
+function getRoomScopedEduRoomIds(eduType: string, content: Record<string, unknown>): string[] {
+  if (eduType === "m.typing") {
+    return typeof content.room_id === "string" ? [content.room_id] : [];
+  }
+
+  if (eduType === "m.receipt" && content && typeof content === "object") {
+    return Object.keys(content);
+  }
+
+  return [];
 }
 
 export class MatrixFederationService {
@@ -56,6 +78,13 @@ export class MatrixFederationService {
   async processTransaction(
     input: FederationTransactionInput,
   ): Promise<{ pdus: Record<string, unknown> }> {
+    await emitEffectWarning("[federation-service] processing transaction", {
+      origin: input.origin,
+      txnId: input.txnId,
+      pdus: input.body.pdus?.length ?? 0,
+      edus: input.body.edus?.length ?? 0,
+    });
+
     const cached = await this.repository.getCachedTransaction(input.origin, input.txnId);
     if (cached) {
       return cached as { pdus: Record<string, unknown> };
@@ -64,14 +93,70 @@ export class MatrixFederationService {
     const pduResults: Record<string, unknown> = {};
 
     for (const pdu of input.body.pdus || []) {
-      const eventId = pdu.event_id || "unknown";
       const roomId = pdu.room_id || "";
 
       try {
-        const existingPdu = pdu.event_id
-          ? await this.repository.getProcessedPdu(pdu.event_id)
-          : null;
+        if (!pdu.room_id || !pdu.sender || !pdu.type || !pdu.content) {
+          const malformedEventId = pdu.event_id || "unknown";
+          pduResults[malformedEventId] = { error: "Invalid PDU structure" };
+          continue;
+        }
 
+        const room = await this.repository.getRoom(roomId);
+        const roomVersion =
+          room?.room_version ||
+          (pdu.type === "m.room.create" &&
+          pdu.content &&
+          typeof pdu.content === "object" &&
+          typeof pdu.content.room_version === "string"
+            ? pdu.content.room_version
+            : getDefaultRoomVersion());
+        const eventIdFormat = getRoomVersion(roomVersion)?.eventIdFormat ?? "v4";
+        const urlsafeEventId =
+          eventIdFormat === "v1"
+            ? typeof pdu.event_id === "string"
+              ? pdu.event_id
+              : null
+            : await calculateReferenceHashEventId(pdu as Record<string, unknown>, roomVersion);
+        const standardEventId =
+          eventIdFormat === "v1"
+            ? typeof pdu.event_id === "string"
+              ? pdu.event_id
+              : null
+            : await calculateReferenceHashEventIdStandard(
+                pdu as Record<string, unknown>,
+                roomVersion,
+              );
+        const normalizedEventId =
+          eventIdFormat === "v1"
+            ? typeof pdu.event_id === "string"
+              ? pdu.event_id
+              : null
+            : urlsafeEventId;
+        const eventId = normalizedEventId || pdu.event_id || "unknown";
+        if (!normalizedEventId) {
+          pduResults[eventId] = { error: "Invalid PDU structure" };
+          continue;
+        }
+        if (eventIdFormat !== "v1") {
+          await emitEffectWarning("[federation-service] normalized inbound PDU", {
+            origin: input.origin,
+            roomId,
+            roomVersion,
+            eventType: pdu.type,
+            stateKey: typeof pdu.state_key === "string" ? pdu.state_key : undefined,
+            incomingEventId: typeof pdu.event_id === "string" ? pdu.event_id : undefined,
+            urlsafeEventId,
+            standardEventId,
+            normalizedEventId,
+          });
+        }
+        const normalizedPdu = {
+          ...(pdu as Record<string, unknown>),
+          event_id: normalizedEventId,
+        } as PDU;
+
+        const existingPdu = await this.repository.getProcessedPdu(normalizedEventId);
         if (existingPdu) {
           pduResults[eventId] = existingPdu.accepted
             ? {}
@@ -79,34 +164,29 @@ export class MatrixFederationService {
           continue;
         }
 
-        if (!pdu.event_id || !pdu.room_id || !pdu.sender || !pdu.type || !pdu.content) {
-          pduResults[eventId] = { error: "Invalid PDU structure" };
-          continue;
-        }
-
-        const pduOrigin = String(pdu.sender).split(":")[1];
+        const pduOrigin = extractServerNameFromMatrixId(String(pdu.sender));
         if (!pduOrigin) {
           pduResults[eventId] = { error: "Invalid sender format" };
           continue;
         }
 
-        if (pdu.signatures) {
+        if (normalizedPdu.signatures) {
           let signatureValid = false;
           const cache = this.appContext.capabilities.kv.cache as KVNamespace;
-          const signatories = Object.keys(pdu.signatures);
+          const signatories = Object.keys(normalizedPdu.signatures);
           for (const signatory of signatories) {
-            const keyIds = Object.keys(pdu.signatures[signatory]);
+            const keyIds = Object.keys(normalizedPdu.signatures[signatory]);
             for (const keyId of keyIds) {
               try {
                 const validByService = await verifyRemoteSignature(
-                  pdu,
+                  normalizedPdu as unknown as Record<string, unknown>,
                   signatory,
                   keyId,
                   this.appContext.capabilities.sql.connection as D1Database,
                   cache,
                 );
                 const validByTransport = await this.signedTransport.verifyJson(
-                  pdu,
+                  normalizedPdu as unknown as Record<string, unknown>,
                   signatory,
                   keyId,
                 );
@@ -134,12 +214,44 @@ export class MatrixFederationService {
           }
         }
 
-        if (pdu.hashes?.sha256) {
+        if (normalizedPdu.hashes?.sha256) {
+          const contentHashInput =
+            eventIdFormat === "v1"
+              ? normalizedPdu
+              : ({ ...normalizedPdu, event_id: undefined } as unknown as Record<string, unknown>);
           const hashValid = await verifyContentHash(
-            pdu as Record<string, unknown>,
-            pdu.hashes.sha256,
+            contentHashInput as unknown as Record<string, unknown>,
+            normalizedPdu.hashes.sha256,
           );
           if (!hashValid) {
+            const rawPdu = pdu as Record<string, unknown>;
+            const rawHash = await calculateContentHash(rawPdu);
+            const normalizedHash = await calculateContentHash(
+              normalizedPdu as unknown as Record<string, unknown>,
+            );
+            const withoutEventIdHash = await calculateContentHash({
+              ...normalizedPdu,
+              event_id: undefined,
+            } as unknown as Record<string, unknown>);
+            await emitEffectWarning("[federation-service] content hash mismatch", {
+              origin: input.origin,
+              roomId,
+              roomVersion,
+              eventId,
+              eventType: normalizedPdu.type,
+              hadIncomingEventId: typeof rawPdu.event_id === "string",
+              expectedHash: normalizedPdu.hashes.sha256,
+              rawHash,
+              normalizedHash,
+              withoutEventIdHash,
+              rawKeys: Object.keys(rawPdu).sort(),
+              unsignedKeys:
+                rawPdu.unsigned &&
+                typeof rawPdu.unsigned === "object" &&
+                !Array.isArray(rawPdu.unsigned)
+                  ? Object.keys(rawPdu.unsigned as Record<string, unknown>).sort()
+                  : [],
+            });
             pduResults[eventId] = { error: "Content hash mismatch" };
             await this.repository.recordProcessedPdu(
               eventId,
@@ -152,20 +264,40 @@ export class MatrixFederationService {
           }
         }
 
-        const room = await this.repository.getRoom(roomId);
         if (room) {
+          const aclPolicy = createServerAclPolicy(await this.repository.getRoomState(roomId));
+          const aclDecision = aclPolicy.allowPdu(input.origin, roomId, normalizedPdu);
+          if (aclDecision.kind === "deny") {
+            await emitEffectWarning("[federation-service] ACL rejected PDU", {
+              origin: input.origin,
+              roomId,
+              eventId,
+              eventType: normalizedPdu.type,
+              reason: aclDecision.reason,
+            });
+            pduResults[eventId] = { error: aclDecision.reason };
+            await this.repository.recordProcessedPdu(
+              eventId,
+              pduOrigin,
+              roomId,
+              false,
+              aclDecision.reason,
+            );
+            continue;
+          }
+
           try {
             let roomState = await this.repository.getRoomState(roomId);
             const inviteStrippedState = await this.repository.getInviteStrippedState(roomId);
             roomState = resolveMembershipAuthState(roomId, roomState, inviteStrippedState);
-            const authResult = checkEventAuth(pdu as PDU, roomState, room.room_version);
+            const authResult = checkEventAuth(normalizedPdu, roomState, room.room_version);
             if (!authResult.allowed) {
-              console.warn("[FederationService] Rejected PDU", {
+              await emitEffectWarning("[federation-service] rejected PDU", {
                 roomId,
                 eventId,
-                type: pdu.type,
-                sender: pdu.sender,
-                stateKey: pdu.state_key,
+                type: normalizedPdu.type,
+                sender: normalizedPdu.sender,
+                stateKey: normalizedPdu.state_key,
                 reason: authResult.error || "Auth failed",
               });
               pduResults[eventId] = { error: authResult.error || "Event authorization failed" };
@@ -184,15 +316,16 @@ export class MatrixFederationService {
         }
 
         pduResults[eventId] = {};
-        await this.repository.recordProcessedPdu(eventId, pduOrigin, roomId, true);
+        await this.repository.recordProcessedPdu(normalizedEventId, pduOrigin, roomId, true);
 
-        await this.storeAcceptedPdu(pdu as PDU);
+        await this.storeAcceptedPdu(normalizedPdu);
       } catch (error) {
+        const eventId = pdu.event_id || "unknown";
         pduResults[eventId] = {
           error: error instanceof Error ? error.message : "Unknown error",
         };
         if (pdu.event_id && pdu.room_id) {
-          const pduOrigin = String(pdu.sender).split(":")[1] || input.origin;
+          const pduOrigin = extractServerNameFromMatrixId(String(pdu.sender)) || input.origin;
           await this.repository.recordProcessedPdu(
             pdu.event_id,
             pduOrigin,
@@ -207,7 +340,12 @@ export class MatrixFederationService {
     for (const edu of input.body.edus || []) {
       try {
         await this.processEdu(input.origin, edu);
-      } catch {
+      } catch (error) {
+        await emitEffectWarning("[federation-service] failed to process EDU", {
+          origin: input.origin,
+          eduType: edu.edu_type,
+          error: error instanceof Error ? error.message : String(error),
+        });
         // EDU processing failures should not abort the transaction
       }
     }
@@ -304,6 +442,30 @@ export class MatrixFederationService {
   private async processEdu(origin: string, edu: Record<string, any>): Promise<void> {
     const eduType = edu.edu_type;
     const content = edu.content as Record<string, any>;
+    const roomScopedRoomIds = getRoomScopedEduRoomIds(eduType, content);
+
+    for (const roomId of roomScopedRoomIds) {
+      const room = await this.repository.getRoom(roomId);
+      if (!room) {
+        continue;
+      }
+
+      const aclPolicy = createServerAclPolicy(await this.repository.getRoomState(roomId));
+      const aclDecision = aclPolicy.allowRoomScopedEdu(origin, {
+        eduType,
+        roomId,
+        userId: typeof content.user_id === "string" ? content.user_id : undefined,
+      });
+      if (aclDecision.kind === "deny") {
+        await emitEffectWarning("[federation-service] ACL rejected EDU", {
+          origin,
+          roomId,
+          eduType,
+          reason: aclDecision.reason,
+        });
+        return;
+      }
+    }
 
     switch (eduType) {
       case "m.presence": {
@@ -319,7 +481,12 @@ export class MatrixFederationService {
         break;
       }
       case "m.typing": {
-        await handleFederationTypingEdu(this.appContext.capabilities.realtime, content);
+        await handleFederationTypingEdu(
+          this.appContext.capabilities.sql.connection as D1Database,
+          origin,
+          this.appContext.capabilities.realtime,
+          content,
+        );
         break;
       }
       case "m.direct_to_device": {

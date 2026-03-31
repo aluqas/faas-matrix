@@ -22,7 +22,6 @@ import {
   deleteRoomAlias,
   getEvent,
   notifyUsersOfEvent,
-  fanoutEventToFederation,
 } from "../services/database";
 import roomMembershipRoutes from "./rooms/membership";
 import roomQueryRoutes from "./rooms/query";
@@ -157,34 +156,15 @@ async function putRoomStateEvent(
   } catch {
     return Errors.badJson().toResponse();
   }
-
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (membership) authEvents.push(membership.eventId);
-
-  const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map((e) => e.event_id);
-
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: eventType,
-    state_key: stateKey,
+  const txnId = await c.get("appContext").capabilities.id.generateOpaqueId();
+  const response = await c.get("appContext").services.rooms.sendEvent({
+    userId,
+    roomId,
+    eventType,
+    stateKey,
+    txnId,
     content,
-    origin_server_ts: Date.now(),
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
-
-  await storeEvent(c.env.DB, event);
+  });
 
   const CACHED_STATE_TYPES = [
     "m.room.name",
@@ -203,16 +183,12 @@ async function putRoomStateEvent(
       roomId,
       stateKey,
       content.membership,
-      eventId,
+      response.event_id,
       content.displayname,
       content.avatar_url,
     );
   }
-
-  await notifyUsersOfEvent(c.env, roomId, eventId, eventType);
-  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
-
-  return c.json({ event_id: eventId });
+  return c.json(response);
 }
 
 // GET /_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey? - Get specific state
@@ -357,18 +333,6 @@ app.put("/_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId", requireAuth()
       txnId: c.req.param("txnId"),
       content,
     });
-
-    // Fan out to federation peers (kept alive via waitUntil)
-    if (response.event_id) {
-      c.executionCtx.waitUntil(
-        getEvent(c.env.DB, response.event_id)
-          .then((pdu) => {
-            if (pdu) return fanoutEventToFederation(c.env, roomId, pdu);
-            return undefined;
-          })
-          .catch(() => undefined),
-      );
-    }
 
     return c.json(response);
   } catch (error) {

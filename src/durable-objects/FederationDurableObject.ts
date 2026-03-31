@@ -2,6 +2,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../types";
+import { federationPut } from "../services/federation-keys";
 
 interface FederationTarget {
   serverName: string;
@@ -53,6 +54,10 @@ export class FederationDurableObject extends DurableObject<Env> {
 
     if (path === "/send-edu") {
       return this.handleSendEdu(request);
+    }
+
+    if (path === "/recover") {
+      return this.handleRecover();
     }
 
     return new Response("Not found", { status: 404 });
@@ -243,10 +248,27 @@ export class FederationDurableObject extends DurableObject<Env> {
     const key = `edu:${data.destination}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
     await this.ctx.storage.put(key, edu);
 
-    // Try to send immediately
-    await this.processFederationQueue(data.destination);
+    // Register the destination for retry processing and schedule delivery
+    // asynchronously so the client request is not blocked on federation I/O.
+    await this.ctx.storage.put(`server:${data.destination}`, {
+      serverName: data.destination,
+      lastContact: 0,
+      retryCount: 0,
+      nextRetry: Date.now(),
+    } satisfies FederationTarget);
+    await this.ctx.storage.setAlarm(Date.now());
 
     return new Response("Queued");
+  }
+
+  private async handleRecover(): Promise<Response> {
+    const allKeys = await this.ctx.storage.list({ prefix: "server:" });
+    for (const [, value] of allKeys) {
+      const target = value as FederationTarget;
+      await this.processFederationQueue(target.serverName);
+    }
+
+    return new Response("Recovered");
   }
 
   private async processFederationQueue(destination: string): Promise<void> {
@@ -281,32 +303,37 @@ export class FederationDurableObject extends DurableObject<Env> {
       content: e.content,
     }));
 
-    try {
-      const response = await fetch(
-        `https://${destination}/_matrix/federation/v1/send/${Date.now()}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+    const retryDelays = [0, 250, 1000];
+
+    for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+      if (retryDelays[attempt] > 0) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
+      }
+
+      try {
+        const response = await federationPut(
+          destination,
+          `/_matrix/federation/v1/send/${Date.now()}-${attempt}`,
+          {
             pdus,
             edus: eduPayloads,
-          }),
-        },
-      );
+          },
+          this.env.SERVER_NAME,
+          this.env.DB,
+          this.env.CACHE,
+        );
 
-      if (response.ok) {
-        // Remove sent events from queue
+        if (!response.ok) {
+          continue;
+        }
+
         for (const event of events) {
           await this.ctx.storage.delete(`queue:${destination}:${event.event_id}`);
         }
-        // Remove sent EDUs
         for (const key of eduKeyNames) {
           await this.ctx.storage.delete(key);
         }
 
-        // Update server status
         const target: FederationTarget = {
           serverName: destination,
           lastContact: Date.now(),
@@ -314,14 +341,15 @@ export class FederationDurableObject extends DurableObject<Env> {
           nextRetry: null,
         };
         await this.ctx.storage.put(`server:${destination}`, target);
-      } else {
-        // Schedule retry
-        await this.scheduleRetry(destination, events);
+        return;
+      } catch (error) {
+        if (attempt === retryDelays.length - 1) {
+          console.error(`Federation send to ${destination} failed:`, error);
+        }
       }
-    } catch (error) {
-      console.error(`Federation send to ${destination} failed:`, error);
-      await this.scheduleRetry(destination, events);
     }
+
+    await this.scheduleRetry(destination, events);
   }
 
   private async scheduleRetry(destination: string, events: OutboundEvent[]): Promise<void> {
@@ -330,8 +358,8 @@ export class FederationDurableObject extends DurableObject<Env> {
       | undefined;
     const retryCount = (target?.retryCount || 0) + 1;
 
-    // Exponential backoff: 1min, 2min, 4min, 8min, 16min, max 1hour
-    const delay = Math.min(60000 * Math.pow(2, retryCount - 1), 3600000);
+    // Exponential backoff tuned for interactive protocol delivery.
+    const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 30000);
     const nextRetry = Date.now() + delay;
 
     // Update server status

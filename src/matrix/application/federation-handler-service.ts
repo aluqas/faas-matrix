@@ -1,5 +1,6 @@
 import { storeEvent } from "../../services/database";
 import type { PDU } from "../../types";
+import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
 import type { FederationRepository } from "../repositories/interfaces";
 import type { RealtimeCapability } from "../../foundation/runtime-capabilities";
 import {
@@ -9,6 +10,9 @@ import {
 } from "./membership-transition-service";
 import { EventQueryService, type MissingEventsQuery } from "./event-query-service";
 import { tryValidateIncomingPdu } from "./pdu-validator";
+import { ingestPresenceEdu } from "./features/presence/ingest";
+import { ingestTypingEdu } from "./features/typing/ingest";
+import { ingestDirectToDeviceEdu } from "./features/to-device/ingest";
 
 type StoredEventRow = {
   event_id: string;
@@ -133,7 +137,7 @@ export async function loadFederationStateBundle(
     new Set(
       roomState
         .filter((event) => event.type === "m.room.member" && event.content.membership === "join")
-        .map((event) => event.sender.split(":")[1])
+        .map((event) => extractServerNameFromMatrixId(event.sender))
         .filter((server): server is string => Boolean(server)),
     ),
   );
@@ -240,7 +244,7 @@ export async function persistFederationStateSnapshot(
   await ensureFederatedRoomStub(db, input.roomId, input.roomVersion, "");
 
   for (const rawEvent of input.authChain) {
-    const event = tryValidateIncomingPdu(rawEvent, "auth_chain");
+    const event = await tryValidateIncomingPdu(rawEvent, "auth_chain", input.roomVersion);
     if (!event) {
       continue;
     }
@@ -260,7 +264,7 @@ export async function persistFederationStateSnapshot(
   }
 
   for (const rawEvent of input.stateEvents) {
-    const event = tryValidateIncomingPdu(rawEvent, "state");
+    const event = await tryValidateIncomingPdu(rawEvent, "state", input.roomVersion);
     if (!event) {
       continue;
     }
@@ -300,76 +304,12 @@ export async function getMissingFederationEvents(
   return eventQueryService.getMissingEvents(db, query);
 }
 
-async function getNextStreamPosition(db: D1Database, streamName: string): Promise<number> {
-  const result = await db
-    .prepare(
-      `UPDATE stream_positions
-       SET position = position + 1
-       WHERE stream_name = ?
-       RETURNING position`,
-    )
-    .bind(streamName)
-    .first<{ position: number }>();
-
-  if (result) {
-    return result.position;
-  }
-
-  const upsertResult = await db
-    .prepare(
-      `INSERT INTO stream_positions (stream_name, position)
-       VALUES (?, 1)
-       ON CONFLICT (stream_name) DO UPDATE SET position = position + 1
-       RETURNING position`,
-    )
-    .bind(streamName)
-    .first<{ position: number }>();
-
-  return upsertResult?.position ?? 1;
-}
-
-async function getLocalDeviceIds(db: D1Database, userId: string): Promise<string[]> {
-  const devices = await db
-    .prepare(`SELECT device_id FROM devices WHERE user_id = ?`)
-    .bind(userId)
-    .all<{ device_id: string }>();
-
-  return devices.results.map((device) => device.device_id);
-}
-
 export async function handleFederationPresenceEdu(
   repository: Pick<FederationRepository, "upsertPresence">,
   now: number,
   content: Record<string, unknown>,
 ): Promise<void> {
-  const presencePush = content.push as
-    | Array<{
-        user_id: string;
-        presence: string;
-        status_msg?: string;
-        last_active_ago?: number;
-        currently_active?: boolean;
-      }>
-    | undefined;
-
-  if (!presencePush) {
-    return;
-  }
-
-  for (const update of presencePush) {
-    if (!update.user_id || !update.presence) {
-      continue;
-    }
-
-    const lastActive = update.last_active_ago ? now - update.last_active_ago : now;
-    await repository.upsertPresence(
-      update.user_id,
-      update.presence,
-      update.status_msg || null,
-      lastActive,
-      Boolean(update.currently_active),
-    );
-  }
+  await ingestPresenceEdu(repository, now, content);
 }
 
 export async function handleFederationDeviceListEdu(
@@ -393,20 +333,47 @@ export async function handleFederationDeviceListEdu(
 }
 
 export async function handleFederationTypingEdu(
+  db: D1Database,
+  origin: string,
   realtime: RealtimeCapability,
   content: Record<string, unknown>,
 ): Promise<void> {
-  const roomId = typeof content.room_id === "string" ? content.room_id : undefined;
-  const userId = typeof content.user_id === "string" ? content.user_id : undefined;
-  const typing = typeof content.typing === "boolean" ? content.typing : undefined;
-  const timeoutMs =
-    typeof content.timeout === "number" && content.timeout > 0 ? content.timeout : undefined;
-
-  if (!roomId || !userId || typing === undefined || !realtime.setRoomTyping) {
+  if (!realtime.setRoomTyping) {
     return;
   }
 
-  await realtime.setRoomTyping(roomId, userId, typing, timeoutMs);
+  await ingestTypingEdu(origin, content, {
+    async getMembership(roomId: string, userId: string) {
+      const membership = await db
+        .prepare(
+          `SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ? LIMIT 1`,
+        )
+        .bind(roomId, userId)
+        .first<{ membership: string }>();
+
+      if (membership?.membership) {
+        return membership.membership;
+      }
+
+      const stateMembership = await db
+        .prepare(
+          `SELECT json_extract(e.content, '$.membership') AS membership
+           FROM room_state rs
+           JOIN events e ON rs.event_id = e.event_id
+           WHERE rs.room_id = ?
+             AND rs.event_type = 'm.room.member'
+             AND rs.state_key = ?
+           LIMIT 1`,
+        )
+        .bind(roomId, userId)
+        .first<{ membership: string | null }>();
+
+      return stateMembership?.membership ?? null;
+    },
+    async setRoomTyping(roomId: string, userId: string, typing: boolean, timeoutMs?: number) {
+      await realtime.setRoomTyping?.(roomId, userId, typing, timeoutMs);
+    },
+  });
 }
 
 export async function handleFederationDirectToDeviceEdu(
@@ -414,51 +381,5 @@ export async function handleFederationDirectToDeviceEdu(
   origin: string,
   content: Record<string, unknown>,
 ): Promise<void> {
-  const sender = typeof content.sender === "string" ? content.sender : origin;
-  const eventType = typeof content.type === "string" ? content.type : undefined;
-  const messageId = typeof content.message_id === "string" ? content.message_id : undefined;
-  const messages =
-    content.messages && typeof content.messages === "object"
-      ? (content.messages as Record<string, Record<string, unknown>>)
-      : undefined;
-
-  if (!eventType || !messageId || !messages) {
-    return;
-  }
-
-  for (const [recipientUserId, deviceMessages] of Object.entries(messages)) {
-    if (!deviceMessages || typeof deviceMessages !== "object") {
-      continue;
-    }
-
-    for (const [deviceId, messageContent] of Object.entries(deviceMessages)) {
-      const targetDevices =
-        deviceId === "*" ? await getLocalDeviceIds(db, recipientUserId) : [deviceId];
-
-      for (const targetDeviceId of targetDevices) {
-        const streamPosition = await getNextStreamPosition(db, "to_device");
-        const contentJson =
-          messageContent && typeof messageContent === "object" ? messageContent : {};
-
-        await db
-          .prepare(
-            `INSERT INTO to_device_messages (
-              recipient_user_id, recipient_device_id, sender_user_id,
-              event_type, content, message_id, stream_position
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (recipient_user_id, recipient_device_id, message_id) DO NOTHING`,
-          )
-          .bind(
-            recipientUserId,
-            targetDeviceId,
-            sender,
-            eventType,
-            JSON.stringify(contentJson),
-            messageId,
-            streamPosition,
-          )
-          .run();
-      }
-    }
-  }
+  await ingestDirectToDeviceEdu(db, origin, content);
 }

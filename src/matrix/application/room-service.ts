@@ -1,7 +1,7 @@
 import type { AppContext } from "../../foundation/app-context";
 import { withIdempotency, type IdempotencyStore } from "../../foundation/idempotency";
 import { Errors, MatrixApiError } from "../../utils/errors";
-import { getDefaultRoomVersion } from "../../services/room-versions";
+import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
 import type { PDU } from "../../types";
 import type { EventPipeline } from "../domain/event-pipeline";
 import type { RoomRepository } from "../repositories/interfaces";
@@ -11,7 +11,9 @@ import {
   getServerFromRoomId,
 } from "./rooms-support";
 import { sendFederationInvite } from "../../services/federation-invite";
+import { getServerSigningKey } from "../../services/federation-keys";
 import { fanoutEventToRemoteServers } from "../../services/federation-fanout";
+import { calculateContentHash, calculateReferenceHashEventId, signJson } from "../../utils/crypto";
 import {
   authorizeBan,
   authorizeKick,
@@ -22,6 +24,7 @@ import {
   validateLeavePreconditions,
 } from "./room-membership-policy";
 import { runDomainEffect } from "./domain-error";
+import { emitEffectWarning } from "./effect-debug";
 import {
   validateCreateRoomRequest,
   validateInviteRoomRequest,
@@ -44,6 +47,7 @@ export interface SendEventInput {
   userId: string;
   roomId: string;
   eventType: string;
+  stateKey?: string;
   txnId: string;
   content: Record<string, unknown>;
 }
@@ -67,6 +71,47 @@ export interface ModerateRoomInput {
 }
 
 type TransactionResponse = Record<string, unknown>;
+
+async function attachFederationMetadata(
+  db: D1Database,
+  serverName: string,
+  event: PDU,
+  roomVersion?: string,
+): Promise<PDU> {
+  const roomVersionBehavior = roomVersion ? getRoomVersion(roomVersion) : null;
+  const hash =
+    event.hashes?.sha256 ??
+    (await calculateContentHash(
+      (roomVersionBehavior?.eventIdFormat === "v1"
+        ? event
+        : { ...event, event_id: undefined }) as unknown as Record<string, unknown>,
+    ));
+  const signingKey = await getServerSigningKey(db);
+  if (!signingKey) {
+    throw new MatrixApiError("M_UNKNOWN", "Server signing key not configured", 500);
+  }
+
+  const signingPayload: Record<string, unknown> = {
+    ...event,
+    hashes: { sha256: hash },
+  };
+  if (roomVersionBehavior?.eventIdFormat !== "v1") {
+    delete signingPayload.event_id;
+  }
+
+  const signed = await signJson(
+    signingPayload,
+    serverName,
+    signingKey.keyId,
+    signingKey.privateKeyJwk,
+  );
+
+  return {
+    ...event,
+    hashes: { sha256: hash },
+    signatures: signed.signatures as Record<string, Record<string, string>> | undefined,
+  };
+}
 
 export class MatrixRoomService {
   constructor(
@@ -616,7 +661,16 @@ export class MatrixRoomService {
               throw Errors.missingParam("eventType");
             }
           },
-          resolveAuth: async () => ({ userId: input.userId }),
+          resolveAuth: async () => {
+            const room = await this.repository.getRoom(input.roomId);
+            if (!room) {
+              throw Errors.notFound("Room not found");
+            }
+            return {
+              userId: input.userId,
+              roomVersion: room.room_version,
+            };
+          },
           authorize: async (_pipelineInput, auth) => {
             const membership = await this.repository.getMembership(input.roomId, auth.userId);
             if (!membership || membership.membership !== "join") {
@@ -637,19 +691,39 @@ export class MatrixRoomService {
             if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
             if (membership) authEvents.push(membership.eventId);
 
-            const event: PDU = {
-              event_id: await this.appContext.capabilities.id.generateEventId(
-                this.appContext.capabilities.config.serverName,
-              ),
+            const baseEvent = {
               room_id: input.roomId,
               sender: auth.userId,
               type: input.eventType,
+              state_key: input.stateKey,
               content: input.content,
               origin_server_ts: this.appContext.capabilities.clock.now(),
               unsigned: { transaction_id: input.txnId },
               depth: (latestEvents[0]?.depth ?? 0) + 1,
               auth_events: authEvents,
               prev_events: latestEvents.map((eventRecord) => eventRecord.event_id),
+            };
+            const hash = await calculateContentHash(
+              baseEvent as unknown as Record<string, unknown>,
+            );
+            const eventWithHash = {
+              ...baseEvent,
+              hashes: { sha256: hash },
+            };
+            const eventId =
+              getRoomVersion(auth.roomVersion)?.eventIdFormat === "v1"
+                ? await this.appContext.capabilities.id.generateEventId(
+                    this.appContext.capabilities.config.serverName,
+                    auth.roomVersion,
+                  )
+                : await calculateReferenceHashEventId(
+                    eventWithHash as unknown as Record<string, unknown>,
+                    auth.roomVersion,
+                  );
+
+            const event: PDU = {
+              event_id: eventId,
+              ...eventWithHash,
             };
 
             return event;
@@ -661,7 +735,7 @@ export class MatrixRoomService {
           fanout: async (_pipelineInput, _auth, event) => {
             await this.repository.notifyUsersOfEvent(input.roomId, event.event_id, input.eventType);
           },
-          notifyFederation: async (_pipelineInput, _auth, event) => {
+          notifyFederation: async (_pipelineInput, auth, event) => {
             if (
               this.appContext.profile.features.pushNotifications &&
               (input.eventType === "m.room.message" || input.eventType === "m.room.encrypted")
@@ -678,6 +752,33 @@ export class MatrixRoomService {
                   })
                   .then(() => undefined),
               );
+            }
+
+            const federatedEvent = await attachFederationMetadata(
+              this.appContext.capabilities.sql.connection as D1Database,
+              this.appContext.capabilities.config.serverName,
+              event,
+              auth.roomVersion,
+            );
+            await emitEffectWarning("[room-service] federating event", {
+              roomId: input.roomId,
+              eventId: federatedEvent.event_id,
+              eventType: input.eventType,
+              hasHashes: Boolean(federatedEvent.hashes?.sha256),
+              signatureServers: Object.keys(federatedEvent.signatures ?? {}),
+              authEvents: federatedEvent.auth_events?.length ?? 0,
+              prevEvents: federatedEvent.prev_events?.length ?? 0,
+            });
+            try {
+              await fanoutEventToRemoteServers(
+                this.appContext.capabilities.sql.connection as D1Database,
+                this.appContext.capabilities.kv.cache as KVNamespace,
+                this.appContext.capabilities.config.serverName,
+                input.roomId,
+                federatedEvent,
+              );
+            } catch (error) {
+              console.error("[room-service.sendEvent] Failed to fan out event:", error);
             }
           },
         });
@@ -779,6 +880,7 @@ export class MatrixRoomService {
           userId: input.targetUserId,
           sender: input.actorUserId,
           membership: input.membership,
+          content: input.reason ? { reason: input.reason } : undefined,
           serverName: this.appContext.capabilities.config.serverName,
           generateEventId: this.appContext.capabilities.id.generateEventId,
           now: this.appContext.capabilities.clock.now,
@@ -794,9 +896,6 @@ export class MatrixRoomService {
               }
             : undefined,
         });
-        if (input.reason) {
-          event.content.reason = input.reason;
-        }
         return event;
       },
       persist: async (_pipelineInput, _auth, event) => {

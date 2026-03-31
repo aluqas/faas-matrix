@@ -1,5 +1,6 @@
+import { getRoomVersion } from "../../services/room-versions";
 import type { Membership, PDU, RoomCreateContent, RoomMemberContent } from "../../types";
-import { calculateContentHash } from "../../utils/crypto";
+import { calculateContentHash, calculateReferenceHashEventId } from "../../utils/crypto";
 import type { RoomRepository } from "../repositories/interfaces";
 
 export interface StateEventValidation {
@@ -97,9 +98,7 @@ export async function createInitialRoomEvents(
     content: Record<string, unknown>,
     stateKey?: string,
   ): Promise<string> {
-    const eventId = await generateEventId(serverName, roomVersion);
-    const event: PDU = {
-      event_id: eventId,
+    const baseEvent = {
       room_id: roomId,
       sender: creatorId,
       type,
@@ -111,8 +110,22 @@ export async function createInitialRoomEvents(
       prev_events: [...prevEvents],
     };
 
-    const hash = await calculateContentHash(event as unknown as Record<string, unknown>);
-    event.hashes = { sha256: hash };
+    const hash = await calculateContentHash(baseEvent as unknown as Record<string, unknown>);
+    const eventWithHash = {
+      ...baseEvent,
+      hashes: { sha256: hash },
+    };
+    const eventId =
+      (roomVersion ? getRoomVersion(roomVersion) : null)?.eventIdFormat === "v1"
+        ? await generateEventId(serverName, roomVersion)
+        : await calculateReferenceHashEventId(
+            eventWithHash as unknown as Record<string, unknown>,
+            roomVersion,
+          );
+    const event: PDU = {
+      event_id: eventId,
+      ...eventWithHash,
+    };
 
     await repository.storeEvent(event);
 
@@ -212,6 +225,7 @@ export interface CreateMembershipEventOptions {
   userId: string;
   sender: string;
   membership: Membership;
+  content?: Record<string, unknown>;
   serverName: string;
   generateEventId: (serverName: string, roomVersion?: string) => Promise<string>;
   now: () => number;
@@ -232,17 +246,33 @@ export async function createMembershipEvent(options: CreateMembershipEventOption
   if (options.powerLevelsEventId) authEvents.push(options.powerLevelsEventId);
   if (options.currentMembershipEventId) authEvents.push(options.currentMembershipEventId);
 
-  return {
-    event_id: await options.generateEventId(options.serverName, options.roomVersion),
+  const baseEvent = {
     room_id: options.roomId,
     sender: options.sender,
     type: "m.room.member",
     state_key: options.userId,
-    content: { membership: options.membership },
+    content: { membership: options.membership, ...options.content },
     origin_server_ts: options.now(),
     depth: options.depth,
     auth_events: authEvents,
     prev_events: options.prevEventIds,
     unsigned: options.unsigned ? options.unsigned : undefined,
+  };
+  const hash = await calculateContentHash(baseEvent as unknown as Record<string, unknown>);
+  const eventWithHash = {
+    ...baseEvent,
+    hashes: { sha256: hash },
+  };
+  const eventId =
+    (options.roomVersion ? getRoomVersion(options.roomVersion) : null)?.eventIdFormat === "v1"
+      ? await options.generateEventId(options.serverName, options.roomVersion)
+      : await calculateReferenceHashEventId(
+          eventWithHash as unknown as Record<string, unknown>,
+          options.roomVersion,
+        );
+
+  return {
+    event_id: eventId,
+    ...eventWithHash,
   };
 }

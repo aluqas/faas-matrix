@@ -1,0 +1,63 @@
+import { describe, expect, it } from "vitest";
+import type { PresenceCommandInput } from "./contracts";
+import { executePresenceCommand } from "./command";
+
+describe("presence command", () => {
+  it("persists presence locally and queues remote EDUs once per remote server", async () => {
+    const persisted: PresenceCommandInput[] = [];
+    const queued: Array<{ destination: string; content: Record<string, unknown> }> = [];
+
+    await executePresenceCommand(
+      {
+        userId: "@alice:test",
+        presence: "online",
+        statusMessage: "Here",
+        now: 123,
+      },
+      {
+        localServerName: "test",
+        async persistPresence(input) {
+          persisted.push(input);
+        },
+        async resolveInterestedServers() {
+          return ["test", "remote-a", "remote-a", "remote-b"];
+        },
+        async queueEdu(destination: string, content: Record<string, unknown>) {
+          queued.push({ destination, content });
+        },
+      },
+    );
+
+    expect(persisted).toHaveLength(1);
+    expect(queued).toEqual([
+      {
+        destination: "remote-a",
+        content: {
+          push: [
+            {
+              user_id: "@alice:test",
+              presence: "online",
+              status_msg: "Here",
+              last_active_ago: 0,
+              currently_active: true,
+            },
+          ],
+        },
+      },
+      {
+        destination: "remote-b",
+        content: {
+          push: [
+            {
+              user_id: "@alice:test",
+              presence: "online",
+              status_msg: "Here",
+              last_active_ago: 0,
+              currently_active: true,
+            },
+          ],
+        },
+      },
+    ]);
+  });
+});
