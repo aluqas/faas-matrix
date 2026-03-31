@@ -21,6 +21,7 @@ const targets = [
   "src/api/to-device.ts",
   "src/api/keys.ts",
   "src/api/keys-contracts.ts",
+  "src/api/push.ts",
   "src/api/push-contracts.ts",
   "src/workflows/RoomJoinWorkflow.ts",
   "src/types/workflows.ts",

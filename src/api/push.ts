@@ -48,6 +48,11 @@ function createPushLogger(operation: string, context: Record<string, unknown> = 
   });
 }
 
+function getMxidLocalpart(userId: string): string {
+  const [rawLocalpart = ""] = userId.split(":");
+  return rawLocalpart.startsWith("@") ? rawLocalpart.slice(1) : rawLocalpart;
+}
+
 function cloneJsonObject(value: JsonObject | undefined): JsonObject {
   return value ? structuredClone(value) : {};
 }
@@ -236,11 +241,14 @@ function getDefaultRulesForUser(userId: string): {
   sender: PushRule[];
   underride: PushRule[];
 } {
-  const localpart = userId.split(":")[0].substring(1); // Remove @ and domain
+  const localpart = getMxidLocalpart(userId);
 
   // Clone and customize default rules
   const overrideRules = DEFAULT_OVERRIDE_RULES.map((rule) => {
-    const r = { ...rule, conditions: rule.conditions ? [...rule.conditions] : undefined };
+    const r: PushRule = {
+      ...rule,
+      ...(rule.conditions ? { conditions: [...rule.conditions] } : {}),
+    };
     if (r.rule_id === ".m.rule.invite_for_me" && r.conditions) {
       r.conditions = r.conditions.map((c) =>
         c.key === "state_key" ? { ...c, pattern: userId } : { ...c },
@@ -256,8 +264,12 @@ function getDefaultRulesForUser(userId: string): {
 
   const contentRules = DEFAULT_CONTENT_RULES.map((rule) => ({
     ...rule,
-    pattern: rule.rule_id === ".m.rule.contains_user_name" ? localpart : rule.pattern,
-  }));
+    ...(rule.rule_id === ".m.rule.contains_user_name" && rule.pattern !== undefined
+      ? { pattern: localpart }
+      : rule.pattern !== undefined
+        ? { pattern: rule.pattern }
+        : {}),
+  })) satisfies PushRule[];
 
   return {
     override: overrideRules,
@@ -309,7 +321,7 @@ async function getUserPushRules(
       default: row.rule_id.startsWith(".m.rule."),
       enabled: row.enabled === 1,
       actions,
-      conditions,
+      ...(conditions ? { conditions } : {}),
     };
 
     const kindRules = rules[row.kind as keyof typeof rules];
@@ -969,8 +981,10 @@ app.get("/_matrix/client/v3/notifications", requireAuth(), async (c) => {
   // Calculate next_token
   let nextToken: string | undefined;
   if (notifications.results.length > 0) {
-    const lastId = notifications.results[notifications.results.length - 1].id;
-    nextToken = String(lastId);
+    const lastNotification = notifications.results[notifications.results.length - 1];
+    if (lastNotification) {
+      nextToken = String(lastNotification.id);
+    }
   }
 
   return c.json({
@@ -1095,7 +1109,7 @@ function matchesCondition(
       if (!match) return false;
 
       const op = match[1] || "==";
-      const count = parseInt(match[2], 10);
+      const count = parseInt(match[2] ?? "0", 10);
 
       switch (op) {
         case "==":
@@ -1229,12 +1243,11 @@ export async function sendPushNotification(
     pusherData = parsedPusherData;
 
     // Prepare sender and room display names
-    const senderDisplayName =
-      event.sender_display_name || event.sender.split(":")[0].replace("@", "");
+    const senderDisplayName = event.sender_display_name || getMxidLocalpart(event.sender);
     const roomDisplayName = event.room_name || "Chat";
 
     // Check if this is an iOS pusher (has default_payload.aps)
-    const isIOSPusher = pusherData.default_payload?.aps !== undefined;
+    const isIOSPusher = pusherData.default_payload?.["aps"] !== undefined;
 
     // Try direct APNs delivery for iOS pushers if configured
     if (useDirectAPNs && isIOSPusher && env) {
@@ -1312,10 +1325,10 @@ export async function sendPushNotification(
 
     // NSE needs these fields to fetch event content
     // Add them to default_payload so Sygnal merges them into APNs payload
-    deviceData.event_id = event.event_id;
-    deviceData.room_id = event.room_id;
-    deviceData.sender = event.sender;
-    deviceData.unread_count = counts.unread;
+    deviceData["event_id"] = event.event_id;
+    deviceData["room_id"] = event.room_id;
+    deviceData["sender"] = event.sender;
+    deviceData["unread_count"] = counts.unread;
 
     // Per Matrix Push Gateway spec, devices[].data should be the pusher data minus URL
     // Sygnal looks for default_payload nested inside data, not at the root
@@ -1470,14 +1483,15 @@ async function sendDirectAPNs(
 
     if (event.type === "m.room.encrypted") {
       // For encrypted messages, show sender and room (can't show content)
-      aps.alert = {
+      aps["alert"] = {
         title: senderDisplayName,
         body: roomDisplayName,
       };
     } else {
       // For unencrypted messages, show sender and message preview
-      const messageBody = event.content?.body || "New message";
-      aps.alert = {
+      const messageBody =
+        typeof event.content["body"] === "string" ? event.content["body"] : "New message";
+      aps["alert"] = {
         title: senderDisplayName,
         subtitle: roomDisplayName,
         body: messageBody,
@@ -1486,7 +1500,7 @@ async function sendDirectAPNs(
 
     // Set badge to unread count
     if (counts.unread > 0) {
-      aps.badge = counts.unread;
+      aps["badge"] = counts.unread;
     }
 
     // Build full APNs payload with Matrix event data for NSE
@@ -1597,8 +1611,7 @@ export async function notifyRoomMembersOfMessage(
   `)
     .bind(event.room_id, event.sender)
     .first<{ display_name: string | null }>();
-  const senderDisplayName =
-    senderMembership?.display_name || event.sender.split(":")[0].replace("@", "");
+  const senderDisplayName = senderMembership?.display_name || getMxidLocalpart(event.sender);
 
   // Get room name from state
   const roomNameEvent = await db
@@ -1655,7 +1668,7 @@ export async function notifyRoomMembersOfMessage(
         {
           ...event,
           sender_display_name: senderDisplayName,
-          room_name: roomName,
+          ...(roomName ? { room_name: roomName } : {}),
         },
         { unread: unreadCount },
         env,
