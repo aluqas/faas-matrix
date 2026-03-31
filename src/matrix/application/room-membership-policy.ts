@@ -31,6 +31,10 @@ export interface InviteAuthorizationResult {
   invitePower: number;
 }
 
+export interface ModerationAuthorizationResult {
+  actorPower: number;
+}
+
 function forbidden(message: string): DomainError {
   return new DomainError({
     kind: "auth_violation",
@@ -145,6 +149,75 @@ export function authorizeLocalInvite(input: {
     inviterPower: input.inviterPower,
     invitePower: input.invitePower,
   });
+}
+
+export function authorizeKick(input: {
+  actorMembership: Membership | null | undefined;
+  targetMembership: Membership | null | undefined;
+  actorPower: number;
+  targetPower: number;
+  kickPower: number;
+  canRescindInvite: boolean;
+}): Effect.Effect<ModerationAuthorizationResult, DomainError> {
+  if (input.actorMembership !== "join") {
+    return Effect.fail(forbidden("Not a member of this room"));
+  }
+
+  if (
+    input.targetMembership !== "join" &&
+    input.targetMembership !== "invite" &&
+    input.targetMembership !== "knock"
+  ) {
+    return Effect.fail(forbidden("User is not joined, invited, or knocking"));
+  }
+
+  if (input.targetMembership === "invite" && !input.canRescindInvite) {
+    return Effect.fail(forbidden("Only the original inviter can rescind an invite"));
+  }
+
+  if (input.actorPower < input.kickPower || input.actorPower <= input.targetPower) {
+    return Effect.fail(forbidden("Insufficient power level to kick"));
+  }
+
+  return Effect.succeed({ actorPower: input.actorPower });
+}
+
+export function authorizeBan(input: {
+  actorMembership: Membership | null | undefined;
+  actorPower: number;
+  targetPower: number;
+  banPower: number;
+}): Effect.Effect<ModerationAuthorizationResult, DomainError> {
+  if (input.actorMembership !== "join") {
+    return Effect.fail(forbidden("Not a member of this room"));
+  }
+
+  if (input.actorPower < input.banPower || input.actorPower <= input.targetPower) {
+    return Effect.fail(forbidden("Insufficient power level to ban"));
+  }
+
+  return Effect.succeed({ actorPower: input.actorPower });
+}
+
+export function authorizeUnban(input: {
+  actorMembership: Membership | null | undefined;
+  targetMembership: Membership | null | undefined;
+  actorPower: number;
+  banPower: number;
+}): Effect.Effect<ModerationAuthorizationResult, DomainError> {
+  if (input.actorMembership !== "join") {
+    return Effect.fail(forbidden("Not a member of this room"));
+  }
+
+  if (input.targetMembership !== "ban") {
+    return Effect.fail(forbidden("User is not banned"));
+  }
+
+  if (input.actorPower < input.banPower) {
+    return Effect.fail(forbidden("Insufficient power level to unban"));
+  }
+
+  return Effect.succeed({ actorPower: input.actorPower });
 }
 
 export function authorizeLocalKnock(input: {

@@ -26,10 +26,12 @@ import {
   persistInviteStrippedState,
 } from "../matrix/application/federation-handler-service";
 import {
+  type FederationThirdPartyInviteValidationResult,
   validateInviteRequest,
   validateSendJoinRequest,
   validateSendKnockRequest,
   validateSendLeaveRequest,
+  validateThirdPartyInviteExchangeRequest,
 } from "../matrix/application/federation-validation";
 import federationQueryRoutes from "./federation/query";
 import federationSpaceRoutes from "./federation/spaces";
@@ -2682,29 +2684,7 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
   const db = c.env.DB;
   const serverName = c.env.SERVER_NAME;
 
-  let body: {
-    type: string;
-    room_id: string;
-    sender: string;
-    state_key: string;
-    content: {
-      membership: string;
-      third_party_invite?: {
-        display_name?: string;
-        signed: {
-          mxid: string;
-          token: string;
-          signatures: Record<string, Record<string, string>>;
-        };
-      };
-    };
-    origin_server_ts?: number;
-    depth?: number;
-    auth_events?: string[];
-    prev_events?: string[];
-    event_id?: string;
-    signatures?: Record<string, Record<string, string>>;
-  };
+  let body: unknown;
 
   try {
     body = await c.req.json();
@@ -2712,50 +2692,18 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
     return Errors.badJson().toResponse();
   }
 
-  // Validate this is a membership invite
-  if (body.type !== "m.room.member" || body.content?.membership !== "invite") {
-    return c.json(
-      {
-        errcode: "M_INVALID_PARAM",
-        error: "Event must be a membership invite",
-      },
-      400,
-    );
+  let validated: FederationThirdPartyInviteValidationResult;
+  try {
+    validated = await runDomainValidation(validateThirdPartyInviteExchangeRequest({ body, roomId }));
+  } catch (error) {
+    const response = toFederationErrorResponse(error);
+    if (response) {
+      return response;
+    }
+    throw error;
   }
 
-  // Validate room ID matches
-  if (body.room_id !== roomId) {
-    return c.json(
-      {
-        errcode: "M_INVALID_PARAM",
-        error: "Room ID mismatch",
-      },
-      400,
-    );
-  }
-
-  // Validate third_party_invite is present
-  const thirdPartyInvite = body.content.third_party_invite;
-  if (!thirdPartyInvite || !thirdPartyInvite.signed) {
-    return c.json(
-      {
-        errcode: "M_INVALID_PARAM",
-        error: "Missing third_party_invite or signed data",
-      },
-      400,
-    );
-  }
-
-  const { mxid, token, signatures } = thirdPartyInvite.signed;
-  if (!mxid || !token || !signatures) {
-    return c.json(
-      {
-        errcode: "M_INVALID_PARAM",
-        error: "Incomplete signed data in third_party_invite",
-      },
-      400,
-    );
-  }
+  const { mxid, token, signatures } = validated.signed;
 
   // Verify room exists
   const room = await db
@@ -2875,16 +2823,6 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
   }
 
   // Verify the mxid matches the state_key
-  if (mxid !== body.state_key) {
-    return c.json(
-      {
-        errcode: "M_INVALID_PARAM",
-        error: "mxid does not match state_key",
-      },
-      400,
-    );
-  }
-
   // Get our signing key
   const key = await db
     .prepare(
@@ -2936,7 +2874,7 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
     JOIN events e ON rs.event_id = e.event_id
     WHERE rs.room_id = ? AND rs.event_type = 'm.room.member' AND rs.state_key = ?
   `)
-    .bind(roomId, body.sender)
+    .bind(roomId, validated.sender)
     .first<{ event_id: string }>();
 
   const authEvents: string[] = [];
@@ -2959,14 +2897,14 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
   // Create the invite event
   const inviteEvent = {
     room_id: roomId,
-    sender: body.sender,
+    sender: validated.sender,
     type: "m.room.member",
     state_key: mxid,
     content: {
       membership: "invite",
       third_party_invite: {
-        display_name: inviteContent.display_name || thirdPartyInvite.display_name,
-        signed: thirdPartyInvite.signed,
+        display_name: inviteContent.display_name || validated.displayName,
+        signed: validated.signed,
       },
     },
     origin_server_ts: originServerTs,
@@ -2983,7 +2921,7 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
       origin: serverName,
     }),
   );
-  const eventId = body.event_id || `$${eventIdHash}`;
+  const eventId = validated.eventId || `$${eventIdHash}`;
 
   // Sign the event
   const signedEvent = await signJson(
@@ -2998,7 +2936,7 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
     const storedPdu: PDU = {
       event_id: eventId,
       room_id: roomId,
-      sender: body.sender,
+      sender: validated.sender,
       type: "m.room.member",
       state_key: mxid,
       content: inviteEvent.content,

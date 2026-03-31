@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { Effect } from "effect";
 import {
+  authorizeBan,
   authorizeLocalInvite,
   authorizeLocalJoin,
   authorizeLocalKnock,
+  authorizeKick,
+  authorizeUnban,
   validateLeavePreconditions,
   validateKnockPreconditions,
 } from "./room-membership-policy";
@@ -111,5 +114,42 @@ describe("room-membership-policy", () => {
       inviterPower: 50,
       invitePower: 50,
     });
+  });
+
+  it("rejects kicks when the actor cannot kick the target", async () => {
+    const effect = authorizeKick({
+      actorMembership: "join",
+      targetMembership: "join",
+      actorPower: 50,
+      targetPower: 50,
+      kickPower: 50,
+      canRescindInvite: false,
+    });
+
+    await expect(Effect.runPromise(effect)).rejects.toThrow(
+      "Insufficient power level to kick",
+    );
+  });
+
+  it("allows bans when actor has sufficient power", async () => {
+    const effect = authorizeBan({
+      actorMembership: "join",
+      actorPower: 100,
+      targetPower: 0,
+      banPower: 50,
+    });
+
+    await expect(Effect.runPromise(effect)).resolves.toMatchObject({ actorPower: 100 });
+  });
+
+  it("rejects unban when target is not banned", async () => {
+    const effect = authorizeUnban({
+      actorMembership: "join",
+      targetMembership: "leave",
+      actorPower: 100,
+      banPower: 50,
+    });
+
+    await expect(Effect.runPromise(effect)).rejects.toThrow("User is not banned");
   });
 });

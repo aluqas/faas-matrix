@@ -1,7 +1,12 @@
 import type { AppContext } from "../../foundation/app-context";
 import type { JoinedRoom, InvitedRoom, KnockedRoom, LeftRoom, SyncResponse } from "../../types";
 import type { SyncRepository } from "../repositories/interfaces";
-import { applyEventFilter, projectMembershipRooms, shouldIncludeRoom } from "./sync-projection";
+import {
+  applyEventFilter,
+  projectJoinedRoom,
+  projectMembershipRooms,
+  shouldIncludeRoom,
+} from "./sync-projection";
 
 export interface SyncUserInput {
   userId: string;
@@ -105,85 +110,13 @@ export class MatrixSyncService {
         continue;
       }
 
-      const joinedRoom: JoinedRoom = {
-        timeline: { events: [], limited: false },
-        state: { events: [] },
-        ephemeral: { events: [] },
-        account_data: { events: [] },
-      };
-
-      const events = await this.repository.getEventsSince(roomId, sincePosition);
-      let stateEvents: any[] = [];
-      let timelineEvents: any[] = [];
-
-      for (const event of events) {
-        const clientEvent = {
-          type: event.type,
-          state_key: event.state_key,
-          content: event.content,
-          sender: event.sender,
-          origin_server_ts: event.origin_server_ts,
-          event_id: event.event_id,
-          room_id: event.room_id,
-          unsigned: event.unsigned,
-        };
-
-        if (event.state_key !== undefined) {
-          stateEvents.push(clientEvent);
-        }
-        timelineEvents.push(clientEvent);
-      }
-
-      if (input.fullState || sincePosition === 0) {
-        const state = await this.repository.getRoomState(roomId);
-        for (const event of state) {
-          const clientEvent = {
-            type: event.type,
-            state_key: event.state_key,
-            content: event.content,
-            sender: event.sender,
-            origin_server_ts: event.origin_server_ts,
-            event_id: event.event_id,
-            room_id: event.room_id,
-          };
-          if (!stateEvents.find((existing) => existing.event_id === event.event_id)) {
-            stateEvents.push(clientEvent);
-          }
-        }
-      }
-
-      joinedRoom.state!.events = applyEventFilter(stateEvents, filter?.room?.state);
-      joinedRoom.timeline!.events = applyEventFilter(timelineEvents, filter?.room?.timeline);
-      joinedRoom.timeline!.prev_batch = sincePosition.toString();
-
-      joinedRoom.account_data!.events = applyEventFilter(
-        await this.repository.getRoomAccountData(
-          input.userId,
-          roomId,
-          sincePosition > 0 ? sincePosition : undefined,
-        ),
-        filter?.room?.account_data,
-      );
-
-      const receipts = await this.repository.getReceiptsForRoom(roomId, input.userId);
-      if (Object.keys(receipts.content).length > 0) {
-        joinedRoom.ephemeral!.events.push(receipts as any);
-      }
-
-      const typingUsers = await this.repository.getTypingUsers(roomId);
-      if (typingUsers.length > 0) {
-        joinedRoom.ephemeral!.events.push({
-          type: "m.typing",
-          content: { user_ids: typingUsers },
-        } as any);
-      }
-
-      joinedRoom.ephemeral!.events = applyEventFilter(
-        joinedRoom.ephemeral!.events,
-        filter?.room?.ephemeral,
-      );
-
-      response.rooms!.join![roomId] = joinedRoom;
+      response.rooms!.join![roomId] = (await projectJoinedRoom(this.repository, {
+        userId: input.userId,
+        roomId,
+        sincePosition,
+        fullState: input.fullState,
+        roomFilter: filter?.room,
+      })) as JoinedRoom;
     }
 
     const includeLeave = filter?.room?.include_leave ?? false;

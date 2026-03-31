@@ -5,6 +5,7 @@ import {
   validateSendJoinRequest,
   validateSendKnockRequest,
   validateSendLeaveRequest,
+  validateThirdPartyInviteExchangeRequest,
 } from "./federation-validation";
 
 describe("federation validation", () => {
@@ -93,5 +94,69 @@ describe("federation validation", () => {
     });
 
     await expect(Effect.runPromise(effect)).rejects.toThrow("Event is not a knock event");
+  });
+
+  it("validates third party invite exchange payloads", async () => {
+    const effect = validateThirdPartyInviteExchangeRequest({
+      roomId: "!room:test",
+      body: {
+        type: "m.room.member",
+        room_id: "!room:test",
+        sender: "@alice:remote.test",
+        state_key: "@bob:test",
+        content: {
+          membership: "invite",
+          third_party_invite: {
+            display_name: "Bob",
+            signed: {
+              mxid: "@bob:test",
+              token: "token-1",
+              signatures: {
+                "is.example": {
+                  "ed25519:key": "sig",
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await expect(Effect.runPromise(effect)).resolves.toMatchObject({
+      roomId: "!room:test",
+      stateKey: "@bob:test",
+      signed: {
+        mxid: "@bob:test",
+        token: "token-1",
+      },
+    });
+  });
+
+  it("rejects third party invite exchanges when mxid mismatches state_key", async () => {
+    const effect = validateThirdPartyInviteExchangeRequest({
+      roomId: "!room:test",
+      body: {
+        type: "m.room.member",
+        room_id: "!room:test",
+        sender: "@alice:remote.test",
+        state_key: "@bob:test",
+        content: {
+          membership: "invite",
+          third_party_invite: {
+            signed: {
+              mxid: "@carol:test",
+              token: "token-1",
+              signatures: {
+                "is.example": {
+                  "ed25519:key": "sig",
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await expect(Effect.runPromise(effect)).rejects.toThrow("mxid does not match state_key");
   });
 });

@@ -1,7 +1,7 @@
 // Matrix room endpoints
 
 import { Hono } from "hono";
-import type { AppEnv, RoomCreateContent, RoomMemberContent, PDU } from "../types";
+import type { AppEnv, RoomCreateContent, PDU } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { generateRoomId, generateEventId } from "../utils/ids";
@@ -24,11 +24,6 @@ import {
   notifyUsersOfEvent,
   fanoutEventToFederation,
 } from "../services/database";
-import {
-  applyMembershipTransitionToDatabase,
-  loadMembershipTransitionContext,
-} from "../matrix/application/membership-transition-service";
-import { sendFederationInvite } from "../services/federation-invite";
 import roomMembershipRoutes from "./rooms/membership";
 import roomQueryRoutes from "./rooms/query";
 const app = new Hono<AppEnv>();
@@ -387,356 +382,89 @@ app.put("/_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId", requireAuth()
 
 // POST /_matrix/client/v3/rooms/:roomId/invite - Invite a user
 app.post("/_matrix/client/v3/rooms/:roomId/invite", requireAuth(), async (c) => {
-  const userId = c.get("userId");
-  const roomId = c.req.param("roomId");
-
-  let body: any;
   try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+    const body = await c.req.json();
+    await c.get("appContext").services.rooms.inviteRoom({
+      userId: c.get("userId"),
+      roomId: c.req.param("roomId"),
+      targetUserId: body.user_id,
+    });
+    return c.json({});
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return Errors.badJson().toResponse();
+    }
+    if (error instanceof Error && "toResponse" in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
   }
-
-  const { user_id: inviteeId } = body;
-  if (!inviteeId) {
-    return Errors.missingParam("user_id").toResponse();
-  }
-
-  // Check inviter membership
-  const inviterMembership = await getMembership(c.env.DB, roomId, userId);
-  if (!inviterMembership || inviterMembership.membership !== "join") {
-    return Errors.forbidden("Not a member of this room").toResponse();
-  }
-
-  // Check power levels
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
-  const powerLevels = (powerLevelsEvent?.content as any) || {};
-  const userPower = powerLevels.users?.[userId] ?? powerLevels.users_default ?? 0;
-  const invitePower = powerLevels.invite ?? 50;
-
-  if (userPower < invitePower) {
-    return Errors.forbidden("Insufficient power level to invite").toResponse();
-  }
-
-  // Check if already invited or joined
-  const inviteeMembership = await getMembership(c.env.DB, roomId, inviteeId);
-  if (inviteeMembership?.membership === "join") {
-    return Errors.forbidden("User is already in the room").toResponse();
-  }
-  if (inviteeMembership?.membership === "invite") {
-    return c.json({}); // Already invited, idempotent
-  }
-
-  // Create invite event
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (inviterMembership) authEvents.push(inviterMembership.eventId);
-
-  const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map((e) => e.event_id);
-
-  const memberContent: RoomMemberContent = {
-    membership: "invite",
-  };
-
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: "m.room.member",
-    state_key: inviteeId,
-    content: memberContent,
-    origin_server_ts: Date.now(),
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
-
-  const transitionContext = await loadMembershipTransitionContext(c.env.DB, roomId, inviteeId);
-  await storeEvent(c.env.DB, event);
-  await applyMembershipTransitionToDatabase(c.env.DB, {
-    roomId,
-    event,
-    source: "client",
-    context: transitionContext,
-  });
-
-  // Notify room members and the invitee about the invite
-  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
-
-  c.executionCtx.waitUntil(
-    sendFederationInvite(c.env.DB, c.env.CACHE, c.env.SERVER_NAME, roomId, event).catch((error) => {
-      console.error("[rooms.invite] Failed to send federation invite:", error);
-    }),
-  );
-
-  // Fan out the invite to existing federation peers already in the room.
-  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
-
-  return c.json({});
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/kick - Kick a user
 app.post("/_matrix/client/v3/rooms/:roomId/kick", requireAuth(), async (c) => {
-  const userId = c.get("userId");
-  const roomId = c.req.param("roomId");
-
-  let body: any;
   try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+    const body = await c.req.json();
+    await c.get("appContext").services.rooms.kickUser({
+      userId: c.get("userId"),
+      roomId: c.req.param("roomId"),
+      targetUserId: body.user_id,
+      reason: body.reason,
+    });
+    return c.json({});
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return Errors.badJson().toResponse();
+    }
+    if (error instanceof Error && "toResponse" in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
   }
-
-  const { user_id: targetId, reason } = body;
-  if (!targetId) {
-    return Errors.missingParam("user_id").toResponse();
-  }
-
-  // Check kicker membership
-  const kickerMembership = await getMembership(c.env.DB, roomId, userId);
-  if (!kickerMembership || kickerMembership.membership !== "join") {
-    return Errors.forbidden("Not a member of this room").toResponse();
-  }
-
-  // Check target membership
-  const targetMembership = await getMembership(c.env.DB, roomId, targetId);
-  if (
-    !targetMembership ||
-    (targetMembership.membership !== "join" &&
-      targetMembership.membership !== "invite" &&
-      targetMembership.membership !== "knock")
-  ) {
-    return Errors.forbidden("User is not joined, invited, or knocking").toResponse();
-  }
-
-  // Check power levels
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
-  const powerLevels = (powerLevelsEvent?.content as any) || {};
-  const userPower = powerLevels.users?.[userId] ?? powerLevels.users_default ?? 0;
-  const targetPower = powerLevels.users?.[targetId] ?? powerLevels.users_default ?? 0;
-  const kickPower = powerLevels.kick ?? 50;
-
-  if (userPower < kickPower || userPower <= targetPower) {
-    return Errors.forbidden("Insufficient power level to kick").toResponse();
-  }
-
-  // Create leave event for target
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
-  const targetMembershipEvent = await getStateEvent(c.env.DB, roomId, "m.room.member", targetId);
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (kickerMembership) authEvents.push(kickerMembership.eventId);
-  if (targetMembership) authEvents.push(targetMembership.eventId);
-
-  const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map((e) => e.event_id);
-
-  const memberContent: RoomMemberContent = {
-    membership: "leave",
-    reason,
-  };
-
-  const prevTargetContent = targetMembershipEvent?.content as Record<string, unknown> | undefined;
-
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: "m.room.member",
-    state_key: targetId,
-    content: memberContent,
-    origin_server_ts: Date.now(),
-    unsigned: prevTargetContent
-      ? {
-          prev_content: prevTargetContent,
-          prev_sender: targetMembershipEvent?.sender,
-        }
-      : undefined,
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
-
-  const transitionContext = await loadMembershipTransitionContext(c.env.DB, roomId, targetId);
-  await storeEvent(c.env.DB, event);
-  await applyMembershipTransitionToDatabase(c.env.DB, {
-    roomId,
-    event,
-    source: "client",
-    context: transitionContext,
-  });
-
-  // Notify room members about the kick
-  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
-  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
-
-  return c.json({});
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/ban - Ban a user
 app.post("/_matrix/client/v3/rooms/:roomId/ban", requireAuth(), async (c) => {
-  const userId = c.get("userId");
-  const roomId = c.req.param("roomId");
-
-  let body: any;
   try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+    const body = await c.req.json();
+    await c.get("appContext").services.rooms.banUser({
+      userId: c.get("userId"),
+      roomId: c.req.param("roomId"),
+      targetUserId: body.user_id,
+      reason: body.reason,
+    });
+    return c.json({});
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return Errors.badJson().toResponse();
+    }
+    if (error instanceof Error && "toResponse" in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
   }
-
-  const { user_id: targetId, reason } = body;
-  if (!targetId) {
-    return Errors.missingParam("user_id").toResponse();
-  }
-
-  // Check banner membership
-  const bannerMembership = await getMembership(c.env.DB, roomId, userId);
-  if (!bannerMembership || bannerMembership.membership !== "join") {
-    return Errors.forbidden("Not a member of this room").toResponse();
-  }
-
-  // Check power levels
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
-  const powerLevels = (powerLevelsEvent?.content as any) || {};
-  const userPower = powerLevels.users?.[userId] ?? powerLevels.users_default ?? 0;
-  const targetPower = powerLevels.users?.[targetId] ?? powerLevels.users_default ?? 0;
-  const banPower = powerLevels.ban ?? 50;
-
-  if (userPower < banPower || userPower <= targetPower) {
-    return Errors.forbidden("Insufficient power level to ban").toResponse();
-  }
-
-  // Create ban event
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
-  const targetMembership = await getMembership(c.env.DB, roomId, targetId);
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (bannerMembership) authEvents.push(bannerMembership.eventId);
-  if (targetMembership) authEvents.push(targetMembership.eventId);
-
-  const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map((e) => e.event_id);
-
-  const memberContent: RoomMemberContent = {
-    membership: "ban",
-    reason,
-  };
-
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: "m.room.member",
-    state_key: targetId,
-    content: memberContent,
-    origin_server_ts: Date.now(),
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
-
-  await storeEvent(c.env.DB, event);
-  await updateMembership(c.env.DB, roomId, targetId, "ban", eventId);
-
-  // Notify room members about the ban
-  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
-
-  return c.json({});
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/unban - Unban a user
 app.post("/_matrix/client/v3/rooms/:roomId/unban", requireAuth(), async (c) => {
-  const userId = c.get("userId");
-  const roomId = c.req.param("roomId");
-
-  let body: any;
   try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+    const body = await c.req.json();
+    await c.get("appContext").services.rooms.unbanUser({
+      userId: c.get("userId"),
+      roomId: c.req.param("roomId"),
+      targetUserId: body.user_id,
+      reason: body.reason,
+    });
+    return c.json({});
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return Errors.badJson().toResponse();
+    }
+    if (error instanceof Error && "toResponse" in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
   }
-
-  const { user_id: targetId, reason } = body;
-  if (!targetId) {
-    return Errors.missingParam("user_id").toResponse();
-  }
-
-  // Check unbanner membership
-  const unbannerMembership = await getMembership(c.env.DB, roomId, userId);
-  if (!unbannerMembership || unbannerMembership.membership !== "join") {
-    return Errors.forbidden("Not a member of this room").toResponse();
-  }
-
-  // Check target is actually banned
-  const targetMembership = await getMembership(c.env.DB, roomId, targetId);
-  if (!targetMembership || targetMembership.membership !== "ban") {
-    return Errors.forbidden("User is not banned").toResponse();
-  }
-
-  // Check power levels
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
-  const powerLevels = (powerLevelsEvent?.content as any) || {};
-  const userPower = powerLevels.users?.[userId] ?? powerLevels.users_default ?? 0;
-  const banPower = powerLevels.ban ?? 50;
-
-  if (userPower < banPower) {
-    return Errors.forbidden("Insufficient power level to unban").toResponse();
-  }
-
-  // Create leave event (unban sets membership to leave)
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (unbannerMembership) authEvents.push(unbannerMembership.eventId);
-  if (targetMembership) authEvents.push(targetMembership.eventId);
-
-  const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map((e) => e.event_id);
-
-  const memberContent: RoomMemberContent = {
-    membership: "leave",
-    reason,
-  };
-
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: "m.room.member",
-    state_key: targetId,
-    content: memberContent,
-    origin_server_ts: Date.now(),
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
-
-  await storeEvent(c.env.DB, event);
-  await updateMembership(c.env.DB, roomId, targetId, "leave", eventId);
-
-  // Notify room members about the unban
-  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
-
-  return c.json({});
 });
 
 // POST /_matrix/client/v3/rooms/:roomId/forget - Forget a room

@@ -404,6 +404,230 @@ describe("MatrixRoomService", () => {
     });
   });
 
+  it("invites a user through the membership persistence boundary", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    await repo.createRoom("!room1:test", "10", "@creator:test", true);
+    await repo.storeEvent({
+      event_id: "$create",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.create",
+      state_key: "",
+      content: { creator: "@creator:test", room_version: "10" },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    await repo.storeEvent({
+      event_id: "$power",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.power_levels",
+      state_key: "",
+      content: { invite: 0, users: { "@alice:test": 50 } },
+      origin_server_ts: 2,
+      depth: 2,
+      auth_events: [],
+      prev_events: ["$create"],
+    });
+    await repo.storeEvent({
+      event_id: "$member",
+      room_id: "!room1:test",
+      sender: "@alice:test",
+      type: "m.room.member",
+      state_key: "@alice:test",
+      content: { membership: "join" },
+      origin_server_ts: 3,
+      depth: 3,
+      auth_events: ["$create", "$power"],
+      prev_events: ["$power"],
+    });
+    await repo.updateMembership("!room1:test", "@alice:test", "join", "$member");
+
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    await service.inviteRoom({
+      userId: "@alice:test",
+      roomId: "!room1:test",
+      targetUserId: "@bob:remote.test",
+    });
+
+    expect(repo.memberships.get("!room1:test:@bob:remote.test")?.membership).toBe("invite");
+    expect(repo.storedEvents.at(-1)).toMatchObject({
+      type: "m.room.member",
+      state_key: "@bob:remote.test",
+      sender: "@alice:test",
+      content: { membership: "invite" },
+    });
+  });
+
+  it("kicks an invited user through the moderation boundary", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    await repo.createRoom("!room1:test", "10", "@creator:test", true);
+    await repo.storeEvent({
+      event_id: "$create",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.create",
+      state_key: "",
+      content: { creator: "@creator:test", room_version: "10" },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    await repo.storeEvent({
+      event_id: "$power",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.power_levels",
+      state_key: "",
+      content: { kick: 50, users: { "@alice:test": 100, "@bob:test": 0 } },
+      origin_server_ts: 2,
+      depth: 2,
+      auth_events: [],
+      prev_events: ["$create"],
+    });
+    await repo.storeEvent({
+      event_id: "$alice-member",
+      room_id: "!room1:test",
+      sender: "@alice:test",
+      type: "m.room.member",
+      state_key: "@alice:test",
+      content: { membership: "join" },
+      origin_server_ts: 3,
+      depth: 3,
+      auth_events: ["$create", "$power"],
+      prev_events: ["$power"],
+    });
+    await repo.storeEvent({
+      event_id: "$invite",
+      room_id: "!room1:test",
+      sender: "@alice:test",
+      type: "m.room.member",
+      state_key: "@bob:test",
+      content: { membership: "invite" },
+      origin_server_ts: 4,
+      depth: 4,
+      auth_events: ["$create", "$power", "$alice-member"],
+      prev_events: ["$alice-member"],
+    });
+    await repo.updateMembership("!room1:test", "@alice:test", "join", "$alice-member");
+    await repo.updateMembership("!room1:test", "@bob:test", "invite", "$invite");
+
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    await service.kickUser({
+      userId: "@alice:test",
+      roomId: "!room1:test",
+      targetUserId: "@bob:test",
+      reason: "cleanup",
+    });
+
+    expect(repo.memberships.get("!room1:test:@bob:test")?.membership).toBe("leave");
+    expect(repo.storedEvents.at(-1)).toMatchObject({
+      state_key: "@bob:test",
+      sender: "@alice:test",
+      content: { membership: "leave", reason: "cleanup" },
+    });
+  });
+
+  it("bans and unbans a user through the moderation boundary", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    await repo.createRoom("!room1:test", "10", "@creator:test", true);
+    await repo.storeEvent({
+      event_id: "$create",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.create",
+      state_key: "",
+      content: { creator: "@creator:test", room_version: "10" },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    await repo.storeEvent({
+      event_id: "$power",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.power_levels",
+      state_key: "",
+      content: { ban: 50, users: { "@alice:test": 100, "@bob:test": 0 } },
+      origin_server_ts: 2,
+      depth: 2,
+      auth_events: [],
+      prev_events: ["$create"],
+    });
+    await repo.storeEvent({
+      event_id: "$alice-member",
+      room_id: "!room1:test",
+      sender: "@alice:test",
+      type: "m.room.member",
+      state_key: "@alice:test",
+      content: { membership: "join" },
+      origin_server_ts: 3,
+      depth: 3,
+      auth_events: ["$create", "$power"],
+      prev_events: ["$power"],
+    });
+    await repo.storeEvent({
+      event_id: "$bob-member",
+      room_id: "!room1:test",
+      sender: "@bob:test",
+      type: "m.room.member",
+      state_key: "@bob:test",
+      content: { membership: "join" },
+      origin_server_ts: 4,
+      depth: 4,
+      auth_events: ["$create", "$power"],
+      prev_events: ["$alice-member"],
+    });
+    await repo.updateMembership("!room1:test", "@alice:test", "join", "$alice-member");
+    await repo.updateMembership("!room1:test", "@bob:test", "join", "$bob-member");
+
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    await service.banUser({
+      userId: "@alice:test",
+      roomId: "!room1:test",
+      targetUserId: "@bob:test",
+      reason: "policy",
+    });
+    expect(repo.memberships.get("!room1:test:@bob:test")?.membership).toBe("ban");
+
+    await service.unbanUser({
+      userId: "@alice:test",
+      roomId: "!room1:test",
+      targetUserId: "@bob:test",
+      reason: "appeal",
+    });
+    expect(repo.memberships.get("!room1:test:@bob:test")?.membership).toBe("leave");
+    expect(repo.storedEvents.at(-1)).toMatchObject({
+      state_key: "@bob:test",
+      content: { membership: "leave", reason: "appeal" },
+    });
+  });
+
   it("deduplicates sendEvent by txn id", async () => {
     const repo = new MemoryRoomRepository();
     const { appContext, pushCalls } = createTestAppContext();

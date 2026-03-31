@@ -1,5 +1,6 @@
 import type {
   InvitedRoom,
+  JoinedRoom,
   KnockedRoom,
   LeftRoom,
   MatrixEvent,
@@ -27,6 +28,14 @@ export interface SyncProjectionResult {
   inviteRooms: Record<string, InvitedRoom>;
   knockRooms: Record<string, KnockedRoom>;
   leaveRooms: Record<string, LeftRoom>;
+}
+
+export interface JoinedRoomProjectionQuery {
+  userId: string;
+  roomId: string;
+  sincePosition: number;
+  fullState?: boolean;
+  roomFilter?: FilterDefinition["room"];
 }
 
 type EventLike = {
@@ -139,6 +148,74 @@ export function shouldIncludeRoom(roomId: string, filter?: FilterDefinition["roo
     return false;
   }
   return true;
+}
+
+export async function projectJoinedRoom(
+  repository: SyncRepository,
+  query: JoinedRoomProjectionQuery,
+): Promise<JoinedRoom> {
+  const joinedRoom: JoinedRoom = {
+    timeline: { events: [], limited: false },
+    state: { events: [] },
+    ephemeral: { events: [] },
+    account_data: { events: [] },
+  };
+
+  const events = await repository.getEventsSince(query.roomId, query.sincePosition);
+  let stateEvents: MatrixEvent[] = [];
+  let timelineEvents: MatrixEvent[] = [];
+
+  for (const event of events) {
+    const clientEvent = toClientEvent(event);
+
+    if (event.state_key !== undefined) {
+      stateEvents.push(clientEvent);
+    }
+    timelineEvents.push(clientEvent);
+  }
+
+  if (query.fullState || query.sincePosition === 0) {
+    const state = await repository.getRoomState(query.roomId);
+    for (const event of state) {
+      const clientEvent = toClientEvent(event);
+      if (!stateEvents.find((existing) => existing.event_id === event.event_id)) {
+        stateEvents.push(clientEvent);
+      }
+    }
+  }
+
+  joinedRoom.state!.events = applyEventFilter(stateEvents, query.roomFilter?.state);
+  joinedRoom.timeline!.events = applyEventFilter(timelineEvents, query.roomFilter?.timeline);
+  joinedRoom.timeline!.prev_batch = query.sincePosition.toString();
+
+  joinedRoom.account_data!.events = applyEventFilter(
+    await repository.getRoomAccountData(
+      query.userId,
+      query.roomId,
+      query.sincePosition > 0 ? query.sincePosition : undefined,
+    ),
+    query.roomFilter?.account_data,
+  );
+
+  const receipts = await repository.getReceiptsForRoom(query.roomId, query.userId);
+  if (Object.keys(receipts.content).length > 0) {
+    joinedRoom.ephemeral!.events.push(receipts as any);
+  }
+
+  const typingUsers = await repository.getTypingUsers(query.roomId);
+  if (typingUsers.length > 0) {
+    joinedRoom.ephemeral!.events.push({
+      type: "m.typing",
+      content: { user_ids: typingUsers },
+    } as any);
+  }
+
+  joinedRoom.ephemeral!.events = applyEventFilter(
+    joinedRoom.ephemeral!.events,
+    query.roomFilter?.ephemeral,
+  );
+
+  return joinedRoom;
 }
 
 export async function projectMembershipRooms(

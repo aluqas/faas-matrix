@@ -32,6 +32,36 @@ const FederationInviteEnvelopeSchema = Schema.Struct({
   invite_room_state: Schema.optional(Schema.Array(Schema.Unknown)),
 });
 
+const FederationThirdPartyInviteSignedSchema = Schema.Struct({
+  mxid: Schema.String,
+  token: Schema.String,
+  signatures: Schema.Record({ key: Schema.String, value: StringRecordSchema }),
+});
+
+const FederationThirdPartyInviteContentSchema = Schema.Struct({
+  membership: Schema.String,
+  third_party_invite: Schema.optional(
+    Schema.Struct({
+      display_name: Schema.optional(Schema.String),
+      signed: FederationThirdPartyInviteSignedSchema,
+    }),
+  ),
+});
+
+const FederationThirdPartyInviteExchangeSchema = Schema.Struct({
+  type: Schema.String,
+  room_id: Schema.String,
+  sender: Schema.String,
+  state_key: Schema.String,
+  content: FederationThirdPartyInviteContentSchema,
+  origin_server_ts: Schema.optional(Schema.Number),
+  depth: Schema.optional(Schema.Number),
+  auth_events: Schema.optional(Schema.Array(Schema.String)),
+  prev_events: Schema.optional(Schema.Array(Schema.String)),
+  event_id: Schema.optional(Schema.String),
+  signatures: Schema.optional(Schema.Record({ key: Schema.String, value: StringRecordSchema })),
+});
+
 export interface FederationValidationResult {
   roomId: string;
   eventId: string;
@@ -42,6 +72,19 @@ export interface FederationInviteValidationResult extends FederationValidationRe
   roomVersion: string;
   inviteRoomState: unknown[];
   invitedUserId: string;
+}
+
+export interface FederationThirdPartyInviteValidationResult {
+  roomId: string;
+  sender: string;
+  stateKey: string;
+  eventId?: string;
+  signed: {
+    mxid: string;
+    token: string;
+    signatures: Record<string, Record<string, string>>;
+  };
+  displayName?: string;
 }
 
 function malformed(message: string): DomainError {
@@ -248,6 +291,45 @@ export function validateInviteRequest(input: {
         event,
         inviteRoomState: Array.from(envelope.invite_room_state ?? []),
         invitedUserId: event.state_key,
+      });
+    }),
+  );
+}
+
+export function validateThirdPartyInviteExchangeRequest(input: {
+  body: unknown;
+  roomId: string;
+}): Effect.Effect<FederationThirdPartyInviteValidationResult, DomainError> {
+  return decodeSchema(
+    FederationThirdPartyInviteExchangeSchema,
+    input.body,
+    "Malformed third party invite exchange request",
+  ).pipe(
+    Effect.flatMap((body) => {
+      if (body.type !== "m.room.member" || body.content.membership !== "invite") {
+        return Effect.fail(invalidParam("Event must be a membership invite"));
+      }
+
+      if (body.room_id !== input.roomId) {
+        return Effect.fail(invalidParam("Room ID mismatch"));
+      }
+
+      const thirdPartyInvite = body.content.third_party_invite;
+      if (!thirdPartyInvite) {
+        return Effect.fail(invalidParam("Missing third_party_invite or signed data"));
+      }
+
+      if (thirdPartyInvite.signed.mxid !== body.state_key) {
+        return Effect.fail(invalidParam("mxid does not match state_key"));
+      }
+
+      return Effect.succeed({
+        roomId: body.room_id,
+        sender: body.sender,
+        stateKey: body.state_key,
+        eventId: body.event_id,
+        signed: thirdPartyInvite.signed,
+        displayName: thirdPartyInvite.display_name,
       });
     }),
   );

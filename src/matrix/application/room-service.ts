@@ -13,12 +13,21 @@ import {
 import { sendFederationInvite } from "../../services/federation-invite";
 import { fanoutEventToRemoteServers } from "../../services/federation-fanout";
 import {
+  authorizeBan,
+  authorizeKick,
+  authorizeLocalInvite,
   authorizeLocalJoin,
   getJoinRuleFromContent,
+  authorizeUnban,
   validateLeavePreconditions,
 } from "./room-membership-policy";
 import { runDomainEffect } from "./domain-error";
-import { validateCreateRoomRequest, validateJoinRoomRequest } from "./room-validation";
+import {
+  validateCreateRoomRequest,
+  validateInviteRoomRequest,
+  validateJoinRoomRequest,
+  validateModerationRequest,
+} from "./room-validation";
 
 export interface CreateRoomInput {
   userId: string;
@@ -42,6 +51,19 @@ export interface SendEventInput {
 export interface LeaveRoomInput {
   userId: string;
   roomId: string;
+}
+
+export interface InviteRoomInput {
+  userId: string;
+  roomId: string;
+  targetUserId: string;
+}
+
+export interface ModerateRoomInput {
+  userId: string;
+  roomId: string;
+  targetUserId: string;
+  reason?: string;
 }
 
 type TransactionResponse = Record<string, unknown>;
@@ -391,6 +413,189 @@ export class MatrixRoomService {
     });
   }
 
+  async inviteRoom(input: InviteRoomInput): Promise<void> {
+    const validated = await runDomainEffect(
+      validateInviteRoomRequest({
+        roomId: input.roomId,
+        targetUserId: input.targetUserId,
+      }),
+    );
+
+    await this.eventPipeline.execute({
+      input,
+      validate: () => undefined,
+      resolveAuth: async () => ({ userId: input.userId }),
+      authorize: async (_pipelineInput, auth) => {
+        const inviterMembership = await this.repository.getMembership(validated.roomId, auth.userId);
+        const inviteeMembership = await this.repository.getMembership(
+          validated.roomId,
+          validated.targetUserId,
+        );
+        const powerLevelsEvent = await this.repository.getStateEvent(
+          validated.roomId,
+          "m.room.power_levels",
+        );
+        const powerLevels = (powerLevelsEvent?.content as Record<string, unknown> | undefined) ?? {};
+        const users = (powerLevels.users as Record<string, number> | undefined) ?? {};
+        const usersDefault =
+          typeof powerLevels.users_default === "number" ? powerLevels.users_default : 0;
+        const inviterPower = users[auth.userId] ?? usersDefault;
+        const invitePower = typeof powerLevels.invite === "number" ? powerLevels.invite : 50;
+
+        if (inviteeMembership?.membership === "invite") {
+          return;
+        }
+
+        await runDomainEffect(
+          authorizeLocalInvite({
+            inviterMembership: inviterMembership?.membership,
+            inviteeMembership: inviteeMembership?.membership,
+            inviterPower,
+            invitePower,
+          }),
+        );
+      },
+      buildEvent: async (_pipelineInput, auth) => {
+        const inviteeMembership = await this.repository.getMembership(
+          validated.roomId,
+          validated.targetUserId,
+        );
+        if (inviteeMembership?.membership === "invite") {
+          return null;
+        }
+
+        const createEvent = await this.repository.getStateEvent(validated.roomId, "m.room.create");
+        const powerLevelsEvent = await this.repository.getStateEvent(
+          validated.roomId,
+          "m.room.power_levels",
+        );
+        const inviterMembership = await this.repository.getMembership(validated.roomId, auth.userId);
+        const latestEvents = await this.repository.getLatestRoomEvents(validated.roomId, 1);
+
+        return createMembershipEvent({
+          roomId: validated.roomId,
+          userId: validated.targetUserId,
+          sender: auth.userId,
+          membership: "invite",
+          serverName: this.appContext.capabilities.config.serverName,
+          generateEventId: this.appContext.capabilities.id.generateEventId,
+          now: this.appContext.capabilities.clock.now,
+          createEventId: createEvent?.event_id,
+          powerLevelsEventId: powerLevelsEvent?.event_id,
+          currentMembershipEventId: inviterMembership?.eventId,
+          prevEventIds: latestEvents.map((event) => event.event_id),
+          depth: (latestEvents[0]?.depth ?? 0) + 1,
+        });
+      },
+      persist: async (_pipelineInput, _auth, event) => {
+        if (!event) {
+          return { alreadyInvited: true };
+        }
+
+        await this.repository.persistMembershipEvent(validated.roomId, event, "client");
+        return { eventId: event.event_id, alreadyInvited: false };
+      },
+      fanout: async (_pipelineInput, _auth, event, persisted) => {
+        if (!event || persisted.alreadyInvited) {
+          return;
+        }
+
+        await this.repository.notifyUsersOfEvent(validated.roomId, event.event_id, "m.room.member");
+
+        const db = this.appContext.capabilities.sql.connection as D1Database;
+        const cache = this.appContext.capabilities.kv.cache as KVNamespace;
+        this.appContext.defer(
+          sendFederationInvite(
+            db,
+            cache,
+            this.appContext.capabilities.config.serverName,
+            validated.roomId,
+            event,
+          ).catch((error) => {
+            console.error("[room-service.inviteRoom] Failed to send federation invite:", error);
+          }),
+        );
+
+        this.appContext.defer(
+          fanoutEventToRemoteServers(
+            db,
+            cache,
+            this.appContext.capabilities.config.serverName,
+            validated.roomId,
+            event,
+          ).catch((error) => {
+            console.error("[room-service.inviteRoom] Failed to fan out invite event:", error);
+          }),
+        );
+      },
+    });
+  }
+
+  async kickUser(input: ModerateRoomInput): Promise<void> {
+    const validated = await runDomainEffect(validateModerationRequest(input));
+    await this.executeModerationAction({
+      actorUserId: input.userId,
+      roomId: validated.roomId,
+      targetUserId: validated.targetUserId,
+      membership: "leave",
+      reason: validated.reason,
+      authorize: async (context) => {
+        await runDomainEffect(
+          authorizeKick({
+            actorMembership: context.actorMembership?.membership,
+            targetMembership: context.targetMembership?.membership,
+            actorPower: context.actorPower,
+            targetPower: context.targetPower,
+            kickPower: context.kickPower,
+            canRescindInvite: context.targetMembershipEvent?.sender === input.userId,
+          }),
+        );
+      },
+    });
+  }
+
+  async banUser(input: ModerateRoomInput): Promise<void> {
+    const validated = await runDomainEffect(validateModerationRequest(input));
+    await this.executeModerationAction({
+      actorUserId: input.userId,
+      roomId: validated.roomId,
+      targetUserId: validated.targetUserId,
+      membership: "ban",
+      reason: validated.reason,
+      authorize: async (context) => {
+        await runDomainEffect(
+          authorizeBan({
+            actorMembership: context.actorMembership?.membership,
+            actorPower: context.actorPower,
+            targetPower: context.targetPower,
+            banPower: context.banPower,
+          }),
+        );
+      },
+    });
+  }
+
+  async unbanUser(input: ModerateRoomInput): Promise<void> {
+    const validated = await runDomainEffect(validateModerationRequest(input));
+    await this.executeModerationAction({
+      actorUserId: input.userId,
+      roomId: validated.roomId,
+      targetUserId: validated.targetUserId,
+      membership: "leave",
+      reason: validated.reason,
+      authorize: async (context) => {
+        await runDomainEffect(
+          authorizeUnban({
+            actorMembership: context.actorMembership?.membership,
+            targetMembership: context.targetMembership?.membership,
+            actorPower: context.actorPower,
+            banPower: context.banPower,
+          }),
+        );
+      },
+    });
+  }
+
   async sendEvent(input: SendEventInput): Promise<{ event_id: string }> {
     const response = await withIdempotency(
       this.idempotencyStore,
@@ -478,5 +683,109 @@ export class MatrixRoomService {
       },
     );
     return response as { event_id: string };
+  }
+
+  private async executeModerationAction(input: {
+    actorUserId: string;
+    roomId: string;
+    targetUserId: string;
+    membership: "leave" | "ban";
+    reason?: string;
+    authorize: (context: {
+      actorMembership: Awaited<ReturnType<RoomRepository["getMembership"]>>;
+      targetMembership: Awaited<ReturnType<RoomRepository["getMembership"]>>;
+      targetMembershipEvent: Awaited<ReturnType<RoomRepository["getStateEvent"]>>;
+      actorPower: number;
+      targetPower: number;
+      kickPower: number;
+      banPower: number;
+    }) => Promise<void>;
+  }): Promise<void> {
+    await this.eventPipeline.execute({
+      input,
+      validate: () => undefined,
+      resolveAuth: async () => ({ userId: input.actorUserId }),
+      authorize: async () => {
+        const actorMembership = await this.repository.getMembership(input.roomId, input.actorUserId);
+        const targetMembership = await this.repository.getMembership(input.roomId, input.targetUserId);
+        const targetMembershipEvent = await this.repository.getStateEvent(
+          input.roomId,
+          "m.room.member",
+          input.targetUserId,
+        );
+        const powerLevelsEvent = await this.repository.getStateEvent(
+          input.roomId,
+          "m.room.power_levels",
+        );
+        const powerLevels = (powerLevelsEvent?.content as Record<string, unknown> | undefined) ?? {};
+        const users = (powerLevels.users as Record<string, number> | undefined) ?? {};
+        const usersDefault =
+          typeof powerLevels.users_default === "number" ? powerLevels.users_default : 0;
+
+        await input.authorize({
+          actorMembership,
+          targetMembership,
+          targetMembershipEvent,
+          actorPower: users[input.actorUserId] ?? usersDefault,
+          targetPower: users[input.targetUserId] ?? usersDefault,
+          kickPower: typeof powerLevels.kick === "number" ? powerLevels.kick : 50,
+          banPower: typeof powerLevels.ban === "number" ? powerLevels.ban : 50,
+        });
+      },
+      buildEvent: async () => {
+        const createEvent = await this.repository.getStateEvent(input.roomId, "m.room.create");
+        const powerLevelsEvent = await this.repository.getStateEvent(
+          input.roomId,
+          "m.room.power_levels",
+        );
+        const actorMembership = await this.repository.getMembership(input.roomId, input.actorUserId);
+        const targetMembership = await this.repository.getMembership(input.roomId, input.targetUserId);
+        const targetMembershipEvent = await this.repository.getStateEvent(
+          input.roomId,
+          "m.room.member",
+          input.targetUserId,
+        );
+        const targetMembershipContent = targetMembershipEvent?.content as
+          | { membership?: unknown }
+          | undefined;
+        const prevContent =
+          targetMembershipContent?.membership !== undefined
+            ? (targetMembershipEvent?.content as Record<string, unknown>)
+            : undefined;
+        const prevSender = targetMembershipEvent?.sender;
+        const latestEvents = await this.repository.getLatestRoomEvents(input.roomId, 1);
+        const event = await createMembershipEvent({
+          roomId: input.roomId,
+          userId: input.targetUserId,
+          sender: input.actorUserId,
+          membership: input.membership,
+          serverName: this.appContext.capabilities.config.serverName,
+          generateEventId: this.appContext.capabilities.id.generateEventId,
+          now: this.appContext.capabilities.clock.now,
+          createEventId: createEvent?.event_id,
+          powerLevelsEventId: powerLevelsEvent?.event_id,
+          currentMembershipEventId: targetMembership?.eventId ?? actorMembership?.eventId,
+          prevEventIds: latestEvents.map((event) => event.event_id),
+          depth: (latestEvents[0]?.depth ?? 0) + 1,
+          unsigned: prevContent
+            ? {
+                prev_content: prevContent,
+                prev_sender: prevSender,
+              }
+            : undefined,
+        });
+        if (input.reason) {
+          event.content.reason = input.reason;
+        }
+        return event;
+      },
+      persist: async (_pipelineInput, _auth, event) => {
+        await this.repository.persistMembershipEvent(input.roomId, event, "client");
+        return { eventId: event.event_id };
+      },
+      fanout: async (_pipelineInput, _auth, event) => {
+        await this.repository.notifyUsersOfEvent(input.roomId, event.event_id, "m.room.member");
+      },
+    });
   }
 }

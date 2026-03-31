@@ -30,11 +30,24 @@ const JoinRoomRequestSchema = Schema.Struct({
   remoteServers: Schema.optional(Schema.Array(Schema.String)),
 });
 
+const InviteRoomRequestSchema = Schema.Struct({
+  roomId: Schema.String,
+  targetUserId: Schema.String,
+});
+
+const ModerationRequestSchema = Schema.Struct({
+  roomId: Schema.String,
+  targetUserId: Schema.String,
+  reason: Schema.optional(Schema.String),
+});
+
 export type ValidatedCreateRoomRequest = Schema.Schema.Type<typeof CreateRoomRequestSchema>;
 export type ValidatedJoinRoomRequest = {
   roomId: string;
   remoteServers: string[];
 };
+export type ValidatedInviteRoomRequest = Schema.Schema.Type<typeof InviteRoomRequestSchema>;
+export type ValidatedModerationRequest = Schema.Schema.Type<typeof ModerationRequestSchema>;
 
 const VALID_VISIBILITIES = new Set(["private", "public"]);
 const VALID_PRESETS = new Set(["private_chat", "trusted_private_chat", "public_chat"]);
@@ -147,6 +160,45 @@ export function validateJoinRoomRequest(input: {
           roomId: request.roomId,
           remoteServers,
         };
+      }),
+    ),
+  );
+}
+
+export function validateInviteRoomRequest(input: {
+  roomId: string;
+  targetUserId: string;
+}): Effect.Effect<ValidatedInviteRoomRequest, DomainError> {
+  return decodeSchema(InviteRoomRequestSchema, input, "Malformed invite request").pipe(
+    Effect.flatMap((request) =>
+      Effect.gen(function* () {
+        if (!request.roomId.startsWith("!")) {
+          yield* Effect.fail(invalidParam("roomId must be a room ID"));
+        }
+        if (!request.targetUserId.startsWith("@") || !request.targetUserId.includes(":")) {
+          yield* Effect.fail(invalidParam("user_id must be a Matrix user ID"));
+        }
+        return request;
+      }),
+    ),
+  );
+}
+
+export function validateModerationRequest(input: {
+  roomId: string;
+  targetUserId: string;
+  reason?: string;
+}): Effect.Effect<ValidatedModerationRequest, DomainError> {
+  return decodeSchema(ModerationRequestSchema, input, "Malformed moderation request").pipe(
+    Effect.flatMap((request) =>
+      Effect.gen(function* () {
+        if (!request.roomId.startsWith("!")) {
+          yield* Effect.fail(invalidParam("roomId must be a room ID"));
+        }
+        if (!request.targetUserId.startsWith("@") || !request.targetUserId.includes(":")) {
+          yield* Effect.fail(invalidParam("user_id must be a Matrix user ID"));
+        }
+        return request;
       }),
     ),
   );

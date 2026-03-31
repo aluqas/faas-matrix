@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Effect } from "effect";
-import { validateCreateRoomRequest, validateJoinRoomRequest } from "./room-validation";
+import {
+  validateCreateRoomRequest,
+  validateInviteRoomRequest,
+  validateJoinRoomRequest,
+  validateModerationRequest,
+} from "./room-validation";
 
 describe("room-validation", () => {
   it("rejects duplicate encryption state in createRoom", async () => {
@@ -41,6 +46,31 @@ describe("room-validation", () => {
     await expect(Effect.runPromise(effect)).resolves.toEqual({
       roomId: "!room:test",
       remoteServers: ["remote.test", "backup.test"],
+    });
+  });
+
+  it("rejects invalid invite user ids", async () => {
+    const effect = validateInviteRoomRequest({
+      roomId: "!room:test",
+      targetUserId: "alice",
+    });
+
+    await expect(Effect.runPromise(effect)).rejects.toThrow(
+      "user_id must be a Matrix user ID",
+    );
+  });
+
+  it("accepts moderation requests with valid matrix identifiers", async () => {
+    const effect = validateModerationRequest({
+      roomId: "!room:test",
+      targetUserId: "@alice:test",
+      reason: "policy",
+    });
+
+    await expect(Effect.runPromise(effect)).resolves.toEqual({
+      roomId: "!room:test",
+      targetUserId: "@alice:test",
+      reason: "policy",
     });
   });
 });
