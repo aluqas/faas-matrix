@@ -5,9 +5,11 @@ import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth, optionalAuth } from "../middleware/auth";
 import { getUserById, updateUserProfile } from "../services/database";
-import { parseUserId, isLocalServerName } from "../utils/ids";
+import { isLocalServerName, parseUserId } from "../utils/ids";
+import { FederationQueryService } from "../matrix/application/federation-query-service";
 
 const app = new Hono<AppEnv>();
+const federationQueryService = new FederationQueryService();
 
 // GET /_matrix/client/v3/profile/:userId - Get user profile
 app.get("/_matrix/client/v3/profile/:userId", optionalAuth(), async (c) => {
@@ -19,26 +21,27 @@ app.get("/_matrix/client/v3/profile/:userId", optionalAuth(), async (c) => {
     return Errors.invalidParam("user_id", "Invalid user ID format").toResponse();
   }
 
-  if (!isLocalServerName(parsed.serverName, c.env.SERVER_NAME)) {
-    // Remote user - would need federation lookup
-    return Errors.notFound("User not found").toResponse();
-  }
+  const profile = await federationQueryService.getProfile({
+    userId: targetUserId,
+    localServerName: c.env.SERVER_NAME,
+    db: c.env.DB,
+    cache: c.env.CACHE,
+  });
 
-  const user = await getUserById(c.env.DB, targetUserId);
-  if (!user) {
+  if (!profile) {
     return Errors.notFound("User not found").toResponse();
   }
 
   console.log("[profile] Fetching profile for:", targetUserId, {
-    hasDisplayName: !!user.display_name,
-    hasAvatar: !!user.avatar_url,
+    hasDisplayName: !!profile.displayname,
+    hasAvatar: !!profile.avatar_url,
   });
 
   // Always return both fields (even if null) to indicate user exists
   // Element X uses this to verify users from directory search
   return c.json({
-    displayname: user.display_name || null,
-    avatar_url: user.avatar_url || null,
+    displayname: profile.displayname,
+    avatar_url: profile.avatar_url,
   });
 });
 
@@ -51,17 +54,19 @@ app.get("/_matrix/client/v3/profile/:userId/displayname", optionalAuth(), async 
     return Errors.invalidParam("user_id", "Invalid user ID format").toResponse();
   }
 
-  if (!isLocalServerName(parsed.serverName, c.env.SERVER_NAME)) {
-    return Errors.notFound("User not found").toResponse();
-  }
-
-  const user = await getUserById(c.env.DB, targetUserId);
-  if (!user) {
+  const profile = await federationQueryService.getProfile({
+    userId: targetUserId,
+    field: "displayname",
+    localServerName: c.env.SERVER_NAME,
+    db: c.env.DB,
+    cache: c.env.CACHE,
+  });
+  if (!profile) {
     return Errors.notFound("User not found").toResponse();
   }
 
   return c.json({
-    displayname: user.display_name || null,
+    displayname: profile.displayname,
   });
 });
 
@@ -98,17 +103,19 @@ app.get("/_matrix/client/v3/profile/:userId/avatar_url", optionalAuth(), async (
     return Errors.invalidParam("user_id", "Invalid user ID format").toResponse();
   }
 
-  if (!isLocalServerName(parsed.serverName, c.env.SERVER_NAME)) {
-    return Errors.notFound("User not found").toResponse();
-  }
-
-  const user = await getUserById(c.env.DB, targetUserId);
-  if (!user) {
+  const profile = await federationQueryService.getProfile({
+    userId: targetUserId,
+    field: "avatar_url",
+    localServerName: c.env.SERVER_NAME,
+    db: c.env.DB,
+    cache: c.env.CACHE,
+  });
+  if (!profile) {
     return Errors.notFound("User not found").toResponse();
   }
 
   return c.json({
-    avatar_url: user.avatar_url || null,
+    avatar_url: profile.avatar_url,
   });
 });
 

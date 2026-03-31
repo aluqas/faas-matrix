@@ -5,6 +5,7 @@ import { Effect } from "effect";
 import type { AppEnv, PDU } from "../types";
 import { Errors, MatrixApiError } from "../utils/errors";
 import { generateSigningKeyPair, signJson, sha256, verifySignature } from "../utils/crypto";
+import { isLocalServerName, parseUserId } from "../utils/ids";
 import { requireFederationAuth } from "../middleware/federation-auth";
 import {
   getRemoteKeysWithNotarySignature,
@@ -33,10 +34,12 @@ import {
   validateSendLeaveRequest,
   validateThirdPartyInviteExchangeRequest,
 } from "../matrix/application/federation-validation";
+import { FederationQueryService } from "../matrix/application/federation-query-service";
 import federationQueryRoutes from "./federation/query";
 import federationSpaceRoutes from "./federation/spaces";
 
 const app = new Hono<AppEnv>();
+const federationQueryService = new FederationQueryService();
 
 // GET /_matrix/federation/v1/version - Server version info (unauthenticated)
 // This must be defined BEFORE the auth middleware is applied
@@ -1473,26 +1476,31 @@ app.get("/_matrix/federation/v1/query/profile", async (c) => {
     return Errors.missingParam("user_id").toResponse();
   }
 
-  const user = await c.env.DB.prepare(
-    `SELECT display_name, avatar_url FROM users WHERE user_id = ?`,
-  )
-    .bind(userId)
-    .first<{ display_name: string | null; avatar_url: string | null }>();
+  const parsed = parseUserId(userId);
+  if (!parsed || !isLocalServerName(parsed.serverName, c.env.SERVER_NAME)) {
+    return Errors.notFound("User not found").toResponse();
+  }
 
-  if (!user) {
+  const profile = await federationQueryService.getProfile({
+    userId,
+    field,
+    localServerName: c.env.SERVER_NAME,
+    db: c.env.DB,
+    cache: c.env.CACHE,
+  });
+
+  if (!profile) {
     return Errors.notFound("User not found").toResponse();
   }
 
   if (field === "displayname") {
-    return c.json({ displayname: user.display_name });
-  } else if (field === "avatar_url") {
-    return c.json({ avatar_url: user.avatar_url });
+    return c.json({ displayname: profile.displayname });
+  }
+  if (field === "avatar_url") {
+    return c.json({ avatar_url: profile.avatar_url });
   }
 
-  return c.json({
-    displayname: user.display_name,
-    avatar_url: user.avatar_url,
-  });
+  return c.json(profile);
 });
 
 // ============================================
