@@ -74,10 +74,7 @@ class MemoryRoomRepository implements RoomRepository {
     }
   }
 
-  async persistMembershipEvent(
-    roomId: string,
-    event: PDU,
-  ): Promise<void> {
+  async persistMembershipEvent(roomId: string, event: PDU): Promise<void> {
     await this.storeEvent(event);
     if (event.state_key !== undefined) {
       const content = event.content as { membership?: MembershipRecord["membership"] } | undefined;

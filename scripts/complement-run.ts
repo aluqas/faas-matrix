@@ -68,12 +68,14 @@ if (args.length === 1) {
 // Log path (datetime-based, written to logs/)
 // ---------------------------------------------------------------------------
 
-const logPath = process.env.LOG ?? (() => {
-  const dir = path.join(repoRoot, "logs");
-  fs.mkdirSync(dir, { recursive: true });
-  const ts = new Date().toISOString().replace("T", "_").replace(/:/g, "-").slice(0, 19);
-  return path.join(dir, `${ts}.log`);
-})();
+const logPath =
+  process.env.LOG ??
+  (() => {
+    const dir = path.join(repoRoot, "logs");
+    fs.mkdirSync(dir, { recursive: true });
+    const ts = new Date().toISOString().replace("T", "_").replace(/:/g, "-").slice(0, 19);
+    return path.join(dir, `${ts}.log`);
+  })();
 
 // ---------------------------------------------------------------------------
 // Hash-based build skip
@@ -83,7 +85,8 @@ if (noBuild === undefined) {
   noBuild = "0";
   try {
     const raw = await $`git rev-parse HEAD:src HEAD:migrations HEAD:docker/complement`
-      .cwd(repoRoot).text();
+      .cwd(repoRoot)
+      .text();
     const hash = `${dirty}:${createHash("sha256").update(raw).digest("hex")}`;
     const cacheFile = path.join(repoRoot, ".saqula/.last-image-hash");
     const cached = fs.existsSync(cacheFile) ? fs.readFileSync(cacheFile, "utf8").trim() : "";
@@ -106,7 +109,9 @@ if (noBuild !== "1") {
 // Run tests
 // ---------------------------------------------------------------------------
 
-console.log(`==> Running tests${runFilter ? ` (filter: ${runFilter})` : ""} (parallel=${parallel})...`);
+console.log(
+  `==> Running tests${runFilter ? ` (filter: ${runFilter})` : ""} (parallel=${parallel})...`,
+);
 console.log(`    Log: ${logPath}`);
 
 const runArgs = ["-json", "-count=1", "-parallel", parallel];
@@ -134,15 +139,13 @@ await $`bun run ${path.join(repoRoot, "scripts/complement-summary.ts")} ${logPat
 
 async function buildImage() {
   console.log(`==> Building Docker image ${image} (DIRTY=${dirty})...`);
-  await $`docker build
-    --build-arg DIRTY_RUNS=${dirty}
-    -f ${path.join(repoRoot, "docker/complement/Dockerfile")}
-    -t ${image}
-    ${repoRoot}`;
+  const dockerfile = path.join(repoRoot, "docker/complement/Dockerfile");
+  await $`docker build --build-arg DIRTY_RUNS=${dirty} -f ${dockerfile} -t ${image} ${repoRoot}`;
 
   try {
     const raw = await $`git rev-parse HEAD:src HEAD:migrations HEAD:docker/complement`
-      .cwd(repoRoot).text();
+      .cwd(repoRoot)
+      .text();
     const hash = `${dirty}:${createHash("sha256").update(raw).digest("hex")}`;
     fs.writeFileSync(path.join(repoRoot, ".saqula/.last-image-hash"), hash);
   } catch {}

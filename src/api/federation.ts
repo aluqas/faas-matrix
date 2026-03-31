@@ -54,9 +54,7 @@ app.use("/_matrix/federation/v1/*", requireFederationAuth());
 app.route("/", federationQueryRoutes);
 app.route("/", federationSpaceRoutes);
 
-async function runDomainValidation<A>(
-  effect: Effect.Effect<A, DomainError>,
-): Promise<A> {
+async function runDomainValidation<A>(effect: Effect.Effect<A, DomainError>): Promise<A> {
   return Effect.runPromise(effect);
 }
 
@@ -1079,7 +1077,9 @@ async function handleSendJoin(c: any, version: "v1" | "v2"): Promise<Response> {
       }),
     );
 
-    const room = (await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
+    const room = (await c.env.DB.prepare(
+      `SELECT room_id, room_version FROM rooms WHERE room_id = ?`,
+    )
       .bind(roomId)
       .first()) as { room_id: string; room_version: string } | null;
     if (!room) {
@@ -1342,10 +1342,7 @@ app.put("/_matrix/federation/v2/send_leave/:roomId/:eventId", async (c) => {
   return c.json({});
 });
 
-async function handleFederationInvite(
-  c: any,
-  version: "v1" | "v2",
-): Promise<Response> {
+async function handleFederationInvite(c: any, version: "v1" | "v2"): Promise<Response> {
   void c.req.param("roomId");
   const eventId = c.req.param("eventId");
 
@@ -2035,9 +2032,7 @@ app.put("/_matrix/federation/v1/send_knock/:roomId/:eventId", async (c) => {
 
   let validatedKnock;
   try {
-    validatedKnock = await runDomainValidation(
-      validateSendKnockRequest({ body, roomId, eventId }),
-    );
+    validatedKnock = await runDomainValidation(validateSendKnockRequest({ body, roomId, eventId }));
   } catch (error) {
     const response = toFederationErrorResponse(error);
     if (response) {

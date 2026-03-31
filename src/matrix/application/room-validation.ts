@@ -79,9 +79,7 @@ function validateCreateRoomSemantics(
     }
 
     if (request.visibility !== undefined && !VALID_VISIBILITIES.has(request.visibility)) {
-      yield* Effect.fail(
-        invalidParam("visibility must be one of: public, private"),
-      );
+      yield* Effect.fail(invalidParam("visibility must be one of: public, private"));
     }
 
     if (request.preset !== undefined && !VALID_PRESETS.has(request.preset)) {
@@ -139,7 +137,9 @@ export function validateJoinRoomRequest(input: {
 
         const remoteServers = Array.from(
           new Set(
-            (request.remoteServers ?? []).map((server) => server.trim()).filter((server) => server.length > 0),
+            (request.remoteServers ?? [])
+              .map((server) => server.trim())
+              .filter((server) => server.length > 0),
           ),
         );
 

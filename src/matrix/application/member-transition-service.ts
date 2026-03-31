@@ -166,9 +166,7 @@ function toSyncCategory(membership: Membership | null | undefined): MembershipSy
   return "join";
 }
 
-export function toMembershipCommand(
-  input: MembershipTransitionInput,
-): MembershipCommand | null {
+export function toMembershipCommand(input: MembershipTransitionInput): MembershipCommand | null {
   const membership = (input.event.content as { membership?: Membership } | undefined)?.membership;
   if (
     input.event.type !== "m.room.member" ||

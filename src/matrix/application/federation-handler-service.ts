@@ -189,9 +189,7 @@ export async function persistInviteStrippedState(
         roomId,
         record.type,
         typeof record.state_key === "string" ? record.state_key : "",
-        JSON.stringify(
-          record.content && typeof record.content === "object" ? record.content : {},
-        ),
+        JSON.stringify(record.content && typeof record.content === "object" ? record.content : {}),
         record.sender,
       )
       .run();
@@ -210,14 +208,10 @@ export async function ensureFederatedRoomStub(
        VALUES (?, ?, ?, 0)`,
     )
     .bind(roomId, roomVersion, creatorId)
-      .run();
+    .run();
 }
 
-async function upsertRoomState(
-  db: D1Database,
-  roomId: string,
-  event: PDU,
-): Promise<void> {
+async function upsertRoomState(db: D1Database, roomId: string, event: PDU): Promise<void> {
   if (event.state_key === undefined) {
     return;
   }

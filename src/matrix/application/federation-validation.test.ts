@@ -64,7 +64,9 @@ describe("federation validation", () => {
           content: { membership: "invite" },
           origin_server_ts: 1,
         },
-        invite_room_state: [{ type: "m.room.name", sender: "@alice:remote", content: { name: "T" } }],
+        invite_room_state: [
+          { type: "m.room.name", sender: "@alice:remote", content: { name: "T" } },
+        ],
       },
     });
 

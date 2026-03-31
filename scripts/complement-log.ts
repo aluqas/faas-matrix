@@ -71,12 +71,16 @@ export function parseLog(content: string, maxDepth = 0): TestResults {
 // ---------------------------------------------------------------------------
 
 export function summarize(results: TestResults): Summary {
-  let pass = 0, fail = 0, skip = 0;
+  let pass = 0,
+    fail = 0,
+    skip = 0;
   const fails: string[] = [];
   for (const [test, action] of Object.entries(results)) {
     if (action === "pass") pass++;
-    else if (action === "fail") { fail++; fails.push(test); }
-    else if (action === "skip") skip++;
+    else if (action === "fail") {
+      fail++;
+      fails.push(test);
+    } else if (action === "skip") skip++;
   }
   return { pass, fail, skip, total: pass + fail + skip, fails };
 }
@@ -93,8 +97,18 @@ export function categorize(testName: string): string {
   const top = testName.split("/")[0];
   if (/^TestMedia|^TestContent|^TestRemote.*Thumbnail/i.test(top)) return "media";
   if (/Spaces|^TestFederatedClientSpaces/i.test(top)) return "spaces";
-  if (/Federation|^TestACL|^TestRemote|Remote(?:Join|Presence|Typing)|^TestJoinFederated|^TestBannedUser|ViaSendJoin|ViaSendKnock|GapFill|MissingEvents|AuthChain|^TestEventAuth|^TestNetworkPartition|^TestUnrejectRejected|^TestCorrupted|^TestInbound/i.test(top)) return "federation";
-  if (/^TestKnocking|^TestMSC|^TestKnockRestricted|^TestKnockRooms|^TestRestrictedRooms|^TestCannotSendKnock/i.test(top)) return "msc";
+  if (
+    /Federation|^TestACL|^TestRemote|Remote(?:Join|Presence|Typing)|^TestJoinFederated|^TestBannedUser|ViaSendJoin|ViaSendKnock|GapFill|MissingEvents|AuthChain|^TestEventAuth|^TestNetworkPartition|^TestUnrejectRejected|^TestCorrupted|^TestInbound/i.test(
+      top,
+    )
+  )
+    return "federation";
+  if (
+    /^TestKnocking|^TestMSC|^TestKnockRestricted|^TestKnockRooms|^TestRestrictedRooms|^TestCannotSendKnock/i.test(
+      top,
+    )
+  )
+    return "msc";
   if (/^TestSync|^TestJumpToDate/i.test(top)) return "sync";
   if (/^TestLogin|^TestLogout|^TestRegister/i.test(top)) return "auth";
   if (/^TestRoom|^TestCreateRoom|^TestForget|^TestUnban/i.test(top)) return "rooms";
@@ -121,7 +135,8 @@ export function delta(before: TestResults, after: TestResults): Delta {
   const newFails: string[] = [];
   const appeared: string[] = [];
   for (const t of all) {
-    const b = before[t], a = after[t];
+    const b = before[t],
+      a = after[t];
     if (b === "fail" && a === "pass") newPasses.push(t);
     else if (b === "pass" && a === "fail") newFails.push(t);
     else if (!b && a === "pass") appeared.push(t);
@@ -138,7 +153,8 @@ const LOG_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.log$/;
 /** Load datetime-named log files from logsDir, newest first. */
 export function loadLogs(logsDir: string, maxDepth = 0, lastN = Infinity): ParsedLog[] {
   if (!fs.existsSync(logsDir)) return [];
-  let files = fs.readdirSync(logsDir)
+  let files = fs
+    .readdirSync(logsDir)
     .filter((f) => LOG_PATTERN.test(f))
     .sort()
     .reverse();

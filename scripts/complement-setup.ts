@@ -52,7 +52,9 @@ if (fs.existsSync(path.join(complementDir, ".git"))) {
   console.log(`    HEAD: ${current}`);
   if (current !== COMPLEMENT_REF) {
     console.log(`    NOTE: differs from pinned ref ${COMPLEMENT_REF}`);
-    console.log(`    To update: cd ${complementDir} && git fetch && git checkout ${COMPLEMENT_REF}`);
+    console.log(
+      `    To update: cd ${complementDir} && git fetch && git checkout ${COMPLEMENT_REF}`,
+    );
   }
 } else {
   console.log(`==> Cloning Complement into ${complementDir}...`);

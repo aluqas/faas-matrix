@@ -58,9 +58,9 @@ function toLeftRoom(event: PDU): LeftRoom {
 function isLeaveMembershipEvent(event: PDU | null | undefined, userId: string): event is PDU {
   return Boolean(
     event &&
-      event.type === "m.room.member" &&
-      event.state_key === userId &&
-      (event.content as { membership?: string } | undefined)?.membership === "leave",
+    event.type === "m.room.member" &&
+    event.state_key === userId &&
+    (event.content as { membership?: string } | undefined)?.membership === "leave",
   );
 }
 
@@ -158,7 +158,9 @@ export async function projectMembershipRooms(
     }
 
     const roomState = await repository.getRoomState(roomId);
-    const currentMemberState = roomState.find((event) => isLeaveMembershipEvent(event, query.userId));
+    const currentMemberState = roomState.find((event) =>
+      isLeaveMembershipEvent(event, query.userId),
+    );
     if (currentMemberState) {
       result.leaveRooms[roomId] = toLeftRoom(currentMemberState);
       continue;

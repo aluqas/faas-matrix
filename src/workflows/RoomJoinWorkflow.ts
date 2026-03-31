@@ -61,8 +61,16 @@ interface SerializableEvent {
 
 export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
   async run(event: WorkflowEvent<JoinParams>, step: WorkflowStep): Promise<JoinResult> {
-    const { roomId, userId, isRemote, remoteServer, remoteServers, displayName, avatarUrl, reason } =
-      event.payload;
+    const {
+      roomId,
+      userId,
+      isRemote,
+      remoteServer,
+      remoteServers,
+      displayName,
+      avatarUrl,
+      reason,
+    } = event.payload;
 
     console.log("[RoomJoinWorkflow] Starting join", { roomId, userId, isRemote, remoteServer });
 
@@ -96,7 +104,11 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
                 return result;
               } catch (err) {
                 lastError = err instanceof Error ? err : new Error(String(err));
-                console.warn("[RoomJoinWorkflow] make_join failed for", candidate, lastError.message);
+                console.warn(
+                  "[RoomJoinWorkflow] make_join failed for",
+                  candidate,
+                  lastError.message,
+                );
               }
             }
             throw lastError ?? new Error("All remote servers failed for make_join");

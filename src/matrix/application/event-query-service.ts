@@ -121,9 +121,11 @@ export class EventQueryService {
   }
 
   async getMissingEvents(db: D1Database, query: MissingEventsQuery): Promise<PDU[]> {
-    const frontier =
-      query.latestEvents.length > 0 ? [...query.latestEvents] : [...query.earliestEvents];
-    const seedSet = new Set(frontier);
+    // BFS backwards from latest_events through prev_events.
+    // latest_events are the starting points — walk from here but exclude from results.
+    // earliest_events are the stop boundary — exclude from results and don't walk past them.
+    const frontier = [...query.latestEvents];
+    const startSet = new Set(query.latestEvents);
     const stopSet = new Set(query.earliestEvents);
     const visited = new Set<string>();
     const events: PDU[] = [];
@@ -151,14 +153,12 @@ export class EventQueryService {
 
       const event = toPdu(row);
 
-      if (query.latestEvents.length > 0 && stopSet.has(event.event_id)) {
-        continue;
-      }
-
-      if (!(query.latestEvents.length === 0 && seedSet.has(event.event_id))) {
+      // Exclude start points (latest_events) and stop points (earliest_events) from results
+      if (!startSet.has(event.event_id) && !stopSet.has(event.event_id)) {
         events.push(event);
       }
 
+      // Walk prev_events, stopping at earliest_events boundary
       for (const prevId of event.prev_events ?? []) {
         if (!visited.has(prevId) && !stopSet.has(prevId)) {
           frontier.push(prevId);

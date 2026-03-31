@@ -18,9 +18,7 @@ if (!logPath) {
 const content = fs.readFileSync(logPath, "utf8");
 const results = parseLog(content, 0);
 
-const topResults = Object.fromEntries(
-  Object.entries(results).filter(([t]) => !t.includes("/")),
-);
+const topResults = Object.fromEntries(Object.entries(results).filter(([t]) => !t.includes("/")));
 const { pass, fail, fails } = summarize(topResults);
 
 console.log();

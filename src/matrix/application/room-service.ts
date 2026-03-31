@@ -210,7 +210,10 @@ export class MatrixRoomService {
       validate: () => undefined,
       resolveAuth: async () => ({ userId: input.userId, roomVersion: room.room_version }),
       authorize: async (_pipelineInput, auth) => {
-        const currentMembership = await this.repository.getMembership(validated.roomId, auth.userId);
+        const currentMembership = await this.repository.getMembership(
+          validated.roomId,
+          auth.userId,
+        );
         const joinRulesEvent = await this.repository.getStateEvent(
           validated.roomId,
           "m.room.join_rules",
@@ -226,7 +229,10 @@ export class MatrixRoomService {
         );
       },
       buildEvent: async (_pipelineInput, auth) => {
-        const currentMembership = await this.repository.getMembership(validated.roomId, auth.userId);
+        const currentMembership = await this.repository.getMembership(
+          validated.roomId,
+          auth.userId,
+        );
         if (currentMembership?.membership === "join") {
           return null;
         }

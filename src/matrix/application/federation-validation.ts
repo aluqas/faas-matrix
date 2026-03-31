@@ -109,7 +109,11 @@ function toPdu(envelope: FederationPduEnvelope, roomId: string, eventId: string)
   };
 }
 
-function validateEventIdentity(event: PDU, roomId: string, eventId: string): Effect.Effect<void, DomainError> {
+function validateEventIdentity(
+  event: PDU,
+  roomId: string,
+  eventId: string,
+): Effect.Effect<void, DomainError> {
   return Effect.gen(function* () {
     if (event.event_id !== eventId) {
       yield* Effect.fail(invalidParam("Event ID mismatch"));
@@ -134,10 +138,7 @@ function validateMembershipEventRequest(input: {
       validateEventIdentity(event, input.roomId, input.eventId).pipe(Effect.as(event)),
     ),
     Effect.flatMap((event) => {
-      if (
-        event.type !== "m.room.member" ||
-        event.content.membership !== input.expectedMembership
-      ) {
+      if (event.type !== "m.room.member" || event.content.membership !== input.expectedMembership) {
         return Effect.fail(invalidParam(input.mismatchMessage));
       }
       if (event.state_key !== event.sender) {

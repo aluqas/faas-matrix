@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Effect } from "effect";
 import {
+  authorizeLocalInvite,
   authorizeLocalJoin,
   authorizeLocalKnock,
   validateLeavePreconditions,
@@ -62,9 +63,7 @@ describe("room-membership-policy", () => {
   it("rejects knocking when the user is already invited", async () => {
     const effect = validateKnockPreconditions("invite");
 
-    await expect(Effect.runPromise(effect)).rejects.toThrow(
-      "User is already invited to this room",
-    );
+    await expect(Effect.runPromise(effect)).rejects.toThrow("User is already invited to this room");
   });
 
   it("allows knock_restricted when the room version supports it", async () => {
@@ -85,5 +84,32 @@ describe("room-membership-policy", () => {
     await expect(Effect.runPromise(effect)).rejects.toThrow(
       "Not joined, invited, or knocking in this room",
     );
+  });
+
+  it("rejects invites from users without invite power", async () => {
+    const effect = authorizeLocalInvite({
+      inviterMembership: "join",
+      inviteeMembership: null,
+      inviterPower: 0,
+      invitePower: 50,
+    });
+
+    await expect(Effect.runPromise(effect)).rejects.toThrow(
+      "Insufficient power level to invite",
+    );
+  });
+
+  it("allows invites from joined users with sufficient power", async () => {
+    const effect = authorizeLocalInvite({
+      inviterMembership: "join",
+      inviteeMembership: null,
+      inviterPower: 50,
+      invitePower: 50,
+    });
+
+    await expect(Effect.runPromise(effect)).resolves.toMatchObject({
+      inviterPower: 50,
+      invitePower: 50,
+    });
   });
 });

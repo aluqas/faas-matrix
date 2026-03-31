@@ -2,10 +2,7 @@ import { Effect } from "effect";
 import type { Membership, RoomJoinRulesContent } from "../../types";
 import { ErrorCodes } from "../../types";
 import { DomainError } from "./domain-error";
-import {
-  requireRoomVersionPolicy,
-  type RoomVersionPolicy,
-} from "./room-version-policy";
+import { requireRoomVersionPolicy, type RoomVersionPolicy } from "./room-version-policy";
 
 const JOIN_RULES = [
   "public",
@@ -27,6 +24,11 @@ export interface JoinAuthorizationResult {
 export interface KnockAuthorizationResult {
   joinRule: JoinRule;
   policy: RoomVersionPolicy;
+}
+
+export interface InviteAuthorizationResult {
+  inviterPower: number;
+  invitePower: number;
 }
 
 function forbidden(message: string): DomainError {
@@ -115,6 +117,34 @@ export function validateLeavePreconditions(
   }
 
   return Effect.fail(forbidden("Not joined, invited, or knocking in this room"));
+}
+
+export function authorizeLocalInvite(input: {
+  inviterMembership: Membership | null | undefined;
+  inviteeMembership: Membership | null | undefined;
+  inviterPower: number;
+  invitePower: number;
+}): Effect.Effect<InviteAuthorizationResult, DomainError> {
+  if (input.inviterMembership !== "join") {
+    return Effect.fail(forbidden("Not a member of this room"));
+  }
+
+  if (input.inviterPower < input.invitePower) {
+    return Effect.fail(forbidden("Insufficient power level to invite"));
+  }
+
+  if (input.inviteeMembership === "join") {
+    return Effect.fail(forbidden("User is already in the room"));
+  }
+
+  if (input.inviteeMembership === "ban") {
+    return Effect.fail(forbidden("Cannot invite banned user"));
+  }
+
+  return Effect.succeed({
+    inviterPower: input.inviterPower,
+    invitePower: input.invitePower,
+  });
 }
 
 export function authorizeLocalKnock(input: {
