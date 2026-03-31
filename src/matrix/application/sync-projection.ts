@@ -24,6 +24,11 @@ export interface SyncProjectionQuery {
   includeLeave: boolean;
 }
 
+export interface DeviceListProjectionQuery {
+  userId: string;
+  sincePosition: number;
+}
+
 export interface SyncProjectionResult {
   inviteRooms: Record<string, InvitedRoom>;
   knockRooms: Record<string, KnockedRoom>;
@@ -148,6 +153,34 @@ export function shouldIncludeRoom(roomId: string, filter?: FilterDefinition["roo
     return false;
   }
   return true;
+}
+
+export async function projectGlobalAccountData(
+  repository: SyncRepository,
+  userId: string,
+  sincePosition: number,
+  filter?: SyncEventFilter,
+): Promise<any[]> {
+  return applyEventFilter(
+    await repository.getGlobalAccountData(userId, sincePosition > 0 ? sincePosition : undefined),
+    filter,
+  );
+}
+
+export async function projectDeviceLists(
+  repository: SyncRepository,
+  query: DeviceListProjectionQuery,
+): Promise<{ changed: string[]; left: string[] } | undefined> {
+  if (query.sincePosition <= 0) {
+    return { changed: [query.userId], left: [] };
+  }
+
+  const deviceListChanges = await repository.getDeviceListChanges(query.userId, query.sincePosition);
+  if (deviceListChanges.changed.length > 0 || deviceListChanges.left.length > 0) {
+    return deviceListChanges;
+  }
+
+  return undefined;
 }
 
 export async function projectJoinedRoom(

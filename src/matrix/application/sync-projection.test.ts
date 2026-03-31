@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { SyncRepository } from "../repositories/interfaces";
 import type { PDU } from "../../types";
-import { projectJoinedRoom, projectMembershipRooms } from "./sync-projection";
+import {
+  projectDeviceLists,
+  projectGlobalAccountData,
+  projectJoinedRoom,
+  projectMembershipRooms,
+} from "./sync-projection";
 
 class FakeSyncRepository implements SyncRepository {
   memberships = new Map<
@@ -22,6 +27,8 @@ class FakeSyncRepository implements SyncRepository {
   roomAccountData = new Map<string, any[]>();
   receiptsByRoom = new Map<string, { type: string; content: Record<string, unknown> }>();
   typingUsersByRoom = new Map<string, string[]>();
+  globalAccountData: any[] = [];
+  deviceListChanges = { changed: [] as string[], left: [] as string[] };
 
   async loadFilter() {
     return null;
@@ -39,10 +46,10 @@ class FakeSyncRepository implements SyncRepository {
     return [];
   }
   async getDeviceListChanges() {
-    return { changed: [], left: [] };
+    return this.deviceListChanges;
   }
   async getGlobalAccountData() {
-    return [];
+    return this.globalAccountData;
   }
   async getRoomAccountData(_userId: string, roomId: string) {
     return this.roomAccountData.get(roomId) ?? [];
@@ -293,5 +300,46 @@ describe("sync-projection", () => {
     expect(projection.ephemeral?.events).toEqual([
       { type: "m.typing", content: { user_ids: ["@bob:hs1"] } },
     ]);
+  });
+
+  it("projects global account data with filters applied", async () => {
+    const repo = new FakeSyncRepository();
+    repo.globalAccountData = [
+      { type: "m.push_rules", content: {} },
+      { type: "m.ignored_user_list", content: {} },
+    ];
+
+    const projection = await projectGlobalAccountData(repo, "@alice:test", 0, {
+      types: ["m.push_rules"],
+    });
+
+    expect(projection).toEqual([{ type: "m.push_rules", content: {} }]);
+  });
+
+  it("bootstraps device_lists on initial sync and omits empty incremental changes", async () => {
+    const repo = new FakeSyncRepository();
+
+    await expect(
+      projectDeviceLists(repo, {
+        userId: "@alice:test",
+        sincePosition: 0,
+      }),
+    ).resolves.toEqual({ changed: ["@alice:test"], left: [] });
+
+    repo.deviceListChanges = { changed: [], left: [] };
+    await expect(
+      projectDeviceLists(repo, {
+        userId: "@alice:test",
+        sincePosition: 5,
+      }),
+    ).resolves.toBeUndefined();
+
+    repo.deviceListChanges = { changed: ["@bob:hs1"], left: ["@carol:hs1"] };
+    await expect(
+      projectDeviceLists(repo, {
+        userId: "@alice:test",
+        sincePosition: 5,
+      }),
+    ).resolves.toEqual({ changed: ["@bob:hs1"], left: ["@carol:hs1"] });
   });
 });

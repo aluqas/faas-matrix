@@ -30,6 +30,7 @@ export interface RateLimitCapability<TNamespace = unknown> {
 
 export interface RealtimeCapability {
   notifyRoomEvent(roomId: string, eventId: string, eventType: string): Promise<void>;
+  setRoomTyping?(roomId: string, userId: string, typing: boolean, timeoutMs?: number): Promise<void>;
   waitForUserEvents(userId: string, timeoutMs: number): Promise<{ hasEvents: boolean }>;
 }
 

@@ -12,6 +12,12 @@ import { sha256, verifyContentHash } from "../../utils/crypto";
 import { verifyRemoteSignature } from "../../services/federation-keys";
 import type { FederationRepository } from "../repositories/interfaces";
 import {
+  handleFederationDeviceListEdu,
+  handleFederationDirectToDeviceEdu,
+  handleFederationPresenceEdu,
+  handleFederationTypingEdu,
+} from "./federation-handler-service";
+import {
   MembershipTransitionService,
   resolveMembershipAuthState,
 } from "./membership-transition-service";
@@ -301,46 +307,27 @@ export class MatrixFederationService {
 
     switch (eduType) {
       case "m.presence": {
-        const presencePush = content?.push as
-          | Array<{
-              user_id: string;
-              presence: string;
-              status_msg?: string;
-              last_active_ago?: number;
-              currently_active?: boolean;
-            }>
-          | undefined;
-
-        if (presencePush) {
-          for (const update of presencePush) {
-            if (update.user_id && update.presence) {
-              const now = this.appContext.capabilities.clock.now();
-              const lastActive = update.last_active_ago ? now - update.last_active_ago : now;
-              await this.repository.upsertPresence(
-                update.user_id,
-                update.presence,
-                update.status_msg || null,
-                lastActive,
-                Boolean(update.currently_active),
-              );
-            }
-          }
-        }
+        await handleFederationPresenceEdu(
+          this.repository,
+          this.appContext.capabilities.clock.now(),
+          content,
+        );
         break;
       }
       case "m.device_list_update": {
-        const deviceUserId = content?.user_id as string | undefined;
-        const deviceId = content?.device_id as string | undefined;
-        if (deviceUserId && deviceId) {
-          await this.repository.upsertRemoteDeviceList(
-            deviceUserId,
-            deviceId,
-            Number(content?.stream_id || 0),
-            (content?.keys as Record<string, unknown> | undefined) || null,
-            content?.device_display_name as string | undefined,
-            Boolean(content?.deleted),
-          );
-        }
+        await handleFederationDeviceListEdu(this.repository, content);
+        break;
+      }
+      case "m.typing": {
+        await handleFederationTypingEdu(this.appContext.capabilities.realtime, content);
+        break;
+      }
+      case "m.direct_to_device": {
+        await handleFederationDirectToDeviceEdu(
+          this.appContext.capabilities.sql.connection as D1Database,
+          origin,
+          content,
+        );
         break;
       }
       default:

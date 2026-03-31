@@ -1,5 +1,7 @@
 import { storeEvent } from "../../services/database";
 import type { PDU } from "../../types";
+import type { FederationRepository } from "../repositories/interfaces";
+import type { RealtimeCapability } from "../../foundation/runtime-capabilities";
 import {
   applyMembershipTransitionToDatabase,
   loadMembershipTransitionContext,
@@ -296,4 +298,167 @@ export async function getMissingFederationEvents(
   query: MissingEventsQuery,
 ): Promise<PDU[]> {
   return eventQueryService.getMissingEvents(db, query);
+}
+
+async function getNextStreamPosition(db: D1Database, streamName: string): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE stream_positions
+       SET position = position + 1
+       WHERE stream_name = ?
+       RETURNING position`,
+    )
+    .bind(streamName)
+    .first<{ position: number }>();
+
+  if (result) {
+    return result.position;
+  }
+
+  const upsertResult = await db
+    .prepare(
+      `INSERT INTO stream_positions (stream_name, position)
+       VALUES (?, 1)
+       ON CONFLICT (stream_name) DO UPDATE SET position = position + 1
+       RETURNING position`,
+    )
+    .bind(streamName)
+    .first<{ position: number }>();
+
+  return upsertResult?.position ?? 1;
+}
+
+async function getLocalDeviceIds(db: D1Database, userId: string): Promise<string[]> {
+  const devices = await db
+    .prepare(`SELECT device_id FROM devices WHERE user_id = ?`)
+    .bind(userId)
+    .all<{ device_id: string }>();
+
+  return devices.results.map((device) => device.device_id);
+}
+
+export async function handleFederationPresenceEdu(
+  repository: Pick<FederationRepository, "upsertPresence">,
+  now: number,
+  content: Record<string, unknown>,
+): Promise<void> {
+  const presencePush = content.push as
+    | Array<{
+        user_id: string;
+        presence: string;
+        status_msg?: string;
+        last_active_ago?: number;
+        currently_active?: boolean;
+      }>
+    | undefined;
+
+  if (!presencePush) {
+    return;
+  }
+
+  for (const update of presencePush) {
+    if (!update.user_id || !update.presence) {
+      continue;
+    }
+
+    const lastActive = update.last_active_ago ? now - update.last_active_ago : now;
+    await repository.upsertPresence(
+      update.user_id,
+      update.presence,
+      update.status_msg || null,
+      lastActive,
+      Boolean(update.currently_active),
+    );
+  }
+}
+
+export async function handleFederationDeviceListEdu(
+  repository: Pick<FederationRepository, "upsertRemoteDeviceList">,
+  content: Record<string, unknown>,
+): Promise<void> {
+  const deviceUserId = typeof content.user_id === "string" ? content.user_id : undefined;
+  const deviceId = typeof content.device_id === "string" ? content.device_id : undefined;
+  if (!deviceUserId || !deviceId) {
+    return;
+  }
+
+  await repository.upsertRemoteDeviceList(
+    deviceUserId,
+    deviceId,
+    Number(content.stream_id || 0),
+    (content.keys as Record<string, unknown> | undefined) || null,
+    typeof content.device_display_name === "string" ? content.device_display_name : undefined,
+    Boolean(content.deleted),
+  );
+}
+
+export async function handleFederationTypingEdu(
+  realtime: RealtimeCapability,
+  content: Record<string, unknown>,
+): Promise<void> {
+  const roomId = typeof content.room_id === "string" ? content.room_id : undefined;
+  const userId = typeof content.user_id === "string" ? content.user_id : undefined;
+  const typing = typeof content.typing === "boolean" ? content.typing : undefined;
+  const timeoutMs =
+    typeof content.timeout === "number" && content.timeout > 0 ? content.timeout : undefined;
+
+  if (!roomId || !userId || typing === undefined || !realtime.setRoomTyping) {
+    return;
+  }
+
+  await realtime.setRoomTyping(roomId, userId, typing, timeoutMs);
+}
+
+export async function handleFederationDirectToDeviceEdu(
+  db: D1Database,
+  origin: string,
+  content: Record<string, unknown>,
+): Promise<void> {
+  const sender = typeof content.sender === "string" ? content.sender : origin;
+  const eventType = typeof content.type === "string" ? content.type : undefined;
+  const messageId = typeof content.message_id === "string" ? content.message_id : undefined;
+  const messages =
+    content.messages && typeof content.messages === "object"
+      ? (content.messages as Record<string, Record<string, unknown>>)
+      : undefined;
+
+  if (!eventType || !messageId || !messages) {
+    return;
+  }
+
+  for (const [recipientUserId, deviceMessages] of Object.entries(messages)) {
+    if (!deviceMessages || typeof deviceMessages !== "object") {
+      continue;
+    }
+
+    for (const [deviceId, messageContent] of Object.entries(deviceMessages)) {
+      const targetDevices =
+        deviceId === "*" ? await getLocalDeviceIds(db, recipientUserId) : [deviceId];
+
+      for (const targetDeviceId of targetDevices) {
+        const streamPosition = await getNextStreamPosition(db, "to_device");
+        const contentJson =
+          messageContent && typeof messageContent === "object" ? messageContent : {};
+
+        await db
+          .prepare(
+            `INSERT INTO to_device_messages (
+              recipient_user_id, recipient_device_id, sender_user_id,
+              event_type, content, message_id, stream_position
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (recipient_user_id, recipient_device_id, message_id) DO NOTHING`,
+          )
+          .bind(
+            recipientUserId,
+            targetDeviceId,
+            sender,
+            eventType,
+            JSON.stringify(contentJson),
+            messageId,
+            streamPosition,
+          )
+          .run();
+      }
+    }
+  }
 }

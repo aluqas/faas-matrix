@@ -2,7 +2,8 @@ import type { AppContext } from "../../foundation/app-context";
 import type { JoinedRoom, InvitedRoom, KnockedRoom, LeftRoom, SyncResponse } from "../../types";
 import type { SyncRepository } from "../repositories/interfaces";
 import {
-  applyEventFilter,
+  projectDeviceLists,
+  projectGlobalAccountData,
   projectJoinedRoom,
   projectMembershipRooms,
   shouldIncludeRoom,
@@ -84,23 +85,15 @@ export class MatrixSyncService {
       );
     }
 
-    if (sincePosition > 0) {
-      const deviceListChanges = await this.repository.getDeviceListChanges(
-        input.userId,
-        sincePosition,
-      );
-      if (deviceListChanges.changed.length > 0 || deviceListChanges.left.length > 0) {
-        response.device_lists = deviceListChanges;
-      }
-    } else {
-      response.device_lists = { changed: [input.userId], left: [] };
-    }
+    response.device_lists = await projectDeviceLists(this.repository, {
+      userId: input.userId,
+      sincePosition,
+    });
 
-    response.account_data!.events = applyEventFilter(
-      await this.repository.getGlobalAccountData(
-        input.userId,
-        sincePosition > 0 ? sincePosition : undefined,
-      ),
+    response.account_data!.events = await projectGlobalAccountData(
+      this.repository,
+      input.userId,
+      sincePosition,
       filter?.account_data,
     );
 

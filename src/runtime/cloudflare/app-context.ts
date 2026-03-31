@@ -76,6 +76,21 @@ function createRuntimeCapabilities(
         void eventType;
         return Promise.resolve();
       },
+      async setRoomTyping(roomId: string, userId: string, typing: boolean, timeoutMs = 30000) {
+        const doId = env.ROOMS.idFromName(roomId);
+        const stub = env.ROOMS.get(doId);
+        await stub.fetch(
+          new Request("https://room/typing", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id: userId,
+              typing,
+              timeout: timeoutMs,
+            }),
+          }),
+        );
+      },
       async waitForUserEvents(userId: string, timeoutMs: number) {
         const doId = env.SYNC.idFromName(userId);
         const stub = env.SYNC.get(doId);
