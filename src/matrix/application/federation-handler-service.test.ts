@@ -96,7 +96,9 @@ class FakeD1Database {
         if (query.includes("SELECT device_id FROM devices")) {
           const userId = boundArgs[0] as string;
           return {
-            results: (this.devicesByUser.get(userId) ?? []).map((deviceId) => ({ device_id: deviceId })),
+            results: (this.devicesByUser.get(userId) ?? []).map((deviceId) => ({
+              device_id: deviceId,
+            })),
           };
         }
 
@@ -173,7 +175,8 @@ describe("federation-handler-service", () => {
   });
 
   it("routes typing EDUs to realtime room state", async () => {
-    const calls: Array<{ roomId: string; userId: string; typing: boolean; timeoutMs?: number }> = [];
+    const calls: Array<{ roomId: string; userId: string; typing: boolean; timeoutMs?: number }> =
+      [];
 
     await handleFederationTypingEdu(
       {

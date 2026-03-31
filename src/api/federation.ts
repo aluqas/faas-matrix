@@ -2702,7 +2702,9 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
 
   let validated: FederationThirdPartyInviteValidationResult;
   try {
-    validated = await runDomainValidation(validateThirdPartyInviteExchangeRequest({ body, roomId }));
+    validated = await runDomainValidation(
+      validateThirdPartyInviteExchangeRequest({ body, roomId }),
+    );
   } catch (error) {
     const response = toFederationErrorResponse(error);
     if (response) {

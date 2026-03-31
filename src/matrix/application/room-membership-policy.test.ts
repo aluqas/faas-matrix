@@ -97,9 +97,7 @@ describe("room-membership-policy", () => {
       invitePower: 50,
     });
 
-    await expect(Effect.runPromise(effect)).rejects.toThrow(
-      "Insufficient power level to invite",
-    );
+    await expect(Effect.runPromise(effect)).rejects.toThrow("Insufficient power level to invite");
   });
 
   it("allows invites from joined users with sufficient power", async () => {
@@ -126,9 +124,7 @@ describe("room-membership-policy", () => {
       canRescindInvite: false,
     });
 
-    await expect(Effect.runPromise(effect)).rejects.toThrow(
-      "Insufficient power level to kick",
-    );
+    await expect(Effect.runPromise(effect)).rejects.toThrow("Insufficient power level to kick");
   });
 
   it("allows bans when actor has sufficient power", async () => {

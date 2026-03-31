@@ -55,9 +55,7 @@ describe("room-validation", () => {
       targetUserId: "alice",
     });
 
-    await expect(Effect.runPromise(effect)).rejects.toThrow(
-      "user_id must be a Matrix user ID",
-    );
+    await expect(Effect.runPromise(effect)).rejects.toThrow("user_id must be a Matrix user ID");
   });
 
   it("accepts moderation requests with valid matrix identifiers", async () => {

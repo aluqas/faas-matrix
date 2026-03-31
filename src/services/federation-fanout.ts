@@ -28,7 +28,11 @@ export function collectRemoteServersForEvent(
       continue;
     }
 
-    if (member.membership === "join" || member.membership === "invite" || member.membership === "knock") {
+    if (
+      member.membership === "join" ||
+      member.membership === "invite" ||
+      member.membership === "knock"
+    ) {
       remoteServers.add(server);
       continue;
     }
@@ -77,9 +81,7 @@ export async function fanoutEventToRemoteServers(
   event: PDU,
 ): Promise<void> {
   const members = await db
-    .prepare(
-      `SELECT DISTINCT user_id, membership FROM room_memberships WHERE room_id = ?`,
-    )
+    .prepare(`SELECT DISTINCT user_id, membership FROM room_memberships WHERE room_id = ?`)
     .bind(roomId)
     .all<MembershipServerRow>();
 

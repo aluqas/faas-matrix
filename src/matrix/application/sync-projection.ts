@@ -175,7 +175,10 @@ export async function projectDeviceLists(
     return { changed: [query.userId], left: [] };
   }
 
-  const deviceListChanges = await repository.getDeviceListChanges(query.userId, query.sincePosition);
+  const deviceListChanges = await repository.getDeviceListChanges(
+    query.userId,
+    query.sincePosition,
+  );
   if (deviceListChanges.changed.length > 0 || deviceListChanges.left.length > 0) {
     return deviceListChanges;
   }

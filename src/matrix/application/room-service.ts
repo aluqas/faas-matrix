@@ -426,7 +426,10 @@ export class MatrixRoomService {
       validate: () => undefined,
       resolveAuth: async () => ({ userId: input.userId }),
       authorize: async (_pipelineInput, auth) => {
-        const inviterMembership = await this.repository.getMembership(validated.roomId, auth.userId);
+        const inviterMembership = await this.repository.getMembership(
+          validated.roomId,
+          auth.userId,
+        );
         const inviteeMembership = await this.repository.getMembership(
           validated.roomId,
           validated.targetUserId,
@@ -435,7 +438,8 @@ export class MatrixRoomService {
           validated.roomId,
           "m.room.power_levels",
         );
-        const powerLevels = (powerLevelsEvent?.content as Record<string, unknown> | undefined) ?? {};
+        const powerLevels =
+          (powerLevelsEvent?.content as Record<string, unknown> | undefined) ?? {};
         const users = (powerLevels.users as Record<string, number> | undefined) ?? {};
         const usersDefault =
           typeof powerLevels.users_default === "number" ? powerLevels.users_default : 0;
@@ -469,7 +473,10 @@ export class MatrixRoomService {
           validated.roomId,
           "m.room.power_levels",
         );
-        const inviterMembership = await this.repository.getMembership(validated.roomId, auth.userId);
+        const inviterMembership = await this.repository.getMembership(
+          validated.roomId,
+          auth.userId,
+        );
         const latestEvents = await this.repository.getLatestRoomEvents(validated.roomId, 1);
 
         return createMembershipEvent({
@@ -706,8 +713,14 @@ export class MatrixRoomService {
       validate: () => undefined,
       resolveAuth: async () => ({ userId: input.actorUserId }),
       authorize: async () => {
-        const actorMembership = await this.repository.getMembership(input.roomId, input.actorUserId);
-        const targetMembership = await this.repository.getMembership(input.roomId, input.targetUserId);
+        const actorMembership = await this.repository.getMembership(
+          input.roomId,
+          input.actorUserId,
+        );
+        const targetMembership = await this.repository.getMembership(
+          input.roomId,
+          input.targetUserId,
+        );
         const targetMembershipEvent = await this.repository.getStateEvent(
           input.roomId,
           "m.room.member",
@@ -717,7 +730,8 @@ export class MatrixRoomService {
           input.roomId,
           "m.room.power_levels",
         );
-        const powerLevels = (powerLevelsEvent?.content as Record<string, unknown> | undefined) ?? {};
+        const powerLevels =
+          (powerLevelsEvent?.content as Record<string, unknown> | undefined) ?? {};
         const users = (powerLevels.users as Record<string, number> | undefined) ?? {};
         const usersDefault =
           typeof powerLevels.users_default === "number" ? powerLevels.users_default : 0;
@@ -738,8 +752,14 @@ export class MatrixRoomService {
           input.roomId,
           "m.room.power_levels",
         );
-        const actorMembership = await this.repository.getMembership(input.roomId, input.actorUserId);
-        const targetMembership = await this.repository.getMembership(input.roomId, input.targetUserId);
+        const actorMembership = await this.repository.getMembership(
+          input.roomId,
+          input.actorUserId,
+        );
+        const targetMembership = await this.repository.getMembership(
+          input.roomId,
+          input.targetUserId,
+        );
         const targetMembershipEvent = await this.repository.getStateEvent(
           input.roomId,
           "m.room.member",
