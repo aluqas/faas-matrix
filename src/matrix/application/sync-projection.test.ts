@@ -302,6 +302,38 @@ describe("sync-projection", () => {
     ]);
   });
 
+  it("omits incremental state changes when the corresponding timeline event is filtered out", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.eventsSince.set(roomId, [
+      {
+        event_id: "$topic",
+        room_id: roomId,
+        sender: "@bob:hs1",
+        type: "m.room.topic",
+        state_key: "",
+        content: { topic: "Filtered" },
+        origin_server_ts: 30,
+        depth: 3,
+        auth_events: [],
+        prev_events: [],
+      },
+    ]);
+
+    const projection = await projectJoinedRoom(repo, {
+      userId: "@alice:test",
+      roomId,
+      sincePosition: 5,
+      roomFilter: {
+        timeline: { not_types: ["m.room.topic"] },
+        state: { types: ["m.room.*"] },
+      },
+    });
+
+    expect(projection.timeline?.events).toEqual([]);
+    expect(projection.state?.events).toEqual([]);
+  });
+
   it("projects global account data with filters applied", async () => {
     const repo = new FakeSyncRepository();
     repo.globalAccountData = [

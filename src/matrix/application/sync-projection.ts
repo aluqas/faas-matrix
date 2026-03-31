@@ -203,11 +203,15 @@ export async function projectJoinedRoom(
 
   for (const event of events) {
     const clientEvent = toClientEvent(event);
+    const timelineIncluded =
+      applyEventFilter([clientEvent], query.roomFilter?.timeline).length > 0;
 
-    if (event.state_key !== undefined) {
+    if (event.state_key !== undefined && timelineIncluded) {
       stateEvents.push(clientEvent);
     }
-    timelineEvents.push(clientEvent);
+    if (timelineIncluded) {
+      timelineEvents.push(clientEvent);
+    }
   }
 
   if (query.fullState || query.sincePosition === 0) {
@@ -221,7 +225,7 @@ export async function projectJoinedRoom(
   }
 
   joinedRoom.state!.events = applyEventFilter(stateEvents, query.roomFilter?.state);
-  joinedRoom.timeline!.events = applyEventFilter(timelineEvents, query.roomFilter?.timeline);
+  joinedRoom.timeline!.events = timelineEvents;
   joinedRoom.timeline!.prev_batch = query.sincePosition.toString();
 
   joinedRoom.account_data!.events = applyEventFilter(

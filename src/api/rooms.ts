@@ -117,116 +117,118 @@ app.get("/_matrix/client/v3/rooms/:roomId/state", requireAuth(), async (c) => {
   return c.json(clientEvents);
 });
 
+async function getRoomStateEvent(
+  c: import("hono").Context<AppEnv>,
+  stateKey: string,
+): Promise<Response> {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
+  const eventType = c.req.param("eventType");
+
+  const membership = await getMembership(c.env.DB, roomId, userId);
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
+  }
+
+  const event = await getStateEvent(c.env.DB, roomId, eventType, stateKey);
+  if (!event) {
+    return Errors.notFound("State event not found").toResponse();
+  }
+
+  return c.json(event.content);
+}
+
+async function putRoomStateEvent(
+  c: import("hono").Context<AppEnv>,
+  stateKey: string,
+): Promise<Response> {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
+  const eventType = c.req.param("eventType");
+
+  const membership = await getMembership(c.env.DB, roomId, userId);
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
+  }
+
+  let content: any;
+  try {
+    content = await c.req.json();
+  } catch {
+    return Errors.badJson().toResponse();
+  }
+
+  const eventId = await generateEventId(c.env.SERVER_NAME);
+
+  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
+  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
+
+  const authEvents: string[] = [];
+  if (createEvent) authEvents.push(createEvent.event_id);
+  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
+  if (membership) authEvents.push(membership.eventId);
+
+  const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
+  const prevEvents = latestEvents.map((e) => e.event_id);
+
+  const event: PDU = {
+    event_id: eventId,
+    room_id: roomId,
+    sender: userId,
+    type: eventType,
+    state_key: stateKey,
+    content,
+    origin_server_ts: Date.now(),
+    depth: (latestEvents[0]?.depth ?? 0) + 1,
+    auth_events: authEvents,
+    prev_events: prevEvents,
+  };
+
+  await storeEvent(c.env.DB, event);
+
+  const CACHED_STATE_TYPES = [
+    "m.room.name",
+    "m.room.avatar",
+    "m.room.topic",
+    "m.room.canonical_alias",
+    "m.room.member",
+  ];
+  if (CACHED_STATE_TYPES.includes(eventType)) {
+    invalidateRoomCache(c.env.CACHE, roomId).catch(() => {});
+  }
+
+  if (eventType === "m.room.member") {
+    await updateMembership(
+      c.env.DB,
+      roomId,
+      stateKey,
+      content.membership,
+      eventId,
+      content.displayname,
+      content.avatar_url,
+    );
+  }
+
+  await notifyUsersOfEvent(c.env, roomId, eventId, eventType);
+  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
+
+  return c.json({ event_id: eventId });
+}
+
 // GET /_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey? - Get specific state
-app.get(
-  "/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey?",
-  requireAuth(),
-  async (c) => {
-    const userId = c.get("userId");
-    const roomId = c.req.param("roomId");
-    const eventType = c.req.param("eventType");
-    const stateKey = c.req.param("stateKey") ?? "";
-
-    // Check membership
-    const membership = await getMembership(c.env.DB, roomId, userId);
-    if (!membership || membership.membership !== "join") {
-      return Errors.forbidden("Not a member of this room").toResponse();
-    }
-
-    const event = await getStateEvent(c.env.DB, roomId, eventType, stateKey);
-    if (!event) {
-      return Errors.notFound("State event not found").toResponse();
-    }
-
-    return c.json(event.content);
-  },
+app.get("/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey?", requireAuth(), (c) =>
+  getRoomStateEvent(c, c.req.param("stateKey") ?? ""),
+);
+app.get("/_matrix/client/v3/rooms/:roomId/state/:eventType/", requireAuth(), (c) =>
+  getRoomStateEvent(c, ""),
 );
 
 // PUT /_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey? - Set state
-app.put(
-  "/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey?",
-  requireAuth(),
-  async (c) => {
-    const userId = c.get("userId");
-    const roomId = c.req.param("roomId");
-    const eventType = c.req.param("eventType");
-    const stateKey = c.req.param("stateKey") ?? "";
-
-    // Check membership
-    const membership = await getMembership(c.env.DB, roomId, userId);
-    if (!membership || membership.membership !== "join") {
-      return Errors.forbidden("Not a member of this room").toResponse();
-    }
-
-    let content: any;
-    try {
-      content = await c.req.json();
-    } catch {
-      return Errors.badJson().toResponse();
-    }
-
-    const eventId = await generateEventId(c.env.SERVER_NAME);
-
-    const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
-    const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
-
-    const authEvents: string[] = [];
-    if (createEvent) authEvents.push(createEvent.event_id);
-    if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-    if (membership) authEvents.push(membership.eventId);
-
-    const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-    const prevEvents = latestEvents.map((e) => e.event_id);
-
-    const event: PDU = {
-      event_id: eventId,
-      room_id: roomId,
-      sender: userId,
-      type: eventType,
-      state_key: stateKey,
-      content,
-      origin_server_ts: Date.now(),
-      depth: (latestEvents[0]?.depth ?? 0) + 1,
-      auth_events: authEvents,
-      prev_events: prevEvents,
-    };
-
-    await storeEvent(c.env.DB, event);
-
-    // Invalidate room metadata cache if this is a metadata-affecting state event
-    const CACHED_STATE_TYPES = [
-      "m.room.name",
-      "m.room.avatar",
-      "m.room.topic",
-      "m.room.canonical_alias",
-      "m.room.member",
-    ];
-    if (CACHED_STATE_TYPES.includes(eventType)) {
-      // Non-blocking cache invalidation
-      invalidateRoomCache(c.env.CACHE, roomId).catch(() => {});
-    }
-
-    // Update membership table if this is a membership event
-    if (eventType === "m.room.member") {
-      await updateMembership(
-        c.env.DB,
-        roomId,
-        stateKey,
-        content.membership,
-        eventId,
-        content.displayname,
-        content.avatar_url,
-      );
-    }
-
-    // Notify room members about the state change (wakes up long-polling syncs)
-    await notifyUsersOfEvent(c.env, roomId, eventId, eventType);
-
-    // Fan out to remote federation peers (kept alive via waitUntil)
-    c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, event));
-
-    return c.json({ event_id: eventId });
-  },
+app.put("/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey?", requireAuth(), (c) =>
+  putRoomStateEvent(c, c.req.param("stateKey") ?? ""),
+);
+app.put("/_matrix/client/v3/rooms/:roomId/state/:eventType/", requireAuth(), (c) =>
+  putRoomStateEvent(c, ""),
 );
 
 // GET /_matrix/client/v3/rooms/:roomId/members - Get room members
