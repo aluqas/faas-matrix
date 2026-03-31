@@ -1,7 +1,29 @@
 # Complement Gap Analysis
 
 Complement black-box integration test results and failure root-cause analysis.
-Last updated: 2026-03-30. Based on test runs test1–test9 plus targeted Complement TDD reruns on 2026-03-30.
+Last updated: 2026-03-31. Based on test runs test1–test10 plus targeted Complement reruns on 2026-03-31.
+
+## Current Full-Run Status (2026-03-31)
+
+Latest full run:
+
+- Top-level summary from [`2026-03-31_11-09-17.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-03-31_11-09-17.log): **71 total / 17 pass / 52 fail / 2 skip**
+- Progress tracking in the table below uses `bun run complement:analyze --last 1 --depth 7`, which counts reached subtests: **291 reached / 124 pass (43%) / 160 fail / 7 skip**
+
+Important targeted reruns on 2026-03-31 are greener than the single full run in a few federation buckets:
+
+- `TestACLs` passes in targeted reruns after the state-event pipeline / reference-hash fixes, but flaked in the full run because the Complement blueprint did not become healthy in time.
+- `TestOutboundFederationProfile`, `TestRemotePresence`, `TestRemoteTyping`, `TestToDeviceMessagesOverFederation`, and `TestSyncOmitsStateChangeOnFilteredEvents` all pass in targeted reruns.
+
+Current active failure clusters in the full run are narrower than test9-era priorities:
+
+- device lists / device management over local and federated joins
+- partial-state join flows
+- missing-events / event-auth / rejected-auth federation correctness
+- room alias / room state / room create correctness
+- auth and account-lifecycle flows
+- delayed events, search, thread subscriptions, and owned-state MSC coverage
+- a small amount of infrastructure flake in blueprint startup (`TestACLs`, some large suites)
 
 ## Test Run Progression
 
@@ -16,6 +38,9 @@ Last updated: 2026-03-30. Based on test runs test1–test9 plus targeted Complem
 | test7 | 322   | 111 (34%) | 204  | 7    | 15 new passes (Registration, RoomCreate, RoomState, publicRooms).                                                     |
 | test8 | 245   | 67 (27%)  | 171  | 7    | `TestWriteMDirectAccountData` newly passing; `TestRemovingAccountData` passing.                                       |
 | test9 | 295   | 104 (35%) | 184  | 7    | 37 new passes over test8. Federation invite/leave flow green; restricted remote joins and parts of knocking improved. |
+| test10 | 291  | 124 (43%) | 160  | 7    | 2026-03-31 full run at analyzer depth 7. High-priority federation bucket is mostly green in targeted reruns; current failures concentrate in device-lists, partial-state joins, room correctness, auth/account lifecycle, search, and delayed events. |
+
+> `test1`–`test10` totals are analyzer counts from `bun run complement:analyze --depth 7`, not the top-level `complement-run.ts` summary. The latest full run's top-level summary is `71 / 17 / 52 / 2`.
 
 **Cumulative fixes that produced pass gains (test1 → test9):**
 
@@ -33,6 +58,12 @@ Last updated: 2026-03-30. Based on test runs test1–test9 plus targeted Complem
 - `TestRestrictedRoomsRemoteJoin` ✅ subtests in test9
 - `TestRestrictedRoomsRemoteJoinInMSC3787Room` ✅ subtests in test9
 - Multiple `TestKnocking` / `TestKnockingInMSC3787Room` subtests newly passing in test9
+- `TestACLs` ✅ in targeted rerun (2026-03-31)
+- `TestOutboundFederationProfile` ✅ (2026-03-31)
+- `TestRemotePresence` ✅ (2026-03-31)
+- `TestRemoteTyping` ✅ (2026-03-31)
+- `TestToDeviceMessagesOverFederation` ✅ (2026-03-31)
+- `TestSyncOmitsStateChangeOnFilteredEvents` ✅ (2026-03-31)
 
 ---
 
@@ -69,6 +100,8 @@ nginx proxied both port 8008 (HTTP) and 8448 (HTTPS). Port 8008 needed no TLS te
 ## Failure Categories (historical root causes; updated with current TDD status)
 
 The buckets below were first isolated in test5. As of test9 and the targeted Complement TDD reruns on 2026-03-30, the federation invite/leave/join core path has improved substantially: `TestFederationRoomsInvite`, `TestJoinViaRoomIDAndServerName`, `TestCannotSendNonLeaveViaSendLeaveV1`, and `TestCannotSendNonLeaveViaSendLeaveV2` are now passing, and restricted remote joins moved forward as well.
+
+For 2026-03-31 planning, treat the sections below as historical context. The current blockers are the "Current Full-Run Status" buckets above; several older federation buckets are no longer the primary risks.
 
 ### A. Federation invite / leave full flow is now passing
 
