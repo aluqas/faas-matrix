@@ -19,8 +19,57 @@ import { FEDERATION_OUTBOUND_DO_NAME } from "../matrix/application/features/shar
 import { verifyPassword } from "../utils/crypto";
 import { generateOpaqueId } from "../utils/ids";
 import { getPasswordHash } from "../services/database";
+import { runClientEffect } from "../matrix/application/effect-runtime";
+import { withLogContext } from "../matrix/application/logging";
+import {
+  type CrossSigningKeyPayload,
+  type CrossSigningKeysStore,
+  type DeviceKeysPayload,
+  type JsonObject,
+  type SignaturesUploadRequest,
+  type TokenSubmitRequest,
+  type UiaSessionData,
+  parseCrossSigningKeysStore,
+  parseCrossSigningUploadRequest,
+  parseDeviceKeysMap,
+  parseDeviceKeysPayload,
+  parseJsonObject,
+  parseKeysClaimRequest,
+  parseKeysQueryRequest,
+  parseKeysUploadRequest,
+  parseSignaturesUploadRequest,
+  parseStoredOneTimeKeyBuckets,
+  parseTokenSubmitRequest,
+  parseUiaSessionData,
+} from "./keys-contracts";
 
 const app = new Hono<AppEnv>();
+
+function createKeysLogger(operation: string, context: Record<string, unknown> = {}) {
+  return withLogContext({
+    component: "keys",
+    operation,
+    debugEnabled: true,
+    user_id: typeof context["user_id"] === "string" ? context["user_id"] : undefined,
+    device_id: typeof context["device_id"] === "string" ? context["device_id"] : undefined,
+  });
+}
+
+function parseJsonObjectString(value: string): JsonObject | null {
+  try {
+    return parseJsonObject(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
+
+function parseUiaSessionJson(value: string): UiaSessionData | null {
+  try {
+    return parseUiaSessionData(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
 
 // Helper to get the UserKeys Durable Object stub for a user
 function getUserKeysDO(env: Env, userId: string): DurableObjectStub {
@@ -29,37 +78,43 @@ function getUserKeysDO(env: Env, userId: string): DurableObjectStub {
 }
 
 // Fetch cross-signing keys from Durable Object (strongly consistent)
-async function getCrossSigningKeysFromDO(
-  env: Env,
-  userId: string,
-): Promise<{
-  master?: any;
-  self_signing?: any;
-  user_signing?: any;
-}> {
+async function getCrossSigningKeysFromDO(env: Env, userId: string): Promise<CrossSigningKeysStore> {
   const stub = getUserKeysDO(env, userId);
+  const logger = createKeysLogger("durable_object", { user_id: userId });
   const response = await stub.fetch(new Request("http://internal/cross-signing/get"));
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "unknown error");
-    console.error("[keys] DO cross-signing get failed:", response.status, errorText);
+    await runClientEffect(
+      logger.error("keys.command.do_fetch_failed", new Error(errorText), {
+        endpoint: "cross-signing/get",
+        status: response.status,
+      }),
+    );
     throw new Error(`DO cross-signing get failed: ${response.status} - ${errorText}`);
   }
 
-  return await response.json();
+  const parsed = parseCrossSigningKeysStore(await response.json().catch(() => null));
+  if (!parsed) {
+    await runClientEffect(
+      logger.warn("keys.command.do_invalid_payload", {
+        endpoint: "cross-signing/get",
+      }),
+    );
+    throw new Error("DO cross-signing get returned invalid payload");
+  }
+
+  return parsed;
 }
 
 // Store cross-signing keys in Durable Object (strongly consistent)
 async function putCrossSigningKeysToDO(
   env: Env,
   userId: string,
-  keys: {
-    master?: any;
-    self_signing?: any;
-    user_signing?: any;
-  },
+  keys: CrossSigningKeysStore,
 ): Promise<void> {
   const stub = getUserKeysDO(env, userId);
+  const logger = createKeysLogger("durable_object", { user_id: userId });
   const response = await stub.fetch(
     new Request("http://internal/cross-signing/put", {
       method: "POST",
@@ -70,32 +125,87 @@ async function putCrossSigningKeysToDO(
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "unknown error");
-    console.error("[keys] DO cross-signing put failed:", response.status, errorText);
+    await runClientEffect(
+      logger.error("keys.command.do_fetch_failed", new Error(errorText), {
+        endpoint: "cross-signing/put",
+        status: response.status,
+      }),
+    );
     throw new Error(`DO cross-signing put failed: ${response.status} - ${errorText}`);
   }
 }
 
-// Fetch device keys from Durable Object (strongly consistent)
-async function getDeviceKeysFromDO(env: Env, userId: string, deviceId?: string): Promise<any> {
+async function getAllDeviceKeysFromDO(
+  env: Env,
+  userId: string,
+): Promise<Record<string, DeviceKeysPayload>> {
   const stub = getUserKeysDO(env, userId);
-  const url = deviceId
-    ? `http://internal/device-keys/get?device_id=${encodeURIComponent(deviceId)}`
-    : "http://internal/device-keys/get";
-  const response = await stub.fetch(new Request(url));
+  const logger = createKeysLogger("durable_object", { user_id: userId });
+  const response = await stub.fetch(new Request("http://internal/device-keys/get"));
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "unknown error");
-    console.error(
-      "[keys] DO device-keys get failed:",
-      response.status,
-      errorText,
-      "deviceId:",
-      deviceId,
+    await runClientEffect(
+      logger.error("keys.command.do_fetch_failed", new Error(errorText), {
+        endpoint: "device-keys/get",
+        status: response.status,
+      }),
+    );
+    throw new Error(`DO all device-keys get failed: ${response.status} - ${errorText}`);
+  }
+
+  const parsed = parseDeviceKeysMap(await response.json().catch(() => null));
+  if (!parsed) {
+    await runClientEffect(
+      logger.warn("keys.command.do_invalid_payload", {
+        endpoint: "device-keys/get",
+      }),
+    );
+    throw new Error("DO device-keys get returned invalid payload");
+  }
+
+  return parsed;
+}
+
+// Fetch a single device key from Durable Object (strongly consistent)
+async function getDeviceKeyFromDO(
+  env: Env,
+  userId: string,
+  deviceId: string,
+): Promise<DeviceKeysPayload | null> {
+  const stub = getUserKeysDO(env, userId);
+  const logger = createKeysLogger("durable_object", { user_id: userId, device_id: deviceId });
+  const response = await stub.fetch(
+    new Request(`http://internal/device-keys/get?device_id=${encodeURIComponent(deviceId)}`),
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "unknown error");
+    await runClientEffect(
+      logger.error("keys.command.do_fetch_failed", new Error(errorText), {
+        endpoint: "device-keys/get",
+        status: response.status,
+      }),
     );
     throw new Error(`DO device-keys get failed: ${response.status} - ${errorText}`);
   }
 
-  return await response.json();
+  const payload = await response.json().catch(() => null);
+  if (payload === null) {
+    return null;
+  }
+
+  const parsed = parseDeviceKeysPayload(payload);
+  if (!parsed) {
+    await runClientEffect(
+      logger.warn("keys.command.do_invalid_payload", {
+        endpoint: "device-keys/get",
+      }),
+    );
+    throw new Error("DO device-keys get returned invalid payload");
+  }
+
+  return parsed;
 }
 
 // Store device keys in Durable Object (strongly consistent)
@@ -103,9 +213,10 @@ async function putDeviceKeysToDO(
   env: Env,
   userId: string,
   deviceId: string,
-  keys: any,
+  keys: DeviceKeysPayload,
 ): Promise<void> {
   const stub = getUserKeysDO(env, userId);
+  const logger = createKeysLogger("durable_object", { user_id: userId, device_id: deviceId });
   const response = await stub.fetch(
     new Request("http://internal/device-keys/put", {
       method: "POST",
@@ -116,12 +227,11 @@ async function putDeviceKeysToDO(
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "unknown error");
-    console.error(
-      "[keys] DO device-keys put failed:",
-      response.status,
-      errorText,
-      "deviceId:",
-      deviceId,
+    await runClientEffect(
+      logger.error("keys.command.do_fetch_failed", new Error(errorText), {
+        endpoint: "device-keys/put",
+        status: response.status,
+      }),
     );
     throw new Error(`DO device-keys put failed: ${response.status} - ${errorText}`);
   }
@@ -175,30 +285,50 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
   const userId = c.get("userId");
   const deviceId = c.get("deviceId");
   const db = c.env.DB;
+  const logger = createKeysLogger("upload", { user_id: userId, device_id: deviceId });
 
-  let body: any;
+  let body: unknown;
   try {
     body = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
   }
 
-  const { device_keys, one_time_keys, fallback_keys } = body;
+  const parsed = parseKeysUploadRequest(body);
+  if (!parsed) {
+    return Errors.badJson().toResponse();
+  }
+
+  const { device_keys, one_time_keys, fallback_keys } = parsed;
+  await runClientEffect(
+    logger.info("keys.command.start", {
+      command: "upload",
+      has_device_keys: Boolean(device_keys),
+      one_time_key_count: one_time_keys ? Object.keys(one_time_keys).length : 0,
+      fallback_key_count: fallback_keys ? Object.keys(fallback_keys).length : 0,
+    }),
+  );
 
   // Store device keys with strong consistency
   if (device_keys) {
     // Validate device_keys structure
-    console.log("[keys/upload] Validating device_keys:", {
-      authUserId: userId,
-      authDeviceId: deviceId,
-      bodyUserId: device_keys.user_id,
-      bodyDeviceId: device_keys.device_id,
-      userMatch: device_keys.user_id === userId,
-      deviceMatch: device_keys.device_id === deviceId,
-    });
+    await runClientEffect(
+      logger.info("keys.command.validate_device_keys", {
+        auth_user_id: userId,
+        auth_device_id: deviceId,
+        body_user_id: device_keys.user_id,
+        body_device_id: device_keys.device_id,
+      }),
+    );
 
     if (device_keys.user_id !== userId || device_keys.device_id !== deviceId) {
-      console.log("[keys/upload] MISMATCH - returning 400");
+      await runClientEffect(
+        logger.warn("keys.command.reject_device_keys", {
+          reason: "user_or_device_mismatch",
+          body_user_id: device_keys.user_id,
+          body_device_id: device_keys.device_id,
+        }),
+      );
       return c.json(
         {
           errcode: "M_INVALID_PARAM",
@@ -239,7 +369,10 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
               content: {
                 user_id: userId,
                 device_id: deviceId,
-                device_display_name: device_keys.unsigned?.device_display_name,
+                device_display_name:
+                  typeof device_keys.unsigned?.["device_display_name"] === "string"
+                    ? device_keys.unsigned["device_display_name"]
+                    : undefined,
                 stream_id: Date.now(),
                 keys: device_keys,
                 deleted: false,
@@ -249,7 +382,12 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
         );
       }
     } catch (fedErr) {
-      console.warn("[keys] Failed to queue device list EDUs:", fedErr);
+      await runClientEffect(
+        logger.error("keys.command.async_error", fedErr, {
+          command: "upload",
+          step: "queue_device_list_update",
+        }),
+      );
     }
   }
 
@@ -259,24 +397,27 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
   if (one_time_keys) {
     // Get existing keys from KV
     const existingKeys =
-      ((await c.env.ONE_TIME_KEYS.get(`otk:${userId}:${deviceId}`, "json")) as Record<
-        string,
-        { keyId: string; keyData: any; claimed: boolean }[]
-      > | null) || {};
+      parseStoredOneTimeKeyBuckets(
+        await c.env.ONE_TIME_KEYS.get(`otk:${userId}:${deviceId}`, "json"),
+      ) || {};
 
     for (const [keyId, keyData] of Object.entries(one_time_keys)) {
       const [algorithm] = keyId.split(":");
+      if (!algorithm) {
+        continue;
+      }
 
+      const bucket = existingKeys[algorithm] ?? [];
       if (!existingKeys[algorithm]) {
-        existingKeys[algorithm] = [];
+        existingKeys[algorithm] = bucket;
       }
 
       // Check if key already exists
-      const existingIndex = existingKeys[algorithm].findIndex((k) => k.keyId === keyId);
+      const existingIndex = bucket.findIndex((storedKey) => storedKey.keyId === keyId);
       if (existingIndex >= 0) {
-        existingKeys[algorithm][existingIndex] = { keyId, keyData, claimed: false };
+        bucket[existingIndex] = { keyId, keyData, claimed: false };
       } else {
-        existingKeys[algorithm].push({ keyId, keyData, claimed: false });
+        bucket.push({ keyId, keyData, claimed: false });
       }
 
       // Also write to D1 as backup
@@ -303,10 +444,11 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
     const existingKeys = (await c.env.ONE_TIME_KEYS.get(
       `otk:${userId}:${deviceId}`,
       "json",
-    )) as Record<string, { keyId: string; keyData: any; claimed: boolean }[]> | null;
+    )) as unknown;
+    const parsedExistingKeys = parseStoredOneTimeKeyBuckets(existingKeys);
 
-    if (existingKeys) {
-      for (const [algorithm, keys] of Object.entries(existingKeys)) {
+    if (parsedExistingKeys) {
+      for (const [algorithm, keys] of Object.entries(parsedExistingKeys)) {
         oneTimeKeyCounts[algorithm] = keys.filter((k) => !k.claimed).length;
       }
     }
@@ -331,6 +473,13 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
     }
   }
 
+  await runClientEffect(
+    logger.info("keys.command.success", {
+      command: "upload",
+      one_time_algorithms: Object.keys(oneTimeKeyCounts).length,
+    }),
+  );
+
   return c.json({
     one_time_key_counts: oneTimeKeyCounts,
   });
@@ -339,29 +488,42 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
 // POST /_matrix/client/v3/keys/query - Query device keys for users
 app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
   const db = c.env.DB;
+  const requesterUserId = c.get("userId");
+  const logger = createKeysLogger("query", { user_id: requesterUserId });
 
-  let body: any;
+  let body: unknown;
   try {
     body = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
   }
 
-  const { device_keys: requestedKeys } = body;
+  const parsed = parseKeysQueryRequest(body);
+  if (!parsed) {
+    return Errors.badJson().toResponse();
+  }
 
-  const deviceKeys: Record<string, Record<string, any>> = {};
-  const masterKeys: Record<string, any> = {};
-  const selfSigningKeys: Record<string, any> = {};
-  const userSigningKeys: Record<string, any> = {};
-  const failures: Record<string, any> = {};
+  const { device_keys: requestedKeys } = parsed;
+  await runClientEffect(
+    logger.info("keys.command.start", {
+      command: "query",
+      requested_user_count: requestedKeys ? Object.keys(requestedKeys).length : 0,
+    }),
+  );
+
+  const deviceKeys: Record<string, Record<string, JsonObject>> = {};
+  const masterKeys: Record<string, CrossSigningKeyPayload> = {};
+  const selfSigningKeys: Record<string, CrossSigningKeyPayload> = {};
+  const userSigningKeys: Record<string, CrossSigningKeyPayload> = {};
+  const failures: Record<string, JsonObject> = {};
 
   // Helper function to merge signatures from DB into device keys
   async function mergeSignaturesForDevice(
     userId: string,
     deviceId: string,
-    deviceKey: any,
-  ): Promise<any> {
-    // Get any additional signatures from the database
+    deviceKey: DeviceKeysPayload,
+  ): Promise<DeviceKeysPayload> {
+    // Get additional signatures from the database
     const dbSignatures = await db
       .prepare(`
       SELECT signer_user_id, signer_key_id, signature
@@ -376,11 +538,14 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
       }>();
 
     if (dbSignatures.results.length > 0) {
-      deviceKey.signatures = deviceKey.signatures || {};
+      const signatures: Record<string, Record<string, string>> = deviceKey.signatures
+        ? { ...deviceKey.signatures }
+        : {};
       for (const sig of dbSignatures.results) {
-        deviceKey.signatures[sig.signer_user_id] = deviceKey.signatures[sig.signer_user_id] || {};
-        deviceKey.signatures[sig.signer_user_id][sig.signer_key_id] = sig.signature;
+        signatures[sig.signer_user_id] = signatures[sig.signer_user_id] || {};
+        signatures[sig.signer_user_id]![sig.signer_key_id] = sig.signature;
       }
+      deviceKey.signatures = signatures;
     }
 
     return deviceKey;
@@ -396,19 +561,19 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
 
       if (requestedDevices === null || requestedDevices.length === 0) {
         // Get all devices for this user from Durable Object
-        const allDeviceKeys = await getDeviceKeysFromDO(c.env, userId);
+        const allDeviceKeys = await getAllDeviceKeysFromDO(c.env, userId);
         for (const [deviceId, keys] of Object.entries(allDeviceKeys)) {
           if (keys) {
-            // Merge any DB signatures into the device keys
+            // Merge DB signatures into the device keys
             deviceKeys[userId][deviceId] = await mergeSignaturesForDevice(userId, deviceId, keys);
           }
         }
       } else {
         // Get specific devices from Durable Object
         for (const deviceId of requestedDevices) {
-          const keys = await getDeviceKeysFromDO(c.env, userId, deviceId);
+          const keys = await getDeviceKeyFromDO(c.env, userId, deviceId);
           if (keys) {
-            // Merge any DB signatures into the device keys
+            // Merge DB signatures into the device keys
             deviceKeys[userId][deviceId] = await mergeSignaturesForDevice(userId, deviceId, keys);
           }
         }
@@ -418,8 +583,6 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
       // Per Cloudflare blog: D1 has eventual consistency across read replicas.
       // Durable Objects provide single-threaded, atomic storage - critical for
       // E2EE bootstrap where client uploads then immediately queries keys.
-      const requestingUserId = c.get("userId");
-
       const csKeys = await getCrossSigningKeysFromDO(c.env, userId);
 
       if (csKeys.master) {
@@ -429,11 +592,18 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
         selfSigningKeys[userId] = csKeys.self_signing;
       }
       // Only return user_signing key if querying own keys
-      if (csKeys.user_signing && userId === requestingUserId) {
+      if (csKeys.user_signing && userId === requesterUserId) {
         userSigningKeys[userId] = csKeys.user_signing;
       }
     }
   }
+
+  await runClientEffect(
+    logger.info("keys.command.success", {
+      command: "query",
+      returned_user_count: Object.keys(deviceKeys).length,
+    }),
+  );
 
   return c.json({
     device_keys: deviceKeys,
@@ -447,39 +617,54 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
 // POST /_matrix/client/v3/keys/claim - Claim one-time keys for establishing sessions
 app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
   const db = c.env.DB;
+  const logger = createKeysLogger("claim", { user_id: c.get("userId") });
 
-  let body: any;
+  let body: unknown;
   try {
     body = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
   }
 
-  const { one_time_keys: requestedKeys } = body;
+  const parsed = parseKeysClaimRequest(body);
+  if (!parsed) {
+    return Errors.badJson().toResponse();
+  }
 
-  const oneTimeKeys: Record<string, Record<string, Record<string, any>>> = {};
-  const failures: Record<string, any> = {};
+  const { one_time_keys: requestedKeys } = parsed;
+  await runClientEffect(
+    logger.info("keys.command.start", {
+      command: "claim",
+      requested_user_count: requestedKeys ? Object.keys(requestedKeys).length : 0,
+    }),
+  );
+
+  const oneTimeKeys: Record<string, Record<string, Record<string, JsonObject>>> = {};
+  const failures: Record<string, JsonObject> = {};
 
   if (requestedKeys) {
     for (const [userId, devices] of Object.entries(requestedKeys)) {
       oneTimeKeys[userId] = {};
 
-      for (const [deviceId, algorithm] of Object.entries(devices as Record<string, string>)) {
+      for (const [deviceId, algorithm] of Object.entries(devices)) {
         // Try to claim a one-time key from KV first
-        const existingKeys = (await c.env.ONE_TIME_KEYS.get(
-          `otk:${userId}:${deviceId}`,
-          "json",
-        )) as Record<string, { keyId: string; keyData: any; claimed: boolean }[]> | null;
+        const existingKeys = parseStoredOneTimeKeyBuckets(
+          await c.env.ONE_TIME_KEYS.get(`otk:${userId}:${deviceId}`, "json"),
+        );
 
         let foundKey = false;
 
-        if (existingKeys && existingKeys[algorithm]) {
+        const bucket = existingKeys?.[algorithm];
+        if (bucket) {
           // Find first unclaimed key
-          const keyIndex = existingKeys[algorithm].findIndex((k) => !k.claimed);
+          const keyIndex = bucket.findIndex((storedKey) => !storedKey.claimed);
           if (keyIndex >= 0) {
-            const key = existingKeys[algorithm][keyIndex];
+            const key = bucket[keyIndex];
+            if (!key) {
+              continue;
+            }
             // Mark as claimed
-            existingKeys[algorithm][keyIndex].claimed = true;
+            bucket[keyIndex] = { ...key, claimed: true };
 
             // Save back to KV
             await c.env.ONE_TIME_KEYS.put(
@@ -528,7 +713,7 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
               .run();
 
             oneTimeKeys[userId][deviceId] = {
-              [otk.key_id]: JSON.parse(otk.key_data),
+              [otk.key_id]: parseJsonObjectString(otk.key_data) ?? {},
             };
             foundKey = true;
           }
@@ -557,7 +742,7 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
               .bind(userId, deviceId, algorithm)
               .run();
 
-            const keyData = JSON.parse(fallback.key_data);
+            const keyData = parseJsonObjectString(fallback.key_data) ?? {};
             oneTimeKeys[userId][deviceId] = {
               [fallback.key_id]: {
                 ...keyData,
@@ -569,6 +754,13 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
       }
     }
   }
+
+  await runClientEffect(
+    logger.info("keys.command.success", {
+      command: "claim",
+      returned_user_count: Object.keys(oneTimeKeys).length,
+    }),
+  );
 
   return c.json({
     one_time_keys: oneTimeKeys,
@@ -660,22 +852,30 @@ async function hasPassword(db: D1Database, userId: string): Promise<boolean> {
 app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (c) => {
   const userId = c.get("userId");
   const db = c.env.DB;
+  const logger = createKeysLogger("device_signing_upload", { user_id: userId });
 
-  let body: any;
+  let body: unknown;
   try {
     body = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
   }
 
-  const { master_key, self_signing_key, user_signing_key, auth } = body;
+  const parsed = parseCrossSigningUploadRequest(body);
+  if (!parsed) {
+    return Errors.badJson().toResponse();
+  }
 
-  // Debug logging for cross-signing key uploads
-  console.log("[keys] Cross-signing upload for user:", userId);
-  console.log("[keys] Auth provided:", auth ? JSON.stringify(auth) : "none");
-  if (master_key) console.log("[keys] Master key:", JSON.stringify(master_key));
-  if (self_signing_key) console.log("[keys] Self-signing key:", JSON.stringify(self_signing_key));
-  if (user_signing_key) console.log("[keys] User-signing key:", JSON.stringify(user_signing_key));
+  const { master_key, self_signing_key, user_signing_key, auth } = parsed;
+  await runClientEffect(
+    logger.info("keys.command.start", {
+      command: "device_signing_upload",
+      has_master_key: Boolean(master_key),
+      has_self_signing_key: Boolean(self_signing_key),
+      has_user_signing_key: Boolean(user_signing_key),
+      auth_type: auth?.type,
+    }),
+  );
 
   // Check if user already has cross-signing keys set up
   const existingKeys = await db
@@ -686,17 +886,21 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
     .first<{ count: number }>();
 
   const hasExistingKeys = (existingKeys?.count || 0) > 0;
-  console.log("[keys] User has existing keys:", hasExistingKeys);
+  await runClientEffect(
+    logger.info("keys.command.auth_context", {
+      has_existing_keys: hasExistingKeys,
+    }),
+  );
 
   // Check user's authentication capabilities
   const userIsOIDC = await isOIDCUser(db, userId);
   const userHasPassword = await hasPassword(db, userId);
   // Log auth method type without exposing sensitive details
-  console.log(
-    "[keys] User auth method: OIDC=" +
-      (userIsOIDC ? "yes" : "no") +
-      ", password=" +
-      (userHasPassword ? "yes" : "no"),
+  await runClientEffect(
+    logger.info("keys.command.auth_context", {
+      is_oidc_user: userIsOIDC,
+      has_password: userHasPassword,
+    }),
   );
 
   // MSC3967: Do not require UIA when first uploading cross-signing keys
@@ -704,7 +908,11 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   // If user HAS existing keys, require authentication
   if (!hasExistingKeys) {
     // First-time cross-signing setup - skip UIA per MSC3967
-    console.log("[keys] First-time cross-signing setup - skipping UIA per MSC3967");
+    await runClientEffect(
+      logger.info("keys.command.uia_skipped", {
+        reason: "first_time_setup",
+      }),
+    );
   } else if (!auth) {
     // User has existing keys but no auth provided - return UIA challenge
     const sessionId = await generateOpaqueId(16);
@@ -713,7 +921,7 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
     const flows: Array<{ stages: string[] }> = [];
     const serverName = c.env.SERVER_NAME;
     const baseUrl = `https://${serverName}`;
-    const params: Record<string, any> = {};
+    const params: Record<string, JsonObject> = {};
 
     if (userIsOIDC) {
       // OIDC users: Use org.matrix.cross_signing_reset per MSC4312
@@ -760,11 +968,11 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
       { expirationTtl: 300 }, // 5 minute session
     );
 
-    console.log(
-      "[keys] UIA required (existing keys), returning challenge with session:",
-      sessionId,
-      "flows:",
-      flows,
+    await runClientEffect(
+      logger.info("keys.command.uia_required", {
+        session_id: sessionId,
+        flow_count: flows.length,
+      }),
     );
 
     // Return UIA challenge
@@ -778,28 +986,48 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
     );
   } else {
     // Auth provided for key replacement - validate it
-    console.log("[keys] Auth type:", auth.type);
+    await runClientEffect(
+      logger.info("keys.command.auth_validate", {
+        auth_type: auth.type,
+      }),
+    );
 
     if (auth.type === "m.login.password") {
       // Validate password
       const storedHash = await getPasswordHash(db, userId);
       if (!storedHash) {
-        console.log("[keys] No password hash found for user");
+        await runClientEffect(
+          logger.warn("keys.command.auth_reject", {
+            reason: "missing_password_hash",
+          }),
+        );
         return Errors.forbidden("No password set for user").toResponse();
       }
 
       if (!auth.password) {
-        console.log("[keys] No password in auth object");
+        await runClientEffect(
+          logger.warn("keys.command.auth_reject", {
+            reason: "missing_password",
+          }),
+        );
         return Errors.missingParam("auth.password").toResponse();
       }
 
       const valid = await verifyPassword(auth.password, storedHash);
       if (!valid) {
-        console.log("[keys] Invalid password");
+        await runClientEffect(
+          logger.warn("keys.command.auth_reject", {
+            reason: "invalid_password",
+          }),
+        );
         return Errors.forbidden("Invalid password").toResponse();
       }
 
-      console.log("[keys] Password validated successfully");
+      await runClientEffect(
+        logger.info("keys.command.auth_success", {
+          auth_type: auth.type,
+        }),
+      );
     } else if (
       auth.type === "org.matrix.cross_signing_reset" ||
       auth.type === "m.oauth" ||
@@ -817,13 +1045,22 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
 
       const sessionId = auth.session;
       if (!sessionId) {
-        console.log("[keys] No session ID in OAuth/cross-signing auth");
+        await runClientEffect(
+          logger.warn("keys.command.auth_reject", {
+            reason: "missing_session",
+          }),
+        );
         return Errors.missingParam("auth.session").toResponse();
       }
 
       const sessionJson = await c.env.CACHE.get(`uia_session:${sessionId}`);
       if (!sessionJson) {
-        console.log("[keys] UIA session not found or expired");
+        await runClientEffect(
+          logger.warn("keys.command.auth_reject", {
+            reason: "session_not_found",
+            session_id: sessionId,
+          }),
+        );
         return c.json(
           {
             errcode: "M_UNKNOWN",
@@ -833,16 +1070,30 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
         );
       }
 
-      const session = JSON.parse(sessionJson);
+      const session = parseUiaSessionJson(sessionJson);
+      if (!session) {
+        await runClientEffect(
+          logger.warn("keys.command.auth_reject", {
+            reason: "invalid_session_payload",
+            session_id: sessionId,
+          }),
+        );
+        return Errors.unknown("Invalid UIA session payload").toResponse();
+      }
 
       // Check if session belongs to this user
       if (session.user_id !== userId) {
-        console.log("[keys] UIA session user mismatch");
+        await runClientEffect(
+          logger.warn("keys.command.auth_reject", {
+            reason: "session_user_mismatch",
+            session_id: sessionId,
+          }),
+        );
         return Errors.forbidden("Session user mismatch").toResponse();
       }
 
       // Check if the cross-signing reset has been approved via OAuth flow
-      // Accept any of the stage names that indicate completion
+      // Accept all stage names that indicate completion
       const completedStages = session.completed_stages || [];
       const hasOAuthApproval =
         completedStages.includes("org.matrix.cross_signing_reset") ||
@@ -852,7 +1103,12 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
         completedStages.includes("m.login.token");
 
       if (!hasOAuthApproval) {
-        console.log("[keys] Cross-signing reset not approved for this session");
+        await runClientEffect(
+          logger.warn("keys.command.auth_reject", {
+            reason: "oauth_approval_missing",
+            session_id: sessionId,
+          }),
+        );
         return c.json(
           {
             errcode: "M_UNAUTHORIZED",
@@ -863,13 +1119,23 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
         );
       }
 
-      console.log("[keys] Cross-signing reset approved via OAuth flow");
+      await runClientEffect(
+        logger.info("keys.command.auth_success", {
+          auth_type: auth.type ?? "session_only",
+          session_id: sessionId,
+        }),
+      );
 
       // Clean up the session
       await c.env.CACHE.delete(`uia_session:${sessionId}`);
     } else {
       // Unknown auth type
-      console.log("[keys] Unknown auth type:", auth.type);
+      await runClientEffect(
+        logger.warn("keys.command.auth_reject", {
+          reason: "unknown_auth_type",
+          auth_type: auth.type,
+        }),
+      );
       return c.json(
         {
           errcode: "M_UNRECOGNIZED",
@@ -903,8 +1169,8 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
 
     if (d1Ssss) {
       try {
-        const parsed = JSON.parse(d1Ssss.content);
-        hasValidSSS = !!parsed.key;
+        const parsed = parseJsonObjectString(d1Ssss.content);
+        hasValidSSS = !!parsed?.["key"];
       } catch {
         hasValidSSS = false;
       }
@@ -914,13 +1180,17 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   if (!hasValidSSS) {
     // SSSS is not set up yet - this is OK, Element X will prompt user to set up recovery
     // Cross-signing keys can be uploaded before SSSS during initial bootstrap
-    console.log(
-      "[keys] SSSS not configured for user",
-      userId,
-      "- allowing cross-signing upload (client will prompt for recovery setup)",
+    await runClientEffect(
+      logger.info("keys.command.ssss_state", {
+        has_valid_ssss: false,
+      }),
     );
   } else {
-    console.log("[keys] SSSS is configured, proceeding to store cross-signing keys");
+    await runClientEffect(
+      logger.info("keys.command.ssss_state", {
+        has_valid_ssss: true,
+      }),
+    );
   }
 
   // Get existing keys from Durable Object (strongly consistent)
@@ -935,7 +1205,14 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   // Write to Durable Object (primary - strongly consistent)
   // This is critical for E2EE bootstrap where client uploads then immediately queries
   await putCrossSigningKeysToDO(c.env, userId, csKeys);
-  console.log("[keys] Cross-signing keys stored in Durable Object for user:", userId);
+  await runClientEffect(
+    logger.info("keys.command.success", {
+      command: "device_signing_upload",
+      has_master_key: Boolean(master_key),
+      has_self_signing_key: Boolean(self_signing_key),
+      has_user_signing_key: Boolean(user_signing_key),
+    }),
+  );
 
   // Also write to D1 as backup (for durability/recovery)
   // These writes are eventually consistent but serve as backup storage
@@ -996,34 +1273,44 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
 app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) => {
   const signerUserId = c.get("userId");
   const db = c.env.DB;
+  const logger = createKeysLogger("signatures_upload", { user_id: signerUserId });
 
-  let body: any;
+  let body: unknown;
   try {
     body = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
   }
 
-  console.log("[signatures/upload] Request from:", signerUserId);
-  console.log("[signatures/upload] Body:", JSON.stringify(body));
+  const parsedBody: SignaturesUploadRequest | null = parseSignaturesUploadRequest(body);
+  if (!parsedBody) {
+    return Errors.badJson().toResponse();
+  }
+
+  await runClientEffect(
+    logger.info("keys.command.start", {
+      command: "signatures_upload",
+      target_user_count: Object.keys(parsedBody).length,
+    }),
+  );
 
   // body is a map of user_id -> key_id -> signed_key_object
   const failures: Record<string, Record<string, { errcode: string; error: string }>> = {};
 
-  for (const [userId, keys] of Object.entries(body)) {
-    for (const [keyId, signedKey] of Object.entries(keys as Record<string, any>)) {
+  for (const [userId, keys] of Object.entries(parsedBody)) {
+    for (const [keyId, signedKeyObj] of Object.entries(keys)) {
       try {
-        const signedKeyObj = signedKey as any;
-
         // Extract signatures from the signed key object
-        const signatures = signedKeyObj.signatures?.[signerUserId] || {};
+        const signatures = signedKeyObj.signatures?.[signerUserId] ?? {};
 
-        console.log("[signatures/upload] Processing:", {
-          userId,
-          keyId,
-          hasDeviceId: !!signedKeyObj.device_id,
-        });
-        console.log("[signatures/upload] Signatures to store:", JSON.stringify(signatures));
+        await runClientEffect(
+          logger.info("keys.command.signature_process", {
+            target_user_id: userId,
+            key_id: keyId,
+            has_device_id: Boolean(signedKeyObj.device_id),
+            signature_count: Object.keys(signatures).length,
+          }),
+        );
 
         // Store all signatures in the database
         for (const [signerKeyId, signature] of Object.entries(signatures)) {
@@ -1038,28 +1325,20 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
             ON CONFLICT (user_id, key_id, signer_user_id, signer_key_id) DO UPDATE SET
               signature = excluded.signature
           `)
-            .bind(userId, effectiveKeyId, signerUserId, signerKeyId, signature as string)
+            .bind(userId, effectiveKeyId, signerUserId, signerKeyId, signature)
             .run();
-
-          console.log("[signatures/upload] Stored signature:", {
-            userId,
-            effectiveKeyId,
-            signerUserId,
-            signerKeyId,
-          });
         }
 
         // If this is a device key (has device_id field), update the device key in KV
         if (signedKeyObj.device_id) {
           const deviceId = signedKeyObj.device_id;
-          console.log("[signatures/upload] Updating device key for device:", deviceId);
 
           // Read from Durable Object (strongly consistent)
-          const existingKey = await getDeviceKeysFromDO(c.env, userId, deviceId);
+          const existingKey = await getDeviceKeyFromDO(c.env, userId, deviceId);
 
           if (existingKey) {
             // Merge new signatures into existing signatures
-            existingKey.signatures = existingKey.signatures || {};
+            existingKey.signatures = existingKey.signatures ?? {};
             existingKey.signatures[signerUserId] = {
               ...existingKey.signatures[signerUserId],
               ...signatures,
@@ -1073,20 +1352,26 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
               `device:${userId}:${deviceId}`,
               JSON.stringify(existingKey),
             );
-
-            console.log("[signatures/upload] Updated device key signatures:", {
-              deviceId,
-              newSignatures: Object.keys(signatures),
-            });
           } else {
-            console.log("[signatures/upload] Device key not found:", deviceId);
+            await runClientEffect(
+              logger.warn("keys.command.signature_missing_device", {
+                target_user_id: userId,
+                device_id: deviceId,
+              }),
+            );
           }
         }
 
         // Record key change for sync notifications
         await recordKeyChange(db, userId, signedKeyObj.device_id || null, "update");
       } catch (err) {
-        console.error("[signatures/upload] Error processing signature:", err);
+        await runClientEffect(
+          logger.error("keys.command.error", err, {
+            command: "signatures_upload",
+            target_user_id: userId,
+            key_id: keyId,
+          }),
+        );
         if (!failures[userId]) failures[userId] = {};
         failures[userId][keyId] = {
           errcode: "M_UNKNOWN",
@@ -1096,9 +1381,11 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
     }
   }
 
-  console.log(
-    "[signatures/upload] Completed, failures:",
-    Object.keys(failures).length > 0 ? failures : "none",
+  await runClientEffect(
+    logger.info("keys.command.success", {
+      command: "signatures_upload",
+      failure_count: Object.keys(failures).length,
+    }),
   );
   return c.json({ failures });
 });
@@ -1111,6 +1398,7 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
 // This endpoint is used by clients to initiate SSO authentication during UIA
 // Spec: https://spec.matrix.org/v1.12/client-server-api/#get_matrixclientv3authmlloginssofallbackweb
 app.get("/_matrix/client/v3/auth/m.login.sso/redirect", async (c) => {
+  const logger = createKeysLogger("uia_sso_redirect");
   const sessionId = c.req.query("session");
   const redirectUrl = c.req.query("redirectUrl");
 
@@ -1136,7 +1424,10 @@ app.get("/_matrix/client/v3/auth/m.login.sso/redirect", async (c) => {
     );
   }
 
-  const session = JSON.parse(sessionJson);
+  const session = parseUiaSessionJson(sessionJson);
+  if (!session) {
+    return Errors.unknown("Invalid UIA session payload").toResponse();
+  }
   const serverName = c.env.SERVER_NAME;
   const baseUrl = `https://${serverName}`;
 
@@ -1158,20 +1449,31 @@ app.get("/_matrix/client/v3/auth/m.login.sso/redirect", async (c) => {
   authorizeUrl.searchParams.set("scope", "openid");
   authorizeUrl.searchParams.set("state", sessionId);
 
-  console.log("[keys/sso] Redirecting to SSO for UIA session:", sessionId);
+  await runClientEffect(
+    logger.info("keys.command.start", {
+      command: "uia_sso_redirect",
+      session_id: sessionId,
+    }),
+  );
   return c.redirect(authorizeUrl.toString());
 });
 
 // GET /_matrix/client/v3/auth/m.login.sso/callback - SSO callback for UIA
 // This endpoint handles the return from SSO authentication
 app.get("/_matrix/client/v3/auth/m.login.sso/callback", async (c) => {
+  const logger = createKeysLogger("uia_sso_callback");
   const code = c.req.query("code");
   const state = c.req.query("state"); // This is the UIA session ID
   const error = c.req.query("error");
   const errorDescription = c.req.query("error_description");
 
   if (error) {
-    console.log("[keys/sso] SSO error:", error, errorDescription);
+    await runClientEffect(
+      logger.warn("keys.command.sso_error", {
+        error_code: error,
+        error_description: errorDescription,
+      }),
+    );
     return c.html(generateSSOErrorPage("SSO Authentication Failed", errorDescription || error));
   }
 
@@ -1187,7 +1489,10 @@ app.get("/_matrix/client/v3/auth/m.login.sso/callback", async (c) => {
     );
   }
 
-  const session = JSON.parse(sessionJson);
+  const session = parseUiaSessionJson(sessionJson);
+  if (!session) {
+    return c.html(generateSSOErrorPage("Session Invalid", "The UIA session payload is invalid."));
+  }
 
   // If code is present, SSO was successful
   // For UIA purposes, we just need to verify the user authenticated - we don't need the token
@@ -1202,7 +1507,12 @@ app.get("/_matrix/client/v3/auth/m.login.sso/callback", async (c) => {
     // Save updated session
     await c.env.CACHE.put(`uia_session:${state}`, JSON.stringify(session), { expirationTtl: 300 });
 
-    console.log("[keys/sso] SSO completed for UIA session:", state);
+    await runClientEffect(
+      logger.info("keys.command.success", {
+        command: "uia_sso_callback",
+        session_id: state,
+      }),
+    );
 
     // Return success page that tells the client to retry the original request
     return c.html(generateSSOSuccessPage(state, session.redirect_url));
@@ -1215,15 +1525,21 @@ app.get("/_matrix/client/v3/auth/m.login.sso/callback", async (c) => {
 // Alternative flow for OIDC users who have a valid token
 app.post("/_matrix/client/v3/auth/m.login.token/submit", requireAuth(), async (c) => {
   const userId = c.get("userId");
+  const logger = createKeysLogger("uia_token_submit", { user_id: userId });
 
-  let body: any;
+  let body: unknown;
   try {
     body = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
   }
 
-  const { session } = body;
+  const parsed: TokenSubmitRequest | null = parseTokenSubmitRequest(body);
+  if (!parsed) {
+    return Errors.badJson().toResponse();
+  }
+
+  const { session } = parsed;
 
   if (!session) {
     return Errors.missingParam("session").toResponse();
@@ -1241,7 +1557,10 @@ app.post("/_matrix/client/v3/auth/m.login.token/submit", requireAuth(), async (c
     );
   }
 
-  const sessionData = JSON.parse(sessionJson);
+  const sessionData = parseUiaSessionJson(sessionJson);
+  if (!sessionData) {
+    return Errors.unknown("Invalid UIA session payload").toResponse();
+  }
 
   // Verify the session belongs to this user
   if (sessionData.user_id !== userId) {
@@ -1261,7 +1580,12 @@ app.post("/_matrix/client/v3/auth/m.login.token/submit", requireAuth(), async (c
     expirationTtl: 300,
   });
 
-  console.log("[keys/token] Token UIA completed for session:", session);
+  await runClientEffect(
+    logger.info("keys.command.success", {
+      command: "uia_token_submit",
+      session_id: session,
+    }),
+  );
 
   return c.json({
     completed: ["m.login.token"],

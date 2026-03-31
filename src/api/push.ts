@@ -13,44 +13,58 @@ import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
+import { runClientEffect } from "../matrix/application/effect-runtime";
+import { withLogContext } from "../matrix/application/logging";
+import {
+  type JsonObject,
+  type PusherData,
+  type PushAction,
+  type PushCondition,
+  type PushEvaluationResult,
+  type PushEvent,
+  type PushNotificationCounts,
+  type PushRule,
+  parseJsonObject,
+  parseJsonObjectString,
+  parsePushActionsJson,
+  parsePushConditionsJson,
+  parsePusherDataJson,
+  parsePusherRequestBody,
+  parsePushRuleActionsRequest,
+  parsePushRuleEnabledRequest,
+  parsePushRuleUpsertRequest,
+} from "./push-contracts";
 
 const app = new Hono<AppEnv>();
 
-// ============================================
-// Types
-// ============================================
-
-interface Pusher {
-  pushkey: string;
-  kind: string;
-  app_id: string;
-  app_display_name: string;
-  device_display_name: string;
-  profile_tag?: string;
-  lang: string;
-  data: {
-    url?: string;
-    format?: string;
-    [key: string]: any;
-  };
-  append?: boolean;
+function createPushLogger(operation: string, context: Record<string, unknown> = {}) {
+  return withLogContext({
+    component: "push",
+    operation,
+    debugEnabled: true,
+    user_id: typeof context["user_id"] === "string" ? context["user_id"] : undefined,
+    room_id: typeof context["room_id"] === "string" ? context["room_id"] : undefined,
+    event_id: typeof context["event_id"] === "string" ? context["event_id"] : undefined,
+  });
 }
 
-interface PushRule {
-  rule_id: string;
-  default: boolean;
-  enabled: boolean;
-  conditions?: PushCondition[];
-  actions: (string | { set_tweak: string; value?: any })[];
-  pattern?: string;
+function cloneJsonObject(value: JsonObject | undefined): JsonObject {
+  return value ? structuredClone(value) : {};
 }
 
-interface PushCondition {
-  kind: string;
-  key?: string;
-  pattern?: string;
-  is?: string;
-  value?: any;
+function getNestedValue(obj: unknown, path: string): unknown {
+  const keys = path.split(".");
+  let value: unknown = obj;
+
+  for (const key of keys) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return undefined;
+    }
+
+    value = (value as Record<string, unknown>)[key];
+  }
+
+  return value;
 }
 
 // ============================================
@@ -287,20 +301,8 @@ async function getUserPushRules(
 
   // Apply custom rules (override defaults or add new)
   for (const row of customRules.results) {
-    let conditions: PushCondition[] | undefined;
-    let actions: any[];
-
-    try {
-      conditions = row.conditions ? JSON.parse(row.conditions) : undefined;
-    } catch {
-      conditions = undefined;
-    }
-
-    try {
-      actions = JSON.parse(row.actions);
-    } catch {
-      actions = [];
-    }
+    const conditions = parsePushConditionsJson(row.conditions);
+    const actions = parsePushActionsJson(row.actions) ?? [];
 
     const ruleData: PushRule = {
       rule_id: row.rule_id,
@@ -362,7 +364,7 @@ app.get("/_matrix/client/v3/pushers", requireAuth(), async (c) => {
     device_display_name: p.device_display_name,
     profile_tag: p.profile_tag || undefined,
     lang: p.lang,
-    data: JSON.parse(p.data),
+    data: parsePusherDataJson(p.data) ?? {},
   }));
 
   return c.json({ pushers: pusherList });
@@ -372,15 +374,27 @@ app.get("/_matrix/client/v3/pushers", requireAuth(), async (c) => {
 app.post("/_matrix/client/v3/pushers/set", requireAuth(), async (c) => {
   const userId = c.get("userId");
   const db = c.env.DB;
+  const logger = createPushLogger("pushers_set", { user_id: userId });
 
-  let body: Pusher & { kind?: string };
+  let body: unknown;
   try {
     body = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
   }
 
-  console.log("[push] Pusher registration from", userId, ":", JSON.stringify(body));
+  const parsed = parsePusherRequestBody(body);
+  if (!parsed) {
+    return Errors.badJson().toResponse();
+  }
+
+  await runClientEffect(
+    logger.info("push.command.start", {
+      command: "pushers_set",
+      has_kind: parsed.kind !== undefined && parsed.kind !== null,
+      pushkey: parsed.pushkey,
+    }),
+  );
 
   const {
     pushkey,
@@ -392,7 +406,7 @@ app.post("/_matrix/client/v3/pushers/set", requireAuth(), async (c) => {
     lang,
     data,
     append,
-  } = body;
+  } = parsed;
 
   // Validate required fields
   if (!pushkey) {
@@ -408,6 +422,13 @@ app.post("/_matrix/client/v3/pushers/set", requireAuth(), async (c) => {
       .bind(userId, pushkey, app_id || "")
       .run();
 
+    await runClientEffect(
+      logger.info("push.command.success", {
+        command: "pushers_set",
+        action: "delete",
+        pushkey,
+      }),
+    );
     return c.json({});
   }
 
@@ -457,6 +478,15 @@ app.post("/_matrix/client/v3/pushers/set", requireAuth(), async (c) => {
     )
     .run();
 
+  await runClientEffect(
+    logger.info("push.command.success", {
+      command: "pushers_set",
+      action: "upsert",
+      pushkey,
+      kind,
+      append: append ?? false,
+    }),
+  );
   return c.json({});
 });
 
@@ -546,6 +576,7 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId", requireAuth(), asyn
   const kind = c.req.param("kind");
   const ruleId = decodeURIComponent(c.req.param("ruleId"));
   const db = c.env.DB;
+  const logger = createPushLogger("pushrules_upsert", { user_id: userId });
 
   if (scope !== "global") {
     return c.json(
@@ -568,18 +599,19 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId", requireAuth(), asyn
     );
   }
 
-  let body: Partial<PushRule>;
+  let body: unknown;
   try {
     body = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
   }
 
-  const { actions, conditions, pattern } = body;
-
-  if (!actions) {
-    return Errors.missingParam("actions").toResponse();
+  const parsed = parsePushRuleUpsertRequest(body);
+  if (!parsed) {
+    return Errors.badJson().toResponse();
   }
+
+  const { actions, conditions, pattern } = parsed;
 
   // Content rules require pattern
   if (kind === "content" && !pattern) {
@@ -630,6 +662,15 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId", requireAuth(), asyn
     )
     .run();
 
+  await runClientEffect(
+    logger.info("push.command.success", {
+      command: "pushrules_upsert",
+      kind,
+      rule_id: ruleId,
+      has_conditions: Boolean(conditions),
+      action_count: actions.length,
+    }),
+  );
   return c.json({});
 });
 
@@ -690,16 +731,18 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId/enabled", requireAuth
   const kind = c.req.param("kind");
   const ruleId = decodeURIComponent(c.req.param("ruleId"));
   const db = c.env.DB;
+  const logger = createPushLogger("pushrules_enabled", { user_id: userId });
 
-  let body: { enabled: boolean };
+  let body: unknown;
   try {
     body = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
   }
 
-  if (typeof body.enabled !== "boolean") {
-    return Errors.missingParam("enabled").toResponse();
+  const parsed = parsePushRuleEnabledRequest(body);
+  if (!parsed) {
+    return Errors.badJson().toResponse();
   }
 
   // For default rules, we need to create an override entry
@@ -733,7 +776,7 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId/enabled", requireAuth
         ruleId,
         defaultRule.conditions ? JSON.stringify(defaultRule.conditions) : null,
         JSON.stringify(defaultRule.actions),
-        body.enabled ? 1 : 0,
+        parsed.enabled ? 1 : 0,
       )
       .run();
   } else {
@@ -742,10 +785,18 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId/enabled", requireAuth
       .prepare(`
       UPDATE push_rules SET enabled = ? WHERE user_id = ? AND kind = ? AND rule_id = ?
     `)
-      .bind(body.enabled ? 1 : 0, userId, kind, ruleId)
+      .bind(parsed.enabled ? 1 : 0, userId, kind, ruleId)
       .run();
   }
 
+  await runClientEffect(
+    logger.info("push.command.success", {
+      command: "pushrules_enabled",
+      kind,
+      rule_id: ruleId,
+      enabled: parsed.enabled,
+    }),
+  );
   return c.json({});
 });
 
@@ -757,16 +808,18 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId/actions", requireAuth
   const kind = c.req.param("kind");
   const ruleId = decodeURIComponent(c.req.param("ruleId"));
   const db = c.env.DB;
+  const logger = createPushLogger("pushrules_actions", { user_id: userId });
 
-  let body: { actions: any[] };
+  let body: unknown;
   try {
     body = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
   }
 
-  if (!Array.isArray(body.actions)) {
-    return Errors.missingParam("actions").toResponse();
+  const parsed = parsePushRuleActionsRequest(body);
+  if (!parsed) {
+    return Errors.badJson().toResponse();
   }
 
   // Get current rule (default or custom)
@@ -778,14 +831,10 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId/actions", requireAuth
     .first<{ conditions: string | null; actions: string }>();
 
   let ruleConditions: PushCondition[] | undefined;
-  let ruleActions: any[] = body.actions;
+  const ruleActions: PushAction[] = parsed.actions;
 
   if (customRule) {
-    try {
-      ruleConditions = customRule.conditions ? JSON.parse(customRule.conditions) : undefined;
-    } catch {
-      ruleConditions = undefined;
-    }
+    ruleConditions = parsePushConditionsJson(customRule.conditions);
   } else if (ruleId.startsWith(".m.rule.")) {
     // Get default rule
     const rules = getDefaultRulesForUser(userId);
@@ -829,6 +878,14 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId/actions", requireAuth
     )
     .run();
 
+  await runClientEffect(
+    logger.info("push.command.success", {
+      command: "pushrules_actions",
+      kind,
+      rule_id: ruleId,
+      action_count: ruleActions.length,
+    }),
+  );
   return c.json({});
 });
 
@@ -858,7 +915,7 @@ app.get("/_matrix/client/v3/notifications", requireAuth(), async (c) => {
     WHERE nq.user_id = ?
   `;
 
-  const params: any[] = [userId];
+  const params: Array<string | number> = [userId];
 
   if (sincePosition > 0) {
     query += ` AND nq.id > ?`;
@@ -889,15 +946,8 @@ app.get("/_matrix/client/v3/notifications", requireAuth(), async (c) => {
     }>();
 
   const notificationList = notifications.results.map((n) => {
-    let content = {};
-    try {
-      content = JSON.parse(n.content || "{}");
-    } catch {}
-
-    let actions: any[] = [];
-    try {
-      actions = JSON.parse(n.actions || "[]");
-    } catch {}
+    const content = parseJsonObjectString(n.content) ?? {};
+    const actions = parsePushActionsJson(n.actions) ?? [];
 
     return {
       room_id: n.room_id,
@@ -939,7 +989,7 @@ export async function queueNotification(
   roomId: string,
   eventId: string,
   notificationType: string,
-  actions: any[],
+  actions: PushAction[],
 ): Promise<void> {
   await db
     .prepare(`
@@ -957,16 +1007,10 @@ export async function queueNotification(
 export async function evaluatePushRules(
   db: D1Database,
   userId: string,
-  event: {
-    type: string;
-    content: any;
-    sender: string;
-    room_id: string;
-    state_key?: string;
-  },
+  event: Pick<PushEvent, "type" | "content" | "sender" | "room_id" | "state_key">,
   roomMemberCount: number,
   displayName?: string,
-): Promise<{ notify: boolean; actions: any[]; highlight: boolean }> {
+): Promise<PushEvaluationResult> {
   const rules = await getUserPushRules(db, userId);
 
   // Combine all rules in priority order
@@ -995,15 +1039,15 @@ export async function evaluatePushRules(
 
 function matchesRule(
   rule: PushRule,
-  event: any,
+  event: Pick<PushEvent, "type" | "content" | "sender" | "room_id" | "state_key">,
   userId: string,
   roomMemberCount: number,
   displayName?: string,
 ): boolean {
   // Content rules check pattern against body
   if (rule.pattern) {
-    const body = event.content?.body;
-    if (!body) return false;
+    const body = event.content["body"];
+    if (typeof body !== "string" || body.length === 0) return false;
 
     // Convert glob pattern to regex
     const regex = new RegExp(
@@ -1025,7 +1069,7 @@ function matchesRule(
 
 function matchesCondition(
   condition: PushCondition,
-  event: any,
+  event: Pick<PushEvent, "type" | "content" | "sender" | "room_id" | "state_key">,
   userId: string,
   roomMemberCount: number,
   displayName?: string,
@@ -1071,8 +1115,8 @@ function matchesCondition(
 
     case "contains_display_name": {
       if (!displayName) return false;
-      const body = event.content?.body;
-      if (!body) return false;
+      const body = event.content["body"];
+      if (typeof body !== "string" || body.length === 0) return false;
       return body.toLowerCase().includes(displayName.toLowerCase());
     }
 
@@ -1099,27 +1143,9 @@ function matchesCondition(
   }
 }
 
-function getNestedValue(obj: any, path: string): any {
-  const keys = path.split(".");
-  let value = obj;
-
-  for (const key of keys) {
-    if (value === null || value === undefined) return undefined;
-    value = value[key];
-  }
-
-  return value;
-}
-
 // ============================================
 // Push Notification Delivery
 // ============================================
-
-interface PusherData {
-  url: string;
-  format?: string;
-  default_payload?: any;
-}
 
 // Generate a short correlation ID for tracking push -> NSE flow
 function generatePushCorrelationId(): string {
@@ -1130,36 +1156,30 @@ function generatePushCorrelationId(): string {
 export async function sendPushNotification(
   db: D1Database,
   userId: string,
-  event: {
-    event_id: string;
-    room_id: string;
-    type: string;
-    sender: string;
-    content: any;
-    origin_server_ts: number;
-    sender_display_name?: string;
-    room_name?: string;
-  },
-  counts: { unread: number; missed_calls?: number },
+  event: PushEvent,
+  counts: PushNotificationCounts,
   env?: import("../types").Env, // Optional env for direct APNs delivery
 ): Promise<void> {
+  const logger = createPushLogger("send_notification", {
+    user_id: userId,
+    room_id: event.room_id,
+    event_id: event.event_id,
+  });
   // Generate correlation ID for tracking push -> NSE flow
   const correlationId = generatePushCorrelationId();
   const pushTimestamp = new Date().toISOString();
 
-  // Log push initiation with correlation ID
-  // This can be correlated with NSE/context requests in sliding-sync.ts and rooms.ts
-  console.log("[push] PUSH_INITIATED:", {
-    correlationId,
-    userId,
-    eventId: event.event_id,
-    roomId: event.room_id,
-    eventType: event.type,
-    sender: event.sender,
-    senderDisplayName: event.sender_display_name,
-    roomName: event.room_name,
-    timestamp: pushTimestamp,
-  });
+  await runClientEffect(
+    logger.info("push.command.start", {
+      command: "send_notification",
+      correlation_id: correlationId,
+      event_type: event.type,
+      sender: event.sender,
+      sender_display_name: event.sender_display_name,
+      room_name: event.room_name,
+      timestamp: pushTimestamp,
+    }),
+  );
 
   // Get user's pushers
   const pushers = await db
@@ -1170,16 +1190,21 @@ export async function sendPushNotification(
     .all<{ pushkey: string; kind: string; app_id: string; data: string }>();
 
   if (pushers.results.length === 0) {
-    console.log("[push] PUSH_NO_PUSHERS:", { correlationId, userId });
+    await runClientEffect(
+      logger.info("push.command.no_pushers", {
+        correlation_id: correlationId,
+      }),
+    );
     return; // No pushers registered
   }
 
-  console.log("[push] PUSH_PUSHERS_FOUND:", {
-    correlationId,
-    userId,
-    pusherCount: pushers.results.length,
-    pusherAppIds: pushers.results.map((p) => p.app_id),
-  });
+  await runClientEffect(
+    logger.info("push.command.pushers_loaded", {
+      correlation_id: correlationId,
+      pusher_count: pushers.results.length,
+      pusher_app_ids: pushers.results.map((p) => p.app_id),
+    }),
+  );
 
   // Check if direct APNs is configured
   const useDirectAPNs = env?.APNS_KEY_ID && env?.APNS_TEAM_ID && env?.APNS_PRIVATE_KEY;
@@ -1190,12 +1215,18 @@ export async function sendPushNotification(
     }
 
     let pusherData: PusherData;
-    try {
-      pusherData = JSON.parse(pusher.data);
-    } catch {
-      console.error("[push] Failed to parse pusher data for", userId);
+    const parsedPusherData = parsePusherDataJson(pusher.data);
+    if (!parsedPusherData) {
+      await runClientEffect(
+        logger.warn("push.command.invalid_pusher_data", {
+          correlation_id: correlationId,
+          app_id: pusher.app_id,
+          pushkey: pusher.pushkey,
+        }),
+      );
       continue;
     }
+    pusherData = parsedPusherData;
 
     // Prepare sender and room display names
     const senderDisplayName =
@@ -1228,12 +1259,23 @@ export async function sendPushNotification(
         continue; // Successfully sent via direct APNs, skip Sygnal
       }
       // If direct APNs failed, fall through to Sygnal
-      console.log("[push] Direct APNs failed, falling back to Sygnal");
+      await runClientEffect(
+        logger.warn("push.command.direct_apns_fallback", {
+          correlation_id: correlationId,
+          app_id: pusher.app_id,
+        }),
+      );
     }
 
     // Fall back to Sygnal (or use it directly if not iOS/no direct APNs)
     if (!pusherData.url) {
-      console.error("[push] Pusher has no URL for", userId);
+      await runClientEffect(
+        logger.warn("push.command.invalid_pusher_data", {
+          correlation_id: correlationId,
+          app_id: pusher.app_id,
+          reason: "missing_url",
+        }),
+      );
       continue;
     }
 
@@ -1241,28 +1283,31 @@ export async function sendPushNotification(
     // https://spec.matrix.org/v1.12/push-gateway-api/
 
     // Deep clone default_payload and populate APNs alert for proper iOS notification display
-    const deviceData = JSON.parse(JSON.stringify(pusherData.default_payload || {}));
+    const deviceData = cloneJsonObject(pusherData.default_payload);
 
     // Set direct alert body instead of loc-key/loc-args (Element X doesn't have our loc-keys)
     // This is the fallback text shown if NSE can't process the notification
-    if (deviceData.aps) {
+    const apsPayload = parseJsonObject(deviceData["aps"]);
+    if (apsPayload) {
       if (event.type === "m.room.encrypted") {
         // For encrypted messages, show sender and room (can't show content)
-        deviceData.aps.alert = {
+        apsPayload["alert"] = {
           title: senderDisplayName,
           body: roomDisplayName,
         };
       } else {
         // For unencrypted messages, show sender and message preview
-        const messageBody = event.content?.body || "New message";
-        deviceData.aps.alert = {
+        const messageBody =
+          typeof event.content["body"] === "string" ? event.content["body"] : "New message";
+        apsPayload["alert"] = {
           title: senderDisplayName,
           subtitle: roomDisplayName,
           body: messageBody,
         };
       }
       // Keep mutable-content so NSE can still process and override with rich content
-      deviceData.aps["mutable-content"] = 1;
+      apsPayload["mutable-content"] = 1;
+      deviceData["aps"] = apsPayload;
     }
 
     // NSE needs these fields to fetch event content
@@ -1274,46 +1319,52 @@ export async function sendPushNotification(
 
     // Per Matrix Push Gateway spec, devices[].data should be the pusher data minus URL
     // Sygnal looks for default_payload nested inside data, not at the root
-    const pusherDataForGateway: any = {
+    const pusherDataForGateway: JsonObject = {
       format: pusherData.format,
       default_payload: deviceData,
     };
 
-    const notification: any = {
+    const notificationPayload: JsonObject = {
+      event_id: event.event_id,
+      room_id: event.room_id,
+      type: event.type,
+      sender: event.sender,
+      sender_display_name: senderDisplayName,
+      room_name: roomDisplayName,
+      prio: "high",
+      counts: counts,
+      devices: [
+        {
+          app_id: pusher.app_id,
+          pushkey: pusher.pushkey,
+          pushkey_ts: Date.now(),
+          data: pusherDataForGateway,
+        },
+      ],
+    };
+
+    const notification: JsonObject = {
       notification: {
-        event_id: event.event_id,
-        room_id: event.room_id,
-        type: event.type,
-        sender: event.sender,
-        sender_display_name: senderDisplayName,
-        room_name: roomDisplayName,
-        prio: "high",
-        counts: counts,
-        devices: [
-          {
-            app_id: pusher.app_id,
-            pushkey: pusher.pushkey,
-            pushkey_ts: Date.now(),
-            data: pusherDataForGateway,
-          },
-        ],
+        ...notificationPayload,
       },
     };
 
     // Include content for non-event_id_only format
     if (pusherData.format !== "event_id_only") {
-      notification.notification.content = event.content;
+      notification["notification"] = {
+        ...notificationPayload,
+        content: event.content,
+      };
     }
 
     try {
-      console.log("[push] PUSH_SENDING:", {
-        correlationId,
-        userId,
-        eventId: event.event_id,
-        gatewayUrl: pusherData.url,
-        appId: pusher.app_id,
-      });
-      console.log("[push] Notification payload:", JSON.stringify(notification, null, 2));
+      await runClientEffect(
+        logger.info("push.command.dispatch", {
+          correlation_id: correlationId,
+          gateway_url: pusherData.url,
+          app_id: pusher.app_id,
+        }),
+      );
 
       const response = await fetch(pusherData.url, {
         method: "POST",
@@ -1325,13 +1376,14 @@ export async function sendPushNotification(
 
       if (!response.ok) {
         const text = await response.text();
-        console.error("[push] PUSH_GATEWAY_ERROR:", {
-          correlationId,
-          userId,
-          eventId: event.event_id,
-          status: response.status,
-          error: text,
-        });
+        await runClientEffect(
+          logger.warn("push.command.gateway_error", {
+            correlation_id: correlationId,
+            app_id: pusher.app_id,
+            status: response.status,
+            response_text: text,
+          }),
+        );
 
         // Update pusher failure count
         await db
@@ -1343,25 +1395,22 @@ export async function sendPushNotification(
           .run();
       } else {
         // Parse gateway response (Sygnal returns rejected device tokens)
-        let gatewayResponse: any = {};
+        let gatewayResponse: JsonObject = {};
         try {
-          gatewayResponse = await response.json();
+          gatewayResponse = parseJsonObject(await response.json()) ?? {};
         } catch {
           gatewayResponse = {};
         }
 
-        console.log("[push] PUSH_SENT_SUCCESS:", {
-          correlationId,
-          userId,
-          eventId: event.event_id,
-          roomId: event.room_id,
-          appId: pusher.app_id,
-          gatewayResponse,
-          timestamp: new Date().toISOString(),
-          // IMPORTANT: NSE should make a request within ~30 seconds of this timestamp
-          // Look for [sliding-sync] POTENTIAL NSE REQUEST or [rooms/context] Request
-          // with matching roomId and eventId shortly after this log entry
-        });
+        await runClientEffect(
+          logger.info("push.command.success", {
+            command: "send_notification",
+            correlation_id: correlationId,
+            app_id: pusher.app_id,
+            gateway_response: gatewayResponse,
+            timestamp: new Date().toISOString(),
+          }),
+        );
 
         // Update pusher success
         await db
@@ -1373,12 +1422,13 @@ export async function sendPushNotification(
           .run();
       }
     } catch (error) {
-      console.error("[push] PUSH_SEND_ERROR:", {
-        correlationId,
-        userId,
-        eventId: event.event_id,
-        error: String(error),
-      });
+      await runClientEffect(
+        logger.error("push.command.error", error, {
+          command: "send_notification",
+          correlation_id: correlationId,
+          app_id: pusher.app_id,
+        }),
+      );
 
       // Update pusher failure count
       await db
@@ -1397,17 +1447,15 @@ async function sendDirectAPNs(
   env: import("../types").Env,
   pusher: { pushkey: string; app_id: string },
   _pusherData: PusherData,
-  event: {
-    event_id: string;
-    room_id: string;
-    type: string;
-    sender: string;
-    content: any;
-  },
+  event: PushEvent,
   senderDisplayName: string,
   roomDisplayName: string,
-  counts: { unread: number; missed_calls?: number },
+  counts: PushNotificationCounts,
 ): Promise<boolean> {
+  const logger = createPushLogger("direct_apns", {
+    room_id: event.room_id,
+    event_id: event.event_id,
+  });
   try {
     // Get Push Durable Object
     const pushDO = env.PUSH;
@@ -1415,7 +1463,7 @@ async function sendDirectAPNs(
     const stub = pushDO.get(doId);
 
     // Build APNs payload with direct alert text (bypassing Sygnal's loc-key handling)
-    const aps: any = {
+    const aps: JsonObject = {
       "mutable-content": 1, // Allow NSE to modify
       sound: "default",
     };
@@ -1458,11 +1506,14 @@ async function sendDirectAPNs(
       .replace(/\.prod$/, "")
       .replace(/\.dev$/, "");
 
-    console.log("[push] Sending direct APNs via Push DO:", {
-      topic,
-      pushkey: pusher.pushkey.substring(0, 16) + "...",
-      alert: aps.alert,
-    });
+    await runClientEffect(
+      logger.info("push.command.dispatch", {
+        command: "direct_apns",
+        topic,
+        pushkey_prefix: `${pusher.pushkey.substring(0, 16)}...`,
+        alert: aps["alert"],
+      }),
+    );
 
     // Send via Push DO
     const response = await stub.fetch(
@@ -1481,14 +1532,30 @@ async function sendDirectAPNs(
     const result = (await response.json()) as { success: boolean; apnsId?: string; error?: string };
 
     if (result.success) {
-      console.log("[push] Direct APNs success, apns-id:", result.apnsId);
+      await runClientEffect(
+        logger.info("push.command.success", {
+          command: "direct_apns",
+          topic,
+          apns_id: result.apnsId,
+        }),
+      );
       return true;
     } else {
-      console.error("[push] Direct APNs failed:", result.error);
+      await runClientEffect(
+        logger.warn("push.command.gateway_error", {
+          command: "direct_apns",
+          topic,
+          error_message: result.error,
+        }),
+      );
       return false;
     }
   } catch (error) {
-    console.error("[push] Direct APNs error:", error);
+    await runClientEffect(
+      logger.error("push.command.error", error, {
+        command: "direct_apns",
+      }),
+    );
     return false;
   }
 }
@@ -1497,15 +1564,12 @@ async function sendDirectAPNs(
 export async function notifyRoomMembersOfMessage(
   db: D1Database,
   env: import("../types").Env,
-  event: {
-    event_id: string;
-    room_id: string;
-    type: string;
-    sender: string;
-    content: any;
-    origin_server_ts: number;
-  },
+  event: PushEvent,
 ): Promise<void> {
+  const logger = createPushLogger("notify_room_members", {
+    room_id: event.room_id,
+    event_id: event.event_id,
+  });
   // Get all joined members except the sender
   const members = await db
     .prepare(`
@@ -1547,10 +1611,8 @@ export async function notifyRoomMembersOfMessage(
     .first<{ content: string }>();
   let roomName: string | undefined;
   if (roomNameEvent) {
-    try {
-      const content = JSON.parse(roomNameEvent.content);
-      roomName = content.name;
-    } catch {}
+    const content = parseJsonObjectString(roomNameEvent.content);
+    roomName = typeof content?.["name"] === "string" ? content["name"] : undefined;
   }
 
   // For DM rooms without explicit name, use the sender's display name as room name
@@ -1614,7 +1676,12 @@ export async function notifyRoomMembersOfMessage(
         )
         .run();
     } catch (error) {
-      console.error("[push] Failed to notify user", member.user_id, ":", error);
+      await runClientEffect(
+        logger.error("push.command.error", error, {
+          command: "notify_room_members",
+          user_id: member.user_id,
+        }),
+      );
     }
   });
 

@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Cause, Effect, Exit, Option } from "effect";
 import { MatrixApiError } from "../../utils/errors";
 import { DomainError, InfraError, toMatrixApiError } from "./domain-error";
 
@@ -17,9 +17,15 @@ function toFallbackMatrixApiError(kind: RuntimeKind, error: unknown): MatrixApiE
 }
 
 async function runEffect<A, E>(effect: Effect.Effect<A, E>, kind: RuntimeKind): Promise<A> {
-  try {
-    return await Effect.runPromise(effect);
-  } catch (error) {
+  const exit = await Effect.runPromiseExit(effect);
+  if (Exit.isSuccess(exit)) {
+    return exit.value;
+  }
+
+  const failure = Cause.failureOption(exit.cause);
+  if (Option.isSome(failure)) {
+    const error = failure.value;
+
     if (error instanceof DomainError) {
       throw toMatrixApiError(error);
     }
@@ -30,6 +36,8 @@ async function runEffect<A, E>(effect: Effect.Effect<A, E>, kind: RuntimeKind): 
 
     throw toFallbackMatrixApiError(kind, error);
   }
+
+  throw toFallbackMatrixApiError(kind, exit.cause);
 }
 
 export function runClientEffect<A, E>(effect: Effect.Effect<A, E>): Promise<A> {
