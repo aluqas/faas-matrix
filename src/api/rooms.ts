@@ -2,10 +2,12 @@
 
 import { Hono } from "hono";
 import type { AppEnv, RoomCreateContent, PDU } from "../types";
-import { Errors } from "../utils/errors";
+import { ErrorCodes } from "../types";
+import { Errors, MatrixApiError } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
-import { generateRoomId, generateEventId } from "../utils/ids";
+import { generateRoomId, generateEventId, parseRoomAlias } from "../utils/ids";
 import { invalidateRoomCache } from "../services/room-cache";
+import { federationGet } from "../services/federation-keys";
 import {
   createRoom,
   getRoom,
@@ -23,12 +25,271 @@ import {
   getEvent,
   notifyUsersOfEvent,
 } from "../services/database";
+import { getPartialStateJoin } from "../matrix/application/features/partial-state/tracker";
+import { FORGOTTEN_ROOM_ACCOUNT_DATA_TYPE } from "../matrix/application/room-account-data";
 import roomMembershipRoutes from "./rooms/membership";
 import roomQueryRoutes from "./rooms/query";
 const app = new Hono<AppEnv>();
 
 app.route("/", roomMembershipRoutes);
 app.route("/", roomQueryRoutes);
+
+async function resolveRoomIdOrAlias(
+  c: import("hono").Context<AppEnv>,
+  roomIdOrAlias: string,
+  serverHints: string[],
+): Promise<{ roomId: string; remoteServers: string[] }> {
+  if (!roomIdOrAlias.startsWith("#")) {
+    return { roomId: roomIdOrAlias, remoteServers: serverHints };
+  }
+
+  const localRoomId = await getRoomByAlias(c.env.DB, roomIdOrAlias);
+  if (localRoomId) {
+    return { roomId: localRoomId, remoteServers: serverHints };
+  }
+
+  const parsedAlias = parseRoomAlias(roomIdOrAlias);
+  if (!parsedAlias) {
+    throw Errors.notFound("Room alias not found");
+  }
+
+  const candidateServers = Array.from(new Set([parsedAlias.serverName, ...serverHints]));
+  for (const serverName of candidateServers) {
+    const response = await federationGet(
+      serverName,
+      `/_matrix/federation/v1/query/directory?room_alias=${encodeURIComponent(roomIdOrAlias)}`,
+      c.env.SERVER_NAME,
+      c.env.DB,
+      c.env.CACHE,
+    ).catch(() => null);
+
+    if (!response?.ok) {
+      continue;
+    }
+
+    const body = (await response.json()) as {
+      room_id?: unknown;
+      servers?: unknown;
+    };
+    if (typeof body.room_id !== "string") {
+      continue;
+    }
+
+    const responseServers = Array.isArray(body.servers)
+      ? body.servers.filter((value): value is string => typeof value === "string")
+      : [];
+    return {
+      roomId: body.room_id,
+      remoteServers: Array.from(new Set([...candidateServers, ...responseServers])),
+    };
+  }
+
+  throw Errors.notFound("Room alias not found");
+}
+
+function parseMessagesRelationFilter(rawFilter: string | undefined): {
+  relTypes?: string[];
+  notRelTypes?: string[];
+} | null {
+  if (!rawFilter) {
+    return {};
+  }
+
+  const parsed = JSON.parse(rawFilter) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const relTypes = Array.isArray(record["org.matrix.msc3874.rel_types"])
+    ? record["org.matrix.msc3874.rel_types"].filter(
+        (value): value is string => typeof value === "string",
+      )
+    : undefined;
+  const notRelTypes = Array.isArray(record["org.matrix.msc3874.not_rel_types"])
+    ? record["org.matrix.msc3874.not_rel_types"].filter(
+        (value): value is string => typeof value === "string",
+      )
+    : undefined;
+
+  return {
+    ...(relTypes && relTypes.length > 0 ? { relTypes } : {}),
+    ...(notRelTypes && notRelTypes.length > 0 ? { notRelTypes } : {}),
+  };
+}
+
+async function waitForPartialStateJoinCompletion(
+  cache: KVNamespace | undefined,
+  userId: string,
+  roomId: string,
+  timeoutMs = 2000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const marker = await getPartialStateJoin(cache, userId, roomId);
+    if (!marker) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+async function parseOptionalJsonObjectBody(
+  c: import("hono").Context<AppEnv>,
+): Promise<Record<string, unknown> | undefined> {
+  const bodyText = await c.req.text();
+  if (bodyText.trim().length === 0) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(bodyText);
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw Errors.badJson();
+  }
+
+  return parsed as Record<string, unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function badAlias(message: string = "Room alias does not point to this room"): MatrixApiError {
+  return new MatrixApiError(ErrorCodes.M_BAD_ALIAS, message, 400);
+}
+
+async function validateCanonicalAliasReference(
+  db: D1Database,
+  roomId: string,
+  alias: string,
+): Promise<MatrixApiError | null> {
+  if (!parseRoomAlias(alias)) {
+    return Errors.invalidParam("alias", "Invalid room alias format");
+  }
+
+  const mappedRoomId = await getRoomByAlias(db, alias);
+  if (!mappedRoomId || mappedRoomId !== roomId) {
+    return badAlias();
+  }
+
+  return null;
+}
+
+async function validateCanonicalAliasContent(
+  db: D1Database,
+  roomId: string,
+  content: unknown,
+): Promise<MatrixApiError | null> {
+  if (!isRecord(content)) {
+    return Errors.badJson();
+  }
+
+  const alias = content["alias"];
+  if (alias !== undefined) {
+    if (typeof alias !== "string") {
+      return Errors.invalidParam("alias", "alias must be a string");
+    }
+    const aliasError = await validateCanonicalAliasReference(db, roomId, alias);
+    if (aliasError) {
+      return aliasError;
+    }
+  }
+
+  const altAliases = content["alt_aliases"];
+  if (altAliases !== undefined) {
+    if (!Array.isArray(altAliases) || altAliases.some((entry) => typeof entry !== "string")) {
+      return Errors.invalidParam("alt_aliases", "alt_aliases must be an array of room aliases");
+    }
+
+    for (const altAlias of altAliases) {
+      const aliasError = await validateCanonicalAliasReference(db, roomId, altAlias);
+      if (aliasError) {
+        return aliasError;
+      }
+    }
+  }
+
+  return null;
+}
+
+function getUserPowerLevelFromContent(
+  content: unknown,
+  userId: string,
+): { userPower: number; stateDefault: number; eventLevels: Record<string, number> } {
+  if (!isRecord(content)) {
+    return { userPower: 0, stateDefault: 50, eventLevels: {} };
+  }
+
+  const users = isRecord(content["users"]) ? content["users"] : {};
+  const events = isRecord(content["events"]) ? content["events"] : {};
+  const usersDefault = typeof content["users_default"] === "number" ? content["users_default"] : 0;
+  const stateDefault = typeof content["state_default"] === "number" ? content["state_default"] : 50;
+  const explicitUserPower = users[userId];
+  const userPower = typeof explicitUserPower === "number" ? explicitUserPower : usersDefault;
+
+  return {
+    userPower,
+    stateDefault,
+    eventLevels: Object.fromEntries(
+      Object.entries(events).filter(([, value]) => typeof value === "number"),
+    ) as Record<string, number>,
+  };
+}
+
+async function canUserSendStateEvent(
+  db: D1Database,
+  roomId: string,
+  userId: string,
+  eventType: string,
+): Promise<boolean> {
+  const membership = await getMembership(db, roomId, userId);
+  if (!membership || membership.membership !== "join") {
+    return false;
+  }
+
+  const powerLevelsEvent = await getStateEvent(db, roomId, "m.room.power_levels", "");
+  const { userPower, stateDefault, eventLevels } = getUserPowerLevelFromContent(
+    powerLevelsEvent?.content,
+    userId,
+  );
+  const requiredPower =
+    typeof eventLevels[eventType] === "number" ? eventLevels[eventType] : stateDefault;
+
+  return userPower >= requiredPower;
+}
+
+function removeDeletedAliasFromCanonicalContent(
+  content: unknown,
+  deletedAlias: string,
+): Record<string, unknown> | null {
+  if (!isRecord(content)) {
+    return null;
+  }
+
+  const nextContent: Record<string, unknown> = { ...content };
+  let changed = false;
+
+  if (nextContent["alias"] === deletedAlias) {
+    delete nextContent["alias"];
+    changed = true;
+  }
+
+  const altAliases = nextContent["alt_aliases"];
+  if (Array.isArray(altAliases)) {
+    const remaining = altAliases.filter((entry): entry is string => typeof entry === "string");
+    const filtered = remaining.filter((entry) => entry !== deletedAlias);
+    if (filtered.length !== remaining.length) {
+      changed = true;
+      if (filtered.length > 0) {
+        nextContent["alt_aliases"] = filtered;
+      } else {
+        delete nextContent["alt_aliases"];
+      }
+    }
+  }
+
+  return changed ? nextContent : null;
+}
 
 // POST /_matrix/client/v3/createRoom - Create a new room
 app.post("/_matrix/client/v3/createRoom", requireAuth(), async (c) => {
@@ -60,12 +321,17 @@ app.get("/_matrix/client/v3/joined_rooms", requireAuth(), async (c) => {
 // POST /_matrix/client/v3/rooms/:roomId/join - Join a room
 app.post("/_matrix/client/v3/rooms/:roomId/join", requireAuth(), async (c) => {
   try {
+    const body = await parseOptionalJsonObjectBody(c);
     const response = await c.get("appContext").services.rooms.joinRoom({
       userId: c.get("userId"),
       roomId: c.req.param("roomId"),
+      ...(body !== undefined ? { body } : {}),
     });
     return c.json(response);
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return Errors.badJson().toResponse();
+    }
     if (error instanceof Error && "toResponse" in error) {
       return (error as { toResponse(): Response }).toResponse();
     }
@@ -134,6 +400,18 @@ async function getRoomStateEvent(
     return Errors.notFound("State event not found").toResponse();
   }
 
+  if (c.req.query("format") === "event") {
+    return c.json({
+      type: event.type,
+      state_key: event.state_key,
+      content: event.content,
+      sender: event.sender,
+      origin_server_ts: event.origin_server_ts,
+      event_id: event.event_id,
+      room_id: event.room_id,
+    });
+  }
+
   return c.json(event.content);
 }
 
@@ -155,6 +433,13 @@ async function putRoomStateEvent(
     content = await c.req.json();
   } catch {
     return Errors.badJson().toResponse();
+  }
+
+  if (eventType === "m.room.canonical_alias" && stateKey === "") {
+    const validationError = await validateCanonicalAliasContent(c.env.DB, roomId, content);
+    if (validationError) {
+      return validationError.toResponse();
+    }
   }
   const txnId = await c.get("appContext").capabilities.id.generateOpaqueId();
   const response = await c.get("appContext").services.rooms.sendEvent({
@@ -212,6 +497,8 @@ app.get("/_matrix/client/v3/rooms/:roomId/members", requireAuth(), async (c) => 
   const userId = c.get("userId");
   const roomId = c.req.param("roomId");
 
+  await waitForPartialStateJoinCompletion(c.env.CACHE, userId, roomId);
+
   // Check membership
   const membership = await getMembership(c.env.DB, roomId, userId);
   if (!membership || membership.membership !== "join") {
@@ -254,6 +541,16 @@ app.get("/_matrix/client/v3/rooms/:roomId/messages", requireAuth(), async (c) =>
   const from = c.req.query("from");
   const dir = (c.req.query("dir") || "b") as "f" | "b";
   const limit = Math.min(parseInt(c.req.query("limit") || "10"), 100);
+  let relationFilter: { relTypes?: string[]; notRelTypes?: string[] } | undefined;
+  try {
+    const parsedFilter = parseMessagesRelationFilter(c.req.query("filter"));
+    if (parsedFilter === null) {
+      return Errors.badJson().toResponse();
+    }
+    relationFilter = parsedFilter;
+  } catch {
+    return Errors.badJson().toResponse();
+  }
 
   // Parse token - handle both 's123' format (from sliding-sync) and plain '123' format
   let fromToken: number | undefined;
@@ -262,7 +559,14 @@ app.get("/_matrix/client/v3/rooms/:roomId/messages", requireAuth(), async (c) =>
     const parsed = parseInt(tokenStr);
     fromToken = isNaN(parsed) ? undefined : parsed;
   }
-  const { events, end } = await getRoomEvents(c.env.DB, roomId, fromToken, limit, dir);
+  const { events, end } = await getRoomEvents(
+    c.env.DB,
+    roomId,
+    fromToken,
+    limit,
+    dir,
+    relationFilter,
+  );
 
   // Format events for client
   const clientEvents = events.map((e) => ({
@@ -299,6 +603,32 @@ app.get("/_matrix/client/v3/rooms/:roomId/event/:eventId", requireAuth(), async 
   const eventId = c.req.param("eventId");
 
   // Check membership
+  const membership = await getMembership(c.env.DB, roomId, userId);
+  if (!membership || membership.membership !== "join") {
+    return Errors.forbidden("Not a member of this room").toResponse();
+  }
+
+  const event = await getEvent(c.env.DB, eventId);
+  if (!event || event.room_id !== roomId) {
+    return Errors.notFound("Event not found").toResponse();
+  }
+
+  return c.json({
+    type: event.type,
+    state_key: event.state_key,
+    content: event.content,
+    sender: event.sender,
+    origin_server_ts: event.origin_server_ts,
+    event_id: event.event_id,
+    room_id: event.room_id,
+    unsigned: event.unsigned,
+  });
+});
+app.get("/_matrix/client/r0/rooms/:roomId/event/:eventId", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
+  const eventId = c.req.param("eventId");
+
   const membership = await getMembership(c.env.DB, roomId, userId);
   if (!membership || membership.membership !== "join") {
     return Errors.forbidden("Not a member of this room").toResponse();
@@ -442,8 +772,28 @@ app.post("/_matrix/client/v3/rooms/:roomId/forget", requireAuth(), async (c) => 
   // Check that user has left the room
   const membership = await getMembership(db, roomId, userId);
   if (membership && membership.membership === "join") {
-    return Errors.forbidden("Cannot forget room while still a member").toResponse();
+    return new MatrixApiError(
+      ErrorCodes.M_UNKNOWN,
+      "Cannot forget room while still a member",
+      400,
+    ).toResponse();
   }
+
+  await db
+    .prepare(
+      `INSERT INTO account_data (user_id, room_id, event_type, content, deleted)
+       VALUES (?, ?, ?, ?, 0)
+       ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET
+         content = excluded.content,
+         deleted = 0`,
+    )
+    .bind(
+      userId,
+      roomId,
+      FORGOTTEN_ROOM_ACCOUNT_DATA_TYPE,
+      JSON.stringify({ forgotten: true, forgotten_at: Date.now() }),
+    )
+    .run();
 
   // Remove membership record entirely
   await db
@@ -647,8 +997,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), asyn
   });
 });
 
-// GET /_matrix/client/v3/rooms/:roomId/joined_members - Get joined members with details
-app.get("/_matrix/client/v3/rooms/:roomId/joined_members", requireAuth(), async (c) => {
+async function getJoinedMembers(c: import("hono").Context<AppEnv>): Promise<Response> {
   const userId = c.get("userId");
   const roomId = c.req.param("roomId");
 
@@ -670,16 +1019,24 @@ app.get("/_matrix/client/v3/rooms/:roomId/joined_members", requireAuth(), async 
       avatar_url: string | null;
     }>();
 
-  const joined: Record<string, { display_name?: string; avatar_url?: string }> = {};
+  const joined: Record<string, { display_name: string | null; avatar_url: string | null }> = {};
   for (const member of members.results) {
     joined[member.user_id] = {
-      display_name: member.display_name || undefined,
-      avatar_url: member.avatar_url || undefined,
+      display_name: member.display_name ?? null,
+      avatar_url: member.avatar_url ?? null,
     };
   }
 
   return c.json({ joined });
-});
+}
+
+// GET /_matrix/client/v3/rooms/:roomId/joined_members - Get joined members with details
+app.get("/_matrix/client/v3/rooms/:roomId/joined_members", requireAuth(), (c) =>
+  getJoinedMembers(c),
+);
+app.get("/_matrix/client/r0/rooms/:roomId/joined_members", requireAuth(), (c) =>
+  getJoinedMembers(c),
+);
 
 // GET /_matrix/client/v3/rooms/:roomId/aliases - Get room aliases
 app.get("/_matrix/client/v3/rooms/:roomId/aliases", requireAuth(), async (c) => {
@@ -709,26 +1066,22 @@ app.get("/_matrix/client/v3/rooms/:roomId/aliases", requireAuth(), async (c) => 
 app.post("/_matrix/client/v3/join/:roomIdOrAlias", requireAuth(), async (c) => {
   try {
     const roomIdOrAlias = decodeURIComponent(c.req.param("roomIdOrAlias"));
-    const db = c.env.DB;
-    const remoteServers = c.req.queries("server_name");
-
-    let roomId = roomIdOrAlias;
-    if (roomIdOrAlias.startsWith("#")) {
-      const resolved = await getRoomByAlias(db, roomIdOrAlias);
-      if (!resolved) {
-        return Errors.notFound("Room alias not found").toResponse();
-      }
-      roomId = resolved;
-    }
+    const remoteServers = c.req.queries("server_name") ?? [];
+    const body = await parseOptionalJsonObjectBody(c);
+    const resolved = await resolveRoomIdOrAlias(c, roomIdOrAlias, remoteServers);
 
     const response = await c.get("appContext").services.rooms.joinRoom({
       userId: c.get("userId"),
-      roomId,
-      remoteServers,
+      roomId: resolved.roomId,
+      remoteServers: resolved.remoteServers,
+      ...(body !== undefined ? { body } : {}),
     });
 
     return c.json(response);
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return Errors.badJson().toResponse();
+    }
     if (error instanceof Error && "toResponse" in error) {
       return (error as { toResponse(): Response }).toResponse();
     }
@@ -742,13 +1095,43 @@ app.get("/_matrix/client/v3/directory/room/:roomAlias", async (c) => {
   const alias = decodeURIComponent(c.req.param("roomAlias"));
 
   const roomId = await getRoomByAlias(c.env.DB, alias);
-  if (!roomId) {
+  if (roomId) {
+    return c.json({
+      room_id: roomId,
+      servers: [c.env.SERVER_NAME],
+    });
+  }
+
+  const parsedAlias = parseRoomAlias(alias);
+  if (!parsedAlias || parsedAlias.serverName === c.env.SERVER_NAME) {
+    return Errors.notFound("Room alias not found").toResponse();
+  }
+
+  const response = await federationGet(
+    parsedAlias.serverName,
+    `/_matrix/federation/v1/query/directory?room_alias=${encodeURIComponent(alias)}`,
+    c.env.SERVER_NAME,
+    c.env.DB,
+    c.env.CACHE,
+  ).catch(() => null);
+
+  if (!response?.ok) {
+    return Errors.notFound("Room alias not found").toResponse();
+  }
+
+  const body = (await response.json()) as {
+    room_id?: unknown;
+    servers?: unknown;
+  };
+  if (typeof body.room_id !== "string") {
     return Errors.notFound("Room alias not found").toResponse();
   }
 
   return c.json({
-    room_id: roomId,
-    servers: [c.env.SERVER_NAME],
+    room_id: body.room_id,
+    servers: Array.isArray(body.servers)
+      ? body.servers.filter((value): value is string => typeof value === "string")
+      : [parsedAlias.serverName],
   });
 });
 
@@ -787,16 +1170,66 @@ app.put("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async (c)
 
 // DELETE /_matrix/client/v3/directory/room/:roomAlias
 app.delete("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async (c) => {
-  // Note: userId could be used for permission checks in future
-  void c.get("userId");
+  const userId = c.get("userId");
   const alias = decodeURIComponent(c.req.param("roomAlias"));
 
-  const roomId = await getRoomByAlias(c.env.DB, alias);
-  if (!roomId) {
+  const aliasRecord = await c.env.DB.prepare(
+    `SELECT room_id, creator_id FROM room_aliases WHERE alias = ?`,
+  )
+    .bind(alias)
+    .first<{ room_id: string; creator_id: string | null }>();
+
+  if (!aliasRecord) {
     return Errors.notFound("Room alias not found").toResponse();
   }
 
+  const canDeleteAsCreator = aliasRecord.creator_id === userId;
+  if (!canDeleteAsCreator) {
+    const powerLevelsEvent = await getStateEvent(
+      c.env.DB,
+      aliasRecord.room_id,
+      "m.room.power_levels",
+      "",
+    );
+    const { userPower, stateDefault } = getUserPowerLevelFromContent(
+      powerLevelsEvent?.content,
+      userId,
+    );
+    if (userPower < stateDefault) {
+      return Errors.forbidden("Insufficient power level to delete alias").toResponse();
+    }
+  }
+
   await deleteRoomAlias(c.env.DB, alias);
+
+  const canonicalAliasEvent = await getStateEvent(
+    c.env.DB,
+    aliasRecord.room_id,
+    "m.room.canonical_alias",
+    "",
+  );
+  const updatedCanonicalAlias = removeDeletedAliasFromCanonicalContent(
+    canonicalAliasEvent?.content,
+    alias,
+  );
+
+  if (
+    updatedCanonicalAlias &&
+    (canDeleteAsCreator
+      ? await canUserSendStateEvent(c.env.DB, aliasRecord.room_id, userId, "m.room.canonical_alias")
+      : true)
+  ) {
+    const txnId = await c.get("appContext").capabilities.id.generateOpaqueId();
+    await c.get("appContext").services.rooms.sendEvent({
+      userId,
+      roomId: aliasRecord.room_id,
+      eventType: "m.room.canonical_alias",
+      stateKey: "",
+      txnId,
+      content: updatedCanonicalAlias,
+    });
+  }
+
   return c.json({});
 });
 

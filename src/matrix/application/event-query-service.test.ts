@@ -1,5 +1,90 @@
 import { describe, expect, it } from "vitest";
-import { normalizeOffsetToken, selectSpaceChildren } from "./event-query-service";
+import {
+  EventQueryService,
+  normalizeOffsetToken,
+  selectSpaceChildren,
+} from "./event-query-service";
+
+class MockD1Database {
+  constructor(
+    private readonly handlers: Array<{
+      match: RegExp;
+      first?: Record<string, unknown> | null;
+    }>,
+  ) {}
+
+  prepare(query: string) {
+    const handler = this.handlers.find(({ match }) => match.test(query));
+    const bound = {
+      first: async <T>() => (handler?.first ?? null) as T | null,
+      run: async () => ({ success: true }),
+      all: async <T>() => ({ results: [] as T[] }),
+    };
+
+    return {
+      bind: () => bound,
+      first: bound.first,
+      run: bound.run,
+      all: bound.all,
+    };
+  }
+}
+
+function createMissingEventsDb(options: {
+  events: Map<string, Record<string, unknown>>;
+  roomVersion?: string;
+  historyRows?: Array<Record<string, unknown>>;
+  membershipRows?: Array<Record<string, unknown>>;
+}): D1Database {
+  const db = {
+    prepare(query: string) {
+      const normalizedQuery = query.replace(/\s+/g, " ").trim();
+
+      return {
+        bind: (...args: unknown[]) => ({
+          first: async <T>() => {
+            if (normalizedQuery.includes("SELECT room_version FROM rooms WHERE room_id = ?")) {
+              return { room_version: options.roomVersion ?? "10" } as T;
+            }
+
+            if (
+              normalizedQuery.includes(
+                "FROM events WHERE event_id = ? AND room_id = ? AND depth >= ?",
+              )
+            ) {
+              const eventId = args[0] as string;
+              return (options.events.get(eventId) ?? null) as T | null;
+            }
+
+            return null as T | null;
+          },
+          all: async <T>() => {
+            if (
+              normalizedQuery.includes(
+                "FROM events WHERE room_id = ? AND event_type = 'm.room.history_visibility'",
+              )
+            ) {
+              return { results: (options.historyRows ?? []) as T[] };
+            }
+
+            if (
+              normalizedQuery.includes(
+                "FROM events WHERE room_id = ? AND event_type = 'm.room.member' AND state_key LIKE ?",
+              )
+            ) {
+              return { results: (options.membershipRows ?? []) as T[] };
+            }
+
+            return { results: [] as T[] };
+          },
+          run: async () => ({ success: true }),
+        }),
+      };
+    },
+  };
+
+  return db as unknown as D1Database;
+}
 
 describe("normalizeOffsetToken", () => {
   it("parses offset pagination tokens", () => {
@@ -37,5 +122,408 @@ describe("selectSpaceChildren", () => {
 
     expect(result.children.map((child) => child.roomId)).toEqual(["!a:test"]);
     expect(result.hasMore).toBe(false);
+  });
+});
+
+describe("EventQueryService.getMissingEvents", () => {
+  it("returns missing events in ascending DAG order", async () => {
+    const service = new EventQueryService();
+    const events = new Map<string, Record<string, unknown>>([
+      [
+        "$latest",
+        {
+          event_id: "$latest",
+          room_id: "!room:test",
+          sender: "@bob:test",
+          event_type: "m.room.message",
+          state_key: null,
+          content: JSON.stringify({ body: "latest" }),
+          origin_server_ts: 4,
+          depth: 4,
+          auth_events: JSON.stringify([]),
+          prev_events: JSON.stringify(["$mid"]),
+          hashes: null,
+          signatures: null,
+        },
+      ],
+      [
+        "$mid",
+        {
+          event_id: "$mid",
+          room_id: "!room:test",
+          sender: "@bob:test",
+          event_type: "m.room.message",
+          state_key: null,
+          content: JSON.stringify({ body: "mid" }),
+          origin_server_ts: 3,
+          depth: 3,
+          auth_events: JSON.stringify([]),
+          prev_events: JSON.stringify(["$early"]),
+          hashes: null,
+          signatures: null,
+        },
+      ],
+      [
+        "$early",
+        {
+          event_id: "$early",
+          room_id: "!room:test",
+          sender: "@bob:test",
+          event_type: "m.room.member",
+          state_key: "@alice:test",
+          content: JSON.stringify({ membership: "join" }),
+          origin_server_ts: 2,
+          depth: 2,
+          auth_events: JSON.stringify([]),
+          prev_events: JSON.stringify(["$start"]),
+          hashes: null,
+          signatures: null,
+        },
+      ],
+      [
+        "$start",
+        {
+          event_id: "$start",
+          room_id: "!room:test",
+          sender: "@alice:test",
+          event_type: "m.room.create",
+          state_key: "",
+          content: JSON.stringify({ creator: "@alice:test" }),
+          origin_server_ts: 1,
+          depth: 1,
+          auth_events: JSON.stringify([]),
+          prev_events: JSON.stringify([]),
+          hashes: null,
+          signatures: null,
+        },
+      ],
+    ]);
+    const db = new MockD1Database([
+      {
+        match: /FROM events\s+WHERE event_id = \? AND room_id = \? AND depth >= \?/,
+        first: null,
+      },
+    ]) as unknown as D1Database;
+
+    db.prepare = (() => {
+      const bound = {
+        first: async <T>(..._args: unknown[]) => null as T | null,
+        run: async () => ({ success: true }),
+        all: async <T>() => ({ results: [] as T[] }),
+      };
+      return {
+        bind: (eventId: string) => ({
+          ...bound,
+          first: async <T>() => (events.get(eventId) ?? null) as T | null,
+        }),
+        first: bound.first,
+        run: bound.run,
+        all: bound.all,
+      };
+    }) as unknown as typeof db.prepare;
+
+    const result = await service.getMissingEvents(db, {
+      roomId: "!room:test",
+      earliestEvents: ["$start"],
+      latestEvents: ["$latest"],
+      limit: 10,
+      minDepth: 0,
+    });
+
+    expect(result.map((event) => event.event_id)).toEqual(["$early", "$mid"]);
+  });
+
+  it("redacts non-state events that the requesting server could not see under joined visibility", async () => {
+    const service = new EventQueryService();
+    const db = createMissingEventsDb({
+      roomVersion: "10",
+      events: new Map<string, Record<string, unknown>>([
+        [
+          "$latest",
+          {
+            event_id: "$latest",
+            room_id: "!room:test",
+            sender: "@charlie:remote.test",
+            event_type: "m.room.member",
+            state_key: "@charlie:remote.test",
+            content: JSON.stringify({ membership: "join" }),
+            origin_server_ts: 3,
+            depth: 3,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$message"]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+        [
+          "$message",
+          {
+            event_id: "$message",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.message",
+            state_key: null,
+            content: JSON.stringify({ body: "secret", msgtype: "m.text" }),
+            origin_server_ts: 2,
+            depth: 2,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$start"]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+        [
+          "$start",
+          {
+            event_id: "$start",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.create",
+            state_key: "",
+            content: JSON.stringify({ creator: "@alice:test" }),
+            origin_server_ts: 1,
+            depth: 1,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify([]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+      ]),
+      historyRows: [
+        {
+          event_id: "$hist",
+          origin_server_ts: 1,
+          depth: 1,
+          content: JSON.stringify({ history_visibility: "joined" }),
+        },
+      ],
+      membershipRows: [
+        {
+          event_id: "$latest",
+          origin_server_ts: 3,
+          depth: 3,
+          state_key: "@charlie:remote.test",
+          content: JSON.stringify({ membership: "join" }),
+        },
+      ],
+    });
+
+    const result = await service.getMissingEvents(db, {
+      roomId: "!room:test",
+      earliestEvents: ["$start"],
+      latestEvents: ["$latest"],
+      limit: 10,
+      minDepth: 0,
+      requestingServer: "remote.test",
+      roomVersion: "10",
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.type).toBe("m.room.message");
+    expect(result[0]?.content).not.toHaveProperty("body");
+    expect(result[0]?.content).not.toHaveProperty("msgtype");
+  });
+
+  it("keeps non-state events unredacted for shared visibility when the requesting server joined later", async () => {
+    const service = new EventQueryService();
+    const db = createMissingEventsDb({
+      roomVersion: "10",
+      events: new Map<string, Record<string, unknown>>([
+        [
+          "$latest",
+          {
+            event_id: "$latest",
+            room_id: "!room:test",
+            sender: "@charlie:remote.test",
+            event_type: "m.room.member",
+            state_key: "@charlie:remote.test",
+            content: JSON.stringify({ membership: "join" }),
+            origin_server_ts: 3,
+            depth: 3,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$message"]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+        [
+          "$message",
+          {
+            event_id: "$message",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.message",
+            state_key: null,
+            content: JSON.stringify({ body: "visible", msgtype: "m.text" }),
+            origin_server_ts: 2,
+            depth: 2,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$start"]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+        [
+          "$start",
+          {
+            event_id: "$start",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.create",
+            state_key: "",
+            content: JSON.stringify({ creator: "@alice:test" }),
+            origin_server_ts: 1,
+            depth: 1,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify([]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+      ]),
+      historyRows: [
+        {
+          event_id: "$hist",
+          origin_server_ts: 1,
+          depth: 1,
+          content: JSON.stringify({ history_visibility: "shared" }),
+        },
+      ],
+      membershipRows: [
+        {
+          event_id: "$latest",
+          origin_server_ts: 3,
+          depth: 3,
+          state_key: "@charlie:remote.test",
+          content: JSON.stringify({ membership: "join" }),
+        },
+      ],
+    });
+
+    const result = await service.getMissingEvents(db, {
+      roomId: "!room:test",
+      earliestEvents: ["$start"],
+      latestEvents: ["$latest"],
+      limit: 10,
+      minDepth: 0,
+      requestingServer: "remote.test",
+      roomVersion: "10",
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.content).toMatchObject({ body: "visible", msgtype: "m.text" });
+  });
+
+  it("drops no-op history visibility events from missing-events responses", async () => {
+    const service = new EventQueryService();
+    const db = createMissingEventsDb({
+      roomVersion: "10",
+      events: new Map<string, Record<string, unknown>>([
+        [
+          "$latest",
+          {
+            event_id: "$latest",
+            room_id: "!room:test",
+            sender: "@charlie:remote.test",
+            event_type: "m.room.member",
+            state_key: "@charlie:remote.test",
+            content: JSON.stringify({ membership: "join" }),
+            origin_server_ts: 4,
+            depth: 4,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$hist2"]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+        [
+          "$hist2",
+          {
+            event_id: "$hist2",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.history_visibility",
+            state_key: "",
+            content: JSON.stringify({ history_visibility: "shared" }),
+            origin_server_ts: 3,
+            depth: 3,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$hist1"]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+        [
+          "$hist1",
+          {
+            event_id: "$hist1",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.history_visibility",
+            state_key: "",
+            content: JSON.stringify({ history_visibility: "shared" }),
+            origin_server_ts: 2,
+            depth: 2,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$start"]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+        [
+          "$start",
+          {
+            event_id: "$start",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.create",
+            state_key: "",
+            content: JSON.stringify({ creator: "@alice:test" }),
+            origin_server_ts: 1,
+            depth: 1,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify([]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+      ]),
+      historyRows: [
+        {
+          event_id: "$hist1",
+          origin_server_ts: 2,
+          depth: 2,
+          content: JSON.stringify({ history_visibility: "shared" }),
+        },
+        {
+          event_id: "$hist2",
+          origin_server_ts: 3,
+          depth: 3,
+          content: JSON.stringify({ history_visibility: "shared" }),
+        },
+      ],
+      membershipRows: [
+        {
+          event_id: "$latest",
+          origin_server_ts: 4,
+          depth: 4,
+          state_key: "@charlie:remote.test",
+          content: JSON.stringify({ membership: "join" }),
+        },
+      ],
+    });
+
+    const result = await service.getMissingEvents(db, {
+      roomId: "!room:test",
+      earliestEvents: ["$start"],
+      latestEvents: ["$latest"],
+      limit: 10,
+      minDepth: 0,
+      requestingServer: "remote.test",
+      roomVersion: "10",
+    });
+
+    expect(result.map((event) => event.event_id)).toEqual(["$hist1"]);
   });
 });

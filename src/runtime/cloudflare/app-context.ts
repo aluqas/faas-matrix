@@ -10,6 +10,7 @@ import {
   formatRoomAlias,
 } from "../../utils/ids";
 import { createMatrixServiceRegistry, type MatrixServiceRegistry } from "../../matrix/services";
+import { getPartialStateJoin } from "../../matrix/application/features/partial-state/tracker";
 import {
   CloudflareDeliveryQueue,
   CloudflareDiscoveryService,
@@ -54,6 +55,17 @@ function createRuntimeCapabilities(
           status.status === "running" ||
           status.status === "waiting"
         ) {
+          if (params.isRemote) {
+            const partialStateJoin = await getPartialStateJoin(
+              env.CACHE,
+              params.userId,
+              params.roomId,
+            );
+            if (partialStateJoin) {
+              break;
+            }
+          }
+
           if (Date.now() - startedAt >= workflowWaitTimeoutMs) {
             break;
           }
@@ -88,6 +100,30 @@ function createRuntimeCapabilities(
               user_id: userId,
               typing,
               timeout: timeoutMs,
+            }),
+          }),
+        );
+      },
+      async setRoomReceipt(
+        roomId: string,
+        userId: string,
+        eventId: string,
+        receiptType: string,
+        threadId?: string,
+        ts?: number,
+      ) {
+        const doId = env.ROOMS.idFromName(roomId);
+        const stub = env.ROOMS.get(doId);
+        await stub.fetch(
+          new Request("https://room/receipt", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id: userId,
+              event_id: eventId,
+              receipt_type: receiptType,
+              ...(threadId ? { thread_id: threadId } : {}),
+              ...(ts !== undefined ? { ts } : {}),
             }),
           }),
         );

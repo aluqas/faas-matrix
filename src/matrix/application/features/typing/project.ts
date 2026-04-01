@@ -14,23 +14,21 @@ export async function projectTypingEphemeral(
     debugEnabled: query.debugEnabled,
   });
   const typingUsers = await repository.getTypingUsers(query.roomId);
-  if (typingUsers.length === 0) {
-    await runClientEffect(logger.debug("typing.project.result", { user_count: 0 }));
-    return [];
-  }
-
   const projection = applyEventFilter(
-    [
-      {
-        type: "m.typing" as const,
-        content: { user_ids: typingUsers },
-      },
-    ],
+    typingUsers.length > 0 || query.includeEmpty
+      ? [
+          {
+            type: "m.typing" as const,
+            content: { user_ids: typingUsers },
+          },
+        ]
+      : [],
     query.filter,
   );
   await runClientEffect(
     logger.debug("typing.project.result", {
       user_count: typingUsers.length,
+      include_empty: Boolean(query.includeEmpty),
       event_count: projection.length,
     }),
   );

@@ -81,6 +81,7 @@ export async function createInitialRoomEvents(
     topic?: string;
     preset?: string;
     is_direct?: boolean;
+    creation_content?: Record<string, unknown>;
     initial_state?: Array<{ type: string; state_key?: string; content: Record<string, unknown> }>;
     invite?: string[];
     room_alias_local_part?: string;
@@ -139,6 +140,7 @@ export async function createInitialRoomEvents(
   }
 
   const createContent: RoomCreateContent = {
+    ...(options.creation_content ?? {}),
     creator: creatorId,
     room_version: roomVersion,
   };
@@ -186,24 +188,31 @@ export async function createInitialRoomEvents(
   await createEvent("m.room.join_rules", { join_rule: joinRule }, "");
 
   await createEvent("m.room.history_visibility", { history_visibility: "shared" }, "");
-  await createEvent(
-    "m.room.guest_access",
-    { guest_access: preset === "public_chat" ? "can_join" : "forbidden" },
-    "",
-  );
-
-  if (options.name) {
-    await createEvent("m.room.name", { name: options.name }, "");
-  }
-
-  if (options.topic) {
-    await createEvent("m.room.topic", { topic: options.topic }, "");
+  if (preset !== "public_chat") {
+    await createEvent("m.room.guest_access", { guest_access: "can_join" }, "");
   }
 
   if (options.initial_state) {
     for (const state of options.initial_state) {
       await createEvent(state.type, state.content, state.state_key ?? "");
     }
+  }
+
+  if (options.name) {
+    await createEvent("m.room.name", { name: options.name }, "");
+  }
+
+  if (options.topic) {
+    await createEvent(
+      "m.room.topic",
+      {
+        topic: options.topic,
+        "m.topic": {
+          "m.text": [{ body: options.topic }],
+        },
+      },
+      "",
+    );
   }
 
   if (options.invite) {
@@ -251,7 +260,7 @@ export async function createMembershipEvent(options: CreateMembershipEventOption
     sender: options.sender,
     type: "m.room.member",
     state_key: options.userId,
-    content: { membership: options.membership, ...options.content },
+    content: { ...(options.content ?? {}), membership: options.membership },
     origin_server_ts: options.now(),
     depth: options.depth,
     auth_events: authEvents,

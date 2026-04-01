@@ -26,6 +26,8 @@ export interface RoomVersionBehavior {
   authRuleVariant: "v1" | "v8" | "v10";
   /** Whether knock_restricted join rule is supported (v10+) */
   knockRestrictedSupported: boolean;
+  /** Whether MSC3757 owned-state semantics are enabled */
+  ownedStateSupported: boolean;
   /** Stability status */
   stable: boolean;
 }
@@ -42,6 +44,7 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: false,
     authRuleVariant: "v1",
     knockRestrictedSupported: false,
+    ownedStateSupported: false,
     stable: true,
   },
   "2": {
@@ -55,6 +58,7 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: false,
     authRuleVariant: "v1",
     knockRestrictedSupported: false,
+    ownedStateSupported: false,
     stable: true,
   },
   "3": {
@@ -68,6 +72,7 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: false,
     authRuleVariant: "v1",
     knockRestrictedSupported: false,
+    ownedStateSupported: false,
     stable: true,
   },
   "4": {
@@ -81,6 +86,7 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: false,
     authRuleVariant: "v1",
     knockRestrictedSupported: false,
+    ownedStateSupported: false,
     stable: true,
   },
   "5": {
@@ -94,6 +100,7 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: false,
     authRuleVariant: "v1",
     knockRestrictedSupported: false,
+    ownedStateSupported: false,
     stable: true,
   },
   "6": {
@@ -107,6 +114,7 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: false,
     authRuleVariant: "v1",
     knockRestrictedSupported: false,
+    ownedStateSupported: false,
     stable: true,
   },
   "7": {
@@ -120,6 +128,7 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: false,
     authRuleVariant: "v1",
     knockRestrictedSupported: false,
+    ownedStateSupported: false,
     stable: true,
   },
   "8": {
@@ -133,6 +142,7 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: false,
     authRuleVariant: "v8",
     knockRestrictedSupported: false,
+    ownedStateSupported: false,
     stable: true,
   },
   "9": {
@@ -146,6 +156,7 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: false,
     authRuleVariant: "v8",
     knockRestrictedSupported: false,
+    ownedStateSupported: false,
     stable: true,
   },
   "10": {
@@ -159,7 +170,22 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: false,
     authRuleVariant: "v10",
     knockRestrictedSupported: true,
+    ownedStateSupported: false,
     stable: true,
+  },
+  "org.matrix.msc3757.10": {
+    version: "org.matrix.msc3757.10",
+    stateResolution: "v2",
+    eventIdFormat: "v4",
+    redactionAlgorithm: "v1",
+    knockingSupported: true,
+    restrictedJoinsSupported: true,
+    integerPowerLevels: true,
+    updatedRedactionRules: false,
+    authRuleVariant: "v10",
+    knockRestrictedSupported: true,
+    ownedStateSupported: true,
+    stable: false,
   },
   "11": {
     version: "11",
@@ -172,6 +198,7 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: true,
     authRuleVariant: "v10",
     knockRestrictedSupported: true,
+    ownedStateSupported: false,
     stable: true,
   },
   "12": {
@@ -185,6 +212,7 @@ const ROOM_VERSIONS: Record<string, RoomVersionBehavior> = {
     updatedRedactionRules: true,
     authRuleVariant: "v10",
     knockRestrictedSupported: true,
+    ownedStateSupported: false,
     stable: true,
   },
 };

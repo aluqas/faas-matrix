@@ -36,7 +36,7 @@ export interface MembershipTransitionContext {
 }
 
 export interface MembershipTransitionResult {
-  membershipToPersist: "invite" | "join" | "leave" | "knock" | null;
+  membershipToPersist: "invite" | "join" | "leave" | "ban" | "knock" | null;
   shouldUpsertRoomState: boolean;
   shouldClearInviteStrippedState: boolean;
   shouldUpsertKnockState: boolean;
@@ -63,6 +63,14 @@ export type MembershipCommand =
     }
   | {
       kind: "leave";
+      roomId: string;
+      sender: string;
+      targetUserId: string;
+      source: MembershipTransitionSource;
+      event: PDU;
+    }
+  | {
+      kind: "ban";
       roomId: string;
       sender: string;
       targetUserId: string;
@@ -163,6 +171,9 @@ function toSyncCategory(membership: Membership | null | undefined): MembershipSy
   if (membership === "invite" || membership === "leave" || membership === "knock") {
     return membership;
   }
+  if (membership === "ban") {
+    return "leave";
+  }
   return "join";
 }
 
@@ -172,7 +183,7 @@ export function toMembershipCommand(input: MembershipTransitionInput): Membershi
     input.event.type !== "m.room.member" ||
     input.event.state_key === undefined ||
     !membership ||
-    !["invite", "join", "leave", "knock"].includes(membership)
+    !["invite", "join", "leave", "ban", "knock"].includes(membership)
   ) {
     return null;
   }

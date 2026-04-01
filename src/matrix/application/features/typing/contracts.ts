@@ -23,6 +23,7 @@ export interface TypingCommandPorts {
 
 export interface TypingIngestPorts {
   getMembership(roomId: string, userId: string): Promise<string | null>;
+  isPartialStateRoom?(roomId: string): Promise<boolean>;
   setRoomTyping(roomId: string, userId: string, typing: boolean, timeoutMs?: number): Promise<void>;
 }
 
@@ -32,6 +33,7 @@ export interface TypingProjectionRepository {
 
 export interface TypingProjectionQuery {
   roomId: string;
+  includeEmpty?: boolean | undefined;
   filter?: SyncEventFilter | undefined;
   debugEnabled?: boolean | undefined;
 }

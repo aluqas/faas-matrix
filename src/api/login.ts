@@ -11,6 +11,8 @@ import {
   generateRefreshToken,
   generateOpaqueId,
   isValidLocalpart,
+  isLocalServerName,
+  parseUserId,
 } from "../utils/ids";
 import {
   createUser,
@@ -21,10 +23,43 @@ import {
   createAccessToken,
   deleteAccessToken,
   deleteAllUserTokens,
+  deleteAllUserDevices,
+  deleteDevice,
+  getAccessTokenRecordByHash,
 } from "../services/database";
 import { requireAuth, extractAccessToken } from "../middleware/auth";
 
 const app = new Hono<AppEnv>();
+
+function methodNotAllowed() {
+  return new Response(
+    JSON.stringify({
+      errcode: "M_UNRECOGNIZED",
+      error: "Method not allowed",
+    }),
+    {
+      status: 405,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  );
+}
+
+function resolveLoginUserId(identifierUser: string, localServerName: string): string | null {
+  if (identifierUser.startsWith("@")) {
+    const parsed = parseUserId(identifierUser as `@${string}:${string}`);
+    if (!parsed) {
+      return null;
+    }
+    const localpart = isLocalServerName(parsed.serverName, localServerName)
+      ? parsed.localpart.toLowerCase()
+      : parsed.localpart;
+    return formatUserId(localpart, parsed.serverName);
+  }
+
+  return formatUserId(identifierUser.toLowerCase(), localServerName);
+}
 
 // GET /_matrix/client/v3/login - Get supported login flows
 app.get("/_matrix/client/v3/login", (c) => {
@@ -42,6 +77,8 @@ app.get("/_matrix/client/v3/login", (c) => {
     ],
   });
 });
+
+app.on(["PUT", "DELETE", "PATCH"], "/_matrix/client/v3/login", () => methodNotAllowed());
 
 // POST /_matrix/client/v3/login - Login
 app.post("/_matrix/client/v3/login", async (c) => {
@@ -92,12 +129,11 @@ app.post("/_matrix/client/v3/login", async (c) => {
 
     // Parse identifier
     if (identifier.type === "m.id.user") {
-      // Can be full user ID or just localpart
-      if (identifier.user.startsWith("@")) {
-        userId = identifier.user;
-      } else {
-        userId = formatUserId(identifier.user, c.env.SERVER_NAME);
+      const resolvedUserId = resolveLoginUserId(identifier.user, c.env.SERVER_NAME);
+      if (!resolvedUserId) {
+        return Errors.forbidden("Invalid username or password").toResponse();
       }
+      userId = resolvedUserId;
     } else {
       return Errors.unrecognized("Unknown identifier type").toResponse();
     }
@@ -122,11 +158,11 @@ app.post("/_matrix/client/v3/login", async (c) => {
 
     // Parse identifier
     if (identifier.type === "m.id.user") {
-      if (identifier.user.startsWith("@")) {
-        userId = identifier.user;
-      } else {
-        userId = formatUserId(identifier.user, c.env.SERVER_NAME);
+      const resolvedUserId = resolveLoginUserId(identifier.user, c.env.SERVER_NAME);
+      if (!resolvedUserId) {
+        return Errors.forbidden("Invalid username or password").toResponse();
       }
+      userId = resolvedUserId;
     } else {
       return Errors.unrecognized("Unknown identifier type").toResponse();
     }
@@ -190,7 +226,11 @@ app.post("/_matrix/client/v3/logout", requireAuth(), async (c) => {
   const token = extractAccessToken(c.req.raw);
   if (token) {
     const tokenHash = await hashToken(token);
+    const tokenRecord = await getAccessTokenRecordByHash(c.env.DB, tokenHash);
     await deleteAccessToken(c.env.DB, tokenHash);
+    if (tokenRecord?.deviceId) {
+      await deleteDevice(c.env.DB, tokenRecord.userId, tokenRecord.deviceId);
+    }
   }
   return c.json({});
 });
@@ -199,6 +239,7 @@ app.post("/_matrix/client/v3/logout", requireAuth(), async (c) => {
 app.post("/_matrix/client/v3/logout/all", requireAuth(), async (c) => {
   const userId = c.get("userId");
   await deleteAllUserTokens(c.env.DB, userId);
+  await deleteAllUserDevices(c.env.DB, userId);
   return c.json({});
 });
 
@@ -313,6 +354,7 @@ app.post("/_matrix/client/v3/register", async (c) => {
   }
 
   const isGuest = kind === "guest";
+  const normalizedUsername = typeof username === "string" ? username.toLowerCase() : username;
 
   // For non-guests, require username and password
   if (!isGuest) {
@@ -330,11 +372,11 @@ app.post("/_matrix/client/v3/register", async (c) => {
       );
     }
 
-    if (!username) {
+    if (!normalizedUsername) {
       return Errors.missingParam("username").toResponse();
     }
 
-    if (!isValidLocalpart(username)) {
+    if (!isValidLocalpart(normalizedUsername)) {
       return Errors.invalidUsername("Username contains invalid characters").toResponse();
     }
 
@@ -344,7 +386,7 @@ app.post("/_matrix/client/v3/register", async (c) => {
   }
 
   // Generate localpart for guests
-  const localpart = isGuest ? await generateOpaqueId(12) : username;
+  const localpart = isGuest ? await generateOpaqueId(12) : normalizedUsername;
   const userId = formatUserId(localpart, c.env.SERVER_NAME);
 
   // Check if user already exists

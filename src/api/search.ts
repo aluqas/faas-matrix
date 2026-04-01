@@ -20,6 +20,7 @@ interface SearchRequest {
       search_term: string;
       keys?: string[];
       filter?: {
+        limit?: number;
         rooms?: string[];
         not_rooms?: string[];
         senders?: string[];
@@ -59,6 +60,17 @@ interface SearchResult {
     start?: string;
     end?: string;
   };
+}
+
+function parseEventContent(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 // ============================================
@@ -146,7 +158,11 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
   }
 
   // Build the search query using FTS5 for ranked full-text search
-  const limit = 50;
+  const requestedLimit =
+    typeof filter.limit === "number" && Number.isFinite(filter.limit) && filter.limit > 0
+      ? Math.floor(filter.limit)
+      : 50;
+  const limit = requestedLimit;
   let offset = 0;
 
   if (nextBatch) {
@@ -162,13 +178,14 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
   let query = `
     SELECT e.event_id, e.event_type, e.room_id, e.sender, e.origin_server_ts, e.content,
            bm25(events_fts) as rank
-    FROM events_fts fts
-    JOIN events e ON fts.event_id = e.event_id
-    WHERE fts.body MATCH ?
+    FROM events_fts
+    JOIN events e ON events_fts.event_id = e.event_id
+    WHERE events_fts MATCH ?
       AND e.room_id IN (${searchRoomIds.map(() => "?").join(",")})
+      AND e.redacted_because IS NULL
   `;
 
-  const params: any[] = [ftsSearchTerm, ...searchRoomIds];
+  const params: Array<string | number> = [ftsSearchTerm, ...searchRoomIds];
 
   // Apply sender filter
   if (filter.senders && filter.senders.length > 0) {
@@ -220,16 +237,39 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
   const searchResults = results.results.slice(0, limit);
 
   // Get count (approximate for performance)
-  const countQuery = `
+  let countQuery = `
     SELECT COUNT(*) as total
-    FROM events_fts fts
-    JOIN events e ON fts.event_id = e.event_id
-    WHERE fts.body MATCH ?
+    FROM events_fts
+    JOIN events e ON events_fts.event_id = e.event_id
+    WHERE events_fts MATCH ?
       AND e.room_id IN (${searchRoomIds.map(() => "?").join(",")})
+      AND e.redacted_because IS NULL
   `;
+  const countParams: Array<string | number> = [ftsSearchTerm, ...searchRoomIds];
+
+  if (filter.senders && filter.senders.length > 0) {
+    countQuery += ` AND e.sender IN (${filter.senders.map(() => "?").join(",")})`;
+    countParams.push(...filter.senders);
+  }
+
+  if (filter.not_senders && filter.not_senders.length > 0) {
+    countQuery += ` AND e.sender NOT IN (${filter.not_senders.map(() => "?").join(",")})`;
+    countParams.push(...filter.not_senders);
+  }
+
+  if (filter.types && filter.types.length > 0) {
+    countQuery += ` AND e.event_type IN (${filter.types.map(() => "?").join(",")})`;
+    countParams.push(...filter.types);
+  }
+
+  if (filter.not_types && filter.not_types.length > 0) {
+    countQuery += ` AND e.event_type NOT IN (${filter.not_types.map(() => "?").join(",")})`;
+    countParams.push(...filter.not_types);
+  }
+
   const countResult = await db
     .prepare(countQuery)
-    .bind(ftsSearchTerm, ...searchRoomIds)
+    .bind(...countParams)
     .first<{ total: number }>();
   const totalCount = countResult?.total || 0;
 
@@ -237,11 +277,6 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
   const formattedResults: SearchResult[] = [];
 
   for (const event of searchResults) {
-    let content: Record<string, any> = {};
-    try {
-      content = JSON.parse(event.content);
-    } catch {}
-
     const result: SearchResult = {
       event_id: event.event_id,
       rank: Math.abs(event.rank || 0),
@@ -251,7 +286,7 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
         room_id: event.room_id,
         sender: event.sender,
         origin_server_ts: event.origin_server_ts,
-        content,
+        content: parseEventContent(event.content),
       },
     };
 
@@ -297,12 +332,12 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
         }>();
 
       result.context = {
-        events_before: eventsBefore.results.reverse().map((e) => ({
+        events_before: eventsBefore.results.map((e) => ({
           event_id: e.event_id,
           type: e.event_type,
           sender: e.sender,
           origin_server_ts: e.origin_server_ts,
-          content: JSON.parse(e.content),
+          content: parseEventContent(e.content),
           room_id: event.room_id,
         })),
         events_after: eventsAfter.results.map((e) => ({
@@ -310,7 +345,7 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
           type: e.event_type,
           sender: e.sender,
           origin_server_ts: e.origin_server_ts,
-          content: JSON.parse(e.content),
+          content: parseEventContent(e.content),
           room_id: event.room_id,
         })),
       };
@@ -362,7 +397,7 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
   };
 
   // Add pagination token if there are more results
-  if (hasMore) {
+  if (hasMore || searchResults.length === limit) {
     response.search_categories.room_events.next_batch = String(offset + limit);
   }
 
@@ -392,7 +427,7 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
         type: s.event_type,
         state_key: s.state_key,
         sender: s.sender,
-        content: JSON.parse(s.content),
+        content: parseEventContent(s.content),
         origin_server_ts: s.origin_server_ts,
         room_id: roomId,
       }));

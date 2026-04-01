@@ -12,9 +12,11 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
+import { extractAccessToken, requireAuth } from "../middleware/auth";
+import { hashToken } from "../utils/crypto";
 import { runClientEffect } from "../matrix/application/effect-runtime";
 import { withLogContext } from "../matrix/application/logging";
+import { getAccessTokenRecordByHash } from "../services/database";
 import {
   type JsonObject,
   type PusherData,
@@ -164,6 +166,13 @@ const DEFAULT_OVERRIDE_RULES: PushRule[] = [
     actions: [],
   },
   {
+    rule_id: ".org.matrix.msc3930.rule.poll_response",
+    default: true,
+    enabled: true,
+    conditions: [{ kind: "event_match", key: "type", pattern: "org.matrix.msc3381.poll.response" }],
+    actions: [],
+  },
+  {
     rule_id: ".m.rule.reaction",
     default: true,
     enabled: true,
@@ -215,6 +224,40 @@ const DEFAULT_UNDERRIDE_RULES: PushRule[] = [
     actions: ["notify", { set_tweak: "sound", value: "default" }],
   },
   {
+    rule_id: ".org.matrix.msc3930.rule.poll_start_one_to_one",
+    default: true,
+    enabled: true,
+    conditions: [
+      { kind: "room_member_count", is: "2" },
+      { kind: "event_match", key: "type", pattern: "org.matrix.msc3381.poll.start" },
+    ],
+    actions: ["notify", { set_tweak: "sound", value: "default" }],
+  },
+  {
+    rule_id: ".org.matrix.msc3930.rule.poll_end_one_to_one",
+    default: true,
+    enabled: true,
+    conditions: [
+      { kind: "room_member_count", is: "2" },
+      { kind: "event_match", key: "type", pattern: "org.matrix.msc3381.poll.end" },
+    ],
+    actions: ["notify", { set_tweak: "sound", value: "default" }],
+  },
+  {
+    rule_id: ".org.matrix.msc3930.rule.poll_start",
+    default: true,
+    enabled: true,
+    conditions: [{ kind: "event_match", key: "type", pattern: "org.matrix.msc3381.poll.start" }],
+    actions: ["notify"],
+  },
+  {
+    rule_id: ".org.matrix.msc3930.rule.poll_end",
+    default: true,
+    enabled: true,
+    conditions: [{ kind: "event_match", key: "type", pattern: "org.matrix.msc3381.poll.end" }],
+    actions: ["notify"],
+  },
+  {
     rule_id: ".m.rule.message",
     default: true,
     enabled: true,
@@ -229,6 +272,12 @@ const DEFAULT_UNDERRIDE_RULES: PushRule[] = [
     actions: ["notify"],
   },
 ];
+
+const DEFAULT_PUSH_RULE_IDS = new Set(
+  [...DEFAULT_OVERRIDE_RULES, ...DEFAULT_CONTENT_RULES, ...DEFAULT_UNDERRIDE_RULES].map(
+    (rule) => rule.rule_id,
+  ),
+);
 
 // ============================================
 // Helper Functions
@@ -318,7 +367,7 @@ async function getUserPushRules(
 
     const ruleData: PushRule = {
       rule_id: row.rule_id,
-      default: row.rule_id.startsWith(".m.rule."),
+      default: DEFAULT_PUSH_RULE_IDS.has(row.rule_id),
       enabled: row.enabled === 1,
       actions,
       ...(conditions ? { conditions } : {}),
@@ -419,6 +468,11 @@ app.post("/_matrix/client/v3/pushers/set", requireAuth(), async (c) => {
     data,
     append,
   } = parsed;
+  const currentAccessToken = extractAccessToken(c.req.raw);
+  const currentTokenRecord = currentAccessToken
+    ? await getAccessTokenRecordByHash(db, await hashToken(currentAccessToken))
+    : null;
+  const accessTokenId = currentTokenRecord?.tokenId ?? null;
 
   // Validate required fields
   if (!pushkey) {
@@ -465,10 +519,11 @@ app.post("/_matrix/client/v3/pushers/set", requireAuth(), async (c) => {
   await db
     .prepare(`
     INSERT INTO pushers (
-      user_id, pushkey, kind, app_id, app_display_name, device_display_name,
+      user_id, access_token_id, pushkey, kind, app_id, app_display_name, device_display_name,
       profile_tag, lang, data
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (user_id, pushkey, app_id) DO UPDATE SET
+      access_token_id = excluded.access_token_id,
       kind = excluded.kind,
       app_display_name = excluded.app_display_name,
       device_display_name = excluded.device_display_name,
@@ -479,6 +534,7 @@ app.post("/_matrix/client/v3/pushers/set", requireAuth(), async (c) => {
   `)
     .bind(
       userId,
+      accessTokenId,
       pushkey,
       kind,
       app_id,

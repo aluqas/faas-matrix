@@ -6,10 +6,16 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
-import { hashPassword, verifyPassword } from "../utils/crypto";
+import { extractAccessToken, requireAuth } from "../middleware/auth";
+import { hashPassword, hashToken, verifyPassword } from "../utils/crypto";
 import { generateOpaqueId } from "../utils/ids";
-import { getPasswordHash, deleteAllUserTokens } from "../services/database";
+import {
+  deleteAllUserDevices,
+  deleteOtherUserDevices,
+  deleteAllUserTokens,
+  getAccessTokenRecordByHash,
+  getPasswordHash,
+} from "../services/database";
 import {
   sendVerificationEmail,
   createVerificationSession,
@@ -88,7 +94,32 @@ app.post("/_matrix/client/v3/account/password", requireAuth(), async (c) => {
 
   // Logout all devices if requested
   if (logout_devices) {
-    await deleteAllUserTokens(db, userId);
+    const currentAccessToken = extractAccessToken(c.req.raw);
+    const currentTokenRecord = currentAccessToken
+      ? await getAccessTokenRecordByHash(db, await hashToken(currentAccessToken))
+      : null;
+
+    if (currentTokenRecord) {
+      await db
+        .prepare(`DELETE FROM access_tokens WHERE user_id = ? AND token_id != ?`)
+        .bind(userId, currentTokenRecord.tokenId)
+        .run();
+
+      await db
+        .prepare(
+          `DELETE FROM pushers WHERE user_id = ? AND (access_token_id IS NULL OR access_token_id != ?)`,
+        )
+        .bind(userId, currentTokenRecord.tokenId)
+        .run();
+
+      if (currentTokenRecord.deviceId) {
+        await deleteOtherUserDevices(db, userId, currentTokenRecord.deviceId);
+      }
+    } else {
+      await deleteAllUserTokens(db, userId);
+      await db.prepare(`DELETE FROM pushers WHERE user_id = ?`).bind(userId).run();
+      await deleteAllUserDevices(db, userId);
+    }
   }
 
   return c.json({});
@@ -156,10 +187,20 @@ app.post("/_matrix/client/v3/account/deactivate", requireAuth(), async (c) => {
 
   // Verify password
   const storedHash = await getPasswordHash(db, userId);
-  if (storedHash && auth.password) {
+  if (storedHash) {
+    if (!auth.password) {
+      return Errors.missingParam("auth.password").toResponse();
+    }
+
     const valid = await verifyPassword(auth.password, storedHash);
     if (!valid) {
-      return Errors.forbidden("Invalid password").toResponse();
+      return c.json(
+        {
+          errcode: "M_FORBIDDEN",
+          error: "Invalid password",
+        },
+        401,
+      );
     }
   }
 

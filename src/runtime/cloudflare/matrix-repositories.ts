@@ -22,6 +22,7 @@ import { getGlobalAccountData, getRoomAccountData } from "../../api/account-data
 import { getReceiptsForRoom } from "../../api/receipts";
 import { getToDeviceMessages } from "../../api/to-device";
 import { getTypingUsers } from "../../api/typing";
+import { countUnreadNotificationSummaryWithRules } from "../../services/push-rule-evaluator";
 import type { Env, PDU, Room } from "../../types";
 import type {
   FederationProcessedPdu,
@@ -474,6 +475,11 @@ export class CloudflareSyncRepository implements SyncRepository {
     return getReceiptsForRoom(this.env, roomId, userId) as Promise<ReceiptEvent>;
   }
 
+  async getUnreadNotificationSummary(roomId: string, userId: string) {
+    const receipts = await getReceiptsForRoom(this.env, roomId, userId);
+    return countUnreadNotificationSummaryWithRules(this.env.DB, userId, roomId, receipts.content);
+  }
+
   getTypingUsers(roomId: string): Promise<string[]> {
     return getTypingUsers(this.env, roomId);
   }
@@ -566,6 +572,15 @@ export class CloudflareFederationRepository implements FederationRepository {
     return getRoom(this.env.DB, roomId);
   }
 
+  getEvent(eventId: string) {
+    return getEvent(this.env.DB, eventId);
+  }
+
+  async getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]> {
+    const result = await getRoomEvents(this.env.DB, roomId, undefined, limit);
+    return result.events;
+  }
+
   getRoomState(roomId: string): Promise<PDU[]> {
     return getRoomState(this.env.DB, roomId);
   }
@@ -575,38 +590,7 @@ export class CloudflareFederationRepository implements FederationRepository {
   }
 
   async storeIncomingEvent(event: PDU): Promise<void> {
-    const existing = await this.env.DB.prepare(`SELECT event_id FROM events WHERE event_id = ?`)
-      .bind(event.event_id)
-      .first();
-    if (existing) return;
-
-    const lastOrdering = await this.env.DB.prepare(
-      `SELECT MAX(stream_ordering) as max_ordering FROM events`,
-    ).first<{ max_ordering: number | null }>();
-    const streamOrdering = (lastOrdering?.max_ordering ?? 0) + 1;
-
-    await this.env.DB.prepare(
-      `INSERT OR IGNORE INTO events
-       (event_id, room_id, sender, event_type, state_key, content, origin_server_ts, unsigned, depth, auth_events, prev_events, hashes, signatures, stream_ordering)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        event.event_id,
-        event.room_id,
-        event.sender,
-        event.type,
-        event.state_key ?? null,
-        JSON.stringify(event.content),
-        event.origin_server_ts,
-        event.unsigned ? JSON.stringify(event.unsigned) : null,
-        event.depth || 0,
-        JSON.stringify(event.auth_events || []),
-        JSON.stringify(event.prev_events || []),
-        event.hashes ? JSON.stringify(event.hashes) : null,
-        event.signatures ? JSON.stringify(event.signatures) : null,
-        streamOrdering,
-      )
-      .run();
+    await storeEvent(this.env.DB, event);
   }
 
   notifyUsersOfEvent(roomId: string, eventId: string, eventType: string): Promise<void> {

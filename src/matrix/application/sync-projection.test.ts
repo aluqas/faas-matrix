@@ -11,7 +11,7 @@ import {
 class FakeSyncRepository implements SyncRepository {
   memberships = new Map<
     string,
-    { membership: "invite" | "join" | "leave" | "knock"; eventId: string }
+    { membership: "invite" | "join" | "leave" | "ban" | "knock"; eventId: string }
   >();
   roomStates = new Map<string, PDU[]>();
   inviteStates = new Map<
@@ -26,6 +26,14 @@ class FakeSyncRepository implements SyncRepository {
   eventsById = new Map<string, PDU>();
   roomAccountData = new Map<string, any[]>();
   receiptsByRoom = new Map<string, { type: string; content: Record<string, unknown> }>();
+  unreadSummaryByRoom = new Map<
+    string,
+    {
+      room: { notification_count: number; highlight_count: number };
+      main: { notification_count: number; highlight_count: number };
+      threads: Record<string, { notification_count: number; highlight_count: number }>;
+    }
+  >();
   typingUsersByRoom = new Map<string, string[]>();
   globalAccountData: any[] = [];
   deviceListChanges = { changed: [] as string[], left: [] as string[] };
@@ -62,6 +70,11 @@ class FakeSyncRepository implements SyncRepository {
     if (membership === "invite") return this.inviteRooms;
     if (membership === "knock") return this.knockRooms;
     if (membership === "leave") return this.leaveRooms;
+    if (membership === "ban") {
+      return Array.from(this.memberships.entries())
+        .filter(([, value]) => value.membership === "ban")
+        .map(([key]) => key.split(":@")[0]);
+    }
     return [];
   }
   async getMembership(roomId: string, userId: string) {
@@ -81,6 +94,15 @@ class FakeSyncRepository implements SyncRepository {
   }
   async getReceiptsForRoom(roomId: string) {
     return this.receiptsByRoom.get(roomId) ?? { type: "m.receipt", content: {} };
+  }
+  async getUnreadNotificationSummary(roomId: string) {
+    return (
+      this.unreadSummaryByRoom.get(roomId) ?? {
+        room: { notification_count: 0, highlight_count: 0 },
+        main: { notification_count: 0, highlight_count: 0 },
+        threads: {},
+      }
+    );
   }
   async getTypingUsers(roomId: string) {
     return this.typingUsersByRoom.get(roomId) ?? [];
@@ -215,6 +237,131 @@ describe("sync-projection", () => {
     });
   });
 
+  it("projects banned rooms through leave rooms with the ban membership event", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    const banEvent: PDU = {
+      event_id: "$ban",
+      room_id: roomId,
+      sender: "@bob:hs1",
+      type: "m.room.member",
+      state_key: "@alice:test",
+      content: { membership: "ban" },
+      origin_server_ts: 40,
+      depth: 3,
+      auth_events: [],
+      prev_events: ["$join"],
+    };
+    repo.leaveRooms = [];
+    repo.memberships.set(`${roomId}:@alice:test`, { membership: "ban", eventId: "$ban" });
+    repo.eventsById.set("$ban", banEvent);
+    repo.roomStates.set(roomId, [banEvent]);
+
+    const projection = await projectMembershipRooms(repo, {
+      userId: "@alice:test",
+      sincePosition: 1,
+      includeLeave: true,
+    });
+
+    expect(projection.leaveRooms[roomId]?.timeline?.events[0]).toMatchObject({
+      event_id: "$ban",
+      content: { membership: "ban" },
+    });
+  });
+
+  it("suppresses invite rooms when invite permissions ignore the inviter", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.inviteRooms = [roomId];
+    repo.globalAccountData = [
+      {
+        type: "org.matrix.msc4155.invite_permission_config",
+        content: {
+          ignored_users: ["@bob:hs2"],
+        },
+      },
+    ];
+    repo.memberships.set(`${roomId}:@alice:hs1`, { membership: "invite", eventId: "$invite" });
+    repo.eventsById.set("$invite", {
+      event_id: "$invite",
+      room_id: roomId,
+      sender: "@bob:hs2",
+      type: "m.room.member",
+      state_key: "@alice:hs1",
+      content: { membership: "invite" },
+      origin_server_ts: 10,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    repo.roomStates.set(roomId, [
+      {
+        event_id: "$invite",
+        room_id: roomId,
+        sender: "@bob:hs2",
+        type: "m.room.member",
+        state_key: "@alice:hs1",
+        content: { membership: "invite" },
+        origin_server_ts: 10,
+        depth: 1,
+        auth_events: [],
+        prev_events: [],
+      },
+    ]);
+
+    const projection = await projectMembershipRooms(repo, {
+      userId: "@alice:hs1",
+      sincePosition: 0,
+      includeLeave: false,
+    });
+
+    expect(projection.inviteRooms[roomId]).toBeUndefined();
+  });
+
+  it("adds the invite membership event to invite_state when stripped state omits it", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.inviteRooms = [roomId];
+    repo.memberships.set(`${roomId}:@alice:hs1`, { membership: "invite", eventId: "$invite" });
+    repo.eventsById.set("$invite", {
+      event_id: "$invite",
+      room_id: roomId,
+      sender: "@bob:hs2",
+      type: "m.room.member",
+      state_key: "@alice:hs1",
+      content: { membership: "invite" },
+      origin_server_ts: 10,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    repo.inviteStates.set(roomId, [
+      {
+        type: "m.room.name",
+        state_key: "",
+        content: { name: "Lobby" },
+        sender: "@bob:hs2",
+      },
+    ]);
+
+    const projection = await projectMembershipRooms(repo, {
+      userId: "@alice:hs1",
+      sincePosition: 0,
+      includeLeave: false,
+    });
+
+    expect(projection.inviteRooms[roomId]?.invite_state?.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "m.room.name" }),
+        expect.objectContaining({
+          type: "m.room.member",
+          state_key: "@alice:hs1",
+          content: { membership: "invite" },
+        }),
+      ]),
+    );
+  });
+
   it("projects joined room timeline, state, account data, and ephemeral events separately", async () => {
     const repo = new FakeSyncRepository();
     const roomId = "!room:hs1";
@@ -276,6 +423,11 @@ describe("sync-projection", () => {
       content: { $message: { "m.read": { "@alice:test": { ts: 100 } } } },
     });
     repo.typingUsersByRoom.set(roomId, ["@bob:hs1"]);
+    repo.unreadSummaryByRoom.set(roomId, {
+      room: { notification_count: 3, highlight_count: 1 },
+      main: { notification_count: 2, highlight_count: 1 },
+      threads: { $root: { notification_count: 1, highlight_count: 0 } },
+    });
 
     const projection = await projectJoinedRoom(repo, {
       userId: "@alice:test",
@@ -303,6 +455,40 @@ describe("sync-projection", () => {
     expect(projection.ephemeral?.events).toEqual([
       { type: "m.typing", content: { user_ids: ["@bob:hs1"] } },
     ]);
+    expect(projection.unread_notifications).toEqual({
+      notification_count: 3,
+      highlight_count: 1,
+    });
+    expect(projection.unread_thread_notifications).toBeUndefined();
+  });
+
+  it("projects threaded unread notifications separately when requested by the sync filter", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.unreadSummaryByRoom.set(roomId, {
+      room: { notification_count: 4, highlight_count: 2 },
+      main: { notification_count: 2, highlight_count: 1 },
+      threads: {
+        $root: { notification_count: 2, highlight_count: 1 },
+      },
+    });
+
+    const projection = await projectJoinedRoom(repo, {
+      userId: "@alice:test",
+      roomId,
+      sincePosition: 5,
+      roomFilter: {
+        timeline: { unread_thread_notifications: true },
+      },
+    });
+
+    expect(projection.unread_notifications).toEqual({
+      notification_count: 2,
+      highlight_count: 1,
+    });
+    expect(projection.unread_thread_notifications).toEqual({
+      $root: { notification_count: 2, highlight_count: 1 },
+    });
   });
 
   it("omits incremental state changes when the corresponding timeline event is filtered out", async () => {
@@ -335,6 +521,75 @@ describe("sync-projection", () => {
 
     expect(projection.timeline?.events).toEqual([]);
     expect(projection.state?.events).toEqual([]);
+  });
+
+  it("includes an empty typing event on incremental syncs so typing stops are observable", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+
+    const projection = await projectJoinedRoom(repo, {
+      userId: "@alice:test",
+      roomId,
+      sincePosition: 5,
+      roomFilter: {
+        ephemeral: { types: ["m.typing"] },
+      },
+    });
+
+    expect(projection.ephemeral?.events).toEqual([{ type: "m.typing", content: { user_ids: [] } }]);
+  });
+
+  it("adds sender membership state for lazy-loaded incremental syncs", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.eventsSince.set(roomId, [
+      {
+        event_id: "$message",
+        room_id: roomId,
+        sender: "@derek:remote",
+        type: "m.room.message",
+        content: { body: "hello", msgtype: "m.text" },
+        origin_server_ts: 20,
+        depth: 2,
+        auth_events: [],
+        prev_events: [],
+      },
+    ]);
+    repo.roomStates.set(roomId, [
+      {
+        event_id: "$member",
+        room_id: roomId,
+        sender: "@derek:remote",
+        type: "m.room.member",
+        state_key: "@derek:remote",
+        content: { membership: "join" },
+        origin_server_ts: 10,
+        depth: 1,
+        auth_events: [],
+        prev_events: [],
+      },
+    ]);
+
+    const projection = await projectJoinedRoom(repo, {
+      userId: "@alice:test",
+      roomId,
+      sincePosition: 5,
+      roomFilter: {
+        timeline: { lazy_load_members: true },
+        state: { lazy_load_members: true },
+      },
+    });
+
+    expect(projection.timeline?.events).toEqual([
+      expect.objectContaining({ event_id: "$message", sender: "@derek:remote" }),
+    ]);
+    expect(projection.state?.events).toEqual([
+      expect.objectContaining({
+        event_id: "$member",
+        type: "m.room.member",
+        state_key: "@derek:remote",
+      }),
+    ]);
   });
 
   it("projects global account data with filters applied", async () => {

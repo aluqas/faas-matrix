@@ -81,8 +81,10 @@ export function collectRemoteServersForEvent(
   roomId: string,
   event: PDU,
   memberships: MembershipServerRow[],
+  excludeServers: string[] = [],
 ): string[] {
   const remoteServers = new Set<string>();
+  const excluded = new Set(excludeServers.filter((server) => server !== localServerName));
 
   for (const member of memberships) {
     const server = extractServerNameFromMatrixId(member.user_id);
@@ -132,7 +134,7 @@ export function collectRemoteServersForEvent(
     }
   }
 
-  return Array.from(remoteServers);
+  return Array.from(remoteServers).filter((server) => !excluded.has(server));
 }
 
 export async function fanoutEventToRemoteServers(
@@ -141,6 +143,7 @@ export async function fanoutEventToRemoteServers(
   localServerName: string,
   roomId: string,
   event: PDU,
+  excludeServers: string[] = [],
 ): Promise<void> {
   if (!(await shouldFanoutEvent(db, localServerName, roomId, event))) {
     await emitEffectWarning("[federation-fanout] skipped by ACL policy", {
@@ -176,6 +179,7 @@ export async function fanoutEventToRemoteServers(
     roomId,
     event,
     members.results,
+    excludeServers,
   );
 
   await emitEffectWarning("[federation-fanout] resolved targets", {

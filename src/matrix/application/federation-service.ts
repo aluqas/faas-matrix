@@ -17,6 +17,7 @@ import {
   verifyContentHash,
 } from "../../utils/crypto";
 import { verifyRemoteSignature } from "../../services/federation-keys";
+import { federationPost } from "../../services/federation-keys";
 import type { FederationRepository } from "../repositories/interfaces";
 import { createServerAclPolicy } from "./features/server-acl/policy";
 import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
@@ -24,6 +25,7 @@ import {
   handleFederationDeviceListEdu,
   handleFederationDirectToDeviceEdu,
   handleFederationPresenceEdu,
+  handleFederationReceiptEdu,
   handleFederationTypingEdu,
 } from "./federation-handler-service";
 import type { PresenceEduContent } from "./features/presence/contracts";
@@ -42,6 +44,7 @@ import {
 import { emitEffectWarning } from "./effect-debug";
 import { runFederationEffect } from "./effect-runtime";
 import { withLogContext } from "./logging";
+import { getPartialStateJoinForRoom } from "./features/partial-state/tracker";
 
 export interface FederationTransactionInput {
   origin: string;
@@ -86,6 +89,17 @@ function isDirectToDeviceEduContent(
     typeof content["message_id"] === "string" &&
     isRecord(content["messages"])
   );
+}
+
+function hasRelationContent(pdu: PDU): boolean {
+  const content = pdu.content;
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    return false;
+  }
+
+  const record = content as Record<string, unknown>;
+  const relation = record["m.relates_to"] ?? record["m.relationship"];
+  return !!relation && typeof relation === "object" && !Array.isArray(relation);
 }
 
 export class MatrixFederationService {
@@ -200,6 +214,17 @@ export class MatrixFederationService {
           content,
           event_id: normalizedEventId,
         } as PDU;
+
+        if (room) {
+          await this.fetchMissingPrevEventsIfNeeded(
+            input.origin,
+            input.txnId,
+            roomId,
+            room.room_version,
+            normalizedPdu,
+            logger,
+          );
+        }
 
         const existingPdu = await this.repository.getProcessedPdu(normalizedEventId);
         if (existingPdu) {
@@ -340,24 +365,43 @@ export class MatrixFederationService {
             roomState = resolveMembershipAuthState(roomId, roomState, inviteStrippedState);
             const authResult = checkEventAuth(normalizedPdu, roomState, room.room_version);
             if (!authResult.allowed) {
-              await emitEffectWarning("[federation-service] rejected PDU", {
+              const partialStateJoin = await getPartialStateJoinForRoom(
+                this.appContext.capabilities.kv.cache as KVNamespace | undefined,
                 roomId,
-                eventId,
-                type: normalizedPdu.type,
-                sender: normalizedPdu.sender,
-                stateKey: normalizedPdu.state_key,
-                reason: authResult.error || "Auth failed",
-              });
-              pduResults[eventId] = { error: authResult.error || "Event authorization failed" };
-              rejectedPduCount += 1;
-              await this.repository.recordProcessedPdu(
-                eventId,
-                pduOrigin,
-                roomId,
-                false,
-                authResult.error || "Auth failed",
               );
-              continue;
+              if (
+                partialStateJoin &&
+                authResult.error === "Sender is not joined to the room" &&
+                normalizedPdu.type !== "m.room.member"
+              ) {
+                await runFederationEffect(
+                  logger.warn("federation.transaction.partial_state_auth_deferred", {
+                    room_id: roomId,
+                    event_id: eventId,
+                    event_type: normalizedPdu.type,
+                    reason: authResult.error,
+                  }),
+                );
+              } else {
+                await emitEffectWarning("[federation-service] rejected PDU", {
+                  roomId,
+                  eventId,
+                  type: normalizedPdu.type,
+                  sender: normalizedPdu.sender,
+                  stateKey: normalizedPdu.state_key,
+                  reason: authResult.error || "Auth failed",
+                });
+                pduResults[eventId] = { error: authResult.error || "Event authorization failed" };
+                rejectedPduCount += 1;
+                await this.repository.recordProcessedPdu(
+                  eventId,
+                  pduOrigin,
+                  roomId,
+                  false,
+                  authResult.error || "Auth failed",
+                );
+                continue;
+              }
             }
           } catch {
             // Accept if auth evaluation itself fails.
@@ -418,6 +462,113 @@ export class MatrixFederationService {
       }),
     );
     return response;
+  }
+
+  private async fetchMissingPrevEventsIfNeeded(
+    origin: string,
+    txnId: string,
+    roomId: string,
+    roomVersion: string,
+    pdu: PDU,
+    logger: ReturnType<typeof withLogContext>,
+  ): Promise<void> {
+    if (hasRelationContent(pdu)) {
+      return;
+    }
+
+    const partialStateJoin = await getPartialStateJoinForRoom(
+      this.appContext.capabilities.kv.cache as KVNamespace | undefined,
+      roomId,
+    );
+    if (partialStateJoin) {
+      return;
+    }
+
+    const prevEvents = pdu.prev_events ?? [];
+    if (prevEvents.length === 0) {
+      return;
+    }
+
+    const missingPrevEvents: string[] = [];
+    for (const prevEventId of prevEvents) {
+      const existing = await this.repository.getEvent(prevEventId);
+      if (!existing) {
+        missingPrevEvents.push(prevEventId);
+      }
+    }
+
+    if (missingPrevEvents.length === 0) {
+      return;
+    }
+
+    const latestKnownEvents = await this.repository.getLatestRoomEvents(roomId, 1);
+    const earliestEventId = latestKnownEvents[0]?.event_id;
+    if (!earliestEventId) {
+      return;
+    }
+
+    await runFederationEffect(
+      logger.info("federation.transaction.gap_fill_start", {
+        room_id: roomId,
+        event_id: pdu.event_id,
+        room_version: roomVersion,
+        earliest_event_count: 1,
+        missing_prev_event_count: missingPrevEvents.length,
+      }),
+    );
+
+    const response = await federationPost(
+      origin,
+      `/_matrix/federation/v1/get_missing_events/${encodeURIComponent(roomId)}`,
+      {
+        limit: 20,
+        earliest_events: [earliestEventId],
+        latest_events: [pdu.event_id],
+      },
+      this.appContext.capabilities.config.serverName,
+      this.appContext.capabilities.sql.connection as D1Database,
+      this.appContext.capabilities.kv.cache as KVNamespace,
+    );
+
+    if (!response.ok) {
+      await runFederationEffect(
+        logger.warn("federation.transaction.gap_fill_error", {
+          room_id: roomId,
+          event_id: pdu.event_id,
+          error_message: `get_missing_events returned ${response.status}`,
+        }),
+      );
+      return;
+    }
+
+    const data = (await response.json()) as { events?: unknown[] };
+    const rawEvents = Array.isArray(data.events)
+      ? data.events.filter(
+          (event): event is Record<string, unknown> =>
+            event !== null && typeof event === "object" && !Array.isArray(event),
+        )
+      : [];
+
+    if (rawEvents.length === 0) {
+      return;
+    }
+
+    await this.processTransaction({
+      origin,
+      txnId: `${txnId}:missing:${pdu.event_id}`,
+      body: {
+        pdus: rawEvents,
+        edus: [],
+      },
+    });
+
+    await runFederationEffect(
+      logger.info("federation.transaction.gap_fill_result", {
+        room_id: roomId,
+        event_id: pdu.event_id,
+        fetched_event_count: rawEvents.length,
+      }),
+    );
   }
 
   private async storeAcceptedPdu(pdu: PDU): Promise<void> {
@@ -556,9 +707,20 @@ export class MatrixFederationService {
             this.appContext.capabilities.sql.connection as D1Database,
             origin,
             this.appContext.capabilities.realtime,
+            this.appContext.capabilities.kv.cache as KVNamespace | undefined,
             content,
           );
         }
+        break;
+      }
+      case "m.receipt": {
+        await handleFederationReceiptEdu(
+          this.appContext.capabilities.sql.connection as D1Database,
+          origin,
+          this.appContext.capabilities.realtime,
+          this.appContext.capabilities.kv.cache as KVNamespace | undefined,
+          content,
+        );
         break;
       }
       case "m.direct_to_device": {

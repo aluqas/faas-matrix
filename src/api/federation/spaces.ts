@@ -26,9 +26,14 @@ app.get("/_matrix/federation/v1/hierarchy/:roomId", async (c) => {
     limit,
     offset,
   });
+  const filteredChildrenState = selectSpaceChildren(childEdges, {
+    suggestedOnly,
+    limit: Number.MAX_SAFE_INTEGER,
+    offset: 0,
+  }).children;
 
   const rootInfo = await queries.getRoomPublicInfo(c.env.DB, roomId);
-  const rootChildrenState = childEdges.map((edge) => ({
+  const rootChildrenState = filteredChildrenState.map((edge) => ({
     type: "m.space.child",
     state_key: edge.roomId,
     content: edge.content,

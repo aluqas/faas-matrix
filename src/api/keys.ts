@@ -33,6 +33,7 @@ import {
   type SignaturesUploadRequest,
   type TokenSubmitRequest,
   type UiaSessionData,
+  isIdempotentCrossSigningUpload,
   parseCrossSigningKeysStore,
   parseCrossSigningUploadRequest,
   parseDeviceKeysMap,
@@ -1006,9 +1007,19 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
     .first<{ count: number }>();
 
   const hasExistingKeys = (existingKeys?.count || 0) > 0;
+  const existingCSKeys = hasExistingKeys ? await getCrossSigningKeysFromDO(c.env, userId) : {};
+  const uploadRequest = {
+    ...(master_key ? { master_key } : {}),
+    ...(self_signing_key ? { self_signing_key } : {}),
+    ...(user_signing_key ? { user_signing_key } : {}),
+    ...(auth ? { auth } : {}),
+  };
+  const isIdempotentUpload =
+    hasExistingKeys && isIdempotentCrossSigningUpload(existingCSKeys, uploadRequest);
   await runClientEffect(
     logger.info("keys.command.auth_context", {
       has_existing_keys: hasExistingKeys,
+      is_idempotent_upload: isIdempotentUpload,
     }),
   );
 
@@ -1026,11 +1037,11 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   // MSC3967: Do not require UIA when first uploading cross-signing keys
   // Per Matrix spec v1.11+, if user has NO existing cross-signing keys, skip UIA for first-time setup
   // If user HAS existing keys, require authentication
-  if (!hasExistingKeys) {
+  if (!hasExistingKeys || isIdempotentUpload) {
     // First-time cross-signing setup - skip UIA per MSC3967
     await runClientEffect(
       logger.info("keys.command.uia_skipped", {
-        reason: "first_time_setup",
+        reason: hasExistingKeys ? "idempotent_reupload" : "first_time_setup",
       }),
     );
   } else if (!auth) {
@@ -1314,8 +1325,6 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   }
 
   // Get existing keys from Durable Object (strongly consistent)
-  const existingCSKeys = await getCrossSigningKeysFromDO(c.env, userId);
-
   // Merge new keys with existing
   const csKeys = { ...existingCSKeys };
   if (master_key) csKeys.master = master_key;

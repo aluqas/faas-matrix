@@ -15,6 +15,9 @@ type StoredEventRow = {
   depth: number;
   auth_events: string;
   prev_events: string;
+  event_origin?: string | null;
+  event_membership?: string | null;
+  prev_state?: string | null;
   hashes?: string | null;
   signatures?: string | null;
   stream_ordering?: number;
@@ -38,6 +41,9 @@ function toStoredPdu(row: StoredEventRow): PDU {
     room_id: row.room_id,
     sender: row.sender,
     type: row.event_type,
+    ...withOptionalValue("origin", row.event_origin ?? undefined),
+    ...withOptionalValue("membership", (row.event_membership as Membership | null) ?? undefined),
+    ...(row.prev_state ? { prev_state: parseJsonWithFallback<string[]>(row.prev_state, []) } : {}),
     ...(row.state_key !== null ? { state_key: row.state_key } : {}),
     content: parseJsonWithFallback<Record<string, unknown>>(row.content, {}),
     origin_server_ts: row.origin_server_ts,
@@ -67,6 +73,56 @@ function withOptionalValue<K extends string, V>(key: K, value: V | undefined): {
   }
 
   return { [key]: value } as { [P in K]?: V };
+}
+
+type ExtractedRelation = {
+  relatesToId: string;
+  relationType: string;
+  aggregationKey: string | null;
+};
+
+function extractEventRelation(event: PDU): ExtractedRelation | null {
+  const rawContent = event.content;
+  if (!rawContent || typeof rawContent !== "object" || Array.isArray(rawContent)) {
+    return null;
+  }
+
+  const rawRelation = rawContent["m.relates_to"] ?? rawContent["m.relationship"];
+  if (!rawRelation || typeof rawRelation !== "object" || Array.isArray(rawRelation)) {
+    return null;
+  }
+  const relationRecord = rawRelation as Record<string, unknown>;
+
+  const relationType =
+    typeof relationRecord["rel_type"] === "string" ? relationRecord["rel_type"] : undefined;
+  const relatesToId =
+    typeof relationRecord["event_id"] === "string" ? relationRecord["event_id"] : undefined;
+  const aggregationKey = typeof relationRecord["key"] === "string" ? relationRecord["key"] : null;
+
+  if (!relationType || !relatesToId) {
+    return null;
+  }
+
+  return {
+    relatesToId,
+    relationType,
+    aggregationKey,
+  };
+}
+
+async function persistEventRelation(db: D1Database, event: PDU): Promise<void> {
+  const relation = extractEventRelation(event);
+  if (!relation) {
+    return;
+  }
+
+  await db
+    .prepare(
+      `INSERT OR REPLACE INTO event_relations (event_id, relates_to_id, relation_type, aggregation_key)
+       VALUES (?, ?, ?, ?)`,
+    )
+    .bind(event.event_id, relation.relatesToId, relation.relationType, relation.aggregationKey)
+    .run();
 }
 
 // User operations
@@ -265,15 +321,108 @@ export async function getUserDevices(db: D1Database, userId: string): Promise<De
   }));
 }
 
+const LOCAL_NOTIFICATION_SETTINGS_PREFIX = "org.matrix.msc3890.local_notification_settings.";
+
+async function recordAccountDataChange(
+  db: D1Database,
+  userId: string,
+  roomId: string,
+  eventType: string,
+): Promise<void> {
+  const pos = await db
+    .prepare(`
+    SELECT MAX(pos) as next_pos FROM (
+      SELECT COALESCE(MAX(stream_ordering), 0) as pos FROM events
+      UNION ALL
+      SELECT COALESCE(MAX(stream_position), 0) as pos FROM account_data_changes
+    )
+  `)
+    .first<{ next_pos: number }>();
+  const streamPosition = (pos?.next_pos ?? 0) + 1;
+
+  await db
+    .prepare(`
+    INSERT INTO account_data_changes (user_id, room_id, event_type, stream_position)
+    VALUES (?, ?, ?, ?)
+  `)
+    .bind(userId, roomId, eventType, streamPosition)
+    .run();
+}
+
+async function markGlobalAccountDataDeleted(
+  db: D1Database,
+  userId: string,
+  eventType: string,
+): Promise<void> {
+  await db
+    .prepare(`
+    INSERT INTO account_data (user_id, room_id, event_type, content, deleted)
+    VALUES (?, '', ?, '{}', 1)
+    ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET content = '{}', deleted = 1
+  `)
+    .bind(userId, eventType)
+    .run();
+  await recordAccountDataChange(db, userId, "", eventType);
+}
+
+async function deleteDeviceLocalNotificationSettings(
+  db: D1Database,
+  userId: string,
+  deviceId: string,
+): Promise<void> {
+  await markGlobalAccountDataDeleted(
+    db,
+    userId,
+    `${LOCAL_NOTIFICATION_SETTINGS_PREFIX}${deviceId}`,
+  );
+}
+
 export async function deleteDevice(
   db: D1Database,
   userId: string,
   deviceId: string,
 ): Promise<void> {
+  await deleteDeviceLocalNotificationSettings(db, userId, deviceId);
   await db
     .prepare(`DELETE FROM devices WHERE user_id = ? AND device_id = ?`)
     .bind(userId, deviceId)
     .run();
+}
+
+export async function deleteAllUserDevices(db: D1Database, userId: string): Promise<void> {
+  const notificationSettings = await db
+    .prepare(`
+      SELECT event_type
+      FROM account_data
+      WHERE user_id = ? AND room_id = '' AND event_type LIKE ? AND deleted = 0
+    `)
+    .bind(userId, `${LOCAL_NOTIFICATION_SETTINGS_PREFIX}%`)
+    .all<{ event_type: string }>();
+
+  for (const setting of notificationSettings.results) {
+    await markGlobalAccountDataDeleted(db, userId, setting.event_type);
+  }
+
+  await db.prepare(`DELETE FROM devices WHERE user_id = ?`).bind(userId).run();
+}
+
+export async function deleteOtherUserDevices(
+  db: D1Database,
+  userId: string,
+  keepDeviceId: string,
+): Promise<void> {
+  const devices = await db
+    .prepare(`
+      SELECT device_id
+      FROM devices
+      WHERE user_id = ? AND device_id != ?
+    `)
+    .bind(userId, keepDeviceId)
+    .all<{ device_id: string }>();
+
+  for (const device of devices.results) {
+    await deleteDevice(db, userId, device.device_id);
+  }
 }
 
 // Access token operations
@@ -305,6 +454,24 @@ export async function getUserByTokenHash(
   if (!result) return null;
 
   return {
+    userId: result.user_id,
+    deviceId: result.device_id,
+  };
+}
+
+export async function getAccessTokenRecordByHash(
+  db: D1Database,
+  tokenHash: string,
+): Promise<{ tokenId: string; userId: string; deviceId: string | null } | null> {
+  const result = await db
+    .prepare(`SELECT token_id, user_id, device_id FROM access_tokens WHERE token_hash = ?`)
+    .bind(tokenHash)
+    .first<{ token_id: string; user_id: string; device_id: string | null }>();
+
+  if (!result) return null;
+
+  return {
+    tokenId: result.token_id,
     userId: result.user_id,
     deviceId: result.device_id,
   };
@@ -368,6 +535,8 @@ export async function storeEvent(db: D1Database, event: PDU): Promise<number> {
     .bind(event.event_id)
     .first<{ stream_ordering: number }>();
   if (existing) {
+    await persistEventRelation(db, event);
+
     if (event.state_key !== undefined) {
       await db
         .prepare(
@@ -390,8 +559,9 @@ export async function storeEvent(db: D1Database, event: PDU): Promise<number> {
   await db
     .prepare(
       `INSERT OR IGNORE INTO events (event_id, room_id, sender, event_type, state_key, content,
-     origin_server_ts, unsigned, depth, auth_events, prev_events, hashes, signatures, stream_ordering)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     origin_server_ts, unsigned, depth, auth_events, prev_events, event_origin, event_membership,
+     prev_state, hashes, signatures, stream_ordering)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       event.event_id,
@@ -405,11 +575,16 @@ export async function storeEvent(db: D1Database, event: PDU): Promise<number> {
       event.depth,
       JSON.stringify(event.auth_events),
       JSON.stringify(event.prev_events),
+      event.origin ?? null,
+      event.membership ?? null,
+      event.prev_state ? JSON.stringify(event.prev_state) : null,
       event.hashes ? JSON.stringify(event.hashes) : null,
       event.signatures ? JSON.stringify(event.signatures) : null,
       streamOrdering,
     )
     .run();
+
+  await persistEventRelation(db, event);
 
   // Update room state if this is a state event
   if (event.state_key !== undefined) {
@@ -429,7 +604,8 @@ export async function getEvent(db: D1Database, eventId: string): Promise<PDU | n
   const result = await db
     .prepare(
       `SELECT event_id, room_id, sender, event_type, state_key, content,
-     origin_server_ts, unsigned, depth, auth_events, prev_events, hashes, signatures
+     origin_server_ts, unsigned, depth, auth_events, prev_events, event_origin, event_membership,
+     prev_state, hashes, signatures
      FROM events WHERE event_id = ?`,
     )
     .bind(eventId)
@@ -446,26 +622,52 @@ export async function getRoomEvents(
   fromToken?: number,
   limit: number = 50,
   direction: "f" | "b" = "b",
+  relationFilter?: {
+    relTypes?: string[];
+    notRelTypes?: string[];
+  },
 ): Promise<{ events: PDU[]; end: number }> {
   let query: string;
   const params: (string | number)[] = [roomId];
+  const hasRelationFilter =
+    (relationFilter?.relTypes?.length ?? 0) > 0 || (relationFilter?.notRelTypes?.length ?? 0) > 0;
+  const relationJoin = hasRelationFilter
+    ? " LEFT JOIN event_relations r ON r.event_id = e.event_id"
+    : "";
+  const whereClauses = ["e.room_id = ?"];
+
+  if ((relationFilter?.relTypes?.length ?? 0) > 0) {
+    whereClauses.push(
+      `r.relation_type IN (${relationFilter!.relTypes!.map(() => "?").join(", ")})`,
+    );
+    params.push(...relationFilter!.relTypes!);
+  }
+
+  if ((relationFilter?.notRelTypes?.length ?? 0) > 0) {
+    whereClauses.push(
+      `(r.relation_type IS NULL OR r.relation_type NOT IN (${relationFilter!.notRelTypes!.map(() => "?").join(", ")}))`,
+    );
+    params.push(...relationFilter!.notRelTypes!);
+  }
 
   if (direction === "b") {
     // Backwards (newest first)
-    if (fromToken) {
-      query = `SELECT * FROM events WHERE room_id = ? AND stream_ordering < ? ORDER BY stream_ordering DESC LIMIT ?`;
+    if (fromToken !== undefined) {
+      whereClauses.push("e.stream_ordering < ?");
+      query = `SELECT DISTINCT e.* FROM events e${relationJoin} WHERE ${whereClauses.join(" AND ")} ORDER BY e.stream_ordering DESC LIMIT ?`;
       params.push(fromToken, limit);
     } else {
-      query = `SELECT * FROM events WHERE room_id = ? ORDER BY stream_ordering DESC LIMIT ?`;
+      query = `SELECT DISTINCT e.* FROM events e${relationJoin} WHERE ${whereClauses.join(" AND ")} ORDER BY e.stream_ordering DESC LIMIT ?`;
       params.push(limit);
     }
   } else {
     // Forwards (oldest first)
-    if (fromToken) {
-      query = `SELECT * FROM events WHERE room_id = ? AND stream_ordering > ? ORDER BY stream_ordering ASC LIMIT ?`;
+    if (fromToken !== undefined) {
+      whereClauses.push("e.stream_ordering > ?");
+      query = `SELECT DISTINCT e.* FROM events e${relationJoin} WHERE ${whereClauses.join(" AND ")} ORDER BY e.stream_ordering ASC LIMIT ?`;
       params.push(fromToken, limit);
     } else {
-      query = `SELECT * FROM events WHERE room_id = ? ORDER BY stream_ordering ASC LIMIT ?`;
+      query = `SELECT DISTINCT e.* FROM events e${relationJoin} WHERE ${whereClauses.join(" AND ")} ORDER BY e.stream_ordering ASC LIMIT ?`;
       params.push(limit);
     }
   }
@@ -488,7 +690,8 @@ export async function getRoomState(db: D1Database, roomId: string): Promise<PDU[
   const result = await db
     .prepare(
       `SELECT e.event_id, e.room_id, e.sender, e.event_type, e.state_key, e.content,
-     e.origin_server_ts, e.unsigned, e.depth, e.auth_events, e.prev_events
+     e.origin_server_ts, e.unsigned, e.depth, e.auth_events, e.prev_events, e.event_origin,
+     e.event_membership, e.prev_state, e.hashes, e.signatures
      FROM room_state rs
      JOIN events e ON rs.event_id = e.event_id
      WHERE rs.room_id = ?`,
@@ -502,7 +705,8 @@ export async function getRoomState(db: D1Database, roomId: string): Promise<PDU[
     const createEvent = await db
       .prepare(
         `SELECT event_id, room_id, sender, event_type, state_key, content,
-       origin_server_ts, unsigned, depth, auth_events, prev_events
+       origin_server_ts, unsigned, depth, auth_events, prev_events, event_origin,
+       event_membership, prev_state, hashes, signatures
        FROM events
        WHERE room_id = ? AND event_type = 'm.room.create'
        LIMIT 1`,
@@ -527,7 +731,8 @@ export async function getStateEvent(
   const result = await db
     .prepare(
       `SELECT e.event_id, e.room_id, e.sender, e.event_type, e.state_key, e.content,
-     e.origin_server_ts, e.unsigned, e.depth, e.auth_events, e.prev_events
+     e.origin_server_ts, e.unsigned, e.depth, e.auth_events, e.prev_events, e.event_origin,
+     e.event_membership, e.prev_state, e.hashes, e.signatures
      FROM room_state rs
      JOIN events e ON rs.event_id = e.event_id
      WHERE rs.room_id = ? AND rs.event_type = ? AND rs.state_key = ?`,
@@ -539,7 +744,8 @@ export async function getStateEvent(
     const createEvent = await db
       .prepare(
         `SELECT event_id, room_id, sender, event_type, state_key, content,
-       origin_server_ts, unsigned, depth, auth_events, prev_events
+       origin_server_ts, unsigned, depth, auth_events, prev_events, event_origin,
+       event_membership, prev_state, hashes, signatures
        FROM events
        WHERE room_id = ? AND event_type = 'm.room.create'
        LIMIT 1`,
@@ -776,7 +982,8 @@ export async function getEventsSince(
   const result = await db
     .prepare(
       `SELECT event_id, room_id, sender, event_type, state_key, content,
-     origin_server_ts, unsigned, depth, auth_events, prev_events
+     origin_server_ts, unsigned, depth, auth_events, prev_events, event_origin, event_membership,
+     prev_state, hashes, signatures
      FROM events
      WHERE room_id = ? AND stream_ordering > ?
      ORDER BY stream_ordering ASC
@@ -797,7 +1004,8 @@ export async function getEventsByIds(db: D1Database, eventIds: string[]): Promis
   const result = await db
     .prepare(
       `SELECT event_id, room_id, sender, event_type, state_key, content,
-     origin_server_ts, unsigned, depth, auth_events, prev_events, hashes, signatures
+     origin_server_ts, unsigned, depth, auth_events, prev_events, event_origin, event_membership,
+     prev_state, hashes, signatures
      FROM events WHERE event_id IN (${placeholders})`,
     )
     .bind(...eventIds)
@@ -950,9 +1158,21 @@ export async function notifyUsersOfEvent(
 
 // Fan out a stored event to all remote federation peers that have joined members in the room.
 // Non-blocking — errors are logged but do not propagate to the caller.
-export async function fanoutEventToFederation(env: Env, roomId: string, event: PDU): Promise<void> {
+export async function fanoutEventToFederation(
+  env: Env,
+  roomId: string,
+  event: PDU,
+  options?: { excludeServers?: string[] },
+): Promise<void> {
   try {
-    await fanoutEventToRemoteServers(env.DB, env.CACHE, env.SERVER_NAME, roomId, event);
+    await fanoutEventToRemoteServers(
+      env.DB,
+      env.CACHE,
+      env.SERVER_NAME,
+      roomId,
+      event,
+      options?.excludeServers,
+    );
   } catch (err) {
     console.error("[federation-fanout] Error during fanout:", err);
   }

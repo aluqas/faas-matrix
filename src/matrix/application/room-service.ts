@@ -2,7 +2,7 @@ import type { AppContext } from "../../foundation/app-context";
 import { withIdempotency, type IdempotencyStore } from "../../foundation/idempotency";
 import { Errors, MatrixApiError } from "../../utils/errors";
 import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
-import type { PDU, RoomJoinWorkflowStatus } from "../../types";
+import type { PDU, RoomJoinWorkflowStatus, RoomPowerLevelsContent } from "../../types";
 import type { EventPipeline } from "../domain/event-pipeline";
 import type { RoomRepository } from "../repositories/interfaces";
 import {
@@ -14,7 +14,13 @@ import { sendFederationInvite } from "../../services/federation-invite";
 import { getServerSigningKey } from "../../services/federation-keys";
 import { fanoutEventToRemoteServers } from "../../services/federation-fanout";
 import { getServersInRoomsWithUser, getUserDevices } from "../../services/database";
-import { calculateContentHash, calculateReferenceHashEventId, signJson } from "../../utils/crypto";
+import {
+  calculateContentHash,
+  calculateReferenceHashEventId,
+  canonicalJson,
+  signJson,
+} from "../../utils/crypto";
+import { parseUserId } from "../../utils/ids";
 import { parseDeviceKeysPayload } from "../../api/keys-contracts";
 import {
   authorizeBan,
@@ -25,9 +31,11 @@ import {
   authorizeUnban,
   validateLeavePreconditions,
 } from "./room-membership-policy";
+import { requireRoomVersionPolicy } from "./room-version-policy";
 import { runClientEffect } from "./effect-runtime";
 import { emitEffectWarning } from "./effect-debug";
 import { withLogContext, type LogContext } from "./logging";
+import { DomainError, toMatrixApiError } from "./domain-error";
 import {
   validateCreateRoomRequest,
   validateInviteRoomRequest,
@@ -35,6 +43,11 @@ import {
   validateModerationRequest,
 } from "./room-validation";
 import { publishDeviceListUpdatesForNewlySharedServers } from "./features/device-lists/command";
+import {
+  decideInvitePermission,
+  loadInvitePermissionConfig,
+} from "./features/invite-permissions/policy";
+import { authorizeOwnedStateEvent } from "./features/owned-state/policy";
 
 export interface CreateRoomInput {
   userId: string;
@@ -45,6 +58,7 @@ export interface JoinRoomInput {
   userId: string;
   roomId: string;
   remoteServers?: string[];
+  body?: unknown;
 }
 
 export interface SendEventInput {
@@ -84,6 +98,53 @@ function withOptionalValue<K extends string, V>(key: K, value: V | undefined): {
   return { [key]: value } as { [P in K]?: V };
 }
 
+function isD1Database(value: unknown): value is D1Database {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "prepare" in value &&
+    typeof (value as { prepare?: unknown }).prepare === "function"
+  );
+}
+
+function getPowerLevelsContent(powerLevelsEvent: PDU | null): RoomPowerLevelsContent {
+  const content = powerLevelsEvent?.content;
+  if (!content || typeof content !== "object") {
+    return {
+      users_default: 0,
+      events_default: 0,
+      state_default: 50,
+      ban: 50,
+      kick: 50,
+      redact: 50,
+      invite: 0,
+      users: {},
+      events: {},
+    };
+  }
+
+  return content as RoomPowerLevelsContent;
+}
+
+function getUserPowerLevel(powerLevels: RoomPowerLevelsContent, userId: string): number {
+  return (
+    powerLevels.users?.[userId as keyof typeof powerLevels.users] ?? powerLevels.users_default ?? 0
+  );
+}
+
+function getRequiredEventPowerLevel(
+  powerLevels: RoomPowerLevelsContent,
+  eventType: string,
+  isStateEvent: boolean,
+): number {
+  const eventLevel = powerLevels.events?.[eventType];
+  if (typeof eventLevel === "number") {
+    return eventLevel;
+  }
+
+  return isStateEvent ? (powerLevels.state_default ?? 50) : (powerLevels.events_default ?? 0);
+}
+
 async function getStoredDeviceKeysFromKv(
   kv: KVNamespace | undefined,
   userId: string,
@@ -97,7 +158,7 @@ async function getStoredDeviceKeysFromKv(
 }
 
 async function attachFederationMetadata(
-  db: D1Database,
+  db: D1Database | undefined,
   serverName: string,
   event: PDU,
   roomVersion?: string,
@@ -110,6 +171,12 @@ async function attachFederationMetadata(
         ? event
         : { ...event, event_id: undefined }) as unknown as Record<string, unknown>,
     ));
+  if (!db) {
+    return {
+      ...event,
+      hashes: { sha256: hash },
+    };
+  }
   const signingKey = await getServerSigningKey(db);
   if (!signingKey) {
     throw new MatrixApiError("M_UNKNOWN", "Server signing key not configured", 500);
@@ -164,28 +231,31 @@ export class MatrixRoomService {
     const validated = await runClientEffect(validateCreateRoomRequest(input.body));
     const {
       room_alias_local_part,
+      room_alias_name,
       name,
       topic,
       invite,
       room_version,
+      creation_content,
       initial_state,
       preset,
       is_direct,
       visibility,
     } = validated;
+    const roomAliasLocalPart = room_alias_local_part ?? room_alias_name;
     await runClientEffect(
       logger.info("room.command.start", {
         command: "create_room",
         invite_count: invite?.length ?? 0,
         room_version: room_version ?? getDefaultRoomVersion(),
         visibility,
-        has_alias: Boolean(room_alias_local_part),
+        has_alias: Boolean(roomAliasLocalPart),
       }),
     );
 
-    if (room_alias_local_part) {
+    if (roomAliasLocalPart) {
       const alias = this.appContext.capabilities.id.formatRoomAlias(
-        room_alias_local_part,
+        roomAliasLocalPart,
         this.appContext.capabilities.config.serverName,
       );
       const existingRoom = await this.repository.getRoomByAlias(alias);
@@ -213,6 +283,7 @@ export class MatrixRoomService {
         ...withOptionalValue("topic", topic),
         ...withOptionalValue("preset", preset),
         ...withOptionalValue("is_direct", is_direct),
+        ...withOptionalValue("creation_content", creation_content),
         ...withOptionalValue(
           "initial_state",
           initial_state?.map((state) => ({
@@ -222,7 +293,7 @@ export class MatrixRoomService {
           })),
         ),
         ...withOptionalValue("invite", invite ? [...invite] : undefined),
-        ...withOptionalValue("room_alias_local_part", room_alias_local_part),
+        ...withOptionalValue("room_alias_local_part", roomAliasLocalPart),
       },
       this.appContext.capabilities.id.generateEventId,
       this.appContext.capabilities.clock.now,
@@ -233,9 +304,9 @@ export class MatrixRoomService {
     });
 
     let roomAlias: string | undefined;
-    if (room_alias_local_part) {
+    if (roomAliasLocalPart) {
       roomAlias = this.appContext.capabilities.id.formatRoomAlias(
-        room_alias_local_part,
+        roomAliasLocalPart,
         this.appContext.capabilities.config.serverName,
       );
       await this.repository.createRoomAlias(roomAlias, roomId, input.userId);
@@ -288,14 +359,17 @@ export class MatrixRoomService {
       room_id: input.roomId,
       user_id: input.userId,
     });
-    const db = this.appContext.capabilities.sql.connection as D1Database;
+    const db = isD1Database(this.appContext.capabilities.sql.connection)
+      ? this.appContext.capabilities.sql.connection
+      : undefined;
     const cache = this.appContext.capabilities.kv.cache as KVNamespace;
     const deviceKeysKv = this.appContext.capabilities.kv.deviceKeys as KVNamespace | undefined;
-    const preJoinSharedServers = await getServersInRoomsWithUser(db, input.userId);
+    const preJoinSharedServers = db ? await getServersInRoomsWithUser(db, input.userId) : [];
     const validated = await runClientEffect(
       validateJoinRoomRequest({
         roomId: input.roomId,
         ...withOptionalValue("remoteServers", input.remoteServers),
+        ...withOptionalValue("content", input.body as Record<string, unknown> | undefined),
       }),
     );
     const roomServer = getServerFromRoomId(validated.roomId);
@@ -436,6 +510,7 @@ export class MatrixRoomService {
           ...withOptionalValue("createEventId", createEvent?.event_id),
           prevEventIds: latestEvents.map((event) => event.event_id),
           depth: (latestEvents[0]?.depth ?? 0) + 1,
+          ...withOptionalValue("content", validated.content),
           ...withOptionalValue(
             "unsigned",
             prevContent
@@ -463,6 +538,10 @@ export class MatrixRoomService {
         this.appContext.defer(
           (async () => {
             try {
+              if (!db) {
+                return;
+              }
+
               await fanoutEventToRemoteServers(
                 db,
                 cache,
@@ -484,8 +563,10 @@ export class MatrixRoomService {
                 {
                   localServerName: this.appContext.capabilities.config.serverName,
                   now: () => this.appContext.capabilities.clock.now(),
-                  getSharedRemoteServers: (userId) => getServersInRoomsWithUser(db, userId),
-                  getUserDevices: (userId) => getUserDevices(db, userId),
+                  getSharedRemoteServers: (userId) =>
+                    db ? getServersInRoomsWithUser(db, userId) : Promise.resolve([]),
+                  getUserDevices: (userId) =>
+                    db ? getUserDevices(db, userId) : Promise.resolve([]),
                   getStoredDeviceKeys: (userId, deviceId) =>
                     getStoredDeviceKeysFromKv(deviceKeysKv, userId, deviceId),
                   queueEdu,
@@ -724,6 +805,44 @@ export class MatrixRoomService {
           return { alreadyInvited: true };
         }
 
+        const db = isD1Database(this.appContext.capabilities.sql.connection)
+          ? this.appContext.capabilities.sql.connection
+          : undefined;
+        const cache = this.appContext.capabilities.kv.cache as KVNamespace | undefined;
+        const targetUser = parseUserId(validated.targetUserId);
+        const isLocalTarget =
+          targetUser?.serverName === this.appContext.capabilities.config.serverName;
+
+        if (db && isLocalTarget) {
+          const invitePermissionConfig = await loadInvitePermissionConfig(
+            db,
+            validated.targetUserId,
+          );
+          const decision = decideInvitePermission(invitePermissionConfig, input.userId);
+          if (decision.action === "block") {
+            await runClientEffect(
+              logger.warn("room.command.decision", {
+                command: "invite_room",
+                decision: "invite_blocked",
+                target_user_id: validated.targetUserId,
+                matched_by: decision.matchedBy,
+                matched_value: decision.matchedValue,
+              }),
+            );
+            throw Errors.inviteBlocked();
+          }
+        }
+
+        if (db && cache) {
+          await sendFederationInvite(
+            db,
+            cache,
+            this.appContext.capabilities.config.serverName,
+            validated.roomId,
+            event,
+          );
+        }
+
         await this.repository.persistMembershipEvent(validated.roomId, event, "client");
         return { eventId: event.event_id, alreadyInvited: false };
       },
@@ -736,26 +855,6 @@ export class MatrixRoomService {
 
         const db = this.appContext.capabilities.sql.connection as D1Database;
         const cache = this.appContext.capabilities.kv.cache as KVNamespace;
-        this.appContext.defer(
-          sendFederationInvite(
-            db,
-            cache,
-            this.appContext.capabilities.config.serverName,
-            validated.roomId,
-            event,
-          ).catch((error) => {
-            void runClientEffect(
-              logger.error("room.command.async_error", error, {
-                command: "invite_room",
-                room_id: validated.roomId,
-                event_id: event.event_id,
-                target_user_id: validated.targetUserId,
-                phase: "send_federation_invite",
-              }),
-            );
-          }),
-        );
-
         this.appContext.defer(
           fanoutEventToRemoteServers(
             db,
@@ -863,163 +962,231 @@ export class MatrixRoomService {
         txn_id: input.txnId,
       }),
     );
-    const response = await withIdempotency(
-      this.idempotencyStore,
-      input.userId,
-      input.txnId,
-      async () => {
-        const result = await this.eventPipeline.execute({
-          input,
-          validate: () => {
-            if (!input.eventType) {
-              throw Errors.missingParam("eventType");
-            }
-          },
-          resolveAuth: async () => {
-            const room = await this.repository.getRoom(input.roomId);
-            if (!room) {
-              throw Errors.notFound("Room not found");
-            }
-            return {
-              userId: input.userId,
-              roomVersion: room.room_version,
-            };
-          },
-          authorize: async (_pipelineInput, auth) => {
-            const membership = await this.repository.getMembership(input.roomId, auth.userId);
-            if (!membership || membership.membership !== "join") {
-              throw Errors.forbidden("Not a member of this room");
-            }
-          },
-          buildEvent: async (_pipelineInput, auth) => {
-            const membership = await this.repository.getMembership(input.roomId, auth.userId);
-            const createEvent = await this.repository.getStateEvent(input.roomId, "m.room.create");
-            const powerLevelsEvent = await this.repository.getStateEvent(
+    try {
+      const response = await withIdempotency(
+        this.idempotencyStore,
+        input.userId,
+        input.txnId,
+        async () => {
+          if (input.stateKey !== undefined) {
+            const existingStateEvent = await this.repository.getStateEvent(
               input.roomId,
-              "m.room.power_levels",
+              input.eventType,
+              input.stateKey,
             );
-            const latestEvents = await this.repository.getLatestRoomEvents(input.roomId, 1);
-
-            const authEvents: string[] = [];
-            if (createEvent) authEvents.push(createEvent.event_id);
-            if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-            if (membership) authEvents.push(membership.eventId);
-
-            const baseEvent = {
-              room_id: input.roomId,
-              sender: auth.userId,
-              type: input.eventType,
-              ...withOptionalValue("state_key", input.stateKey),
-              content: input.content,
-              origin_server_ts: this.appContext.capabilities.clock.now(),
-              unsigned: { transaction_id: input.txnId },
-              depth: (latestEvents[0]?.depth ?? 0) + 1,
-              auth_events: authEvents,
-              prev_events: latestEvents.map((eventRecord) => eventRecord.event_id),
-            };
-            const hash = await calculateContentHash(
-              baseEvent as unknown as Record<string, unknown>,
-            );
-            const eventWithHash = {
-              ...baseEvent,
-              hashes: { sha256: hash },
-            };
-            const eventId =
-              getRoomVersion(auth.roomVersion)?.eventIdFormat === "v1"
-                ? await this.appContext.capabilities.id.generateEventId(
-                    this.appContext.capabilities.config.serverName,
-                    auth.roomVersion,
-                  )
-                : await calculateReferenceHashEventId(
-                    eventWithHash as unknown as Record<string, unknown>,
-                    auth.roomVersion,
-                  );
-
-            const event: PDU = {
-              event_id: eventId,
-              ...eventWithHash,
-            };
-
-            return event;
-          },
-          persist: async (_pipelineInput, _auth, event) => {
-            await this.repository.storeEvent(event);
-            return { eventId: event.event_id };
-          },
-          fanout: async (_pipelineInput, _auth, event) => {
-            await this.repository.notifyUsersOfEvent(input.roomId, event.event_id, input.eventType);
-          },
-          notifyFederation: async (_pipelineInput, auth, event) => {
             if (
-              this.appContext.profile.features.pushNotifications &&
-              (input.eventType === "m.room.message" || input.eventType === "m.room.encrypted")
+              existingStateEvent &&
+              existingStateEvent.sender === input.userId &&
+              canonicalJson(existingStateEvent.content) === canonicalJson(input.content)
             ) {
-              this.appContext.defer(
-                this.appContext.capabilities.workflow
-                  .createPushNotification({
-                    eventId: event.event_id,
-                    roomId: input.roomId,
-                    eventType: input.eventType,
-                    sender: input.userId,
-                    content: input.content,
-                    originServerTs: event.origin_server_ts,
-                  })
-                  .then(() => undefined),
-              );
-            }
-
-            const federatedEvent = await attachFederationMetadata(
-              this.appContext.capabilities.sql.connection as D1Database,
-              this.appContext.capabilities.config.serverName,
-              event,
-              auth.roomVersion,
-            );
-            await emitEffectWarning("[room-service] federating event", {
-              roomId: input.roomId,
-              eventId: federatedEvent.event_id,
-              eventType: input.eventType,
-              hasHashes: Boolean(federatedEvent.hashes?.sha256),
-              signatureServers: Object.keys(federatedEvent.signatures ?? {}),
-              authEvents: federatedEvent.auth_events?.length ?? 0,
-              prevEvents: federatedEvent.prev_events?.length ?? 0,
-            });
-            try {
-              await fanoutEventToRemoteServers(
-                this.appContext.capabilities.sql.connection as D1Database,
-                this.appContext.capabilities.kv.cache as KVNamespace,
-                this.appContext.capabilities.config.serverName,
-                input.roomId,
-                federatedEvent,
-              );
-            } catch (error) {
               await runClientEffect(
-                logger.error("room.command.async_error", error, {
+                logger.info("room.command.success", {
                   command: "send_event",
                   room_id: input.roomId,
-                  event_id: federatedEvent.event_id,
                   event_type: input.eventType,
-                  phase: "fanout_event",
+                  state_key: input.stateKey,
+                  event_id: existingStateEvent.event_id,
+                  idempotent: true,
                 }),
               );
+              return { event_id: existingStateEvent.event_id };
             }
-          },
-        });
+          }
 
-        const eventId = result.persisted.eventId;
-        if (typeof eventId !== "string") {
-          throw new MatrixApiError("M_UNKNOWN", "Event persistence failed", 500);
-        }
-        await runClientEffect(
-          logger.info("room.command.success", {
-            command: "send_event",
-            event_id: eventId,
-            event_type: input.eventType,
-          }),
-        );
-        return { event_id: eventId };
-      },
-    );
-    return response as { event_id: string };
+          const result = await this.eventPipeline.execute({
+            input,
+            validate: () => {
+              if (!input.eventType) {
+                throw Errors.missingParam("eventType");
+              }
+            },
+            resolveAuth: async () => {
+              const room = await this.repository.getRoom(input.roomId);
+              if (!room) {
+                throw Errors.notFound("Room not found");
+              }
+              return {
+                userId: input.userId,
+                roomVersion: room.room_version,
+              };
+            },
+            authorize: async (_pipelineInput, auth) => {
+              const membership = await this.repository.getMembership(input.roomId, auth.userId);
+              if (!membership || membership.membership !== "join") {
+                throw Errors.forbidden("Not a member of this room");
+              }
+
+              if (input.stateKey?.startsWith("@")) {
+                const powerLevelsEvent = await this.repository.getStateEvent(
+                  input.roomId,
+                  "m.room.power_levels",
+                );
+                const powerLevels = getPowerLevelsContent(powerLevelsEvent);
+                authorizeOwnedStateEvent({
+                  policy: requireRoomVersionPolicy(auth.roomVersion),
+                  eventType: input.eventType,
+                  stateKey: input.stateKey,
+                  senderUserId: auth.userId,
+                  actorPower: getUserPowerLevel(powerLevels, auth.userId),
+                  requiredEventPower: getRequiredEventPowerLevel(
+                    powerLevels,
+                    input.eventType,
+                    input.stateKey !== undefined,
+                  ),
+                });
+              }
+            },
+            buildEvent: async (_pipelineInput, auth) => {
+              const membership = await this.repository.getMembership(input.roomId, auth.userId);
+              const createEvent = await this.repository.getStateEvent(
+                input.roomId,
+                "m.room.create",
+              );
+              const powerLevelsEvent = await this.repository.getStateEvent(
+                input.roomId,
+                "m.room.power_levels",
+              );
+              const latestEvents = await this.repository.getLatestRoomEvents(input.roomId, 1);
+
+              const authEvents: string[] = [];
+              if (createEvent) authEvents.push(createEvent.event_id);
+              if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
+              if (membership) authEvents.push(membership.eventId);
+
+              const baseEvent = {
+                room_id: input.roomId,
+                sender: auth.userId,
+                type: input.eventType,
+                ...withOptionalValue("state_key", input.stateKey),
+                content: input.content,
+                origin_server_ts: this.appContext.capabilities.clock.now(),
+                unsigned: { transaction_id: input.txnId },
+                depth: (latestEvents[0]?.depth ?? 0) + 1,
+                auth_events: authEvents,
+                prev_events: latestEvents.map((eventRecord) => eventRecord.event_id),
+              };
+              const hash = await calculateContentHash(
+                baseEvent as unknown as Record<string, unknown>,
+              );
+              const eventWithHash = {
+                ...baseEvent,
+                hashes: { sha256: hash },
+              };
+              const eventId =
+                getRoomVersion(auth.roomVersion)?.eventIdFormat === "v1"
+                  ? await this.appContext.capabilities.id.generateEventId(
+                      this.appContext.capabilities.config.serverName,
+                      auth.roomVersion,
+                    )
+                  : await calculateReferenceHashEventId(
+                      eventWithHash as unknown as Record<string, unknown>,
+                      auth.roomVersion,
+                    );
+
+              const event: PDU = {
+                event_id: eventId,
+                ...eventWithHash,
+              };
+
+              return event;
+            },
+            persist: async (_pipelineInput, _auth, event) => {
+              await this.repository.storeEvent(event);
+              return { eventId: event.event_id };
+            },
+            fanout: async (_pipelineInput, _auth, event) => {
+              await this.repository.notifyUsersOfEvent(
+                input.roomId,
+                event.event_id,
+                input.eventType,
+              );
+            },
+            notifyFederation: async (_pipelineInput, auth, event) => {
+              this.appContext.defer(
+                (async () => {
+                  if (
+                    this.appContext.profile.features.pushNotifications &&
+                    (input.eventType === "m.room.message" || input.eventType === "m.room.encrypted")
+                  ) {
+                    await this.appContext.capabilities.workflow.createPushNotification({
+                      eventId: event.event_id,
+                      roomId: input.roomId,
+                      eventType: input.eventType,
+                      sender: input.userId,
+                      content: input.content,
+                      originServerTs: event.origin_server_ts,
+                    });
+                  }
+
+                  const federatedEvent = await attachFederationMetadata(
+                    isD1Database(this.appContext.capabilities.sql.connection)
+                      ? this.appContext.capabilities.sql.connection
+                      : undefined,
+                    this.appContext.capabilities.config.serverName,
+                    event,
+                    auth.roomVersion,
+                  );
+                  await emitEffectWarning("[room-service] federating event", {
+                    roomId: input.roomId,
+                    eventId: federatedEvent.event_id,
+                    eventType: input.eventType,
+                    hasHashes: Boolean(federatedEvent.hashes?.sha256),
+                    signatureServers: Object.keys(federatedEvent.signatures ?? {}),
+                    authEvents: federatedEvent.auth_events?.length ?? 0,
+                    prevEvents: federatedEvent.prev_events?.length ?? 0,
+                  });
+                  try {
+                    const federationDb = isD1Database(this.appContext.capabilities.sql.connection)
+                      ? this.appContext.capabilities.sql.connection
+                      : undefined;
+                    if (!federationDb) {
+                      return;
+                    }
+
+                    await fanoutEventToRemoteServers(
+                      federationDb,
+                      this.appContext.capabilities.kv.cache as KVNamespace,
+                      this.appContext.capabilities.config.serverName,
+                      input.roomId,
+                      federatedEvent,
+                    );
+                  } catch (error) {
+                    await runClientEffect(
+                      logger.error("room.command.async_error", error, {
+                        command: "send_event",
+                        room_id: input.roomId,
+                        event_id: federatedEvent.event_id,
+                        event_type: input.eventType,
+                        phase: "fanout_event",
+                      }),
+                    );
+                  }
+                })(),
+              );
+            },
+          });
+
+          const eventId = result.persisted.eventId;
+          if (typeof eventId !== "string") {
+            throw new MatrixApiError("M_UNKNOWN", "Event persistence failed", 500);
+          }
+          await runClientEffect(
+            logger.info("room.command.success", {
+              command: "send_event",
+              event_id: eventId,
+              event_type: input.eventType,
+            }),
+          );
+          return { event_id: eventId };
+        },
+      );
+      return response as { event_id: string };
+    } catch (error) {
+      if (error instanceof DomainError) {
+        throw toMatrixApiError(error);
+      }
+      throw error;
+    }
   }
 
   private async executeModerationAction(input: {

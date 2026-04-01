@@ -4,6 +4,7 @@ import {
   handleFederationDeviceListEdu,
   handleFederationDirectToDeviceEdu,
   handleFederationPresenceEdu,
+  handleFederationReceiptEdu,
   handleFederationTypingEdu,
 } from "./federation-handler-service";
 
@@ -200,6 +201,7 @@ describe("federation-handler-service", () => {
           calls.push({ roomId, userId, typing, timeoutMs });
         },
       },
+      undefined,
       {
         room_id: "!room:hs1",
         user_id: "@alice:remote",
@@ -214,6 +216,62 @@ describe("federation-handler-service", () => {
         userId: "@alice:remote",
         typing: true,
         timeoutMs: 12_000,
+      },
+    ]);
+  });
+
+  it("preserves remote receipt timestamps when applying receipt EDUs", async () => {
+    const db = new FakeD1Database();
+    db.memberships.set("!room:hs1:@alice:remote", "join");
+    const calls: Array<{
+      roomId: string;
+      userId: string;
+      eventId: string;
+      receiptType: string;
+      threadId?: string;
+      ts?: number;
+    }> = [];
+
+    await handleFederationReceiptEdu(
+      db as unknown as D1Database,
+      "remote",
+      {
+        async notifyRoomEvent() {},
+        async waitForUserEvents() {
+          return { hasEvents: false };
+        },
+        async setRoomReceipt(
+          roomId: string,
+          userId: string,
+          eventId: string,
+          receiptType: string,
+          threadId?: string,
+          ts?: number,
+        ) {
+          calls.push({ roomId, userId, eventId, receiptType, threadId, ts });
+        },
+      },
+      undefined,
+      {
+        "!room:hs1": {
+          "m.read": {
+            "@alice:remote": {
+              event_ids: ["$event"],
+              data: { ts: 1_436_451_550_453, thread_id: "main" },
+            },
+          },
+        },
+      },
+    );
+
+    expect(calls).toEqual([
+      {
+        roomId: "!room:hs1",
+        userId: "@alice:remote",
+        eventId: "$event",
+        receiptType: "m.read",
+        threadId: "main",
+        ts: 1_436_451_550_453,
       },
     ]);
   });

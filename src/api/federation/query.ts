@@ -8,6 +8,7 @@ const queries = new EventQueryService();
 
 app.post("/_matrix/federation/v1/get_missing_events/:roomId", async (c) => {
   const roomId = c.req.param("roomId");
+  const origin = c.get("federationOrigin" as any) as string | undefined;
 
   let body: {
     earliest_events?: string[];
@@ -22,7 +23,11 @@ app.post("/_matrix/federation/v1/get_missing_events/:roomId", async (c) => {
     return Errors.badJson().toResponse();
   }
 
-  if (!(await queries.roomExists(c.env.DB, roomId))) {
+  const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
+    .bind(roomId)
+    .first<{ room_id: string; room_version: string }>();
+
+  if (!room) {
     return Errors.notFound("Room not found").toResponse();
   }
 
@@ -32,6 +37,8 @@ app.post("/_matrix/federation/v1/get_missing_events/:roomId", async (c) => {
     latestEvents: body.latest_events || [],
     limit: Math.min(body.limit || 10, 100),
     minDepth: body.min_depth || 0,
+    roomVersion: room.room_version,
+    requestingServer: origin,
   });
 
   return c.json({ events });

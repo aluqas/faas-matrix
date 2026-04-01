@@ -1,7 +1,7 @@
 # Complement Gap Analysis
 
 Complement black-box integration test results and failure root-cause analysis.
-Last updated: 2026-03-31. Based on test runs test1–test10 plus targeted Complement reruns on 2026-03-31.
+Last updated: 2026-04-01. Based on test runs test1–test10 plus targeted Complement reruns on 2026-03-31 and 2026-04-01.
 
 ## Current Full-Run Status (2026-03-31)
 
@@ -10,20 +10,23 @@ Latest full run:
 - Top-level summary from [`2026-03-31_11-09-17.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-03-31_11-09-17.log): **71 total / 17 pass / 52 fail / 2 skip**
 - Progress tracking in the table below uses `bun run complement:analyze --last 1 --depth 7`, which counts reached subtests: **291 reached / 124 pass (43%) / 160 fail / 7 skip**
 
-Important targeted reruns on 2026-03-31 are greener than the single full run in a few federation buckets:
+Important targeted reruns on 2026-03-31 and 2026-04-01 are greener than the single full run in several high-priority buckets:
 
 - `TestACLs` passes in targeted reruns after the state-event pipeline / reference-hash fixes, but flaked in the full run because the Complement blueprint did not become healthy in time.
 - `TestOutboundFederationProfile`, `TestRemotePresence`, `TestRemoteTyping`, `TestToDeviceMessagesOverFederation`, and `TestSyncOmitsStateChangeOnFilteredEvents` all pass in targeted reruns.
+- `TestInboundCanReturnMissingEvents`, `TestGetMissingEventsGapFilling`, and `TestEventAuth` all pass in targeted reruns on 2026-04-01.
+- `TestPartialStateJoin/CanReceiveTypingDuringPartialStateJoin` passes in a targeted rerun on 2026-04-01.
+- The room/surface correctness bucket is now green in targeted reruns: `TestUnknownEndpoints`, `TestServerCapabilities`, `TestRoomAlias`, `TestRoomDeleteAlias`, `TestRoomCanonicalAlias`, `TestRemoteAliasRequestsUnderstandUnicode`, `TestRoomCreate`, `TestRoomState`, `TestRoomForget`, `TestRoomMembers`, and `TestUnbanViaInvite`.
+- The auth/account-lifecycle bucket is now broadly green in targeted reruns: `TestLogin`, `TestLogout`, `TestRegistration`, `TestChangePassword`, `TestChangePasswordPushers`, `TestDeactivateAccount`, `TestTxnIdWithRefreshToken`, `TestDeviceManagement`, `TestWriteMDirectAccountData`, and `TestRemovingAccountData`.
+- `TestSearch`, `TestDeviceListUpdates`, `TestDeviceListsUpdateOverFederation`, `TestDeviceListsUpdateOverFederationOnRoomJoin`, `TestUserAppearsInChangedDeviceListOnJoinOverFederation`, `TestClientSpacesSummary`, `TestClientSpacesSummaryJoinRules`, `TestFederatedClientSpaces`, `TestThreadSubscriptions`, and `TestMSC4308ThreadSubscriptionsSlidingSync` all pass in targeted reruns on 2026-04-01.
 
-Current active failure clusters in the full run are narrower than test9-era priorities:
+The 2026-03-31 full run still reports older failures, but the currently active targeted buckets are narrower than test10-era priorities:
 
-- device lists / device management over local and federated joins
-- partial-state join flows
-- missing-events / event-auth / rejected-auth federation correctness
-- room alias / room state / room create correctness
-- auth and account-lifecycle flows
-- delayed events, search, thread subscriptions, and owned-state MSC coverage
-- a small amount of infrastructure flake in blueprint startup (`TestACLs`, some large suites)
+- federation key authentication / inbound key verification
+- knocking / knock auth and transition coverage
+- event relationships, historical visibility, and some delayed-event / MSC-owned-state buckets
+- media federation / remote media buckets
+- infrastructure flake in blueprint startup for a few large suites
 
 ## Test Run Progression
 
@@ -64,6 +67,39 @@ Current active failure clusters in the full run are narrower than test9-era prio
 - `TestRemoteTyping` ✅ (2026-03-31)
 - `TestToDeviceMessagesOverFederation` ✅ (2026-03-31)
 - `TestSyncOmitsStateChangeOnFilteredEvents` ✅ (2026-03-31)
+- `TestInboundCanReturnMissingEvents` ✅ (2026-04-01)
+- `TestGetMissingEventsGapFilling` ✅ (2026-04-01)
+- `TestEventAuth` ✅ (2026-04-01)
+- `TestPartialStateJoin/CanReceiveTypingDuringPartialStateJoin` ✅ (2026-04-01)
+- `TestUnknownEndpoints` ✅ (2026-04-01)
+- `TestServerCapabilities` ✅ (2026-04-01)
+- `TestRoomAlias` ✅ (2026-04-01)
+- `TestRoomDeleteAlias` ✅ (2026-04-01)
+- `TestRoomCanonicalAlias` ✅ (2026-04-01)
+- `TestRemoteAliasRequestsUnderstandUnicode` ✅ (2026-04-01)
+- `TestRoomCreate` ✅ (2026-04-01)
+- `TestRoomState` ✅ (2026-04-01)
+- `TestRoomForget` ✅ (2026-04-01)
+- `TestRoomMembers` ✅ (2026-04-01)
+- `TestUnbanViaInvite` ✅ (2026-04-01)
+- `TestLogin` ✅ (2026-04-01)
+- `TestLogout` ✅ (2026-04-01)
+- `TestRegistration` ✅ (2026-04-01)
+- `TestChangePassword` ✅ (2026-04-01)
+- `TestChangePasswordPushers` ✅ (2026-04-01)
+- `TestDeactivateAccount` ✅ (2026-04-01)
+- `TestTxnIdWithRefreshToken` ✅ (2026-04-01)
+- `TestDeviceManagement` ✅ (2026-04-01)
+- `TestSearch` ✅ (2026-04-01)
+- `TestDeviceListUpdates` ✅ (2026-04-01)
+- `TestDeviceListsUpdateOverFederation` ✅ (2026-04-01)
+- `TestDeviceListsUpdateOverFederationOnRoomJoin` ✅ (2026-04-01)
+- `TestUserAppearsInChangedDeviceListOnJoinOverFederation` ✅ (2026-04-01)
+- `TestClientSpacesSummary` ✅ (2026-04-01)
+- `TestClientSpacesSummaryJoinRules` ✅ (2026-04-01)
+- `TestFederatedClientSpaces` ✅ (2026-04-01)
+- `TestThreadSubscriptions` ✅ (2026-04-01)
+- `TestMSC4308ThreadSubscriptionsSlidingSync` ✅ (2026-04-01)
 
 ---
 

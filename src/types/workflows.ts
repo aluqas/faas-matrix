@@ -38,6 +38,9 @@ export interface RemoteJoinTemplate {
 export interface RemoteSendJoinResponse {
   state: JsonObject[];
   auth_chain: JsonObject[];
+  members_omitted?: boolean;
+  servers_in_room?: string[];
+  event?: JsonObject;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -139,5 +142,16 @@ export function toRemoteSendJoinResponse(value: unknown): RemoteSendJoinResponse
           .map((entry) => toJsonObject(entry))
           .filter((entry): entry is JsonObject => entry !== null)
       : [],
+    ...(typeof value["members_omitted"] === "boolean"
+      ? { members_omitted: value["members_omitted"] }
+      : {}),
+    ...(Array.isArray(value["servers_in_room"])
+      ? {
+          servers_in_room: value["servers_in_room"].filter(
+            (entry): entry is string => typeof entry === "string",
+          ),
+        }
+      : {}),
+    ...(toJsonObject(value["event"]) ? { event: toJsonObject(value["event"])! } : {}),
   };
 }

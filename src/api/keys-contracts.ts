@@ -203,6 +203,53 @@ function toCrossSigningKeyPayload(value: unknown): CrossSigningKeyPayload | null
   };
 }
 
+function canonicalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => canonicalizeJson(entry));
+  }
+
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, canonicalizeJson(entry)]),
+    );
+  }
+
+  return value;
+}
+
+function canonicalJsonEquals(left: unknown, right: unknown): boolean {
+  return JSON.stringify(canonicalizeJson(left)) === JSON.stringify(canonicalizeJson(right));
+}
+
+export function isIdempotentCrossSigningUpload(
+  existing: CrossSigningKeysStore,
+  request: CrossSigningUploadRequest,
+): boolean {
+  let hasRequestedKey = false;
+
+  const comparisons: Array<
+    [CrossSigningKeyPayload | undefined, CrossSigningKeyPayload | undefined]
+  > = [
+    [existing.master, request.master_key],
+    [existing.self_signing, request.self_signing_key],
+    [existing.user_signing, request.user_signing_key],
+  ];
+
+  for (const [current, requested] of comparisons) {
+    if (!requested) {
+      continue;
+    }
+    hasRequestedKey = true;
+    if (!current || !canonicalJsonEquals(current, requested)) {
+      return false;
+    }
+  }
+
+  return hasRequestedKey;
+}
+
 function toCrossSigningKeyMap(value: unknown): Record<string, CrossSigningKeyPayload> | null {
   if (!isPlainObject(value)) {
     return null;

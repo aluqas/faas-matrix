@@ -34,18 +34,43 @@ describe("room-validation", () => {
       room_version: "999",
     });
 
-    await expect(Effect.runPromise(effect)).rejects.toThrow("Unsupported room version: 999");
+    await expect(Effect.runPromise(Effect.flip(effect))).resolves.toMatchObject({
+      errcode: "M_UNSUPPORTED_ROOM_VERSION",
+      message: "Unsupported room version: 999",
+    });
+  });
+
+  it("accepts room_alias_name for createRoom", async () => {
+    const effect = validateCreateRoomRequest({
+      room_alias_name: "room_alias",
+    });
+
+    await expect(Effect.runPromise(effect)).resolves.toMatchObject({
+      room_alias_name: "room_alias",
+    });
+  });
+
+  it("accepts unstable owned-state room versions in createRoom", async () => {
+    const effect = validateCreateRoomRequest({
+      room_version: "org.matrix.msc3757.10",
+    });
+
+    await expect(Effect.runPromise(effect)).resolves.toMatchObject({
+      room_version: "org.matrix.msc3757.10",
+    });
   });
 
   it("normalizes remote server hints for joinRoom", async () => {
     const effect = validateJoinRoomRequest({
       roomId: "!room:test",
       remoteServers: [" remote.test ", "remote.test", "backup.test"],
+      content: { foo: "bar" },
     });
 
     await expect(Effect.runPromise(effect)).resolves.toEqual({
       roomId: "!room:test",
       remoteServers: ["remote.test", "backup.test"],
+      content: { foo: "bar" },
     });
   });
 

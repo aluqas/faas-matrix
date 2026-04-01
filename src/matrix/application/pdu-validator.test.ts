@@ -30,6 +30,36 @@ describe("pdu-validator", () => {
     expect(event?.type).toBe("m.room.create");
   });
 
+  it("preserves federation-only top-level fields used by room v10 reference hashes", async () => {
+    const event = await tryValidateIncomingPdu(
+      {
+        room_id: "!room:test",
+        sender: "@alice:remote.test",
+        type: "m.room.member",
+        state_key: "@alice:remote.test",
+        origin: "remote.test",
+        membership: "join",
+        prev_state: ["$prev:test"],
+        content: {
+          membership: "join",
+        },
+        origin_server_ts: 1,
+        depth: 2,
+        auth_events: ["$create:test"],
+        prev_events: ["$prev:test"],
+        hashes: {
+          sha256: "dummy",
+        },
+      },
+      "state",
+      "10",
+    );
+
+    expect(event?.origin).toBe("remote.test");
+    expect(event?.membership).toBe("join");
+    expect(event?.prev_state).toEqual(["$prev:test"]);
+  });
+
   it("rejects room v1 PDUs without event_id", async () => {
     const event = await tryValidateIncomingPdu(
       {

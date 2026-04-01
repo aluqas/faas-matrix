@@ -15,10 +15,12 @@ const InitialStateEventSchema = Schema.Struct({
 
 const CreateRoomRequestSchema = Schema.Struct({
   room_alias_local_part: Schema.optional(Schema.String),
+  room_alias_name: Schema.optional(Schema.String),
   name: Schema.optional(Schema.String),
   topic: Schema.optional(Schema.String),
   invite: Schema.optional(Schema.Array(Schema.String)),
   room_version: Schema.optional(Schema.String),
+  creation_content: Schema.optional(UnknownRecordSchema),
   initial_state: Schema.optional(Schema.Array(InitialStateEventSchema)),
   preset: Schema.optional(Schema.String),
   is_direct: Schema.optional(Schema.Boolean),
@@ -28,6 +30,7 @@ const CreateRoomRequestSchema = Schema.Struct({
 const JoinRoomRequestSchema = Schema.Struct({
   roomId: Schema.String,
   remoteServers: Schema.optional(Schema.Array(Schema.String)),
+  content: Schema.optional(UnknownRecordSchema),
 });
 
 const InviteRoomRequestSchema = Schema.Struct({
@@ -45,6 +48,7 @@ export type ValidatedCreateRoomRequest = Schema.Schema.Type<typeof CreateRoomReq
 export type ValidatedJoinRoomRequest = {
   roomId: string;
   remoteServers: string[];
+  content?: Record<string, unknown>;
 };
 export type ValidatedInviteRoomRequest = Schema.Schema.Type<typeof InviteRoomRequestSchema>;
 export type ValidatedModerationRequest = Schema.Schema.Type<typeof ModerationRequestSchema>;
@@ -91,6 +95,20 @@ function validateCreateRoomSemantics(
       yield* Effect.fail(invalidParam("room_alias_local_part must not be empty"));
     }
 
+    if (request.room_alias_name !== undefined && request.room_alias_name.trim().length === 0) {
+      yield* Effect.fail(invalidParam("room_alias_name must not be empty"));
+    }
+
+    if (
+      request.room_alias_local_part !== undefined &&
+      request.room_alias_name !== undefined &&
+      request.room_alias_local_part !== request.room_alias_name
+    ) {
+      yield* Effect.fail(
+        invalidParam("room_alias_local_part and room_alias_name must match when both provided"),
+      );
+    }
+
     if (request.visibility !== undefined && !VALID_VISIBILITIES.has(request.visibility)) {
       yield* Effect.fail(invalidParam("visibility must be one of: public, private"));
     }
@@ -122,6 +140,16 @@ function validateCreateRoomSemantics(
     try {
       requireRoomVersionPolicy(request.room_version ?? getDefaultRoomVersion());
     } catch (error) {
+      if (error instanceof DomainError && error.kind === "incompatible_room_version") {
+        yield* Effect.fail(
+          new DomainError({
+            kind: "unsupported_room_version",
+            errcode: ErrorCodes.M_UNSUPPORTED_ROOM_VERSION,
+            message: error.message,
+            status: error.status,
+          }),
+        );
+      }
       yield* Effect.fail(error as DomainError);
     }
 
@@ -140,6 +168,7 @@ export function validateCreateRoomRequest(
 export function validateJoinRoomRequest(input: {
   roomId: string;
   remoteServers?: string[];
+  content?: Record<string, unknown>;
 }): Effect.Effect<ValidatedJoinRoomRequest, DomainError> {
   return decodeSchema(JoinRoomRequestSchema, input, "Malformed joinRoom request").pipe(
     Effect.flatMap((request) =>
@@ -159,6 +188,7 @@ export function validateJoinRoomRequest(input: {
         return {
           roomId: request.roomId,
           remoteServers,
+          ...(request.content !== undefined ? { content: request.content } : {}),
         };
       }),
     ),

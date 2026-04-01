@@ -12,6 +12,7 @@ import { EventQueryService, type MissingEventsQuery } from "./event-query-servic
 import { tryValidateIncomingPdu } from "./pdu-validator";
 import { ingestPresenceEdu } from "./features/presence/ingest";
 import type { PresenceEduContent } from "./features/presence/contracts";
+import { getPartialStateJoinForRoom } from "./features/partial-state/tracker";
 import { ingestTypingEdu } from "./features/typing/ingest";
 import type { TypingEduContent } from "./features/typing/contracts";
 import { ingestDirectToDeviceEdu } from "./features/to-device/ingest";
@@ -339,6 +340,7 @@ export async function handleFederationTypingEdu(
   db: D1Database,
   origin: string,
   realtime: RealtimeCapability,
+  cache: KVNamespace | undefined,
   content: TypingEduContent,
 ): Promise<void> {
   if (!realtime.setRoomTyping) {
@@ -373,10 +375,84 @@ export async function handleFederationTypingEdu(
 
       return stateMembership?.membership ?? null;
     },
+    async isPartialStateRoom(roomId: string) {
+      return (await getPartialStateJoinForRoom(cache, roomId)) !== null;
+    },
     async setRoomTyping(roomId: string, userId: string, typing: boolean, timeoutMs?: number) {
       await realtime.setRoomTyping?.(roomId, userId, typing, timeoutMs);
     },
   });
+}
+
+export async function handleFederationReceiptEdu(
+  db: D1Database,
+  origin: string,
+  realtime: RealtimeCapability,
+  cache: KVNamespace | undefined,
+  content: Record<string, unknown>,
+): Promise<void> {
+  if (!realtime.setRoomReceipt) {
+    return;
+  }
+
+  for (const [roomId, receiptsByType] of Object.entries(content)) {
+    if (!receiptsByType || typeof receiptsByType !== "object" || Array.isArray(receiptsByType)) {
+      continue;
+    }
+
+    const partialStateRoom = (await getPartialStateJoinForRoom(cache, roomId)) !== null;
+    for (const [receiptType, receiptsByUser] of Object.entries(receiptsByType)) {
+      if (!receiptsByUser || typeof receiptsByUser !== "object" || Array.isArray(receiptsByUser)) {
+        continue;
+      }
+
+      for (const [userId, receipt] of Object.entries(receiptsByUser)) {
+        if (extractServerNameFromMatrixId(userId) !== origin) {
+          continue;
+        }
+        if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) {
+          continue;
+        }
+
+        const receiptRecord = receipt as Record<string, unknown>;
+        const eventIds = Array.isArray(receiptRecord["event_ids"])
+          ? receiptRecord["event_ids"].filter(
+              (eventId): eventId is string => typeof eventId === "string",
+            )
+          : [];
+        const eventId = eventIds[0];
+        if (!eventId) {
+          continue;
+        }
+
+        const membership = await db
+          .prepare(
+            `SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ? LIMIT 1`,
+          )
+          .bind(roomId, userId)
+          .first<{ membership: string }>();
+        if (membership?.membership !== "join" && !partialStateRoom) {
+          continue;
+        }
+
+        const data =
+          receiptRecord["data"] &&
+          typeof receiptRecord["data"] === "object" &&
+          !Array.isArray(receiptRecord["data"])
+            ? (receiptRecord["data"] as Record<string, unknown>)
+            : {};
+        const ts = typeof data["ts"] === "number" ? data["ts"] : undefined;
+        await realtime.setRoomReceipt(
+          roomId,
+          userId,
+          eventId,
+          receiptType,
+          typeof data["thread_id"] === "string" ? data["thread_id"] : undefined,
+          ts,
+        );
+      }
+    }
+  }
 }
 
 export async function handleFederationDirectToDeviceEdu(

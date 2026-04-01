@@ -1,4 +1,5 @@
-import type { PDU } from "../types";
+import { ErrorCodes, type PDU } from "../types";
+import { MatrixApiError } from "../utils/errors";
 import { federationPut } from "./federation-keys";
 import { getRoom, getRoomState } from "./database";
 
@@ -62,7 +63,7 @@ export async function sendFederationInvite(
   const roomState = await getRoomState(db, roomId);
   const inviteRoomState = toInviteRoomState(roomState);
 
-  await federationPut(
+  const response = await federationPut(
     remoteServer,
     `/_matrix/federation/v2/invite/${encodeURIComponent(roomId)}/${encodeURIComponent(inviteEvent.event_id)}`,
     {
@@ -73,5 +74,33 @@ export async function sendFederationInvite(
     localServerName,
     db,
     cache,
+  );
+
+  if (response.ok) {
+    return;
+  }
+
+  let errcode: string | undefined;
+  let message = `Remote server rejected invite with HTTP ${response.status}`;
+  try {
+    const body = (await response.json()) as { errcode?: unknown; error?: unknown };
+    if (typeof body.errcode === "string") {
+      errcode = body.errcode;
+    }
+    if (typeof body.error === "string") {
+      message = body.error;
+    }
+  } catch {
+    // Ignore malformed bodies and fall back to the HTTP status.
+  }
+
+  if (response.status === 403 && errcode === ErrorCodes.M_INVITE_BLOCKED) {
+    throw new MatrixApiError(ErrorCodes.M_INVITE_BLOCKED, message, 403);
+  }
+
+  throw new MatrixApiError(
+    (errcode as (typeof ErrorCodes)[keyof typeof ErrorCodes] | undefined) ?? ErrorCodes.M_UNKNOWN,
+    message,
+    response.status || 500,
   );
 }

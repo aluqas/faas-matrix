@@ -21,7 +21,7 @@ export async function ingestTypingEdu(
   }
 
   const membership = await ports.getMembership(roomId, userId);
-  if (membership !== "join") {
+  if (membership !== "join" && !(await ports.isPartialStateRoom?.(roomId))) {
     return;
   }
 

@@ -38,6 +38,14 @@ export interface RealtimeCapability {
     typing: boolean,
     timeoutMs?: number,
   ): Promise<void>;
+  setRoomReceipt?(
+    roomId: string,
+    userId: string,
+    eventId: string,
+    receiptType: string,
+    threadId?: string,
+    ts?: number,
+  ): Promise<void>;
   waitForUserEvents(userId: string, timeoutMs: number): Promise<{ hasEvents: boolean }>;
 }
 

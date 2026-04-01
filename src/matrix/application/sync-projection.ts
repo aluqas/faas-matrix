@@ -9,7 +9,12 @@ import type {
   StrippedStateEvent,
 } from "../../types";
 import type { FilterDefinition, SyncRepository } from "../repositories/interfaces";
+import { FORGOTTEN_ROOM_ACCOUNT_DATA_TYPE } from "./room-account-data";
 import { projectTypingEphemeral } from "./features/typing/project";
+import {
+  extractInvitePermissionConfigFromAccountData,
+  shouldSuppressInviteInSync,
+} from "./features/invite-permissions/policy";
 
 export interface SyncEventFilter {
   types?: string[];
@@ -73,12 +78,13 @@ function toLeftRoom(event: PDU): LeftRoom {
   };
 }
 
-function isLeaveMembershipEvent(event: PDU | null | undefined, userId: string): event is PDU {
+function isLeaveLikeMembershipEvent(event: PDU | null | undefined, userId: string): event is PDU {
+  const membership = (event?.content as { membership?: string } | undefined)?.membership;
   return Boolean(
     event &&
     event.type === "m.room.member" &&
     event.state_key === userId &&
-    (event.content as { membership?: string } | undefined)?.membership === "leave",
+    (membership === "leave" || membership === "ban"),
   );
 }
 
@@ -203,6 +209,13 @@ export async function projectJoinedRoom(
   };
 
   const events = await repository.getEventsSince(query.roomId, query.sincePosition);
+  const lazyLoadMembers =
+    query.roomFilter?.timeline?.lazy_load_members === true ||
+    query.roomFilter?.state?.lazy_load_members === true;
+  const roomState =
+    query.fullState || query.sincePosition === 0 || lazyLoadMembers
+      ? await repository.getRoomState(query.roomId)
+      : [];
   let stateEvents: MatrixEvent[] = [];
   let timelineEvents: MatrixEvent[] = [];
 
@@ -219,11 +232,38 @@ export async function projectJoinedRoom(
   }
 
   if (query.fullState || query.sincePosition === 0) {
-    const state = await repository.getRoomState(query.roomId);
-    for (const event of state) {
+    for (const event of roomState) {
       const clientEvent = toClientEvent(event);
       if (!stateEvents.find((existing) => existing.event_id === event.event_id)) {
         stateEvents.push(clientEvent);
+      }
+    }
+  }
+
+  if (lazyLoadMembers && roomState.length > 0) {
+    const memberUserIds = new Set<string>();
+    for (const event of timelineEvents) {
+      if (typeof event.sender === "string") {
+        memberUserIds.add(event.sender);
+      }
+    }
+    for (const event of stateEvents) {
+      if (typeof event.sender === "string") {
+        memberUserIds.add(event.sender);
+      }
+      if (event.type === "m.room.member" && typeof event.state_key === "string") {
+        memberUserIds.add(event.state_key);
+      }
+    }
+
+    for (const event of roomState) {
+      if (
+        event.type === "m.room.member" &&
+        event.state_key !== undefined &&
+        memberUserIds.has(event.state_key) &&
+        !stateEvents.find((existing) => existing.event_id === event.event_id)
+      ) {
+        stateEvents.push(toClientEvent(event));
       }
     }
   }
@@ -246,9 +286,20 @@ export async function projectJoinedRoom(
     joinedRoom.ephemeral!.events.push(receipts);
   }
 
+  const unreadSummary = await repository.getUnreadNotificationSummary(query.roomId, query.userId);
+  const includeThreadNotifications =
+    query.roomFilter?.timeline?.unread_thread_notifications === true;
+  joinedRoom.unread_notifications = includeThreadNotifications
+    ? unreadSummary.main
+    : unreadSummary.room;
+  if (includeThreadNotifications && Object.keys(unreadSummary.threads).length > 0) {
+    joinedRoom.unread_thread_notifications = unreadSummary.threads;
+  }
+
   joinedRoom.ephemeral!.events.push(
     ...(await projectTypingEphemeral(repository, {
       roomId: query.roomId,
+      includeEmpty: query.sincePosition > 0,
       filter: query.roomFilter?.ephemeral,
     })),
   );
@@ -265,6 +316,9 @@ export async function projectMembershipRooms(
   repository: SyncRepository,
   query: SyncProjectionQuery,
 ): Promise<SyncProjectionResult> {
+  const invitePermissionConfig = extractInvitePermissionConfigFromAccountData(
+    await repository.getGlobalAccountData(query.userId),
+  );
   const result: SyncProjectionResult = {
     inviteRooms: {},
     knockRooms: {},
@@ -279,7 +333,7 @@ export async function projectMembershipRooms(
 
     const roomState = await repository.getRoomState(roomId);
     const currentMemberState = roomState.find((event) =>
-      isLeaveMembershipEvent(event, query.userId),
+      isLeaveLikeMembershipEvent(event, query.userId),
     );
     if (currentMemberState) {
       result.leaveRooms[roomId] = toLeftRoom(currentMemberState);
@@ -291,8 +345,37 @@ export async function projectMembershipRooms(
       continue;
     }
 
+    const inviteEvent =
+      (membership.eventId ? await repository.getEvent(membership.eventId) : null) ??
+      roomState.find(
+        (event) =>
+          event.type === "m.room.member" &&
+          event.state_key === query.userId &&
+          (event.content as { membership?: string } | undefined)?.membership === "invite",
+      ) ??
+      null;
+    if (inviteEvent && shouldSuppressInviteInSync(invitePermissionConfig, inviteEvent.sender)) {
+      continue;
+    }
+
     const inviteStripped = await repository.getInviteStrippedState(roomId);
     const stateSource = toStrippedStateSource(roomState, inviteStripped);
+    if (
+      inviteEvent &&
+      inviteEvent.type === "m.room.member" &&
+      inviteEvent.state_key === query.userId &&
+      !stateSource.some(
+        (event) => event.type === inviteEvent.type && event.state_key === inviteEvent.state_key,
+      )
+    ) {
+      stateSource.push({
+        type: inviteEvent.type,
+        state_key: inviteEvent.state_key,
+        content: inviteEvent.content,
+        sender: inviteEvent.sender,
+      });
+    }
+
     result.inviteRooms[roomId] = {
       invite_state: {
         events: applyEventFilter(stateSource, query.roomFilter?.state),
@@ -342,28 +425,38 @@ export async function projectMembershipRooms(
     return result;
   }
 
-  const leftRoomIds = await repository.getUserRooms(query.userId, "leave");
-  for (const roomId of leftRoomIds) {
+  const leaveLikeRoomIds = new Set<string>([
+    ...(await repository.getUserRooms(query.userId, "leave")),
+    ...(await repository.getUserRooms(query.userId, "ban")),
+  ]);
+  for (const roomId of leaveLikeRoomIds) {
     if (!shouldIncludeRoom(roomId, query.roomFilter)) {
       continue;
+    }
+
+    if (query.sincePosition === 0) {
+      const roomAccountData = await repository.getRoomAccountData(query.userId, roomId);
+      if (roomAccountData.some((event) => event.type === FORGOTTEN_ROOM_ACCOUNT_DATA_TYPE)) {
+        continue;
+      }
     }
 
     let leaveEvent: PDU | undefined;
     if (query.sincePosition > 0) {
       leaveEvent = (await repository.getEventsSince(roomId, query.sincePosition)).find((event) =>
-        isLeaveMembershipEvent(event, query.userId),
+        isLeaveLikeMembershipEvent(event, query.userId),
       );
     }
 
     if (!leaveEvent) {
       const membership = await repository.getMembership(roomId, query.userId);
-      if (membership?.membership === "leave") {
+      if (membership?.membership === "leave" || membership?.membership === "ban") {
         const event = await repository.getEvent(membership.eventId);
-        if (isLeaveMembershipEvent(event, query.userId)) {
+        if (isLeaveLikeMembershipEvent(event, query.userId)) {
           leaveEvent = event;
         } else {
           leaveEvent = (await repository.getRoomState(roomId)).find((stateEvent) =>
-            isLeaveMembershipEvent(stateEvent, query.userId),
+            isLeaveLikeMembershipEvent(stateEvent, query.userId),
           );
         }
       }

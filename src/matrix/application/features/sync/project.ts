@@ -1,6 +1,7 @@
 import type { AppContext } from "../../../../foundation/app-context";
 import type { SyncResponse } from "../../../../types";
 import type { SyncRepository } from "../../../repositories/interfaces";
+import { getPartialStateJoin, takePartialStateJoinCompletion } from "../partial-state/tracker";
 import { runClientEffect } from "../../effect-runtime";
 import { withLogContext } from "../../logging";
 import {
@@ -58,6 +59,14 @@ export async function projectSyncResponse(
     device_one_time_keys_count: {},
     device_unused_fallback_key_types: [],
   };
+  const partialStateCache = appContext.capabilities.kv.cache as KVNamespace | undefined;
+
+  function shouldExposePartialStateRoom(): boolean {
+    return (
+      filter?.room?.timeline?.lazy_load_members === true ||
+      filter?.room?.state?.lazy_load_members === true
+    );
+  }
 
   if (input.deviceId) {
     const toDeviceResult = await repository.getToDeviceMessages(
@@ -97,11 +106,28 @@ export async function projectSyncResponse(
       continue;
     }
 
+    const partialStateJoin = await getPartialStateJoin(partialStateCache, input.userId, roomId);
+    if (partialStateJoin && !shouldExposePartialStateRoom()) {
+      await runClientEffect(
+        logger.debug("sync.project.partial_state_hidden", {
+          room_id: roomId,
+          partial_state_event_id: partialStateJoin.eventId,
+        }),
+      );
+      continue;
+    }
+
+    const partialStateCompletion = await takePartialStateJoinCompletion(
+      partialStateCache,
+      input.userId,
+      roomId,
+    );
+
     response.rooms!.join![roomId] = await projectJoinedRoom(repository, {
       userId: input.userId,
       roomId,
       sincePosition,
-      fullState: input.fullState,
+      fullState: input.fullState || Boolean(partialStateCompletion),
       roomFilter: filter?.room,
     });
   }
@@ -113,9 +139,24 @@ export async function projectSyncResponse(
     roomFilter: filter?.room,
     includeLeave: includeLeave || (sincePosition > 0 && !filter),
   });
-  response.rooms!.invite = membershipProjection.inviteRooms;
-  response.rooms!.knock = membershipProjection.knockRooms;
-  response.rooms!.leave = membershipProjection.leaveRooms;
+  if (Object.keys(membershipProjection.inviteRooms).length > 0) {
+    response.rooms!.invite = membershipProjection.inviteRooms;
+  } else {
+    delete response.rooms!.invite;
+  }
+  if (Object.keys(membershipProjection.knockRooms).length > 0) {
+    response.rooms!.knock = membershipProjection.knockRooms;
+  } else {
+    delete response.rooms!.knock;
+  }
+  if (Object.keys(membershipProjection.leaveRooms).length > 0) {
+    response.rooms!.leave = membershipProjection.leaveRooms;
+    for (const roomId of Object.keys(membershipProjection.leaveRooms)) {
+      delete response.rooms!.join?.[roomId];
+    }
+  } else {
+    delete response.rooms!.leave;
+  }
 
   response.presence = await projectPresenceEvents(
     appContext.capabilities.sql.connection as D1Database,
@@ -128,19 +169,27 @@ export async function projectSyncResponse(
     },
   );
 
-  const hasRoomChanges = Object.values(response.rooms!.join!).some(
+  const joinedRooms = response.rooms?.join ?? {};
+  const inviteRooms = response.rooms?.invite ?? {};
+  const leaveRooms = response.rooms?.leave ?? {};
+  const knockRooms = response.rooms?.knock ?? {};
+  const toDeviceEvents = response.to_device?.events ?? [];
+  const accountDataEvents = response.account_data?.events ?? [];
+  const presenceEvents = response.presence?.events ?? [];
+
+  const hasRoomChanges = Object.values(joinedRooms).some(
     (room) =>
       (room.timeline?.events.length || 0) > 0 ||
       (room.state?.events.length || 0) > 0 ||
       (room.ephemeral?.events.length || 0) > 0 ||
       (room.account_data?.events.length || 0) > 0,
   );
-  const hasInvites = Object.keys(response.rooms!.invite!).length > 0;
-  const hasLeaves = Object.keys(response.rooms!.leave!).length > 0;
-  const hasKnocks = Object.keys(response.rooms!.knock!).length > 0;
-  const hasToDevice = response.to_device!.events.length > 0;
-  const hasAccountData = response.account_data!.events.length > 0;
-  const hasPresence = response.presence!.events.length > 0;
+  const hasInvites = Object.keys(inviteRooms).length > 0;
+  const hasLeaves = Object.keys(leaveRooms).length > 0;
+  const hasKnocks = Object.keys(knockRooms).length > 0;
+  const hasToDevice = toDeviceEvents.length > 0;
+  const hasAccountData = accountDataEvents.length > 0;
+  const hasPresence = presenceEvents.length > 0;
   const deviceListChangedCount = response.device_lists?.changed?.length ?? 0;
   const deviceListLeftCount = response.device_lists?.left?.length ?? 0;
   const hasDeviceLists = deviceListChangedCount > 0 || deviceListLeftCount > 0;

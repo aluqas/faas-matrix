@@ -8,8 +8,23 @@ import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { verifyPassword } from "../utils/crypto";
+import { deleteDevice as deleteStoredDevice } from "../services/database";
 
 const app = new Hono<AppEnv>();
+
+function buildPasswordUiaResponse(session: string, error?: string) {
+  return {
+    flows: [{ stages: ["m.login.password"] }],
+    params: {},
+    session,
+    ...(error
+      ? {
+          errcode: "M_FORBIDDEN" as const,
+          error,
+        }
+      : {}),
+  };
+}
 
 // ============================================
 // Endpoints
@@ -135,7 +150,14 @@ app.delete("/_matrix/client/v3/devices/:deviceId", requireAuth(), async (c) => {
   }
 
   // Try to get auth from body for UIA
-  let auth: { type?: string; password?: string; session?: string } | undefined;
+  let auth:
+    | {
+        type?: string;
+        password?: string;
+        session?: string;
+        identifier?: { type?: string; user?: string };
+      }
+    | undefined;
   try {
     const body = await c.req.json();
     auth = body.auth;
@@ -146,18 +168,15 @@ app.delete("/_matrix/client/v3/devices/:deviceId", requireAuth(), async (c) => {
   // If no auth provided, return UIA response
   if (!auth) {
     const sessionId = crypto.randomUUID();
-    return c.json(
-      {
-        flows: [{ stages: ["m.login.password"] }],
-        params: {},
-        session: sessionId,
-      },
-      401,
-    );
+    return c.json(buildPasswordUiaResponse(sessionId), 401);
   }
 
   // Verify password if auth provided
   if (auth.type === "m.login.password") {
+    if (auth.identifier?.type === "m.id.user" && auth.identifier.user !== userId) {
+      return Errors.forbidden("Authenticated user does not own this device").toResponse();
+    }
+
     const user = await db
       .prepare(`
       SELECT password_hash FROM users WHERE user_id = ?
@@ -166,12 +185,14 @@ app.delete("/_matrix/client/v3/devices/:deviceId", requireAuth(), async (c) => {
       .first<{ password_hash: string }>();
 
     if (!user || !auth.password) {
-      return Errors.forbidden("Invalid password").toResponse();
+      const sessionId = auth.session || crypto.randomUUID();
+      return c.json(buildPasswordUiaResponse(sessionId, "Invalid password"), 401);
     }
 
     const valid = await verifyPassword(auth.password, user.password_hash);
     if (!valid) {
-      return Errors.forbidden("Invalid password").toResponse();
+      const sessionId = auth.session || crypto.randomUUID();
+      return c.json(buildPasswordUiaResponse(sessionId, "Invalid password"), 401);
     }
   }
 
@@ -182,20 +203,7 @@ app.delete("/_matrix/client/v3/devices/:deviceId", requireAuth(), async (c) => {
   `)
     .bind(userId, deviceId)
     .run();
-
-  await db
-    .prepare(`
-    DELETE FROM device_keys WHERE user_id = ? AND device_id = ?
-  `)
-    .bind(userId, deviceId)
-    .run();
-
-  await db
-    .prepare(`
-    DELETE FROM devices WHERE user_id = ? AND device_id = ?
-  `)
-    .bind(userId, deviceId)
-    .run();
+  await deleteStoredDevice(db, userId, deviceId);
 
   return c.json({});
 });
@@ -205,7 +213,15 @@ app.post("/_matrix/client/v3/delete_devices", requireAuth(), async (c) => {
   const userId = c.get("userId");
   const db = c.env.DB;
 
-  let body: { devices: string[]; auth?: { type?: string; password?: string; session?: string } };
+  let body: {
+    devices: string[];
+    auth?: {
+      type?: string;
+      password?: string;
+      session?: string;
+      identifier?: { type?: string; user?: string };
+    };
+  };
   try {
     body = await c.req.json();
   } catch {
@@ -219,18 +235,15 @@ app.post("/_matrix/client/v3/delete_devices", requireAuth(), async (c) => {
   // If no auth provided, return UIA response
   if (!body.auth) {
     const sessionId = crypto.randomUUID();
-    return c.json(
-      {
-        flows: [{ stages: ["m.login.password"] }],
-        params: {},
-        session: sessionId,
-      },
-      401,
-    );
+    return c.json(buildPasswordUiaResponse(sessionId), 401);
   }
 
   // Verify password if auth provided
   if (body.auth.type === "m.login.password") {
+    if (body.auth.identifier?.type === "m.id.user" && body.auth.identifier.user !== userId) {
+      return Errors.forbidden("Authenticated user does not own these devices").toResponse();
+    }
+
     const user = await db
       .prepare(`
       SELECT password_hash FROM users WHERE user_id = ?
@@ -239,12 +252,14 @@ app.post("/_matrix/client/v3/delete_devices", requireAuth(), async (c) => {
       .first<{ password_hash: string }>();
 
     if (!user || !body.auth.password) {
-      return Errors.forbidden("Invalid password").toResponse();
+      const sessionId = body.auth.session || crypto.randomUUID();
+      return c.json(buildPasswordUiaResponse(sessionId, "Invalid password"), 401);
     }
 
     const valid = await verifyPassword(body.auth.password, user.password_hash);
     if (!valid) {
-      return Errors.forbidden("Invalid password").toResponse();
+      const sessionId = body.auth.session || crypto.randomUUID();
+      return c.json(buildPasswordUiaResponse(sessionId, "Invalid password"), 401);
     }
   }
 
@@ -256,20 +271,7 @@ app.post("/_matrix/client/v3/delete_devices", requireAuth(), async (c) => {
     `)
       .bind(userId, deviceId)
       .run();
-
-    await db
-      .prepare(`
-      DELETE FROM device_keys WHERE user_id = ? AND device_id = ?
-    `)
-      .bind(userId, deviceId)
-      .run();
-
-    await db
-      .prepare(`
-      DELETE FROM devices WHERE user_id = ? AND device_id = ?
-    `)
-      .bind(userId, deviceId)
-      .run();
+    await deleteStoredDevice(db, userId, deviceId);
   }
 
   return c.json({});

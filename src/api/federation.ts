@@ -4,7 +4,13 @@ import { Hono } from "hono";
 import { Effect } from "effect";
 import type { AppEnv, PDU } from "../types";
 import { Errors, MatrixApiError } from "../utils/errors";
-import { generateSigningKeyPair, signJson, sha256, verifySignature } from "../utils/crypto";
+import {
+  calculateReferenceHashEventId,
+  generateSigningKeyPair,
+  signJson,
+  sha256,
+  verifySignature,
+} from "../utils/crypto";
 import { isLocalServerName, parseUserId } from "../utils/ids";
 import { requireFederationAuth } from "../middleware/federation-auth";
 import {
@@ -21,6 +27,12 @@ import {
 } from "../matrix/application/membership-transition-service";
 import { DomainError, toMatrixApiError } from "../matrix/application/domain-error";
 import { runFederationEffect } from "../matrix/application/effect-runtime";
+import { withLogContext } from "../matrix/application/logging";
+import { getPartialStateJoinForRoom } from "../matrix/application/features/partial-state/tracker";
+import {
+  decideInvitePermission,
+  loadInvitePermissionConfig,
+} from "../matrix/application/features/invite-permissions/policy";
 import {
   ensureFederatedRoomStub,
   getMissingFederationEvents,
@@ -37,11 +49,30 @@ import {
   validateThirdPartyInviteExchangeRequest,
 } from "../matrix/application/federation-validation";
 import { FederationQueryService } from "../matrix/application/federation-query-service";
+import {
+  buildFederatedEventRelationshipsResponse,
+  type EventRelationshipsRequest,
+} from "../matrix/application/relationship-service";
 import federationQueryRoutes from "./federation/query";
 import federationSpaceRoutes from "./federation/spaces";
 
 const app = new Hono<AppEnv>();
 const federationQueryService = new FederationQueryService();
+
+function methodNotAllowedJson(): Response {
+  return new Response(
+    JSON.stringify({
+      errcode: "M_UNRECOGNIZED",
+      error: "Method not allowed",
+    }),
+    {
+      status: 405,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  );
+}
 
 // GET /_matrix/federation/v1/version - Server version info (unauthenticated)
 // This must be defined BEFORE the auth middleware is applied
@@ -54,15 +85,46 @@ app.get("/_matrix/federation/v1/version", async (c) => {
   });
 });
 
+app.on(["POST", "PUT", "DELETE", "PATCH"], "/_matrix/federation/v1/version", () =>
+  methodNotAllowedJson(),
+);
+
+app.use("/_matrix/federation/v1/:endpoint", async (c, next) => {
+  if (c.req.param("endpoint") === "version") {
+    await next();
+    return;
+  }
+  return c.json({ errcode: "M_UNRECOGNIZED", error: "Unrecognized request" }, 404);
+});
+
 // Apply federation authentication to all other federation v1 endpoints
 // Key endpoints (/_matrix/key/*) remain unauthenticated as they are used to establish trust
 // Version endpoint is also unauthenticated as it's used for initial contact
 app.use("/_matrix/federation/v1/*", requireFederationAuth());
+app.use("/_matrix/federation/v2/*", requireFederationAuth());
+app.use("/_matrix/federation/unstable/*", requireFederationAuth());
 app.route("/", federationQueryRoutes);
 app.route("/", federationSpaceRoutes);
 
 async function runDomainValidation<A>(effect: Effect.Effect<A, DomainError>): Promise<A> {
   return runFederationEffect(effect);
+}
+
+async function logFederationRouteWarning(
+  c: { get: (key: string) => unknown },
+  operation: string,
+  fields: Record<string, unknown>,
+): Promise<void> {
+  const logger = withLogContext({
+    component: "federation-route",
+    operation,
+    origin:
+      typeof c.get("federationOrigin") === "string"
+        ? (c.get("federationOrigin") as string)
+        : undefined,
+    debugEnabled: true,
+  });
+  await runFederationEffect(logger.warn(`federation.${operation}.trace`, fields));
 }
 
 function toFederationErrorResponse(error: unknown): Response | null {
@@ -73,6 +135,147 @@ function toFederationErrorResponse(error: unknown): Response | null {
     return error.toResponse();
   }
   return null;
+}
+
+function getEventReferenceLookupCandidates(eventId: string): string[] {
+  const normalized = eventId.replace(/\+/g, "-").replace(/\//g, "_");
+  const standard = eventId.replace(/-/g, "+").replace(/_/g, "/");
+  return Array.from(new Set([eventId, normalized, standard]));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseFederationEventRelationshipsRequest(
+  input: unknown,
+): EventRelationshipsRequest | null {
+  if (!isRecord(input) || typeof input.event_id !== "string") {
+    return null;
+  }
+
+  return {
+    eventId: input.event_id,
+    ...(typeof input.room_id === "string" ? { roomId: input.room_id } : {}),
+    direction: input.direction === "up" ? "up" : "down",
+    ...(typeof input.include_parent === "boolean" ? { includeParent: input.include_parent } : {}),
+    ...(typeof input.recent_first === "boolean" ? { recentFirst: input.recent_first } : {}),
+    ...(typeof input.max_depth === "number" ? { maxDepth: input.max_depth } : {}),
+  };
+}
+
+async function getFederationEventRowByReference(
+  db: D1Database,
+  eventId: string,
+): Promise<{
+  event_id: string;
+  room_id: string;
+  sender: string;
+  event_type: string;
+  state_key: string | null;
+  content: string;
+  origin_server_ts: number;
+  depth: number;
+  auth_events: string;
+  prev_events: string;
+  event_origin: string | null;
+  event_membership: string | null;
+  prev_state: string | null;
+  hashes: string | null;
+  signatures: string | null;
+} | null> {
+  for (const candidate of getEventReferenceLookupCandidates(eventId)) {
+    const row = await db
+      .prepare(
+        `SELECT event_id, room_id, sender, event_type, state_key, content,
+         origin_server_ts, depth, auth_events, prev_events, event_origin, event_membership,
+         prev_state, hashes, signatures
+         FROM events WHERE event_id = ?`,
+      )
+      .bind(candidate)
+      .first<{
+        event_id: string;
+        room_id: string;
+        sender: string;
+        event_type: string;
+        state_key: string | null;
+        content: string;
+        origin_server_ts: number;
+        depth: number;
+        auth_events: string;
+        prev_events: string;
+        event_origin: string | null;
+        event_membership: string | null;
+        prev_state: string | null;
+        hashes: string | null;
+        signatures: string | null;
+      }>();
+    if (row) {
+      return row;
+    }
+  }
+  return null;
+}
+
+function parseJsonWithFallback<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function toFederationPduFromRow(row: {
+  event_id: string;
+  room_id: string;
+  sender: string;
+  event_type: string;
+  state_key: string | null;
+  content: string;
+  origin_server_ts: number;
+  depth: number;
+  auth_events: string;
+  prev_events: string;
+  event_origin?: string | null;
+  event_membership?: string | null;
+  prev_state?: string | null;
+  hashes?: string | null;
+  signatures?: string | null;
+}): PDU {
+  return {
+    event_id: row.event_id,
+    room_id: row.room_id,
+    sender: row.sender,
+    type: row.event_type,
+    ...(row.state_key !== null ? { state_key: row.state_key } : {}),
+    ...(row.event_origin ? { origin: row.event_origin } : {}),
+    ...(row.event_membership
+      ? {
+          membership: row.event_membership as "join" | "invite" | "leave" | "ban" | "knock",
+        }
+      : {}),
+    ...(row.prev_state ? { prev_state: parseJsonWithFallback<string[]>(row.prev_state, []) } : {}),
+    content: parseJsonWithFallback<Record<string, unknown>>(row.content, {}),
+    origin_server_ts: row.origin_server_ts,
+    depth: row.depth,
+    auth_events: parseJsonWithFallback<string[]>(row.auth_events, []),
+    prev_events: parseJsonWithFallback<string[]>(row.prev_events, []),
+    ...(row.hashes
+      ? { hashes: parseJsonWithFallback<{ sha256: string }>(row.hashes, { sha256: "" }) }
+      : {}),
+    ...(row.signatures
+      ? {
+          signatures: parseJsonWithFallback<Record<string, Record<string, string>>>(
+            row.signatures,
+            {},
+          ),
+        }
+      : {}),
+  };
 }
 
 // GET /_matrix/key/v2/server - Get server signing keys
@@ -344,6 +547,35 @@ app.post("/_matrix/key/v2/query", async (c) => {
   return c.json({ server_keys: results });
 });
 
+app.on(["GET", "PUT", "DELETE", "PATCH"], "/_matrix/key/v2/query", () => methodNotAllowedJson());
+
+function buildPartialSendJoinResponse(stateBundle: {
+  state: PDU[];
+  authChain: PDU[];
+  serversInRoom: string[];
+}) {
+  const essentialStateTypes = new Set([
+    "m.room.create",
+    "m.room.power_levels",
+    "m.room.join_rules",
+    "m.room.history_visibility",
+  ]);
+  const state = stateBundle.state.filter(
+    (event) =>
+      essentialStateTypes.has(event.type) ||
+      (event.type === "m.room.member" && event.content?.membership === "join"),
+  );
+  const stateEventIds = new Set(state.map((event) => event.event_id));
+  const authChain = stateBundle.authChain.filter((event) => !stateEventIds.has(event.event_id));
+
+  return {
+    auth_chain: authChain,
+    state,
+    members_omitted: true,
+    servers_in_room: stateBundle.serversInRoom,
+  };
+}
+
 // GET /_matrix/key/v2/query/:serverName - Query all keys for a server
 app.get("/_matrix/key/v2/query/:serverName", async (c) => {
   const serverName = c.req.param("serverName");
@@ -545,7 +777,8 @@ app.get("/_matrix/federation/v1/event/:eventId", async (c) => {
 
   const event = await c.env.DB.prepare(
     `SELECT event_id, room_id, sender, event_type, state_key, content,
-     origin_server_ts, depth, auth_events, prev_events, hashes, signatures
+     origin_server_ts, depth, auth_events, prev_events, event_origin, event_membership,
+     prev_state, hashes, signatures
      FROM events WHERE event_id = ?`,
   )
     .bind(eventId)
@@ -560,6 +793,9 @@ app.get("/_matrix/federation/v1/event/:eventId", async (c) => {
       depth: number;
       auth_events: string;
       prev_events: string;
+      event_origin: string | null;
+      event_membership: string | null;
+      prev_state: string | null;
       hashes: string | null;
       signatures: string | null;
     }>();
@@ -568,20 +804,7 @@ app.get("/_matrix/federation/v1/event/:eventId", async (c) => {
     return Errors.notFound("Event not found").toResponse();
   }
 
-  const pdu: PDU = {
-    event_id: event.event_id,
-    room_id: event.room_id,
-    sender: event.sender,
-    type: event.event_type,
-    state_key: event.state_key ?? undefined,
-    content: JSON.parse(event.content),
-    origin_server_ts: event.origin_server_ts,
-    depth: event.depth,
-    auth_events: JSON.parse(event.auth_events),
-    prev_events: JSON.parse(event.prev_events),
-    hashes: event.hashes ? JSON.parse(event.hashes) : undefined,
-    signatures: event.signatures ? JSON.parse(event.signatures) : undefined,
-  };
+  const pdu = toFederationPduFromRow(event);
 
   return c.json({
     origin: c.env.SERVER_NAME,
@@ -599,7 +822,8 @@ app.get("/_matrix/federation/v1/state/:roomId", async (c) => {
   // Get current room state
   const stateEvents = await c.env.DB.prepare(
     `SELECT e.event_id, e.room_id, e.sender, e.event_type, e.state_key, e.content,
-     e.origin_server_ts, e.depth, e.auth_events, e.prev_events
+     e.origin_server_ts, e.depth, e.auth_events, e.prev_events, e.event_origin,
+     e.event_membership, e.prev_state, e.hashes, e.signatures
      FROM room_state rs
      JOIN events e ON rs.event_id = e.event_id
      WHERE rs.room_id = ?`,
@@ -616,20 +840,14 @@ app.get("/_matrix/federation/v1/state/:roomId", async (c) => {
       depth: number;
       auth_events: string;
       prev_events: string;
+      event_origin: string | null;
+      event_membership: string | null;
+      prev_state: string | null;
+      hashes: string | null;
+      signatures: string | null;
     }>();
 
-  const pdus = stateEvents.results.map((e) => ({
-    event_id: e.event_id,
-    room_id: e.room_id,
-    sender: e.sender,
-    type: e.event_type,
-    state_key: e.state_key ?? "",
-    content: JSON.parse(e.content),
-    origin_server_ts: e.origin_server_ts,
-    depth: e.depth,
-    auth_events: JSON.parse(e.auth_events),
-    prev_events: JSON.parse(e.prev_events),
-  }));
+  const pdus = stateEvents.results.map(toFederationPduFromRow);
 
   // Get auth chain
   const authEventIds = new Set<string>();
@@ -643,20 +861,35 @@ app.get("/_matrix/federation/v1/state/:roomId", async (c) => {
   for (const authId of authEventIds) {
     const authEvent = await c.env.DB.prepare(
       `SELECT event_id, room_id, sender, event_type, state_key, content,
-       origin_server_ts, depth, auth_events, prev_events
+       origin_server_ts, depth, auth_events, prev_events, event_origin, event_membership,
+       prev_state, hashes, signatures
        FROM events WHERE event_id = ?`,
     )
       .bind(authId)
       .first();
 
     if (authEvent) {
-      authChain.push({
-        ...authEvent,
-        type: (authEvent as any).event_type,
-        content: JSON.parse((authEvent as any).content),
-        auth_events: JSON.parse((authEvent as any).auth_events),
-        prev_events: JSON.parse((authEvent as any).prev_events),
-      });
+      authChain.push(
+        toFederationPduFromRow(
+          authEvent as {
+            event_id: string;
+            room_id: string;
+            sender: string;
+            event_type: string;
+            state_key: string | null;
+            content: string;
+            origin_server_ts: number;
+            depth: number;
+            auth_events: string;
+            prev_events: string;
+            event_origin: string | null;
+            event_membership: string | null;
+            prev_state: string | null;
+            hashes: string | null;
+            signatures: string | null;
+          },
+        ),
+      );
     }
   }
 
@@ -673,10 +906,15 @@ app.get("/_matrix/federation/v1/state_ids/:roomId", async (c) => {
   const roomId = c.req.param("roomId");
   const eventId = c.req.query("event_id");
 
+  const partialStateJoin = await getPartialStateJoinForRoom(c.env.CACHE, roomId);
+  if (eventId && partialStateJoin) {
+    return Errors.forbidden("Room state is still partial for this event").toResponse();
+  }
+
   // Verify room exists
-  const room = await c.env.DB.prepare(`SELECT room_id FROM rooms WHERE room_id = ?`)
+  const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
     .bind(roomId)
-    .first<{ room_id: string }>();
+    .first<{ room_id: string; room_version: string }>();
 
   if (!room) {
     return Errors.notFound("Room not found").toResponse();
@@ -745,9 +983,9 @@ app.get("/_matrix/federation/v1/event_auth/:roomId/:eventId", async (c) => {
   const eventId = c.req.param("eventId");
 
   // Verify room exists
-  const room = await c.env.DB.prepare(`SELECT room_id FROM rooms WHERE room_id = ?`)
+  const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
     .bind(roomId)
-    .first<{ room_id: string }>();
+    .first<{ room_id: string; room_version: string }>();
 
   if (!room) {
     return Errors.notFound("Room not found").toResponse();
@@ -768,58 +1006,72 @@ app.get("/_matrix/federation/v1/event_auth/:roomId/:eventId", async (c) => {
   const authChain: PDU[] = [];
   const visited = new Set<string>();
   const toProcess = JSON.parse(event.auth_events) as string[];
+  const missingAuthEvents: string[] = [];
+  const authChainSummaries: Array<{
+    event_id: string;
+    calculated_event_id: string;
+    type: string;
+    state_key?: string;
+    origin_server_ts: number;
+    depth: number;
+    auth_events: string[];
+    prev_events: string[];
+  }> = [];
 
   while (toProcess.length > 0) {
     const authId = toProcess.shift()!;
     if (visited.has(authId)) continue;
     visited.add(authId);
 
-    const authEvent = await c.env.DB.prepare(
-      `SELECT event_id, room_id, sender, event_type, state_key, content,
-       origin_server_ts, depth, auth_events, prev_events, hashes, signatures
-       FROM events WHERE event_id = ?`,
-    )
-      .bind(authId)
-      .first<{
-        event_id: string;
-        room_id: string;
-        sender: string;
-        event_type: string;
-        state_key: string | null;
-        content: string;
-        origin_server_ts: number;
-        depth: number;
-        auth_events: string;
-        prev_events: string;
-        hashes: string | null;
-        signatures: string | null;
-      }>();
+    const authEvent = await getFederationEventRowByReference(c.env.DB, authId);
 
     if (authEvent) {
-      authChain.push({
-        event_id: authEvent.event_id,
-        room_id: authEvent.room_id,
-        sender: authEvent.sender,
-        type: authEvent.event_type,
-        state_key: authEvent.state_key ?? undefined,
-        content: JSON.parse(authEvent.content),
-        origin_server_ts: authEvent.origin_server_ts,
-        depth: authEvent.depth,
-        auth_events: JSON.parse(authEvent.auth_events),
-        prev_events: JSON.parse(authEvent.prev_events),
-        hashes: authEvent.hashes ? JSON.parse(authEvent.hashes) : undefined,
-        signatures: authEvent.signatures ? JSON.parse(authEvent.signatures) : undefined,
+      const authEvents = JSON.parse(authEvent.auth_events) as string[];
+      const prevEvents = JSON.parse(authEvent.prev_events) as string[];
+      const pdu: PDU = {
+        ...toFederationPduFromRow({
+          ...authEvent,
+          auth_events: authEvent.auth_events,
+          prev_events: authEvent.prev_events,
+        }),
+        auth_events: authEvents,
+        prev_events: prevEvents,
+      };
+      authChain.push(pdu);
+
+      const calculatedEventId = await calculateReferenceHashEventId(
+        pdu as unknown as Record<string, unknown>,
+        room.room_version,
+      );
+      authChainSummaries.push({
+        event_id: pdu.event_id,
+        calculated_event_id: calculatedEventId,
+        type: pdu.type,
+        state_key: pdu.state_key,
+        origin_server_ts: pdu.origin_server_ts,
+        depth: pdu.depth,
+        auth_events: authEvents,
+        prev_events: prevEvents,
       });
 
       // Add this event's auth_events to process
-      const moreAuthEvents = JSON.parse(authEvent.auth_events) as string[];
-      for (const id of moreAuthEvents) {
+      for (const id of authEvents) {
         if (!visited.has(id)) {
           toProcess.push(id);
         }
       }
+    } else {
+      missingAuthEvents.push(authId);
     }
   }
+
+  await logFederationRouteWarning(c, "event_auth", {
+    roomId,
+    eventId,
+    requestedAuthEvents: JSON.parse(event.auth_events) as string[],
+    returnedAuthChain: authChainSummaries,
+    missingAuthEvents,
+  });
 
   return c.json({
     auth_chain: authChain,
@@ -833,9 +1085,9 @@ app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
   const vParam = c.req.query("v"); // Starting event IDs
 
   // Verify room exists
-  const room = await c.env.DB.prepare(`SELECT room_id FROM rooms WHERE room_id = ?`)
+  const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
     .bind(roomId)
-    .first<{ room_id: string }>();
+    .first<{ room_id: string; room_version: string }>();
 
   if (!room) {
     return Errors.notFound("Room not found").toResponse();
@@ -858,7 +1110,8 @@ app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
     events = (
       await c.env.DB.prepare(
         `SELECT event_id, room_id, sender, event_type, state_key, content,
-       origin_server_ts, depth, auth_events, prev_events, hashes, signatures
+       origin_server_ts, depth, auth_events, prev_events, event_origin, event_membership,
+       prev_state, hashes, signatures
        FROM events
        WHERE room_id = ? AND depth < ?
        ORDER BY depth DESC
@@ -872,7 +1125,8 @@ app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
     events = (
       await c.env.DB.prepare(
         `SELECT event_id, room_id, sender, event_type, state_key, content,
-       origin_server_ts, depth, auth_events, prev_events, hashes, signatures
+       origin_server_ts, depth, auth_events, prev_events, event_origin, event_membership,
+       prev_state, hashes, signatures
        FROM events
        WHERE room_id = ?
        ORDER BY depth DESC
@@ -883,20 +1137,27 @@ app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
     ).results;
   }
 
-  const pdus = events.map((e: any) => ({
-    event_id: e.event_id,
-    room_id: e.room_id,
-    sender: e.sender,
-    type: e.event_type,
-    state_key: e.state_key ?? undefined,
-    content: JSON.parse(e.content),
-    origin_server_ts: e.origin_server_ts,
-    depth: e.depth,
-    auth_events: JSON.parse(e.auth_events),
-    prev_events: JSON.parse(e.prev_events),
-    hashes: e.hashes ? JSON.parse(e.hashes) : undefined,
-    signatures: e.signatures ? JSON.parse(e.signatures) : undefined,
-  }));
+  const pdus = events.map((eventRow: any) =>
+    toFederationPduFromRow(
+      eventRow as {
+        event_id: string;
+        room_id: string;
+        sender: string;
+        event_type: string;
+        state_key: string | null;
+        content: string;
+        origin_server_ts: number;
+        depth: number;
+        auth_events: string;
+        prev_events: string;
+        event_origin: string | null;
+        event_membership: string | null;
+        prev_state: string | null;
+        hashes: string | null;
+        signatures: string | null;
+      },
+    ),
+  );
 
   return c.json({
     origin: c.env.SERVER_NAME,
@@ -921,9 +1182,9 @@ app.post("/_matrix/federation/v1/get_missing_events/:roomId", async (c) => {
     return Errors.badJson().toResponse();
   }
 
-  const room = await c.env.DB.prepare(`SELECT room_id FROM rooms WHERE room_id = ?`)
+  const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
     .bind(roomId)
-    .first<{ room_id: string }>();
+    .first<{ room_id: string; room_version: string }>();
   if (!room) {
     return Errors.notFound("Room not found").toResponse();
   }
@@ -939,6 +1200,8 @@ app.post("/_matrix/federation/v1/get_missing_events/:roomId", async (c) => {
     latestEvents,
     limit,
     minDepth,
+    roomVersion: room.room_version,
+    requestingServer: origin,
   });
 
   return c.json({ events });
@@ -988,6 +1251,14 @@ app.get("/_matrix/federation/v1/make_join/:roomId/:userId", async (c) => {
   )
     .bind(roomId, userId)
     .first<{ membership: string; event_id: string }>();
+  const currentStateMembership = await c.env.DB.prepare(
+    `SELECT e.event_id, json_extract(e.content, '$.membership') AS membership
+     FROM room_state rs
+     JOIN events e ON rs.event_id = e.event_id
+     WHERE rs.room_id = ? AND rs.event_type = 'm.room.member' AND rs.state_key = ?`,
+  )
+    .bind(roomId, userId)
+    .first<{ event_id: string; membership: string | null }>();
 
   if (currentMembership?.membership === "ban") {
     return c.json({ errcode: "M_FORBIDDEN", error: "User is banned from this room" }, 403);
@@ -1045,6 +1316,19 @@ app.get("/_matrix/federation/v1/make_join/:roomId/:userId", async (c) => {
     prev_events: prevEvents,
   };
 
+  await logFederationRouteWarning(c, "make_join", {
+    roomId,
+    userId,
+    roomVersion: room.room_version,
+    currentMembership: currentMembership?.membership,
+    currentMembershipEventId: currentMembership?.event_id,
+    currentStateMembership: currentStateMembership?.membership,
+    currentStateMembershipEventId: currentStateMembership?.event_id,
+    authEvents,
+    prevEvents,
+    depth,
+  });
+
   return c.json({
     room_version: room.room_version,
     event: eventTemplate,
@@ -1054,6 +1338,8 @@ app.get("/_matrix/federation/v1/make_join/:roomId/:userId", async (c) => {
 async function handleSendJoin(c: any, version: "v1" | "v2"): Promise<Response> {
   const roomId = c.req.param("roomId");
   const eventId = c.req.param("eventId");
+  const omitMembers = c.req.query("omit_members") === "true";
+  const origin = c.get("federationOrigin" as any) as string | undefined;
 
   let body: unknown;
   try {
@@ -1080,8 +1366,24 @@ async function handleSendJoin(c: any, version: "v1" | "v2"): Promise<Response> {
       return Errors.notFound("Room not found").toResponse();
     }
 
+    const incomingEvent = validated.event;
+    const calculatedEventId = await calculateReferenceHashEventId(
+      incomingEvent as unknown as Record<string, unknown>,
+      room.room_version,
+    );
+    await logFederationRouteWarning(c, "send_join", {
+      roomId,
+      eventId,
+      roomVersion: room.room_version,
+      calculatedEventId,
+      originServerTs: incomingEvent.origin_server_ts,
+      depth: incomingEvent.depth,
+      authEvents: incomingEvent.auth_events,
+      prevEvents: incomingEvent.prev_events,
+      pathMatchesCalculated: eventId === calculatedEventId,
+    });
     const stateBundle = await loadFederationStateBundle(c.env.DB, roomId);
-    const authResult = checkEventAuth(validated.event, stateBundle.roomState, room.room_version);
+    const authResult = checkEventAuth(incomingEvent, stateBundle.roomState, room.room_version);
     if (!authResult.allowed) {
       return c.json(
         { errcode: "M_FORBIDDEN", error: authResult.error || "Join event not allowed" },
@@ -1091,27 +1393,33 @@ async function handleSendJoin(c: any, version: "v1" | "v2"): Promise<Response> {
 
     await persistFederationMembershipEvent(c.env.DB, {
       roomId,
-      event: validated.event,
+      event: incomingEvent,
       source: "federation",
     });
 
-    c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, validated.event));
+    c.executionCtx.waitUntil(
+      fanoutEventToFederation(c.env, roomId, incomingEvent, {
+        excludeServers: origin ? [origin] : undefined,
+      }),
+    );
+
+    const partialResponse = omitMembers ? buildPartialSendJoinResponse(stateBundle) : null;
 
     if (version === "v1") {
       return c.json({
         origin: c.env.SERVER_NAME,
-        auth_chain: stateBundle.authChain,
-        state: stateBundle.state,
-        event: validated.event,
+        auth_chain: partialResponse?.auth_chain ?? stateBundle.authChain,
+        state: partialResponse?.state ?? stateBundle.state,
+        event: incomingEvent,
       });
     }
 
     return c.json({
       origin: c.env.SERVER_NAME,
-      auth_chain: stateBundle.authChain,
-      state: stateBundle.state,
-      event: validated.event,
-      members_omitted: false,
+      auth_chain: partialResponse?.auth_chain ?? stateBundle.authChain,
+      state: partialResponse?.state ?? stateBundle.state,
+      event: incomingEvent,
+      members_omitted: partialResponse?.members_omitted ?? false,
       servers_in_room: stateBundle.serversInRoom,
     });
   } catch (error) {
@@ -1153,6 +1461,14 @@ app.get("/_matrix/federation/v1/make_leave/:roomId/:userId", async (c) => {
   )
     .bind(roomId, userId)
     .first<{ event_id: string; membership: string }>();
+  const currentStateMembership = await c.env.DB.prepare(
+    `SELECT e.event_id, json_extract(e.content, '$.membership') AS membership
+     FROM room_state rs
+     JOIN events e ON rs.event_id = e.event_id
+     WHERE rs.room_id = ? AND rs.event_type = 'm.room.member' AND rs.state_key = ?`,
+  )
+    .bind(roomId, userId)
+    .first<{ event_id: string; membership: string | null }>();
 
   if (!membership || !["join", "invite", "knock"].includes(membership.membership)) {
     return c.json(
@@ -1208,6 +1524,19 @@ app.get("/_matrix/federation/v1/make_leave/:roomId/:userId", async (c) => {
     prev_events: prevEvents,
   };
 
+  await logFederationRouteWarning(c, "make_leave", {
+    roomId,
+    userId,
+    roomVersion: room.room_version,
+    currentMembership: membership.membership,
+    currentMembershipEventId: membership.event_id,
+    currentStateMembership: currentStateMembership?.membership,
+    currentStateMembershipEventId: currentStateMembership?.event_id,
+    authEvents,
+    prevEvents,
+    depth,
+  });
+
   return c.json({
     room_version: room.room_version,
     event: eventTemplate,
@@ -1219,13 +1548,23 @@ async function persistFederationLeave(
   roomId: string,
   fallbackEventId: string,
   body: any,
+  roomVersion: string,
+  origin?: string,
 ): Promise<PDU> {
   const leaveEventId = body.event_id || fallbackEventId;
-  const leavePdu: PDU = {
+  const leavePdu = {
     event_id: leaveEventId,
     room_id: roomId,
     sender: body.sender,
     type: body.type,
+    origin: typeof body.origin === "string" ? body.origin : undefined,
+    membership:
+      typeof body.membership === "string"
+        ? (body.membership as "join" | "invite" | "leave" | "ban" | "knock")
+        : undefined,
+    prev_state: Array.isArray(body.prev_state)
+      ? body.prev_state.filter((entry: unknown): entry is string => typeof entry === "string")
+      : undefined,
     state_key: body.state_key ?? undefined,
     content: body.content ?? {},
     origin_server_ts: body.origin_server_ts || Date.now(),
@@ -1236,6 +1575,20 @@ async function persistFederationLeave(
     hashes: body.hashes,
     signatures: body.signatures,
   };
+  const calculatedEventId = await calculateReferenceHashEventId(
+    leavePdu as unknown as Record<string, unknown>,
+    roomVersion,
+  );
+  await logFederationRouteWarning(c, "send_leave", {
+    roomId,
+    eventId: leaveEventId,
+    calculatedEventId,
+    originServerTs: leavePdu.origin_server_ts,
+    depth: leavePdu.depth,
+    authEvents: leavePdu.auth_events,
+    prevEvents: leavePdu.prev_events,
+    pathMatchesCalculated: leaveEventId === calculatedEventId,
+  });
 
   const existing = await c.env.DB.prepare(`SELECT event_id FROM events WHERE event_id = ?`)
     .bind(leaveEventId)
@@ -1257,7 +1610,11 @@ async function persistFederationLeave(
   });
 
   await notifyUsersOfEvent(c.env, roomId, leaveEventId, "m.room.member");
-  c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, leavePdu));
+  c.executionCtx.waitUntil(
+    fanoutEventToFederation(c.env, roomId, leavePdu, {
+      excludeServers: origin ? [origin] : undefined,
+    }),
+  );
 
   return leavePdu;
 }
@@ -1266,6 +1623,7 @@ async function persistFederationLeave(
 app.put("/_matrix/federation/v1/send_leave/:roomId/:eventId", async (c) => {
   const roomId = c.req.param("roomId");
   const eventId = c.req.param("eventId");
+  const origin = c.get("federationOrigin" as any) as string | undefined;
 
   let body: unknown;
   try {
@@ -1285,15 +1643,15 @@ app.put("/_matrix/federation/v1/send_leave/:roomId/:eventId", async (c) => {
   }
 
   // Verify room exists
-  const room = await c.env.DB.prepare(`SELECT room_id FROM rooms WHERE room_id = ?`)
+  const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
     .bind(roomId)
-    .first<{ room_id: string }>();
+    .first<{ room_id: string; room_version: string }>();
 
   if (!room) {
     return Errors.notFound("Room not found").toResponse();
   }
 
-  await persistFederationLeave(c, roomId, eventId, body);
+  await persistFederationLeave(c, roomId, eventId, body, room.room_version, origin);
 
   // v1 returns empty array on success [200, {}]
   return c.json([200, {}]);
@@ -1303,6 +1661,7 @@ app.put("/_matrix/federation/v1/send_leave/:roomId/:eventId", async (c) => {
 app.put("/_matrix/federation/v2/send_leave/:roomId/:eventId", async (c) => {
   const roomId = c.req.param("roomId");
   const eventId = c.req.param("eventId");
+  const origin = c.get("federationOrigin" as any) as string | undefined;
 
   let body: unknown;
   try {
@@ -1322,15 +1681,15 @@ app.put("/_matrix/federation/v2/send_leave/:roomId/:eventId", async (c) => {
   }
 
   // Verify room exists
-  const room = await c.env.DB.prepare(`SELECT room_id FROM rooms WHERE room_id = ?`)
+  const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
     .bind(roomId)
-    .first<{ room_id: string }>();
+    .first<{ room_id: string; room_version: string }>();
 
   if (!room) {
     return Errors.notFound("Room not found").toResponse();
   }
 
-  await persistFederationLeave(c, roomId, eventId, body);
+  await persistFederationLeave(c, roomId, eventId, body, room.room_version, origin);
 
   // v2 returns empty object on success
   return c.json({});
@@ -1362,6 +1721,29 @@ async function handleFederationInvite(c: any, version: "v1" | "v2"): Promise<Res
       .first()) as { user_id: string } | null;
     if (!localUser) {
       return c.json({ errcode: "M_NOT_FOUND", error: "User not found" }, 404);
+    }
+
+    const invitePermissionConfig = await loadInvitePermissionConfig(
+      c.env.DB,
+      validated.invitedUserId,
+    );
+    const decision = decideInvitePermission(
+      invitePermissionConfig,
+      validated.event.sender,
+      typeof c.get("federationOrigin") === "string"
+        ? (c.get("federationOrigin") as string)
+        : undefined,
+    );
+    if (decision.action === "block") {
+      await logFederationRouteWarning(c, "invite", {
+        decision: "invite_blocked",
+        room_id: validated.roomId,
+        invited_user_id: validated.invitedUserId,
+        sender: validated.event.sender,
+        matched_by: decision.matchedBy,
+        matched_value: decision.matchedValue,
+      });
+      return Errors.inviteBlocked().toResponse();
     }
 
     const key = await getServerSigningKey(c.env.DB);
@@ -1537,6 +1919,27 @@ async function getCrossSigningKeysFromDO(
   }
   return await response.json();
 }
+
+app.post("/_matrix/federation/unstable/event_relationships", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return Errors.badJson().toResponse();
+  }
+
+  const request = parseFederationEventRelationshipsRequest(body);
+  if (!request) {
+    return Errors.badJson().toResponse();
+  }
+
+  const result = await buildFederatedEventRelationshipsResponse(c.env.DB, request);
+  if (!result) {
+    return Errors.notFound("Event not found").toResponse();
+  }
+
+  return c.json(result);
+});
 
 // POST /_matrix/federation/v1/user/keys/query - Query device keys for local users
 // This endpoint is called by remote servers to get device keys for E2EE
@@ -2018,6 +2421,7 @@ app.get("/_matrix/federation/v1/make_knock/:roomId/:userId", async (c) => {
 app.put("/_matrix/federation/v1/send_knock/:roomId/:eventId", async (c) => {
   const roomId = c.req.param("roomId");
   const eventId = c.req.param("eventId");
+  const origin = c.get("federationOrigin" as any) as string | undefined;
   const db = c.env.DB;
 
   let body: unknown;
@@ -2040,9 +2444,9 @@ app.put("/_matrix/federation/v1/send_knock/:roomId/:eventId", async (c) => {
 
   // Verify room exists
   const room = await db
-    .prepare(`SELECT room_id FROM rooms WHERE room_id = ?`)
+    .prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
     .bind(roomId)
-    .first<{ room_id: string }>();
+    .first<{ room_id: string; room_version: string }>();
 
   if (!room) {
     return Errors.notFound("Room not found").toResponse();
@@ -2115,7 +2519,11 @@ app.put("/_matrix/federation/v1/send_knock/:roomId/:eventId", async (c) => {
       source: "federation",
     });
     await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.member");
-    c.executionCtx.waitUntil(fanoutEventToFederation(c.env, roomId, knockPdu));
+    c.executionCtx.waitUntil(
+      fanoutEventToFederation(c.env, roomId, knockPdu, {
+        excludeServers: origin ? [origin] : undefined,
+      }),
+    );
   } catch (e) {
     console.error(`Failed to store knock event ${eventId}:`, e);
   }

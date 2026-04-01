@@ -7,6 +7,8 @@ import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
+import { parseRoomAlias } from "../utils/ids";
+import { federationGet } from "../services/federation-keys";
 
 const app = new Hono<AppEnv>();
 
@@ -27,23 +29,53 @@ app.get("/_matrix/client/v3/directory/room/:roomAlias", async (c) => {
     .bind(roomAlias)
     .first<{ room_id: string; servers: string | null }>();
 
-  if (!alias) {
+  if (alias) {
+    // Parse servers list
+    let servers: string[] = [c.env.SERVER_NAME];
+    if (alias.servers) {
+      try {
+        servers = JSON.parse(alias.servers);
+      } catch {
+        // Use default
+      }
+    }
+
+    return c.json({
+      room_id: alias.room_id,
+      servers,
+    });
+  }
+
+  const parsedAlias = parseRoomAlias(roomAlias);
+  if (!parsedAlias || parsedAlias.serverName === c.env.SERVER_NAME) {
     return Errors.notFound("Room alias not found").toResponse();
   }
 
-  // Parse servers list
-  let servers: string[] = [c.env.SERVER_NAME];
-  if (alias.servers) {
-    try {
-      servers = JSON.parse(alias.servers);
-    } catch {
-      // Use default
-    }
+  const response = await federationGet(
+    parsedAlias.serverName,
+    `/_matrix/federation/v1/query/directory?room_alias=${encodeURIComponent(roomAlias)}`,
+    c.env.SERVER_NAME,
+    c.env.DB,
+    c.env.CACHE,
+  ).catch(() => null);
+
+  if (!response?.ok) {
+    return Errors.notFound("Room alias not found").toResponse();
+  }
+
+  const body = (await response.json()) as {
+    room_id?: unknown;
+    servers?: unknown;
+  };
+  if (typeof body.room_id !== "string") {
+    return Errors.notFound("Room alias not found").toResponse();
   }
 
   return c.json({
-    room_id: alias.room_id,
-    servers,
+    room_id: body.room_id,
+    servers: Array.isArray(body.servers)
+      ? body.servers.filter((value): value is string => typeof value === "string")
+      : [parsedAlias.serverName],
   });
 });
 

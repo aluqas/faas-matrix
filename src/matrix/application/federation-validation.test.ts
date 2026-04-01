@@ -49,6 +49,33 @@ describe("federation validation", () => {
     );
   });
 
+  it("preserves top-level federation membership fields on send_join", async () => {
+    const effect = validateSendJoinRequest({
+      roomId: "!room:test",
+      eventId: "$join",
+      body: {
+        event_id: "$join",
+        room_id: "!room:test",
+        sender: "@alice:remote.test",
+        origin: "remote.test",
+        membership: "join",
+        prev_state: ["$prev:test"],
+        state_key: "@alice:remote.test",
+        type: "m.room.member",
+        content: { membership: "join" },
+        origin_server_ts: 1,
+      },
+    });
+
+    await expect(Effect.runPromise(effect)).resolves.toMatchObject({
+      event: {
+        origin: "remote.test",
+        membership: "join",
+        prev_state: ["$prev:test"],
+      },
+    });
+  });
+
   it("validates v2 invites require a supported room version and local target", async () => {
     const effect = validateInviteRequest({
       eventId: "$invite",

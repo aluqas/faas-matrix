@@ -50,6 +50,9 @@ export interface PDU extends MatrixEvent {
   auth_events: EventId[];
   prev_events: EventId[];
   depth: number;
+  origin?: ServerName;
+  membership?: Membership;
+  prev_state?: EventId[];
   hashes?: {
     sha256: string;
   };
@@ -274,6 +277,13 @@ export interface JoinedRoom {
     highlight_count?: number;
     notification_count?: number;
   };
+  unread_thread_notifications?: Record<
+    EventId,
+    {
+      highlight_count?: number;
+      notification_count?: number;
+    }
+  >;
 }
 
 export interface InvitedRoom {
@@ -394,6 +404,7 @@ export const ErrorCodes = {
   M_USER_IN_USE: "M_USER_IN_USE",
   M_INVALID_USERNAME: "M_INVALID_USERNAME",
   M_ROOM_IN_USE: "M_ROOM_IN_USE",
+  M_BAD_ALIAS: "M_BAD_ALIAS",
   M_INVALID_ROOM_STATE: "M_INVALID_ROOM_STATE",
   M_THREEPID_IN_USE: "M_THREEPID_IN_USE",
   M_THREEPID_NOT_FOUND: "M_THREEPID_NOT_FOUND",
@@ -409,6 +420,7 @@ export const ErrorCodes = {
   M_MISSING_PARAM: "M_MISSING_PARAM",
   M_INVALID_PARAM: "M_INVALID_PARAM",
   M_TOO_LARGE: "M_TOO_LARGE",
+  M_INVITE_BLOCKED: "M_INVITE_BLOCKED",
   M_EXCLUSIVE: "M_EXCLUSIVE",
   M_RESOURCE_LIMIT_EXCEEDED: "M_RESOURCE_LIMIT_EXCEEDED",
   M_CANNOT_LEAVE_SERVER_NOTICE_ROOM: "M_CANNOT_LEAVE_SERVER_NOTICE_ROOM",

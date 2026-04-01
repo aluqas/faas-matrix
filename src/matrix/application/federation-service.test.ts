@@ -7,6 +7,7 @@ import type { FederationProcessedPdu, FederationRepository } from "../repositori
 class FakeFederationRepository implements FederationRepository {
   cachedResponse: Record<string, unknown> | null = null;
   roomState: any[] = [];
+  events = new Map<string, any>();
   room: { room_id: string; room_version: string; is_public: boolean; created_at: number } | null =
     null;
   recordedPdus: Array<{
@@ -37,13 +38,21 @@ class FakeFederationRepository implements FederationRepository {
   async getRoom() {
     return this.room;
   }
+  async getEvent(eventId: string) {
+    return this.events.get(eventId) ?? null;
+  }
+  async getLatestRoomEvents(_roomId: string) {
+    return [];
+  }
   async getRoomState() {
     return this.roomState;
   }
   async getInviteStrippedState() {
     return [];
   }
-  async storeIncomingEvent() {}
+  async storeIncomingEvent(event: any) {
+    this.events.set(event.event_id, event);
+  }
   async notifyUsersOfEvent() {}
   async updateMembership() {}
   async upsertRoomState() {}
@@ -57,7 +66,15 @@ function createFederationService(repo: FederationRepository) {
     {
       capabilities: {
         sql: { connection: {} },
-        kv: { cache: {} },
+        kv: {
+          cache: {
+            async get() {
+              return null;
+            },
+            async put() {},
+            async delete() {},
+          },
+        },
         blob: {},
         jobs: { defer() {} },
         workflow: {

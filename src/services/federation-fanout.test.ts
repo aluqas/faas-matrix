@@ -86,4 +86,21 @@ describe("federation-fanout", () => {
 
     expect(servers).toEqual(["remote-host:8448"]);
   });
+
+  it("can exclude the origin server from membership re-fanout", () => {
+    const servers = collectRemoteServersForEvent(
+      "hs1",
+      "!room:remote-origin",
+      createEvent({
+        type: "m.room.member",
+        sender: "@alice:remote-origin",
+        state_key: "@alice:remote-origin",
+        content: { membership: "join" },
+      }),
+      [{ user_id: "@bob:remote-peer", membership: "join" }],
+      ["remote-origin"],
+    );
+
+    expect(servers).toEqual(["remote-peer"]);
+  });
 });

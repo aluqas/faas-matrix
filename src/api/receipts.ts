@@ -11,6 +11,9 @@ import { Hono } from "hono";
 import type { AppEnv, Env } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
+import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
+import { getRoomState } from "../services/database";
+import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
 
 const app = new Hono<AppEnv>();
 
@@ -21,6 +24,25 @@ const app = new Hono<AppEnv>();
 function getRoomDO(env: Env, roomId: string) {
   const id = env.ROOMS.idFromName(roomId);
   return env.ROOMS.get(id);
+}
+
+async function getRemoteJoinedServers(db: D1Database, roomId: string, localServerName: string) {
+  const state = await getRoomState(db, roomId);
+  return Array.from(
+    new Set(
+      state
+        .filter(
+          (event) =>
+            event.type === "m.room.member" &&
+            event.state_key &&
+            event.content &&
+            typeof event.content === "object" &&
+            event.content["membership"] === "join",
+        )
+        .map((event) => extractServerNameFromMatrixId(event.state_key))
+        .filter((server): server is string => Boolean(server) && server !== localServerName),
+    ),
+  );
 }
 
 // ============================================
@@ -128,9 +150,31 @@ app.post(
         eventId,
       );
 
-      // Also update m.fully_read when m.read is set - Element X uses m.fully_read for unread counts
-      // This keeps the read marker in sync with the read receipt
       if (receiptType === "m.read") {
+        const destinations = await getRemoteJoinedServers(db, roomId, c.env.SERVER_NAME);
+        await Promise.all(
+          destinations.map((destination) =>
+            queueFederationEdu(c.env, destination, "m.receipt", {
+              [roomId]: {
+                "m.read": {
+                  [userId]: {
+                    event_ids: [eventId],
+                    data: {
+                      ts: Date.now(),
+                      ...(threadId ? { thread_id: threadId } : {}),
+                    },
+                  },
+                },
+              },
+            }),
+          ),
+        );
+      }
+
+      // Only unthreaded m.read receipts should advance the room-level read marker.
+      // Threaded receipts affect only their scoped timeline and must not collapse
+      // unread counts for the whole room.
+      if (receiptType === "m.read" && threadId === undefined) {
         await db
           .prepare(`
         INSERT INTO account_data (user_id, room_id, event_type, content)

@@ -38,6 +38,11 @@ import { withLogContext } from "../matrix/application/logging";
 import { parseDeviceKeysPayload } from "../api/keys-contracts";
 import { publishDeviceListUpdatesForNewlySharedServers } from "../matrix/application/features/device-lists/command";
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
+import {
+  clearPartialStateJoin,
+  markPartialStateJoinCompleted,
+  markPartialStateJoin,
+} from "../matrix/application/features/partial-state/tracker";
 
 export type JoinParams = RoomJoinWorkflowParams;
 export type JoinResult = RoomJoinWorkflowResult;
@@ -61,6 +66,16 @@ function withDefined<K extends string, V>(key: K, value: V | undefined): { [P in
 function parseWorkflowJson<T>(payload: string): T {
   return JSON.parse(payload) as T;
 }
+
+type RemoteStateIdsResponse = {
+  pdu_ids: string[];
+  auth_chain_ids: string[];
+};
+
+type RemoteStateResponse = {
+  pdus: unknown[];
+  auth_chain: unknown[];
+};
 
 async function getStoredDeviceKeysFromKv(kv: KVNamespace, userId: string, deviceId: string) {
   return parseDeviceKeysPayload(await kv.get(`device:${userId}:${deviceId}`, "json"));
@@ -154,6 +169,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       );
 
       // Step 3: For remote joins, send signed event to remote server and process room state
+      let partialStateEventId: string | undefined;
       if (isRemote && successfulRemoteServer && joinEventData) {
         const sendJoinResponse = parseWorkflowJson<RemoteSendJoinResponse>(
           await step.do(
@@ -185,6 +201,23 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
             source: "workflow",
           });
         });
+
+        if (sendJoinResponse.members_omitted === true) {
+          partialStateEventId = joinEventData.prev_events[0];
+          if (!partialStateEventId) {
+            throw new Error("partial send_join response missing prev_event boundary");
+          }
+
+          await step.do("mark-partial-state", async () => {
+            await markPartialStateJoin(this.env.CACHE, {
+              roomId,
+              userId,
+              eventId: partialStateEventId!,
+              startedAt: Date.now(),
+              ...withDefined("remoteServer", successfulRemoteServer),
+            });
+          });
+        }
       }
 
       // Step 4: Persist event and membership locally
@@ -203,8 +236,55 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
         });
       });
 
+      if (isRemote && successfulRemoteServer && partialStateEventId) {
+        await step.do(
+          "resync-partial-state",
+          {
+            retries: {
+              limit: 3,
+              delay: 500,
+              backoff: "exponential",
+            },
+            timeout: 120000,
+          },
+          async () => {
+            const roomVersion = remoteEventTemplate?.room_version || "10";
+            await this.fetchAndPersistPartialState(
+              successfulRemoteServer!,
+              roomId,
+              partialStateEventId!,
+              roomVersion,
+            );
+            await markPartialStateJoinCompleted(this.env.CACHE, {
+              roomId,
+              userId,
+              eventId: partialStateEventId!,
+              startedAt: Date.now(),
+              ...withDefined("remoteServer", successfulRemoteServer),
+            });
+            await clearPartialStateJoin(this.env.CACHE, userId, roomId);
+            await this.notifyMemberBatch([{ userId }], joinEventData);
+          },
+        );
+      }
+
       await step.do("publish-device-lists", async () => {
         try {
+          const roomEncryptionEvent = await getStateEvent(
+            this.env.DB,
+            roomId,
+            "m.room.encryption",
+            "",
+          );
+          if (!roomEncryptionEvent) {
+            await runWorkflowEffect(
+              logger.info("room_join.workflow.device_list_share_skipped", {
+                reason: "room_not_encrypted",
+              }),
+            );
+            return;
+          }
+
           const published = await publishDeviceListUpdatesForNewlySharedServers(
             {
               userId,
@@ -421,12 +501,19 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       destination: remoteServer,
       debugEnabled: true,
     });
-    await runWorkflowEffect(logger.info("room_join.workflow.send_join_start"));
+    const v2Path = `/_matrix/federation/v2/send_join/${encodeURIComponent(roomId)}/${encodeURIComponent(joinEvent.event_id)}?omit_members=true`;
+    const v1Path = `/_matrix/federation/v1/send_join/${encodeURIComponent(roomId)}/${encodeURIComponent(joinEvent.event_id)}?omit_members=true`;
+    await runWorkflowEffect(
+      logger.info("room_join.workflow.send_join_start", {
+        v2_path: v2Path,
+        v1_path: v1Path,
+      }),
+    );
 
     // Try v2 first (Matrix v1.1+), fall back to v1 if server returns 400/404
     let response = await federationPut(
       remoteServer,
-      `/_matrix/federation/v2/send_join/${encodeURIComponent(roomId)}/${encodeURIComponent(joinEvent.event_id)}`,
+      v2Path,
       joinEvent,
       this.env.SERVER_NAME,
       this.env.DB,
@@ -441,7 +528,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       );
       response = await federationPut(
         remoteServer,
-        `/_matrix/federation/v1/send_join/${encodeURIComponent(roomId)}/${encodeURIComponent(joinEvent.event_id)}`,
+        v1Path,
         joinEvent,
         this.env.SERVER_NAME,
         this.env.DB,
@@ -455,6 +542,53 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
     }
 
     return toRemoteSendJoinResponse((await response.json()) as unknown);
+  }
+
+  private async fetchAndPersistPartialState(
+    remoteServer: string,
+    roomId: string,
+    eventId: string,
+    roomVersion: string,
+  ): Promise<void> {
+    const stateIdsResponse = await federationGet(
+      remoteServer,
+      `/_matrix/federation/v1/state_ids/${encodeURIComponent(roomId)}?event_id=${encodeURIComponent(eventId)}`,
+      this.env.SERVER_NAME,
+      this.env.DB,
+      this.env.CACHE,
+    );
+
+    if (!stateIdsResponse.ok) {
+      const error = await stateIdsResponse.text();
+      throw new Error(`state_ids failed: ${stateIdsResponse.status} ${error}`);
+    }
+
+    const stateIds = (await stateIdsResponse.json()) as RemoteStateIdsResponse;
+    if (!Array.isArray(stateIds.pdu_ids) || !Array.isArray(stateIds.auth_chain_ids)) {
+      throw new Error("state_ids returned invalid response");
+    }
+
+    const stateResponse = await federationGet(
+      remoteServer,
+      `/_matrix/federation/v1/state/${encodeURIComponent(roomId)}?event_id=${encodeURIComponent(eventId)}`,
+      this.env.SERVER_NAME,
+      this.env.DB,
+      this.env.CACHE,
+    );
+
+    if (!stateResponse.ok) {
+      const error = await stateResponse.text();
+      throw new Error(`state failed: ${stateResponse.status} ${error}`);
+    }
+
+    const statePayload = (await stateResponse.json()) as RemoteStateResponse;
+    await persistFederationStateSnapshot(this.env.DB, {
+      roomId,
+      roomVersion,
+      stateEvents: Array.isArray(statePayload.pdus) ? statePayload.pdus : [],
+      authChain: Array.isArray(statePayload.auth_chain) ? statePayload.auth_chain : [],
+      source: "workflow",
+    });
   }
 
   // Notify a batch of members about the join

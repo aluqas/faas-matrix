@@ -11,7 +11,7 @@ function createMemberEvent(params: {
   roomId?: string;
   sender: string;
   stateKey: string;
-  membership: "invite" | "join" | "leave" | "knock";
+  membership: "invite" | "join" | "leave" | "ban" | "knock";
 }): PDU {
   return {
     event_id: params.eventId,
@@ -183,6 +183,35 @@ describe("MembershipTransitionService", () => {
     expect(result.membershipToPersist).toBe("leave");
     expect(result.shouldClearInviteStrippedState).toBe(false);
     expect(result.syncCategory).toBe("leave");
+  });
+
+  it("persists bans and exposes them as leave sync category", () => {
+    const joinEvent = createMemberEvent({
+      eventId: "$join",
+      sender: "@bob:test",
+      stateKey: "@bob:test",
+      membership: "join",
+    });
+    const banEvent = createMemberEvent({
+      eventId: "$ban",
+      sender: "@alice:test",
+      stateKey: "@bob:test",
+      membership: "ban",
+    });
+
+    const result = service.evaluate({
+      event: banEvent,
+      roomId: "!room:test",
+      source: "client",
+      currentMembership: { membership: "join", eventId: "$join" },
+      currentMemberEvent: joinEvent,
+      roomState: [joinEvent],
+      inviteStrippedState: [],
+    });
+
+    expect(result.membershipToPersist).toBe("ban");
+    expect(result.syncCategory).toBe("leave");
+    expect(result.shouldUpsertRoomState).toBe(true);
   });
 
   it("marks a knock transition and requests knock persistence", () => {

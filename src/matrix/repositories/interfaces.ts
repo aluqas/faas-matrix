@@ -15,6 +15,17 @@ export interface MembershipRecord {
 
 export type ReceiptEvent = EphemeralEvent;
 
+export interface UnreadNotificationCounts {
+  highlight_count: number;
+  notification_count: number;
+}
+
+export interface UnreadNotificationSummary {
+  room: UnreadNotificationCounts;
+  main: UnreadNotificationCounts;
+  threads: Record<string, UnreadNotificationCounts>;
+}
+
 export interface FilterDefinition {
   room?: {
     rooms?: string[];
@@ -25,6 +36,8 @@ export interface FilterDefinition {
       senders?: string[];
       not_senders?: string[];
       limit?: number;
+      lazy_load_members?: boolean;
+      unread_thread_notifications?: boolean;
     };
     state?: {
       types?: string[];
@@ -32,6 +45,7 @@ export interface FilterDefinition {
       senders?: string[];
       not_senders?: string[];
       limit?: number;
+      lazy_load_members?: boolean;
     };
     ephemeral?: {
       types?: string[];
@@ -128,6 +142,7 @@ export interface SyncRepository {
   getRoomState(roomId: string): Promise<PDU[]>;
   getInviteStrippedState(roomId: string): Promise<StrippedStateEvent[]>;
   getReceiptsForRoom(roomId: string, userId: string): Promise<ReceiptEvent>;
+  getUnreadNotificationSummary(roomId: string, userId: string): Promise<UnreadNotificationSummary>;
   getTypingUsers(roomId: string): Promise<string[]>;
   waitForUserEvents(userId: string, timeoutMs: number): Promise<{ hasEvents: boolean }>;
 }
@@ -159,6 +174,8 @@ export interface FederationRepository {
     isPublic: boolean,
   ): Promise<void>;
   getRoom(roomId: string): Promise<Room | null>;
+  getEvent(eventId: string): Promise<PDU | null>;
+  getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]>;
   getRoomState(roomId: string): Promise<PDU[]>;
   getInviteStrippedState(roomId: string): Promise<StrippedStateEvent[]>;
   storeIncomingEvent(event: PDU): Promise<void>;

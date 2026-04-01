@@ -1,4 +1,9 @@
 import type { PDU } from "../../types";
+import {
+  getDefaultRoomVersion,
+  getRedactionAllowedKeys,
+  getRoomVersion,
+} from "../../services/room-versions";
 
 export type TimestampDirection = "f" | "b";
 
@@ -8,6 +13,8 @@ export interface MissingEventsQuery {
   latestEvents: string[];
   limit: number;
   minDepth: number;
+  requestingServer?: string;
+  roomVersion?: string;
 }
 
 type EventRow = {
@@ -23,6 +30,25 @@ type EventRow = {
   prev_events: string;
   hashes: string | null;
   signatures: string | null;
+};
+
+type OrderedEvent = Pick<PDU, "event_id" | "origin_server_ts" | "depth">;
+
+type HistoryVisibility = "world_readable" | "shared" | "invited" | "joined";
+
+type HistoryVisibilityRow = {
+  event_id: string;
+  origin_server_ts: number;
+  depth: number;
+  content: string;
+};
+
+type MembershipRow = {
+  event_id: string;
+  origin_server_ts: number;
+  depth: number;
+  state_key: string;
+  content: string;
 };
 
 export interface PublicRoomInfo {
@@ -42,6 +68,10 @@ export interface SpaceChildEdge {
   roomId: string;
   content: Record<string, unknown>;
 }
+
+type RoomMembershipSummaryRow = {
+  membership: string;
+};
 
 function safeJsonParse<T>(value: string | null | undefined): T | null {
   if (!value) {
@@ -71,6 +101,166 @@ function toPdu(row: EventRow): PDU {
     signatures:
       safeJsonParse<Record<string, Record<string, string>>>(row.signatures ?? undefined) ??
       undefined,
+  };
+}
+
+function compareEventOrder(left: OrderedEvent, right: OrderedEvent): number {
+  if (left.depth !== right.depth) {
+    return left.depth - right.depth;
+  }
+
+  if (left.origin_server_ts !== right.origin_server_ts) {
+    return left.origin_server_ts - right.origin_server_ts;
+  }
+
+  return left.event_id.localeCompare(right.event_id);
+}
+
+function getHistoryVisibilityValue(content: string): HistoryVisibility {
+  const parsed = safeJsonParse<{ history_visibility?: unknown }>(content);
+  switch (parsed?.history_visibility) {
+    case "world_readable":
+    case "shared":
+    case "invited":
+    case "joined":
+      return parsed.history_visibility;
+    default:
+      return "shared";
+  }
+}
+
+function getMembershipValue(content: string): string | null {
+  const parsed = safeJsonParse<{ membership?: unknown }>(content);
+  return typeof parsed?.membership === "string" ? parsed.membership : null;
+}
+
+function getHistoryVisibilityAtEvent(
+  event: PDU,
+  historyRows: HistoryVisibilityRow[],
+): HistoryVisibility {
+  let visibility: HistoryVisibility = "shared";
+
+  for (const row of historyRows) {
+    if (compareEventOrder(row, event) > 0) {
+      break;
+    }
+
+    visibility = getHistoryVisibilityValue(row.content);
+  }
+
+  return visibility;
+}
+
+function getHistoryVisibilityBeforeEvent(
+  event: PDU,
+  historyRows: HistoryVisibilityRow[],
+): { visibility: HistoryVisibility; hasPriorEvent: boolean } {
+  let visibility: HistoryVisibility = "shared";
+  let hasPriorEvent = false;
+
+  for (const row of historyRows) {
+    if (compareEventOrder(row, event) >= 0) {
+      break;
+    }
+
+    hasPriorEvent = true;
+    visibility = getHistoryVisibilityValue(row.content);
+  }
+
+  return { visibility, hasPriorEvent };
+}
+
+function isServerAllowedToSeeEventAtHistoryVisibility(
+  event: PDU,
+  requestingServer: string,
+  historyRows: HistoryVisibilityRow[],
+  membershipRows: MembershipRow[],
+): boolean {
+  const historyVisibility = getHistoryVisibilityAtEvent(event, historyRows);
+  if (historyVisibility === "world_readable") {
+    return true;
+  }
+
+  const relevantMembershipRows = membershipRows.filter((row) =>
+    row.state_key.endsWith(`:${requestingServer}`),
+  );
+  const membershipBeforeEvent = new Map<string, string>();
+  const joinedAfterEvent = new Set<string>();
+
+  for (const row of relevantMembershipRows) {
+    const membership = getMembershipValue(row.content);
+    if (!membership) {
+      continue;
+    }
+
+    if (compareEventOrder(row, event) <= 0) {
+      membershipBeforeEvent.set(row.state_key, membership);
+      continue;
+    }
+
+    if (membership === "join") {
+      joinedAfterEvent.add(row.state_key);
+    }
+  }
+
+  for (const [userId, membership] of membershipBeforeEvent) {
+    if (membership === "join") {
+      return true;
+    }
+
+    if (membership === "invite" && historyVisibility === "invited") {
+      return true;
+    }
+
+    if (historyVisibility === "shared" && joinedAfterEvent.has(userId)) {
+      return true;
+    }
+  }
+
+  if (historyVisibility === "shared") {
+    return joinedAfterEvent.size > 0;
+  }
+
+  return false;
+}
+
+function redactEventForMissingEvents(event: PDU, roomVersion: string): PDU {
+  const roomVersionBehavior =
+    getRoomVersion(roomVersion) ?? getRoomVersion(getDefaultRoomVersion());
+  if (!roomVersionBehavior) {
+    return event;
+  }
+
+  const allowedKeys = new Set(getRedactionAllowedKeys(event.type, roomVersionBehavior));
+  const redactedContent = Object.fromEntries(
+    Object.entries(event.content).filter(([key]) => allowedKeys.has(key)),
+  );
+
+  return {
+    event_id: event.event_id,
+    room_id: event.room_id,
+    sender: event.sender,
+    type: event.type,
+    ...(event.state_key !== undefined ? { state_key: event.state_key } : {}),
+    ...(event.origin !== undefined ? { origin: event.origin } : {}),
+    ...(event.membership !== undefined ? { membership: event.membership } : {}),
+    ...(event.prev_state !== undefined ? { prev_state: [...event.prev_state] } : {}),
+    content: redactedContent,
+    origin_server_ts: event.origin_server_ts,
+    depth: event.depth,
+    auth_events: [...event.auth_events],
+    prev_events: [...event.prev_events],
+    ...(event.hashes ? { hashes: { ...event.hashes } } : {}),
+    ...(event.signatures
+      ? {
+          signatures: Object.fromEntries(
+            Object.entries(event.signatures).map(([serverName, signatures]) => [
+              serverName,
+              { ...signatures },
+            ]),
+          ),
+        }
+      : {}),
   };
 }
 
@@ -166,7 +356,71 @@ export class EventQueryService {
       }
     }
 
-    return events;
+    const sortedEvents = events.sort(compareEventOrder);
+
+    if (!query.requestingServer) {
+      return sortedEvents;
+    }
+
+    const roomVersion =
+      query.roomVersion ??
+      (
+        await db
+          .prepare(`SELECT room_version FROM rooms WHERE room_id = ?`)
+          .bind(query.roomId)
+          .first<{ room_version: string }>()
+      )?.room_version ??
+      getDefaultRoomVersion();
+
+    const historyRows = await db
+      .prepare(`
+        SELECT event_id, origin_server_ts, depth, content
+        FROM events
+        WHERE room_id = ? AND event_type = 'm.room.history_visibility'
+        ORDER BY depth ASC, origin_server_ts ASC, event_id ASC
+      `)
+      .bind(query.roomId)
+      .all<HistoryVisibilityRow>();
+
+    const membershipRows = await db
+      .prepare(`
+        SELECT event_id, origin_server_ts, depth, state_key, content
+        FROM events
+        WHERE room_id = ? AND event_type = 'm.room.member' AND state_key LIKE ?
+        ORDER BY depth ASC, origin_server_ts ASC, event_id ASC
+      `)
+      .bind(query.roomId, `%:${query.requestingServer}`)
+      .all<MembershipRow>();
+
+    return sortedEvents.flatMap((event) => {
+      if (event.type === "m.room.history_visibility" && event.state_key !== undefined) {
+        const eventVisibility =
+          typeof event.content.history_visibility === "string"
+            ? event.content.history_visibility
+            : "shared";
+        const previousVisibility = getHistoryVisibilityBeforeEvent(event, historyRows.results);
+        if (previousVisibility.hasPriorEvent && eventVisibility === previousVisibility.visibility) {
+          return [];
+        }
+      }
+
+      if (event.state_key !== undefined) {
+        return [event];
+      }
+
+      if (
+        isServerAllowedToSeeEventAtHistoryVisibility(
+          event,
+          query.requestingServer!,
+          historyRows.results,
+          membershipRows.results,
+        )
+      ) {
+        return [event];
+      }
+
+      return [redactEventForMissingEvents(event, roomVersion)];
+    });
   }
 
   async findClosestEventByTimestamp(
@@ -207,6 +461,7 @@ export class EventQueryService {
       FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.room_id = ? AND rs.event_type = 'm.space.child' AND e.redacted_because IS NULL
+      ORDER BY e.depth ASC, e.origin_server_ts ASC, e.event_id ASC
     `)
       .bind(roomId)
       .all<{ state_key: string; content: string }>();
@@ -310,5 +565,29 @@ export class EventQueryService {
       world_readable: historyVisibility === "world_readable",
       guest_can_join: guestAccess === "can_join",
     };
+  }
+
+  async isRoomVisibleToUser(db: D1Database, roomId: string, userId: string): Promise<boolean> {
+    const membership = await db
+      .prepare(
+        `
+        SELECT membership
+        FROM room_memberships
+        WHERE room_id = ? AND user_id = ?
+      `,
+      )
+      .bind(roomId, userId)
+      .first<RoomMembershipSummaryRow>();
+
+    if (
+      membership?.membership === "join" ||
+      membership?.membership === "invite" ||
+      membership?.membership === "knock"
+    ) {
+      return true;
+    }
+
+    const roomInfo = await this.getRoomPublicInfo(db, roomId);
+    return roomInfo?.world_readable === true;
   }
 }

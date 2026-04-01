@@ -210,6 +210,68 @@ describe("MatrixRoomService", () => {
     expect(repo.notifyCount).toBeGreaterThan(0);
   });
 
+  it("includes creation_content in the create event", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    await service.createRoom({
+      userId: "@alice:test",
+      body: {
+        creation_content: {
+          "m.federate": false,
+        },
+      },
+    });
+
+    expect(
+      repo.storedEvents.find((event) => event.type === "m.room.create")?.content,
+    ).toMatchObject({
+      creator: "@alice:test",
+      room_version: "10",
+      "m.federate": false,
+    });
+  });
+
+  it("applies top-level topic after initial_state and writes rich topic content", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    await service.createRoom({
+      userId: "@alice:test",
+      body: {
+        topic: "Test Room",
+        initial_state: [
+          {
+            type: "m.room.topic",
+            state_key: "",
+            content: { topic: "Shenanigans" },
+          },
+        ],
+      },
+    });
+
+    expect(repo.getStateEvent("!room1:test", "m.room.topic", "")).resolves.toMatchObject({
+      content: {
+        topic: "Test Room",
+        "m.topic": {
+          "m.text": [{ body: "Test Room" }],
+        },
+      },
+    });
+  });
+
   it("joins a public room through the event pipeline", async () => {
     const repo = new MemoryRoomRepository();
     const { appContext } = createTestAppContext();
@@ -261,6 +323,68 @@ describe("MatrixRoomService", () => {
 
     expect(response).toEqual({ room_id: "!room1:test" });
     expect(repo.memberships.get("!room1:test:@alice:test")?.membership).toBe("join");
+  });
+
+  it("preserves custom join content on local joins", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    await repo.createRoom("!room1:test", "10", "@creator:test", true);
+    await repo.storeEvent({
+      event_id: "$create",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.create",
+      state_key: "",
+      content: { creator: "@creator:test", room_version: "10" },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    await repo.storeEvent({
+      event_id: "$joinrules",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.join_rules",
+      state_key: "",
+      content: { join_rule: "public" },
+      origin_server_ts: 2,
+      depth: 2,
+      auth_events: [],
+      prev_events: ["$create"],
+    });
+    await repo.storeEvent({
+      event_id: "$power",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.power_levels",
+      state_key: "",
+      content: {},
+      origin_server_ts: 3,
+      depth: 3,
+      auth_events: [],
+      prev_events: ["$joinrules"],
+    });
+
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    await service.joinRoom({
+      userId: "@alice:test",
+      roomId: "!room1:test",
+      body: { foo: "bar", membership: "leave" },
+    });
+
+    expect(repo.memberships.get("!room1:test:@alice:test")?.membership).toBe("join");
+    expect(repo.storedEvents.at(-1)).toMatchObject({
+      type: "m.room.member",
+      state_key: "@alice:test",
+      content: { foo: "bar", membership: "join" },
+    });
   });
 
   it("uses the federation join workflow for remote invite stubs without create state", async () => {
@@ -687,5 +811,179 @@ describe("MatrixRoomService", () => {
       repo.storedEvents.find((event) => event.type === "m.room.message")?.hashes?.sha256,
     ).toBeDefined();
     expect(pushCalls).toHaveLength(1);
+  });
+
+  it("deduplicates state events by current state content", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    await repo.createRoom("!room1:test", "10", "@creator:test", true);
+    await repo.updateMembership("!room1:test", "@alice:test", "join", "$member");
+    await repo.storeEvent({
+      event_id: "$create",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.create",
+      state_key: "",
+      content: { creator: "@creator:test", room_version: "10" },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    await repo.storeEvent({
+      event_id: "$power",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.power_levels",
+      state_key: "",
+      content: {},
+      origin_server_ts: 2,
+      depth: 2,
+      auth_events: [],
+      prev_events: ["$create"],
+    });
+
+    const existingStateEvent: PDU = {
+      event_id: "$topic-1",
+      room_id: "!room1:test",
+      sender: "@alice:test",
+      type: "m.room.topic",
+      state_key: "",
+      content: { topic: "same" },
+      origin_server_ts: 3,
+      depth: 3,
+      auth_events: ["$create", "$power", "$member"],
+      prev_events: ["$power"],
+    };
+    await repo.storeEvent(existingStateEvent);
+
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    const response = await service.sendEvent({
+      userId: "@alice:test",
+      roomId: "!room1:test",
+      eventType: "m.room.topic",
+      stateKey: "",
+      txnId: "txn-state-1",
+      content: { topic: "same" },
+    });
+
+    expect(response).toEqual({ event_id: "$topic-1" });
+    expect(repo.storedEvents.filter((event) => event.type === "m.room.topic")).toHaveLength(1);
+  });
+
+  it("rejects reserved user state keys for other users in stable v10 rooms", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    await repo.createRoom("!room1:test", "10", "@creator:test", true);
+    await repo.updateMembership("!room1:test", "@creator:test", "join", "$creator-member");
+    await repo.updateMembership("!room1:test", "@alice:test", "join", "$alice-member");
+    await repo.storeEvent({
+      event_id: "$create",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.create",
+      state_key: "",
+      content: { creator: "@creator:test", room_version: "10" },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    await repo.storeEvent({
+      event_id: "$power",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.power_levels",
+      state_key: "",
+      content: {
+        events: { "com.example.test": 0 },
+        users: { "@creator:test": 100, "@alice:test": 0 },
+        users_default: 0,
+        state_default: 50,
+      },
+      origin_server_ts: 2,
+      depth: 2,
+      auth_events: [],
+      prev_events: ["$create"],
+    });
+
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    await expect(
+      service.sendEvent({
+        userId: "@creator:test",
+        roomId: "!room1:test",
+        eventType: "com.example.test",
+        stateKey: "@alice:test",
+        txnId: "txn-owned-stable",
+        content: {},
+      }),
+    ).rejects.toThrow("reserved");
+  });
+
+  it("allows privileged writes to suffixed owned state in MSC3757 rooms", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    await repo.createRoom("!room1:test", "org.matrix.msc3757.10", "@creator:test", true);
+    await repo.updateMembership("!room1:test", "@creator:test", "join", "$creator-member");
+    await repo.updateMembership("!room1:test", "@alice:test", "join", "$alice-member");
+    await repo.storeEvent({
+      event_id: "$create",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.create",
+      state_key: "",
+      content: { creator: "@creator:test", room_version: "org.matrix.msc3757.10" },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    await repo.storeEvent({
+      event_id: "$power",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.power_levels",
+      state_key: "",
+      content: {
+        events: { "com.example.test": 0 },
+        users: { "@creator:test": 100, "@alice:test": 0 },
+        users_default: 0,
+        state_default: 50,
+      },
+      origin_server_ts: 2,
+      depth: 2,
+      auth_events: [],
+      prev_events: ["$create"],
+    });
+
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    await expect(
+      service.sendEvent({
+        userId: "@creator:test",
+        roomId: "!room1:test",
+        eventType: "com.example.test",
+        stateKey: "@alice:test_state_key_suffix:!@#$123",
+        txnId: "txn-owned-unstable",
+        content: {},
+      }),
+    ).resolves.toMatchObject({ event_id: expect.any(String) });
   });
 });

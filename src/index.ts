@@ -47,6 +47,7 @@ import { requireAuth } from "./middleware/auth";
 import { analyticsMiddleware } from "./middleware/analytics";
 import { appContextMiddleware } from "./runtime/cloudflare/app-context";
 import { FEDERATION_OUTBOUND_DO_NAME } from "./matrix/application/features/shared/federation-edu-queue";
+import { handleAppError } from "./runtime/http-error-handler";
 
 // Import Durable Objects
 export {
@@ -187,7 +188,7 @@ app.route("/", identity);
 app.route("/", federation);
 
 // Capabilities endpoint
-app.get("/_matrix/client/v3/capabilities", (c) => {
+app.get("/_matrix/client/v3/capabilities", requireAuth(), (c) => {
   return c.json({
     capabilities: {
       "m.change_password": {
@@ -468,16 +469,6 @@ app.notFound((c) => {
   return c.json({ error: "Not found" }, 404);
 });
 
-// Error handler
-app.onError((err, c) => {
-  console.error("Unhandled error:", err);
-  return c.json(
-    {
-      errcode: "M_UNKNOWN",
-      error: "An internal error occurred",
-    },
-    500,
-  );
-});
+app.onError(handleAppError);
 
 export default app;

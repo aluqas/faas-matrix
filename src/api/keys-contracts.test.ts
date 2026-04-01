@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isIdempotentCrossSigningUpload,
   parseCrossSigningKeysStore,
   parseCrossSigningUploadRequest,
   parseDeviceKeysMap,
@@ -177,5 +178,45 @@ describe("keys contracts", () => {
 
     expect(parseJsonObject({ key: "value" })).toEqual({ key: "value" });
     expect(parseJsonObject("bad")).toBeNull();
+  });
+
+  it("detects idempotent cross-signing uploads", () => {
+    expect(
+      isIdempotentCrossSigningUpload(
+        {
+          master: {
+            user_id: "@alice:test",
+            usage: ["master"],
+            keys: { "ed25519:master": "pub" },
+          },
+        },
+        {
+          master_key: {
+            keys: { "ed25519:master": "pub" },
+            usage: ["master"],
+            user_id: "@alice:test",
+          },
+        },
+      ),
+    ).toBe(true);
+
+    expect(
+      isIdempotentCrossSigningUpload(
+        {
+          master: {
+            user_id: "@alice:test",
+            usage: ["master"],
+            keys: { "ed25519:master": "pub" },
+          },
+        },
+        {
+          self_signing_key: {
+            user_id: "@alice:test",
+            usage: ["self_signing"],
+            keys: { "ed25519:self": "pub2" },
+          },
+        },
+      ),
+    ).toBe(false);
   });
 });

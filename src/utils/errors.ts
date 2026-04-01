@@ -123,13 +123,25 @@ export const Errors = {
   tooLarge(message: string = "Request too large"): MatrixApiError {
     return new MatrixApiError(ErrorCodes.M_TOO_LARGE, message, 413);
   },
+
+  inviteBlocked(message: string = "Invites from this user or server are blocked"): MatrixApiError {
+    return new MatrixApiError(ErrorCodes.M_INVITE_BLOCKED, message, 403);
+  },
 };
+
+export function toErrorResponse(error: unknown): Response | null {
+  if (error instanceof MatrixApiError) {
+    return error.toResponse();
+  }
+  return null;
+}
 
 // Wrap an async handler with error handling
 export function withErrorHandler<T>(handler: () => Promise<T>): Promise<T | Response> {
   return handler().catch((error) => {
-    if (error instanceof MatrixApiError) {
-      return error.toResponse();
+    const response = toErrorResponse(error);
+    if (response) {
+      return response;
     }
 
     console.error("Unexpected error:", error);

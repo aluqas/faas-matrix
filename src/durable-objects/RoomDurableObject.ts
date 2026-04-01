@@ -27,6 +27,7 @@ export class RoomDurableObject extends DurableObject<Env> {
 
   // In-memory typing state - Map of userId -> expiration timestamp
   private typingUsers: Map<string, TypingState> = new Map();
+  private typingCacheLoaded: boolean = false;
 
   // In-memory receipts cache (also persisted to durable storage)
   // Map of `${userId}:${receiptType}:${threadContext}` -> ReceiptData
@@ -36,6 +37,20 @@ export class RoomDurableObject extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+  }
+
+  private async loadTypingCache(): Promise<void> {
+    if (this.typingCacheLoaded) return;
+
+    const stored = await this.ctx.storage.list<TypingState>({ prefix: "typing:" });
+    for (const [key, value] of stored) {
+      const userId = key.replace("typing:", "");
+      if (userId && typeof value?.expiresAt === "number") {
+        this.typingUsers.set(userId, value);
+      }
+    }
+
+    this.typingCacheLoaded = true;
   }
 
   // Load receipts from durable storage into cache
@@ -126,10 +141,11 @@ export class RoomDurableObject extends DurableObject<Env> {
       event_id: string;
       receipt_type: string;
       thread_id?: string;
+      ts?: number;
     };
 
     const { user_id, event_id, receipt_type, thread_id } = body;
-    const ts = Date.now();
+    const ts = typeof body.ts === "number" ? body.ts : Date.now();
 
     // Determine thread context for storage key
     // - undefined/absent = "unthreaded" (room-level receipt)
@@ -197,6 +213,23 @@ export class RoomDurableObject extends DurableObject<Env> {
       if (thread_id && thread_id !== "unthreaded") {
         userData.thread_id = thread_id;
       }
+      const existing = receipts[event_id][receipt_type][user_id];
+      const incomingIsUnthreaded = userData.thread_id === undefined;
+      const existingIsUnthreaded = existing?.thread_id === undefined;
+
+      if (existing) {
+        if (existingIsUnthreaded && !incomingIsUnthreaded) {
+          continue;
+        }
+        if (!existingIsUnthreaded && incomingIsUnthreaded) {
+          receipts[event_id][receipt_type][user_id] = userData;
+          continue;
+        }
+        if (existing.ts > ts) {
+          continue;
+        }
+      }
+
       receipts[event_id][receipt_type][user_id] = userData;
     }
 
@@ -214,17 +247,21 @@ export class RoomDurableObject extends DurableObject<Env> {
     };
 
     const { user_id, typing, timeout = 30000 } = body;
+    await this.loadTypingCache();
 
     if (typing) {
       // User started typing - set expiration
       const expiresAt = Date.now() + Math.min(timeout, 120000); // Max 2 minutes
-      this.typingUsers.set(user_id, { expiresAt });
+      const state = { expiresAt };
+      this.typingUsers.set(user_id, state);
+      await this.ctx.storage.put(`typing:${user_id}`, state);
 
       // Broadcast to WebSocket clients
       await this.broadcastTyping(user_id, true);
     } else {
       // User stopped typing
       this.typingUsers.delete(user_id);
+      await this.ctx.storage.delete(`typing:${user_id}`);
 
       // Broadcast to WebSocket clients
       await this.broadcastTyping(user_id, false);
@@ -234,9 +271,11 @@ export class RoomDurableObject extends DurableObject<Env> {
   }
 
   // Get current typing users (with cleanup of expired entries)
-  private handleGetTyping(): Response {
+  private async handleGetTyping(): Promise<Response> {
+    await this.loadTypingCache();
     const now = Date.now();
     const activeTypingUsers: string[] = [];
+    const expiredUserIds: string[] = [];
 
     // Clean up expired entries and collect active ones
     for (const [userId, state] of this.typingUsers.entries()) {
@@ -245,7 +284,14 @@ export class RoomDurableObject extends DurableObject<Env> {
       } else {
         // Expired - remove it
         this.typingUsers.delete(userId);
+        expiredUserIds.push(userId);
       }
+    }
+
+    if (expiredUserIds.length > 0) {
+      await Promise.all(
+        expiredUserIds.map((userId) => this.ctx.storage.delete(`typing:${userId}`)),
+      );
     }
 
     return new Response(

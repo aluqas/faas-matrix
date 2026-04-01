@@ -37,10 +37,16 @@ describe("workflow contracts", () => {
       toRemoteSendJoinResponse({
         state: [{ event_id: "$state" }],
         auth_chain: [{ event_id: "$auth" }],
+        members_omitted: true,
+        servers_in_room: ["hs1", 1, "hs2"],
+        event: { event_id: "$join" },
       }),
     ).toEqual({
       state: [{ event_id: "$state" }],
       auth_chain: [{ event_id: "$auth" }],
+      members_omitted: true,
+      servers_in_room: ["hs1", "hs2"],
+      event: { event_id: "$join" },
     });
   });
 });
