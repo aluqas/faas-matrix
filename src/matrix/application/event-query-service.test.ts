@@ -48,6 +48,14 @@ function createMissingEventsDb(options: {
             }
 
             if (
+              normalizedQuery.includes("FROM events WHERE event_id = ? AND room_id = ?") &&
+              !normalizedQuery.includes("depth >= ?")
+            ) {
+              const eventId = args[0] as string;
+              return (options.events.get(eventId) ?? null) as T | null;
+            }
+
+            if (
               normalizedQuery.includes(
                 "FROM events WHERE event_id = ? AND room_id = ? AND depth >= ?",
               )
@@ -70,6 +78,14 @@ function createMissingEventsDb(options: {
             if (
               normalizedQuery.includes(
                 "FROM events WHERE room_id = ? AND event_type = 'm.room.member' AND state_key LIKE ?",
+              )
+            ) {
+              return { results: (options.membershipRows ?? []) as T[] };
+            }
+
+            if (
+              normalizedQuery.includes(
+                "FROM events WHERE room_id = ? AND event_type = 'm.room.member' AND state_key = ?",
               )
             ) {
               return { results: (options.membershipRows ?? []) as T[] };
@@ -525,5 +541,153 @@ describe("EventQueryService.getMissingEvents", () => {
     });
 
     expect(result.map((event) => event.event_id)).toEqual(["$hist1"]);
+  });
+});
+
+describe("EventQueryService.getVisibleEventForUser", () => {
+  it("hides events from before an invite under invited history visibility", async () => {
+    const service = new EventQueryService();
+    const db = createMissingEventsDb({
+      events: new Map<string, Record<string, unknown>>([
+        [
+          "$message",
+          {
+            event_id: "$message",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.message",
+            state_key: null,
+            content: JSON.stringify({ body: "hidden", msgtype: "m.text" }),
+            origin_server_ts: 2,
+            depth: 2,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$create"]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+      ]),
+      historyRows: [
+        {
+          event_id: "$hist",
+          origin_server_ts: 1,
+          depth: 1,
+          content: JSON.stringify({ history_visibility: "invited" }),
+        },
+      ],
+      membershipRows: [
+        {
+          event_id: "$invite",
+          origin_server_ts: 3,
+          depth: 3,
+          state_key: "@bob:test",
+          content: JSON.stringify({ membership: "invite" }),
+        },
+        {
+          event_id: "$join",
+          origin_server_ts: 4,
+          depth: 4,
+          state_key: "@bob:test",
+          content: JSON.stringify({ membership: "join" }),
+        },
+      ],
+    });
+
+    const event = await service.getVisibleEventForUser(db, "!room:test", "$message", "@bob:test");
+    expect(event).toBeNull();
+  });
+
+  it("allows events sent after an invite under invited history visibility", async () => {
+    const service = new EventQueryService();
+    const db = createMissingEventsDb({
+      events: new Map<string, Record<string, unknown>>([
+        [
+          "$message",
+          {
+            event_id: "$message",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.message",
+            state_key: null,
+            content: JSON.stringify({ body: "visible", msgtype: "m.text" }),
+            origin_server_ts: 4,
+            depth: 4,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$invite"]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+      ]),
+      historyRows: [
+        {
+          event_id: "$hist",
+          origin_server_ts: 1,
+          depth: 1,
+          content: JSON.stringify({ history_visibility: "invited" }),
+        },
+      ],
+      membershipRows: [
+        {
+          event_id: "$invite",
+          origin_server_ts: 3,
+          depth: 3,
+          state_key: "@bob:test",
+          content: JSON.stringify({ membership: "invite" }),
+        },
+        {
+          event_id: "$join",
+          origin_server_ts: 5,
+          depth: 5,
+          state_key: "@bob:test",
+          content: JSON.stringify({ membership: "join" }),
+        },
+      ],
+    });
+
+    const event = await service.getVisibleEventForUser(db, "!room:test", "$message", "@bob:test");
+    expect(event?.event_id).toBe("$message");
+  });
+
+  it("allows world-readable events without membership", async () => {
+    const service = new EventQueryService();
+    const db = createMissingEventsDb({
+      events: new Map<string, Record<string, unknown>>([
+        [
+          "$message",
+          {
+            event_id: "$message",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.message",
+            state_key: null,
+            content: JSON.stringify({ body: "public", msgtype: "m.text" }),
+            origin_server_ts: 2,
+            depth: 2,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$create"]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+      ]),
+      historyRows: [
+        {
+          event_id: "$hist",
+          origin_server_ts: 1,
+          depth: 1,
+          content: JSON.stringify({ history_visibility: "world_readable" }),
+        },
+      ],
+      membershipRows: [],
+    });
+
+    const event = await service.getVisibleEventForUser(
+      db,
+      "!room:test",
+      "$message",
+      "@charlie:test",
+    );
+    expect(event?.event_id).toBe("$message");
   });
 });

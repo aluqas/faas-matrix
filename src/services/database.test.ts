@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { deleteAllUserDevices, deleteDevice, getEvent, getRoomState, storeEvent } from "./database";
+import {
+  deleteAllUserDevices,
+  deleteDevice,
+  getAuthChain,
+  getEvent,
+  getEventsSince,
+  getLatestForwardExtremities,
+  getRoomState,
+  storeEvent,
+} from "./database";
 
 class MockD1Database {
   constructor(
@@ -135,6 +144,130 @@ describe("database state helpers", () => {
     expect(event?.origin).toBe("remote.test");
     expect(event?.membership).toBe("join");
     expect(event?.prev_state).toEqual(["$older"]);
+  });
+
+  it("loads auth chains recursively", async () => {
+    const db = new MockD1Database([
+      {
+        match: /FROM events WHERE event_id IN/,
+        all: [
+          {
+            event_id: "$a",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.member",
+            state_key: "@alice:test",
+            content: JSON.stringify({ membership: "join" }),
+            origin_server_ts: 3,
+            unsigned: null,
+            depth: 3,
+            auth_events: JSON.stringify(["$b"]),
+            prev_events: JSON.stringify([]),
+          },
+          {
+            event_id: "$b",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.power_levels",
+            state_key: "",
+            content: JSON.stringify({ users_default: 0 }),
+            origin_server_ts: 2,
+            unsigned: null,
+            depth: 2,
+            auth_events: JSON.stringify(["$c"]),
+            prev_events: JSON.stringify([]),
+          },
+          {
+            event_id: "$c",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.create",
+            state_key: "",
+            content: JSON.stringify({ creator: "@alice:test", room_version: "10" }),
+            origin_server_ts: 1,
+            unsigned: null,
+            depth: 1,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify([]),
+          },
+        ],
+      },
+    ]);
+
+    const authChain = await getAuthChain(db as unknown as D1Database, ["$a"]);
+
+    expect(new Set(authChain.map((event) => event.event_id))).toEqual(new Set(["$a", "$b", "$c"]));
+  });
+
+  it("returns the latest events first for initial sync windows", async () => {
+    const db = new MockD1Database([
+      {
+        match: /ORDER BY stream_ordering DESC/,
+        all: [
+          {
+            event_id: "$latest",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.message",
+            state_key: null,
+            content: JSON.stringify({ body: "latest", msgtype: "m.text" }),
+            origin_server_ts: 3,
+            unsigned: null,
+            depth: 3,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$middle"]),
+          },
+          {
+            event_id: "$middle",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.message",
+            state_key: null,
+            content: JSON.stringify({ body: "middle", msgtype: "m.text" }),
+            origin_server_ts: 2,
+            unsigned: null,
+            depth: 2,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$oldest"]),
+          },
+        ],
+      },
+    ]);
+
+    const events = await getEventsSince(db as unknown as D1Database, "!room:test", 0, 2);
+
+    expect(events.map((event) => event.event_id)).toEqual(["$middle", "$latest"]);
+  });
+
+  it("returns forward extremities instead of intermediate events", async () => {
+    const db = new MockD1Database([
+      {
+        match: /json_each\(child\.prev_events\)/,
+        all: [
+          {
+            event_id: "$join",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.member",
+            state_key: "@alice:test",
+            content: JSON.stringify({ membership: "join" }),
+            origin_server_ts: 3,
+            unsigned: null,
+            depth: 3,
+            auth_events: JSON.stringify(["$pl"]),
+            prev_events: JSON.stringify(["$pl"]),
+          },
+        ],
+      },
+    ]);
+
+    const events = await getLatestForwardExtremities(
+      db as unknown as D1Database,
+      "!room:test",
+      1,
+    );
+
+    expect(events.map((event) => event.event_id)).toEqual(["$join"]);
   });
 
   it("indexes m.thread relations when storing events", async () => {

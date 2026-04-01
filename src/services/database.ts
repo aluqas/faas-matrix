@@ -979,17 +979,76 @@ export async function getEventsSince(
   since: number,
   limit: number = 100,
 ): Promise<PDU[]> {
+  const query =
+    since > 0
+      ? `SELECT event_id, room_id, sender, event_type, state_key, content,
+       origin_server_ts, unsigned, depth, auth_events, prev_events, event_origin, event_membership,
+       prev_state, hashes, signatures
+       FROM events
+       WHERE room_id = ? AND stream_ordering > ?
+       ORDER BY stream_ordering ASC
+       LIMIT ?`
+      : `SELECT event_id, room_id, sender, event_type, state_key, content,
+       origin_server_ts, unsigned, depth, auth_events, prev_events, event_origin, event_membership,
+       prev_state, hashes, signatures
+       FROM events
+       WHERE room_id = ? AND stream_ordering > 0
+       ORDER BY stream_ordering DESC
+       LIMIT ?`;
+
+  const statement = db.prepare(query);
+  const result =
+    since > 0
+      ? await statement.bind(roomId, since, limit).all<StoredEventRow>()
+      : await statement.bind(roomId, limit).all<StoredEventRow>();
+
+  const rows = since > 0 ? result.results : [...result.results].reverse();
+  return rows.map(toStoredPdu);
+}
+
+export async function getLatestRoomEventsByDepth(
+  db: D1Database,
+  roomId: string,
+  limit: number = 1,
+): Promise<PDU[]> {
   const result = await db
     .prepare(
       `SELECT event_id, room_id, sender, event_type, state_key, content,
-     origin_server_ts, unsigned, depth, auth_events, prev_events, event_origin, event_membership,
-     prev_state, hashes, signatures
-     FROM events
-     WHERE room_id = ? AND stream_ordering > ?
-     ORDER BY stream_ordering ASC
-     LIMIT ?`,
+       origin_server_ts, unsigned, depth, auth_events, prev_events, event_origin, event_membership,
+       prev_state, hashes, signatures
+       FROM events
+       WHERE room_id = ?
+       ORDER BY depth DESC, stream_ordering DESC
+       LIMIT ?`,
     )
-    .bind(roomId, since, limit)
+    .bind(roomId, limit)
+    .all<StoredEventRow>();
+
+  return result.results.map(toStoredPdu);
+}
+
+export async function getLatestForwardExtremities(
+  db: D1Database,
+  roomId: string,
+  limit: number = 1,
+): Promise<PDU[]> {
+  const result = await db
+    .prepare(
+      `SELECT e.event_id, e.room_id, e.sender, e.event_type, e.state_key, e.content,
+       e.origin_server_ts, e.unsigned, e.depth, e.auth_events, e.prev_events, e.event_origin,
+       e.event_membership, e.prev_state, e.hashes, e.signatures
+       FROM events e
+       WHERE e.room_id = ?
+         AND NOT EXISTS (
+           SELECT 1
+           FROM events child, json_each(child.prev_events) prev
+           WHERE child.room_id = e.room_id
+             AND prev.value = e.event_id
+         )
+       ORDER BY e.stream_ordering DESC, e.depth DESC
+       LIMIT ?`,
+    )
+    .bind(roomId, limit)
     .all<StoredEventRow>();
 
   return result.results.map(toStoredPdu);

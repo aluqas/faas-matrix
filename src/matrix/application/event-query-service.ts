@@ -170,6 +170,121 @@ function getHistoryVisibilityBeforeEvent(
   return { visibility, hasPriorEvent };
 }
 
+function getMembershipAtOrBeforeEvent(
+  event: PDU,
+  membershipRows: MembershipRow[],
+  userId: string,
+): string | null {
+  let membership: string | null = null;
+
+  for (const row of membershipRows) {
+    if (row.state_key !== userId) {
+      continue;
+    }
+
+    if (compareEventOrder(row, event) > 0) {
+      break;
+    }
+
+    membership = getMembershipValue(row.content);
+  }
+
+  return membership;
+}
+
+function getMembershipBeforeEvent(
+  event: PDU,
+  membershipRows: MembershipRow[],
+  userId: string,
+): string | null {
+  let membership: string | null = null;
+
+  for (const row of membershipRows) {
+    if (row.state_key !== userId) {
+      continue;
+    }
+
+    if (compareEventOrder(row, event) >= 0) {
+      break;
+    }
+
+    membership = getMembershipValue(row.content);
+  }
+
+  return membership;
+}
+
+function joinedAfterEvent(event: PDU, membershipRows: MembershipRow[], userId: string): boolean {
+  for (const row of membershipRows) {
+    if (row.state_key !== userId) {
+      continue;
+    }
+
+    if (compareEventOrder(row, event) <= 0) {
+      continue;
+    }
+
+    if (getMembershipValue(row.content) === "join") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function canUserSeeEventAtVisibility(
+  historyVisibility: HistoryVisibility,
+  membershipAtEvent: string | null,
+  joinedLater: boolean,
+): boolean {
+  if (historyVisibility === "world_readable") {
+    return true;
+  }
+
+  if (membershipAtEvent === "join") {
+    return true;
+  }
+
+  if (historyVisibility === "shared" && joinedLater) {
+    return true;
+  }
+
+  if (historyVisibility === "invited" && membershipAtEvent === "invite") {
+    return true;
+  }
+
+  return false;
+}
+
+function isUserAllowedToSeeEvent(
+  event: PDU,
+  userId: string,
+  historyRows: HistoryVisibilityRow[],
+  membershipRows: MembershipRow[],
+): boolean {
+  const historyVisibility = getHistoryVisibilityAtEvent(event, historyRows);
+  const membershipAtEvent = getMembershipAtOrBeforeEvent(event, membershipRows, userId);
+  const joinedLater = joinedAfterEvent(event, membershipRows, userId);
+
+  if (event.type === "m.room.history_visibility" && event.state_key !== undefined) {
+    const previousVisibility = getHistoryVisibilityBeforeEvent(event, historyRows).visibility;
+    return (
+      canUserSeeEventAtVisibility(previousVisibility, membershipAtEvent, joinedLater) ||
+      canUserSeeEventAtVisibility(historyVisibility, membershipAtEvent, joinedLater)
+    );
+  }
+
+  if (event.type === "m.room.member" && event.state_key === userId) {
+    const membershipBeforeEvent = getMembershipBeforeEvent(event, membershipRows, userId);
+    return (
+      canUserSeeEventAtVisibility(historyVisibility, membershipBeforeEvent, joinedLater) ||
+      canUserSeeEventAtVisibility(historyVisibility, membershipAtEvent, joinedLater)
+    );
+  }
+
+  return canUserSeeEventAtVisibility(historyVisibility, membershipAtEvent, joinedLater);
+}
+
 function isServerAllowedToSeeEventAtHistoryVisibility(
   event: PDU,
   requestingServer: string,
@@ -297,6 +412,55 @@ export function selectSpaceChildren(
 }
 
 export class EventQueryService {
+  async getVisibleEventForUser(
+    db: D1Database,
+    roomId: string,
+    eventId: string,
+    userId: string,
+  ): Promise<PDU | null> {
+    const eventRow = await db
+      .prepare(`
+        SELECT event_id, room_id, sender, event_type, state_key, content,
+               origin_server_ts, depth, auth_events, prev_events, hashes, signatures
+        FROM events
+        WHERE event_id = ? AND room_id = ?
+      `)
+      .bind(eventId, roomId)
+      .first<EventRow>();
+
+    if (!eventRow) {
+      return null;
+    }
+
+    const event = toPdu(eventRow);
+
+    const historyRows = await db
+      .prepare(`
+        SELECT event_id, origin_server_ts, depth, content
+        FROM events
+        WHERE room_id = ? AND event_type = 'm.room.history_visibility'
+        ORDER BY depth ASC, origin_server_ts ASC, event_id ASC
+      `)
+      .bind(roomId)
+      .all<HistoryVisibilityRow>();
+
+    const membershipRows = await db
+      .prepare(`
+        SELECT event_id, origin_server_ts, depth, state_key, content
+        FROM events
+        WHERE room_id = ? AND event_type = 'm.room.member' AND state_key = ?
+        ORDER BY depth ASC, origin_server_ts ASC, event_id ASC
+      `)
+      .bind(roomId, userId)
+      .all<MembershipRow>();
+
+    if (!isUserAllowedToSeeEvent(event, userId, historyRows.results, membershipRows.results)) {
+      return null;
+    }
+
+    return event;
+  }
+
   async roomExists(db: D1Database, roomId: string): Promise<boolean> {
     const room = await db
       .prepare(`

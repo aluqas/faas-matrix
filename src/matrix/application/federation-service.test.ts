@@ -8,6 +8,7 @@ class FakeFederationRepository implements FederationRepository {
   cachedResponse: Record<string, unknown> | null = null;
   roomState: any[] = [];
   events = new Map<string, any>();
+  processedPdus = new Map<string, FederationProcessedPdu>();
   room: { room_id: string; room_version: string; is_public: boolean; created_at: number } | null =
     null;
   recordedPdus: Array<{
@@ -22,8 +23,8 @@ class FakeFederationRepository implements FederationRepository {
     return this.cachedResponse;
   }
   async storeCachedTransaction() {}
-  async getProcessedPdu(): Promise<FederationProcessedPdu | null> {
-    return null;
+  async getProcessedPdu(eventId: string): Promise<FederationProcessedPdu | null> {
+    return this.processedPdus.get(eventId) ?? null;
   }
   async recordProcessedPdu(
     eventId: string,
@@ -32,6 +33,7 @@ class FakeFederationRepository implements FederationRepository {
     accepted: boolean,
     rejectionReason?: string,
   ) {
+    this.processedPdus.set(eventId, { accepted, rejectionReason: rejectionReason ?? null });
     this.recordedPdus.push({ eventId, origin, roomId, accepted, rejectionReason });
   }
   async createRoom() {}
@@ -280,6 +282,95 @@ describe("MatrixFederationService", () => {
       roomId: "!room:test",
       accepted: true,
       rejectionReason: undefined,
+    });
+  });
+
+  it("rejects PDUs whose auth events were previously rejected", async () => {
+    const repo = new FakeFederationRepository();
+    repo.room = {
+      room_id: "!room:test",
+      room_version: "10",
+      is_public: true,
+      created_at: 1,
+    };
+    repo.events.set("$create", {
+      event_id: "$create",
+      room_id: "!room:test",
+      sender: "@alice:test",
+      type: "m.room.create",
+      state_key: "",
+      content: { creator: "@alice:test", room_version: "10" },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    repo.events.set("$pl", {
+      event_id: "$pl",
+      room_id: "!room:test",
+      sender: "@alice:test",
+      type: "m.room.power_levels",
+      state_key: "",
+      content: { users: { "@charlie:remote.example": 100 }, users_default: 0, events_default: 0 },
+      origin_server_ts: 2,
+      depth: 2,
+      auth_events: ["$create"],
+      prev_events: ["$create"],
+    });
+    repo.events.set("$member", {
+      event_id: "$member",
+      room_id: "!room:test",
+      sender: "@charlie:remote.example",
+      type: "m.room.member",
+      state_key: "@charlie:remote.example",
+      content: { membership: "join" },
+      origin_server_ts: 3,
+      depth: 3,
+      auth_events: ["$create", "$pl"],
+      prev_events: ["$pl"],
+    });
+    repo.roomState = [repo.events.get("$create"), repo.events.get("$pl"), repo.events.get("$member")];
+    repo.processedPdus.set("$rejected-auth", {
+      accepted: false,
+      rejectionReason: "Insufficient power level",
+    });
+
+    const service = createFederationService(repo);
+    const messageEvent = {
+      room_id: "!room:test",
+      sender: "@charlie:remote.example",
+      type: "m.room.message",
+      content: { body: "hi", msgtype: "m.text" },
+      origin_server_ts: 4,
+      depth: 4,
+      auth_events: ["$create", "$pl", "$member", "$rejected-auth"],
+      prev_events: ["$member"],
+    };
+    const messageEventWithHash = {
+      ...messageEvent,
+      hashes: {
+        sha256: await calculateContentHash(messageEvent),
+      },
+    };
+    const eventId = await calculateReferenceHashEventId(messageEventWithHash, "10");
+
+    const response = await service.processTransaction({
+      origin: "remote.example",
+      txnId: "txn-rejected-auth",
+      body: {
+        pdus: [messageEventWithHash],
+      },
+    });
+
+    expect(response.pdus).toEqual({
+      [eventId]: { error: "Auth event $rejected-auth was rejected" },
+    });
+    expect(repo.recordedPdus).toContainEqual({
+      eventId,
+      origin: "remote.example",
+      roomId: "!room:test",
+      accepted: false,
+      rejectionReason: "Auth event $rejected-auth was rejected",
     });
   });
 });

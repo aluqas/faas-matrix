@@ -6,7 +6,9 @@ import type { AppEnv, PDU } from "../types";
 import { Errors, MatrixApiError } from "../utils/errors";
 import {
   calculateReferenceHashEventId,
+  canonicalJson,
   generateSigningKeyPair,
+  normalizeMatrixBase64,
   signJson,
   sha256,
   verifySignature,
@@ -19,7 +21,12 @@ import {
   type ServerKeyResponse,
 } from "../services/federation-keys";
 import { validateUrl } from "../utils/url-validator";
-import { storeEvent, fanoutEventToFederation, notifyUsersOfEvent } from "../services/database";
+import {
+  getAuthChain,
+  storeEvent,
+  fanoutEventToFederation,
+  notifyUsersOfEvent,
+} from "../services/database";
 import { checkEventAuth } from "../services/event-auth";
 import {
   applyMembershipTransitionToDatabase,
@@ -58,6 +65,15 @@ import federationSpaceRoutes from "./federation/spaces";
 
 const app = new Hono<AppEnv>();
 const federationQueryService = new FederationQueryService();
+
+function canonicalJsonResponse(body: Record<string, unknown>): Response {
+  return new Response(canonicalJson(body), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+  });
+}
 
 function methodNotAllowedJson(): Response {
   return new Response(
@@ -348,7 +364,7 @@ app.get("/_matrix/key/v2/server", async (c) => {
 
   const verifyKeys: Record<string, { key: string }> = {};
   for (const key of keys.results) {
-    verifyKeys[key.key_id] = { key: key.public_key };
+    verifyKeys[key.key_id] = { key: normalizeMatrixBase64(key.public_key) };
   }
 
   const validUntilTs = keys.results[0]?.valid_until || Date.now() + 365 * 24 * 60 * 60 * 1000;
@@ -369,10 +385,10 @@ app.get("/_matrix/key/v2/server", async (c) => {
       currentKey.key_id,
       JSON.parse(currentKey.private_key_jwk),
     );
-    return c.json(signed);
+    return canonicalJsonResponse(signed);
   }
 
-  return c.json(response);
+  return canonicalJsonResponse(response);
 });
 
 // GET /_matrix/key/v2/server/:keyId - Get specific key
@@ -395,16 +411,27 @@ app.get("/_matrix/key/v2/server/:keyId", async (c) => {
     return Errors.notFound("Key not found").toResponse();
   }
 
-  const response = {
+  const response: ServerKeyResponse = {
     server_name: serverName,
     valid_until_ts: key.valid_until || Date.now() + 365 * 24 * 60 * 60 * 1000,
     verify_keys: {
-      [key.key_id]: { key: key.public_key },
+      [key.key_id]: { key: normalizeMatrixBase64(key.public_key) },
     },
     old_verify_keys: {},
   };
 
-  return c.json(response);
+  const signingKey = await getServerSigningKey(c.env.DB);
+  if (signingKey) {
+    const signed = (await signJson(
+      response,
+      serverName,
+      signingKey.keyId,
+      signingKey.privateKeyJwk,
+    )) as ServerKeyResponse;
+    return canonicalJsonResponse(signed);
+  }
+
+  return canonicalJsonResponse(response);
 });
 
 // Helper function to get our server's notary signing key
@@ -498,7 +525,7 @@ app.post("/_matrix/key/v2/query", async (c) => {
         let maxValidUntil = 0;
 
         for (const key of ownKeys.results) {
-          verifyKeys[key.key_id] = { key: key.public_key };
+          verifyKeys[key.key_id] = { key: normalizeMatrixBase64(key.public_key) };
           if (key.valid_until && key.valid_until > maxValidUntil) {
             maxValidUntil = key.valid_until;
           }
@@ -618,7 +645,7 @@ app.get("/_matrix/key/v2/query/:serverName", async (c) => {
     let maxValidUntil = 0;
 
     for (const key of ownKeys.results) {
-      verifyKeys[key.key_id] = { key: key.public_key };
+      verifyKeys[key.key_id] = { key: normalizeMatrixBase64(key.public_key) };
       if (key.valid_until && key.valid_until > maxValidUntil) {
         maxValidUntil = key.valid_until;
       }
@@ -920,56 +947,31 @@ app.get("/_matrix/federation/v1/state_ids/:roomId", async (c) => {
     return Errors.notFound("Room not found").toResponse();
   }
 
-  // Get state event IDs
-  let stateEventIds: string[];
-  let authChainIds: string[];
+  const stateEvents = await c.env.DB.prepare(
+    `SELECT e.event_id, e.auth_events
+     FROM room_state rs
+     JOIN events e ON rs.event_id = e.event_id
+     WHERE rs.room_id = ?`,
+  )
+    .bind(roomId)
+    .all<{ event_id: string; auth_events: string }>();
 
-  if (eventId) {
-    // Get state at a specific event
-    // For now, we get current state - proper implementation would track state snapshots
-    const stateEvents = await c.env.DB.prepare(
-      `SELECT e.event_id, e.auth_events
-       FROM room_state rs
-       JOIN events e ON rs.event_id = e.event_id
-       WHERE rs.room_id = ?`,
-    )
-      .bind(roomId)
-      .all<{ event_id: string; auth_events: string }>();
-
-    stateEventIds = stateEvents.results.map((e) => e.event_id);
-
-    // Collect auth chain IDs
-    const authChainSet = new Set<string>();
-    for (const event of stateEvents.results) {
-      const authEvents = JSON.parse(event.auth_events) as string[];
-      for (const authId of authEvents) {
-        authChainSet.add(authId);
-      }
-    }
-    authChainIds = Array.from(authChainSet);
-  } else {
-    // Get current state
-    const stateEvents = await c.env.DB.prepare(
-      `SELECT e.event_id, e.auth_events
-       FROM room_state rs
-       JOIN events e ON rs.event_id = e.event_id
-       WHERE rs.room_id = ?`,
-    )
-      .bind(roomId)
-      .all<{ event_id: string; auth_events: string }>();
-
-    stateEventIds = stateEvents.results.map((e) => e.event_id);
-
-    // Collect auth chain IDs
-    const authChainSet = new Set<string>();
-    for (const event of stateEvents.results) {
-      const authEvents = JSON.parse(event.auth_events) as string[];
-      for (const authId of authEvents) {
-        authChainSet.add(authId);
-      }
-    }
-    authChainIds = Array.from(authChainSet);
-  }
+  const stateEventIds = stateEvents.results.map((e) => e.event_id);
+  const rootAuthEventIds = Array.from(
+    new Set(
+      stateEvents.results.flatMap((event) => {
+        try {
+          const authEvents = JSON.parse(event.auth_events) as unknown;
+          return Array.isArray(authEvents)
+            ? authEvents.filter((authId): authId is string => typeof authId === "string")
+            : [];
+        } catch {
+          return [];
+        }
+      }),
+    ),
+  );
+  const authChainIds = (await getAuthChain(c.env.DB, rootAuthEventIds)).map((event) => event.event_id);
 
   return c.json({
     pdu_ids: stateEventIds,
@@ -1367,6 +1369,18 @@ async function handleSendJoin(c: any, version: "v1" | "v2"): Promise<Response> {
     }
 
     const incomingEvent = validated.event;
+    const currentMembership = await c.env.DB.prepare(
+      `SELECT json_extract(e.content, '$.membership') AS membership
+       FROM room_state rs
+       JOIN events e ON rs.event_id = e.event_id
+       WHERE rs.room_id = ? AND rs.event_type = 'm.room.member' AND rs.state_key = ?`,
+    )
+      .bind(roomId, incomingEvent.state_key)
+      .first();
+    if (currentMembership?.membership === "ban") {
+      return c.json({ errcode: "M_FORBIDDEN", error: "User is banned from this room" }, 403);
+    }
+
     const calculatedEventId = await calculateReferenceHashEventId(
       incomingEvent as unknown as Record<string, unknown>,
       room.room_version,

@@ -86,10 +86,22 @@ export function encodeUnpaddedBase64(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes)).replace(/=/g, "");
 }
 
-function decodeUnpaddedBase64(str: string): Uint8Array {
+export function decodeUnpaddedBase64(str: string): Uint8Array {
   const padded = str + "=".repeat((4 - (str.length % 4)) % 4);
   const binary = atob(padded);
   return new Uint8Array([...binary].map((c) => c.charCodeAt(0)));
+}
+
+export function decodeMatrixBase64(str: string): Uint8Array {
+  try {
+    return decodeUnpaddedBase64(str);
+  } catch {
+    return base64UrlDecode(str);
+  }
+}
+
+export function normalizeMatrixBase64(str: string): string {
+  return encodeUnpaddedBase64(decodeMatrixBase64(str));
 }
 
 async function sha256UnpaddedBase64(data: string | Uint8Array): Promise<string> {
@@ -146,7 +158,7 @@ export async function generateSigningKeyPair(): Promise<{
     .join("")}`;
 
   return {
-    publicKey: base64UrlEncode(publicKeyBytes),
+    publicKey: encodeUnpaddedBase64(publicKeyBytes),
     privateKeyJwk,
     keyId,
   };
@@ -203,7 +215,7 @@ export async function signJson(
   );
 
   // Encode signature as unpadded base64
-  const signatureB64 = base64UrlEncode(new Uint8Array(signatureBytes));
+  const signatureB64 = encodeUnpaddedBase64(new Uint8Array(signatureBytes));
 
   // Merge with existing signatures if present
   const existingSignatures = (obj.signatures as Record<string, Record<string, string>>) ?? {};
@@ -243,7 +255,7 @@ export async function verifySignature(
     delete toVerify["unsigned"];
 
     // Decode the public key
-    const publicKeyBytes = base64UrlDecode(publicKeyB64);
+    const publicKeyBytes = decodeMatrixBase64(publicKeyB64);
 
     // Import the public key
     const publicKey = await crypto.subtle.importKey(
@@ -255,7 +267,7 @@ export async function verifySignature(
     );
 
     // Decode the signature
-    const signatureBytes = base64UrlDecode(signature);
+    const signatureBytes = decodeMatrixBase64(signature);
 
     // Get canonical JSON
     const canonical = canonicalJson(toVerify);

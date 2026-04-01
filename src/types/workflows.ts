@@ -1,3 +1,5 @@
+import type { ErrorCode } from "./matrix";
+
 export type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
 export type JsonObject = { [key: string]: JsonValue };
 
@@ -17,6 +19,8 @@ export interface RoomJoinWorkflowResult {
   roomId: string;
   success: boolean;
   error?: string;
+  errorStatus?: number;
+  errorErrcode?: ErrorCode;
 }
 
 export interface RoomJoinWorkflowStatus {

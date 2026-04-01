@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateContentHash, verifyContentHash } from "./crypto";
+import {
+  calculateContentHash,
+  decodeMatrixBase64,
+  normalizeMatrixBase64,
+  verifyContentHash,
+} from "./crypto";
 
 describe("crypto content hashes", () => {
   it("produces unpadded base64 hashes for Matrix events", async () => {
@@ -49,5 +54,16 @@ describe("crypto content hashes", () => {
 
     expect(await verifyContentHash(event, hash)).toBe(true);
     expect(await verifyContentHash(event, urlsafeHash)).toBe(true);
+  });
+
+  it("decodes both standard and urlsafe unpadded base64 encodings", () => {
+    const expected = new Uint8Array([251, 255, 255]);
+
+    expect(decodeMatrixBase64("+///")).toEqual(expected);
+    expect(decodeMatrixBase64("-___")).toEqual(expected);
+  });
+
+  it("normalizes urlsafe base64 into standard unpadded base64", () => {
+    expect(normalizeMatrixBase64("-___")).toBe("+///");
   });
 });

@@ -5,8 +5,9 @@
 import {
   verifySignature,
   signJson,
-  base64UrlDecode,
+  decodeMatrixBase64,
   generateSigningKeyPair,
+  normalizeMatrixBase64,
 } from "../utils/crypto";
 import { discoverServer, buildServerUrl } from "./server-discovery";
 
@@ -145,7 +146,7 @@ async function fetchKeysFromRemote(
   for (const [keyId, keyData] of Object.entries(keyResponse.verify_keys || {})) {
     // Validate key format (should be base64url-encoded 32 bytes for Ed25519)
     try {
-      const keyBytes = base64UrlDecode(keyData.key);
+      const keyBytes = decodeMatrixBase64(keyData.key);
       if (keyBytes.length !== 32) {
         console.warn(`Invalid key length for ${serverName}:${keyId}: ${keyBytes.length}`);
         continue;
@@ -171,7 +172,7 @@ async function fetchKeysFromRemote(
     keys.push({
       server_name: serverName,
       key_id: keyId,
-      public_key: keyData.key,
+      public_key: normalizeMatrixBase64(keyData.key),
       valid_from: now,
       valid_until: keyResponse.valid_until_ts || null,
       fetched_at: now,
@@ -182,7 +183,7 @@ async function fetchKeysFromRemote(
   // Process old keys (for verifying historical signatures)
   for (const [keyId, keyData] of Object.entries(keyResponse.old_verify_keys || {})) {
     try {
-      const keyBytes = base64UrlDecode(keyData.key);
+      const keyBytes = decodeMatrixBase64(keyData.key);
       if (keyBytes.length !== 32) continue;
     } catch {
       continue;
@@ -191,7 +192,7 @@ async function fetchKeysFromRemote(
     keys.push({
       server_name: serverName,
       key_id: keyId,
-      public_key: keyData.key,
+      public_key: normalizeMatrixBase64(keyData.key),
       valid_from: 0,
       valid_until: keyData.expired_ts || now,
       fetched_at: now,
@@ -287,7 +288,7 @@ export async function getRemoteKeysWithNotarySignature(
 
       for (const key of dbKeys) {
         if (keyId && key.key_id !== keyId) continue;
-        verifyKeys[key.key_id] = { key: key.public_key };
+        verifyKeys[key.key_id] = { key: normalizeMatrixBase64(key.public_key) };
         if (key.valid_until && key.valid_until > maxValidUntil) {
           maxValidUntil = key.valid_until;
         }

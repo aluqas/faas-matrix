@@ -31,6 +31,14 @@ import { requireAuth, extractAccessToken } from "../middleware/auth";
 
 const app = new Hono<AppEnv>();
 
+type ParsedJsonBody =
+  | { ok: true; value: unknown }
+  | { ok: false; reason: "not_json" | "bad_json" };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function methodNotAllowed() {
   return new Response(
     JSON.stringify({
@@ -61,6 +69,23 @@ function resolveLoginUserId(identifierUser: string, localServerName: string): st
   return formatUserId(identifierUser.toLowerCase(), localServerName);
 }
 
+async function parseJsonBody(request: Request): Promise<ParsedJsonBody> {
+  const body = await request.arrayBuffer();
+
+  let decoded: string;
+  try {
+    decoded = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(body);
+  } catch {
+    return { ok: false, reason: "not_json" };
+  }
+
+  try {
+    return { ok: true, value: JSON.parse(decoded) as unknown };
+  } catch {
+    return { ok: false, reason: "bad_json" };
+  }
+}
+
 // GET /_matrix/client/v3/login - Get supported login flows
 app.get("/_matrix/client/v3/login", (c) => {
   return c.json({
@@ -82,14 +107,26 @@ app.on(["PUT", "DELETE", "PATCH"], "/_matrix/client/v3/login", () => methodNotAl
 
 // POST /_matrix/client/v3/login - Login
 app.post("/_matrix/client/v3/login", async (c) => {
-  let body: any;
-  try {
-    body = await c.req.json();
-  } catch {
+  const parsedBody = await parseJsonBody(c.req.raw);
+  if (!parsedBody.ok) {
+    return (
+      parsedBody.reason === "not_json" ? Errors.notJson("Request body is not valid UTF-8 JSON") : Errors.badJson()
+    ).toResponse();
+  }
+  if (!isRecord(parsedBody.value)) {
     return Errors.badJson().toResponse();
   }
-
-  const { type, identifier, password, token, device_id, initial_device_display_name } = body;
+  const body = parsedBody.value;
+  const type = typeof body["type"] === "string" ? body["type"] : undefined;
+  const identifier = isRecord(body["identifier"]) ? body["identifier"] : null;
+  const password = typeof body["password"] === "string" ? body["password"] : undefined;
+  const token = typeof body["token"] === "string" ? body["token"] : undefined;
+  const deviceIdFromBody =
+    typeof body["device_id"] === "string" ? body["device_id"] : undefined;
+  const initialDeviceDisplayName =
+    typeof body["initial_device_display_name"] === "string"
+      ? body["initial_device_display_name"]
+      : undefined;
 
   let userId: string;
 
@@ -128,8 +165,8 @@ app.post("/_matrix/client/v3/login", async (c) => {
     }
 
     // Parse identifier
-    if (identifier.type === "m.id.user") {
-      const resolvedUserId = resolveLoginUserId(identifier.user, c.env.SERVER_NAME);
+    if (identifier?.["type"] === "m.id.user" && typeof identifier["user"] === "string") {
+      const resolvedUserId = resolveLoginUserId(identifier["user"], c.env.SERVER_NAME);
       if (!resolvedUserId) {
         return Errors.forbidden("Invalid username or password").toResponse();
       }
@@ -157,8 +194,8 @@ app.post("/_matrix/client/v3/login", async (c) => {
     }
 
     // Parse identifier
-    if (identifier.type === "m.id.user") {
-      const resolvedUserId = resolveLoginUserId(identifier.user, c.env.SERVER_NAME);
+    if (identifier?.["type"] === "m.id.user" && typeof identifier["user"] === "string") {
+      const resolvedUserId = resolveLoginUserId(identifier["user"], c.env.SERVER_NAME);
       if (!resolvedUserId) {
         return Errors.forbidden("Invalid username or password").toResponse();
       }
@@ -180,10 +217,10 @@ app.post("/_matrix/client/v3/login", async (c) => {
   }
 
   // Generate or use provided device ID
-  const deviceId = device_id || (await generateDeviceId());
+  const deviceId = deviceIdFromBody || (await generateDeviceId());
 
   // Create device
-  await createDevice(c.env.DB, userId, deviceId, initial_device_display_name);
+  await createDevice(c.env.DB, userId, deviceId, initialDeviceDisplayName);
 
   // Generate access token
   const accessToken = await generateAccessToken();
@@ -247,14 +284,19 @@ app.post("/_matrix/client/v3/logout/all", requireAuth(), async (c) => {
 // Uses the refresh token to get a new access token + refresh token pair
 // Implements token rotation (single-use refresh tokens)
 app.post("/_matrix/client/v3/refresh", async (c) => {
-  let body: { refresh_token?: string };
-  try {
-    body = await c.req.json();
-  } catch {
+  const parsedBody = await parseJsonBody(c.req.raw);
+  if (!parsedBody.ok) {
+    return (
+      parsedBody.reason === "not_json" ? Errors.notJson("Request body is not valid UTF-8 JSON") : Errors.badJson()
+    ).toResponse();
+  }
+  if (!isRecord(parsedBody.value)) {
     return Errors.badJson().toResponse();
   }
-
-  const { refresh_token: refreshToken } = body;
+  const refreshToken =
+    typeof parsedBody.value["refresh_token"] === "string"
+      ? parsedBody.value["refresh_token"]
+      : undefined;
 
   if (!refreshToken) {
     return Errors.missingParam("refresh_token").toResponse();
@@ -338,14 +380,26 @@ app.get("/_matrix/client/v3/register/available", async (c) => {
 
 // POST /_matrix/client/v3/register - Register new user
 app.post("/_matrix/client/v3/register", async (c) => {
-  let body: any;
-  try {
-    body = await c.req.json();
-  } catch {
+  const parsedBody = await parseJsonBody(c.req.raw);
+  if (!parsedBody.ok) {
+    return (
+      parsedBody.reason === "not_json" ? Errors.notJson("Request body is not valid UTF-8 JSON") : Errors.badJson()
+    ).toResponse();
+  }
+  if (!isRecord(parsedBody.value)) {
     return Errors.badJson().toResponse();
   }
-
-  const { username, password, device_id, initial_device_display_name, inhibit_login, auth } = body;
+  const body = parsedBody.value;
+  const username = typeof body["username"] === "string" ? body["username"] : undefined;
+  const password = typeof body["password"] === "string" ? body["password"] : undefined;
+  const deviceIdFromBody =
+    typeof body["device_id"] === "string" ? body["device_id"] : undefined;
+  const initialDeviceDisplayName =
+    typeof body["initial_device_display_name"] === "string"
+      ? body["initial_device_display_name"]
+      : undefined;
+  const inhibitLogin = body["inhibit_login"] === true;
+  const auth = isRecord(body["auth"]) ? body["auth"] : null;
 
   // Check registration kind
   const kind = c.req.query("kind") || "user";
@@ -355,11 +409,12 @@ app.post("/_matrix/client/v3/register", async (c) => {
 
   const isGuest = kind === "guest";
   const normalizedUsername = typeof username === "string" ? username.toLowerCase() : username;
+  const requiredUsername = typeof normalizedUsername === "string" ? normalizedUsername : null;
 
   // For non-guests, require username and password
   if (!isGuest) {
     // Simple auth - in production, implement UIA (User-Interactive Authentication)
-    if (!auth || auth.type !== "m.login.dummy") {
+    if (auth?.["type"] !== "m.login.dummy") {
       // Return UIA requirements
       const sessionId = await generateOpaqueId(16);
       return c.json(
@@ -385,8 +440,20 @@ app.post("/_matrix/client/v3/register", async (c) => {
     }
   }
 
+  if (!isGuest && requiredUsername === null) {
+    return Errors.missingParam("username").toResponse();
+  }
+
   // Generate localpart for guests
-  const localpart = isGuest ? await generateOpaqueId(12) : normalizedUsername;
+  let localpart: string;
+  if (isGuest) {
+    localpart = await generateOpaqueId(12);
+  } else {
+    if (requiredUsername === null) {
+      return Errors.missingParam("username").toResponse();
+    }
+    localpart = requiredUsername;
+  }
   const userId = formatUserId(localpart, c.env.SERVER_NAME);
 
   // Check if user already exists
@@ -402,7 +469,7 @@ app.post("/_matrix/client/v3/register", async (c) => {
   await createUser(c.env.DB, userId, localpart, passwordHash, isGuest);
 
   // Response depends on inhibit_login
-  if (inhibit_login) {
+  if (inhibitLogin) {
     return c.json({
       user_id: userId,
       home_server: c.env.SERVER_NAME,
@@ -410,8 +477,8 @@ app.post("/_matrix/client/v3/register", async (c) => {
   }
 
   // Generate device and access token
-  const deviceId = device_id || (await generateDeviceId());
-  await createDevice(c.env.DB, userId, deviceId, initial_device_display_name);
+  const deviceId = deviceIdFromBody || (await generateDeviceId());
+  await createDevice(c.env.DB, userId, deviceId, initialDeviceDisplayName);
 
   const accessToken = await generateAccessToken();
   const tokenHash = await hashToken(accessToken);

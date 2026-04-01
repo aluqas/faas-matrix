@@ -6,11 +6,12 @@ import {
   getEvent,
   getEventsSince,
   getInviteStrippedState,
+  getLatestForwardExtremities,
+  getLatestRoomEventsByDepth,
   getLatestStreamPosition,
   getMembership,
   getRoom,
   getRoomByAlias,
-  getRoomEvents,
   getRoomState,
   getStateEvent,
   getUserRooms,
@@ -162,8 +163,7 @@ export class CloudflareRoomRepository implements RoomRepository {
   }
 
   async getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]> {
-    const result = await getRoomEvents(this.env.DB, roomId, undefined, limit);
-    return result.events;
+    return getLatestRoomEventsByDepth(this.env.DB, roomId, limit);
   }
 }
 
@@ -577,8 +577,7 @@ export class CloudflareFederationRepository implements FederationRepository {
   }
 
   async getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]> {
-    const result = await getRoomEvents(this.env.DB, roomId, undefined, limit);
-    return result.events;
+    return getLatestForwardExtremities(this.env.DB, roomId, limit);
   }
 
   getRoomState(roomId: string): Promise<PDU[]> {

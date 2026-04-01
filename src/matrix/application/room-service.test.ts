@@ -4,7 +4,7 @@ import { createFeatureProfile } from "../../foundation/config/feature-profile";
 import { DefaultEventPipeline } from "../domain/event-pipeline";
 import { MatrixRoomService } from "./room-service";
 import type { MembershipRecord, RoomRepository } from "../repositories/interfaces";
-import type { PDU, Room, RoomJoinWorkflowParams } from "../../types";
+import type { PDU, Room, RoomJoinWorkflowParams, RoomJoinWorkflowStatus } from "../../types";
 
 class MemoryIdempotencyStore {
   private readonly entries = new Map<string, Record<string, unknown>>();
@@ -121,7 +121,7 @@ class MemoryRoomRepository implements RoomRepository {
   }
 }
 
-function createTestAppContext() {
+function createTestAppContext(roomJoinStatus: RoomJoinWorkflowStatus = { status: "complete", output: { success: true } }) {
   let eventCounter = 0;
   let roomCounter = 0;
   const pushCalls: Array<Record<string, unknown>> = [];
@@ -137,7 +137,7 @@ function createTestAppContext() {
       workflow: {
         async createRoomJoin(params: RoomJoinWorkflowParams) {
           roomJoinCalls.push(params);
-          return { status: "complete", output: { success: true } };
+          return roomJoinStatus;
         },
         async createPushNotification(params: unknown) {
           pushCalls.push(params as Record<string, unknown>);
@@ -414,6 +414,33 @@ describe("MatrixRoomService", () => {
       remoteServer: "remote.test",
     });
     expect(repo.memberships.get("!room1:remote.test:@alice:test")?.membership).toBe("invite");
+  });
+
+  it("maps remote workflow join failures back to Matrix errors", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext({
+      status: "complete",
+      output: {
+        success: false,
+        error: "Cannot join room without an invite",
+        errorStatus: 403,
+        errorErrcode: "M_FORBIDDEN",
+      },
+    });
+
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    await expect(
+      service.joinRoom({
+        userId: "@alice:test",
+        roomId: "!room1:remote.test",
+      }),
+    ).rejects.toThrow("Cannot join room without an invite");
   });
 
   it("rejects restricted joins without explicit authorization", async () => {

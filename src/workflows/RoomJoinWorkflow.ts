@@ -9,7 +9,9 @@
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import type { Env, PDU } from "../types";
 import { generateEventId } from "../utils/ids";
+import { calculateContentHash, calculateReferenceHashEventId } from "../utils/crypto";
 import { federationGet, federationPut } from "../services/federation-keys";
+import { getRoomVersion } from "../services/room-versions";
 import {
   storeEvent,
   getRoomMembers,
@@ -26,10 +28,10 @@ import {
 import { persistFederationStateSnapshot } from "../matrix/application/federation-handler-service";
 import {
   type JsonObject,
+  type RoomJoinWorkflowResult,
   type RemoteJoinTemplate,
   type RemoteSendJoinResponse,
   type RoomJoinWorkflowParams,
-  type RoomJoinWorkflowResult,
   toRemoteJoinTemplate,
   toRemoteSendJoinResponse,
 } from "../types/workflows";
@@ -77,6 +79,74 @@ type RemoteStateResponse = {
   auth_chain: unknown[];
 };
 
+type RemoteJoinStepSuccess<T> = {
+  success: true;
+  value: T;
+};
+
+type RemoteJoinStepFailure = {
+  success: false;
+  failure: Pick<RoomJoinWorkflowResult, "error" | "errorStatus" | "errorErrcode">;
+};
+
+type RemoteJoinHttpErrorOptions = {
+  operation: "make_join" | "send_join";
+  destination: string;
+  status: number;
+  message: string;
+  errcode?: RoomJoinWorkflowResult["errorErrcode"];
+};
+
+class RemoteJoinHttpError extends Error {
+  readonly operation: "make_join" | "send_join";
+  readonly destination: string;
+  readonly status: number;
+  readonly errcode?: RoomJoinWorkflowResult["errorErrcode"];
+  readonly retryable: boolean;
+
+  constructor(options: RemoteJoinHttpErrorOptions) {
+    super(options.message);
+    this.name = "RemoteJoinHttpError";
+    this.operation = options.operation;
+    this.destination = options.destination;
+    this.status = options.status;
+    this.errcode = options.errcode;
+    this.retryable = options.status === 429 || options.status >= 500;
+  }
+}
+
+function parseMatrixErrorPayload(value: string): {
+  errcode?: RoomJoinWorkflowResult["errorErrcode"];
+  error?: string;
+} {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    const parsedRecord = parsed as Record<string, unknown>;
+    const errcode =
+      typeof parsedRecord["errcode"] === "string"
+        ? (parsedRecord["errcode"] as RoomJoinWorkflowResult["errorErrcode"])
+        : undefined;
+    const error = typeof parsedRecord["error"] === "string" ? parsedRecord["error"] : undefined;
+    return { ...withDefined("errcode", errcode), ...withDefined("error", error) };
+  } catch {
+    return {};
+  }
+}
+
+function toWorkflowFailure(
+  error: RemoteJoinHttpError,
+): Pick<RoomJoinWorkflowResult, "error" | "errorStatus" | "errorErrcode"> {
+  const payload = parseMatrixErrorPayload(error.message);
+  return {
+    error: payload.error ?? error.message,
+    errorStatus: error.status,
+    ...withDefined("errorErrcode", payload.errcode ?? error.errcode),
+  };
+}
+
 async function getStoredDeviceKeysFromKv(kv: KVNamespace, userId: string, deviceId: string) {
   return parseDeviceKeysPayload(await kv.get(`device:${userId}:${deviceId}`, "json"));
 }
@@ -112,45 +182,92 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
     try {
       // Step 1: For remote joins, get join template from remote server
       // Try each candidate server in order until one succeeds
-      let remoteEventTemplate: RemoteJoinTemplate | null = null;
-      let successfulRemoteServer: string | undefined = remoteServer;
-      if (isRemote && (remoteServer || remoteServers?.length)) {
-        const candidates = remoteServers?.length
-          ? remoteServers
-          : remoteServer
+        let remoteEventTemplate: RemoteJoinTemplate | null = null;
+        let successfulRemoteServer: string | undefined = remoteServer;
+        if (isRemote && (remoteServer || remoteServers?.length)) {
+          const candidates = remoteServers?.length
+            ? remoteServers
+            : remoteServer
             ? [remoteServer]
             : [];
-        remoteEventTemplate = (await step.do(
-          "make-join",
-          {
-            retries: {
-              limit: 3,
-              delay: 5000,
+          const makeJoinResult = (await step.do(
+            "make-join",
+            {
+              retries: {
+                limit: 3,
+                delay: 5000,
               backoff: "exponential",
             },
             timeout: 30000,
-          },
-          async () => {
-            let lastError: Error | undefined;
-            for (const candidate of candidates) {
-              try {
-                const result = await this.makeJoinRequest(candidate, roomId, userId);
-                successfulRemoteServer = candidate;
-                return result;
-              } catch (err) {
-                lastError = err instanceof Error ? err : new Error(String(err));
-                await runWorkflowEffect(
-                  logger.warn("room_join.workflow.make_join_retry", {
-                    destination: candidate,
-                    error_message: lastError.message,
-                  }),
-                );
+            },
+            async () => {
+              let lastError: Error | undefined;
+              let lastNonRetryableError: RemoteJoinHttpError | undefined;
+              for (const candidate of candidates) {
+                try {
+                  const result = await this.makeJoinRequest(candidate, roomId, userId);
+                  return {
+                    success: true,
+                    value: {
+                      remoteEventTemplate: result,
+                      remoteServer: candidate,
+                    },
+                  } satisfies RemoteJoinStepSuccess<{
+                    remoteEventTemplate: RemoteJoinTemplate;
+                    remoteServer: string;
+                  }>;
+                } catch (err) {
+                  if (err instanceof RemoteJoinHttpError && !err.retryable) {
+                    lastNonRetryableError = err;
+                    await runWorkflowEffect(
+                      logger.warn("room_join.workflow.make_join_terminal_error", {
+                        destination: candidate,
+                        error_message: err.message,
+                        status: err.status,
+                        errcode: err.errcode,
+                      }),
+                    );
+                    continue;
+                  }
+
+                  lastError = err instanceof Error ? err : new Error(String(err));
+                  await runWorkflowEffect(
+                    logger.warn("room_join.workflow.make_join_retry", {
+                      destination: candidate,
+                      error_message: lastError.message,
+                    }),
+                  );
+                }
               }
-            }
-            throw lastError ?? new Error("All remote servers failed for make_join");
-          },
-        )) as RemoteJoinTemplate | null;
-      }
+
+              if (!lastError && lastNonRetryableError) {
+                return {
+                  success: false,
+                  failure: toWorkflowFailure(lastNonRetryableError),
+                } satisfies RemoteJoinStepFailure;
+              }
+
+              throw lastError ?? new Error("All remote servers failed for make_join");
+            },
+          )) as
+            | RemoteJoinStepSuccess<{
+                remoteEventTemplate: RemoteJoinTemplate;
+                remoteServer: string;
+              }>
+            | RemoteJoinStepFailure;
+
+          if (!makeJoinResult.success) {
+            return {
+              eventId: "",
+              roomId,
+              success: false,
+              ...makeJoinResult.failure,
+            };
+          }
+
+          remoteEventTemplate = makeJoinResult.value.remoteEventTemplate;
+          successfulRemoteServer = makeJoinResult.value.remoteServer;
+        }
 
       // Step 2: Create and sign the join event
       const joinEventData = parseWorkflowJson<JoinWorkflowEvent>(
@@ -171,7 +288,9 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       // Step 3: For remote joins, send signed event to remote server and process room state
       let partialStateEventId: string | undefined;
       if (isRemote && successfulRemoteServer && joinEventData) {
-        const sendJoinResponse = parseWorkflowJson<RemoteSendJoinResponse>(
+        const sendJoinResult = parseWorkflowJson<
+          RemoteJoinStepSuccess<RemoteSendJoinResponse> | RemoteJoinStepFailure
+        >(
           await step.do(
             "send-join",
             {
@@ -183,12 +302,33 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
               timeout: 30000,
             },
             async () => {
-              return JSON.stringify(
-                await this.sendJoinRequest(successfulRemoteServer!, roomId, joinEventData),
-              );
+              try {
+                return JSON.stringify({
+                  success: true,
+                  value: await this.sendJoinRequest(successfulRemoteServer!, roomId, joinEventData),
+                } satisfies RemoteJoinStepSuccess<RemoteSendJoinResponse>);
+              } catch (error) {
+                if (error instanceof RemoteJoinHttpError && !error.retryable) {
+                  return JSON.stringify({
+                    success: false,
+                    failure: toWorkflowFailure(error),
+                  } satisfies RemoteJoinStepFailure);
+                }
+                throw error;
+              }
             },
           ),
         );
+
+        if (!sendJoinResult.success) {
+          return {
+            eventId: "",
+            roomId,
+            success: false,
+            ...sendJoinResult.failure,
+          };
+        }
+        const sendJoinResponse = sendJoinResult.value;
 
         // Process the room state received from the remote server
         await step.do("process-remote-state", async () => {
@@ -383,7 +523,14 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`make_join failed: ${response.status} ${error}`);
+      const parsed = parseMatrixErrorPayload(error);
+      throw new RemoteJoinHttpError({
+        operation: "make_join",
+        destination: remoteServer,
+        status: response.status,
+        message: parsed.error ?? `make_join failed: ${response.status} ${error}`,
+        ...withDefined("errcode", parsed.errcode),
+      });
     }
 
     const result = toRemoteJoinTemplate((await response.json()) as unknown);
@@ -446,8 +593,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       depth = (latestEvents[0]?.depth ?? 0) + 1;
     }
 
-    const eventId = await generateEventId(this.env.SERVER_NAME, remoteEventTemplate?.room_version);
-
+    const roomVersion = remoteEventTemplate?.room_version;
     const memberContent: JsonObject = {
       membership: "join",
     };
@@ -462,8 +608,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       memberContent["reason"] = reason;
     }
 
-    const event: JoinWorkflowEvent = {
-      event_id: eventId,
+    const baseEvent = {
       room_id: roomId,
       sender: userId,
       type: "m.room.member",
@@ -482,6 +627,24 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
             }
           : undefined,
       ),
+    };
+
+    const hash = await calculateContentHash(baseEvent as unknown as Record<string, unknown>);
+    const eventWithHash = {
+      ...baseEvent,
+      hashes: { sha256: hash },
+    };
+    const eventId =
+      (roomVersion ? getRoomVersion(roomVersion) : null)?.eventIdFormat === "v1"
+        ? await generateEventId(this.env.SERVER_NAME, roomVersion)
+        : await calculateReferenceHashEventId(
+            eventWithHash as unknown as Record<string, unknown>,
+            roomVersion,
+          );
+
+    const event: JoinWorkflowEvent = {
+      event_id: eventId,
+      ...eventWithHash,
     };
 
     return event;
@@ -538,7 +701,14 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`send_join failed: ${response.status} ${error}`);
+      const parsed = parseMatrixErrorPayload(error);
+      throw new RemoteJoinHttpError({
+        operation: "send_join",
+        destination: remoteServer,
+        status: response.status,
+        message: parsed.error ?? `send_join failed: ${response.status} ${error}`,
+        ...withDefined("errcode", parsed.errcode),
+      });
     }
 
     return toRemoteSendJoinResponse((await response.json()) as unknown);

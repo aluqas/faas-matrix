@@ -32,6 +32,44 @@ const IncomingPduSchema = Schema.Struct({
 
 type IncomingPdu = Schema.Schema.Type<typeof IncomingPduSchema>;
 
+export function roomVersionRequiresIntegerJsonNumbers(roomVersion?: string): boolean {
+  const numericVersion = Number(roomVersion ?? getDefaultRoomVersion());
+  return Number.isInteger(numericVersion) && numericVersion >= 6;
+}
+
+export function findInvalidCanonicalJsonNumberPath(
+  value: unknown,
+  path: string = "$",
+): string | null {
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || Object.is(value, -0)) {
+      return path;
+    }
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const [index, entry] of value.entries()) {
+      const invalidPath = findInvalidCanonicalJsonNumberPath(entry, `${path}[${index}]`);
+      if (invalidPath) {
+        return invalidPath;
+      }
+    }
+    return null;
+  }
+
+  if (value !== null && typeof value === "object") {
+    for (const [key, entry] of Object.entries(value)) {
+      const invalidPath = findInvalidCanonicalJsonNumberPath(entry, `${path}.${key}`);
+      if (invalidPath) {
+        return invalidPath;
+      }
+    }
+  }
+
+  return null;
+}
+
 function toIncomingPdu(event: IncomingPdu, eventId: string): PDU {
   return {
     event_id: eventId,
@@ -79,6 +117,20 @@ export function validateIncomingPduEffect(
             status: 400,
           }),
         );
+      }
+
+      if (roomVersionRequiresIntegerJsonNumbers(roomVersion)) {
+        const invalidNumberPath = findInvalidCanonicalJsonNumberPath(event);
+        if (invalidNumberPath) {
+          return Effect.fail(
+            new DomainError({
+              kind: "spec_violation",
+              errcode: ErrorCodes.M_BAD_JSON,
+              message: `${context ?? "PDU"}: invalid canonical JSON number at ${invalidNumberPath}`,
+              status: 400,
+            }),
+          );
+        }
       }
 
       const eventIdFormat = getRoomVersion(roomVersion ?? getDefaultRoomVersion())?.eventIdFormat;

@@ -78,4 +78,27 @@ describe("pdu-validator", () => {
 
     expect(event).toBeNull();
   });
+
+  it("rejects non-integer canonical JSON numbers for room v6+", async () => {
+    const event = await tryValidateIncomingPdu(
+      {
+        event_id: "$bad:test",
+        room_id: "!room:test",
+        sender: "@alice:test",
+        type: "m.room.message",
+        content: {
+          body: "hi",
+          bad_val: 1.1,
+        },
+        origin_server_ts: 1,
+        depth: 2,
+        auth_events: ["$create:test"],
+        prev_events: ["$prev:test"],
+      },
+      "state",
+      "10",
+    );
+
+    expect(event).toBeNull();
+  });
 });

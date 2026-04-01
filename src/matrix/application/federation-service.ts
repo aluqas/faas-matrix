@@ -17,7 +17,8 @@ import {
   verifyContentHash,
 } from "../../utils/crypto";
 import { verifyRemoteSignature } from "../../services/federation-keys";
-import { federationPost } from "../../services/federation-keys";
+import { federationGet, federationPost } from "../../services/federation-keys";
+import { fanoutEventToRemoteServers } from "../../services/federation-fanout";
 import type { FederationRepository } from "../repositories/interfaces";
 import { createServerAclPolicy } from "./features/server-acl/policy";
 import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
@@ -28,6 +29,10 @@ import {
   handleFederationReceiptEdu,
   handleFederationTypingEdu,
 } from "./federation-handler-service";
+import {
+  findInvalidCanonicalJsonNumberPath,
+  roomVersionRequiresIntegerJsonNumbers,
+} from "./pdu-validator";
 import type { PresenceEduContent } from "./features/presence/contracts";
 import type { TypingEduContent } from "./features/typing/contracts";
 import type { DirectToDeviceEduContent } from "./features/to-device/contracts";
@@ -53,11 +58,22 @@ export interface FederationTransactionInput {
     pdus?: Array<Record<string, unknown>>;
     edus?: Array<Record<string, unknown>>;
   };
+  disableGapFill?: boolean;
+  historicalOnly?: boolean;
 }
 
 interface CachedKeyRecord {
   keyId: string;
   key: string;
+}
+
+function isD1Database(value: unknown): value is D1Database {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "prepare" in value &&
+    typeof (value as { prepare?: unknown }).prepare === "function"
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -193,6 +209,16 @@ export class MatrixFederationService {
           rejectedPduCount += 1;
           continue;
         }
+        if (roomVersionRequiresIntegerJsonNumbers(roomVersion)) {
+          const invalidNumberPath = findInvalidCanonicalJsonNumberPath(rawPdu);
+          if (invalidNumberPath) {
+            const reason = `Invalid canonical JSON number at ${invalidNumberPath}`;
+            pduResults[eventId] = { error: reason };
+            rejectedPduCount += 1;
+            await this.repository.recordProcessedPdu(eventId, input.origin, roomId, false, reason);
+            continue;
+          }
+        }
         if (eventIdFormat !== "v1") {
           await emitEffectWarning("[federation-service] normalized inbound PDU", {
             origin: input.origin,
@@ -214,13 +240,22 @@ export class MatrixFederationService {
           content,
           event_id: normalizedEventId,
         } as PDU;
+        let snapshotIncomplete = false;
 
         if (room) {
-          await this.fetchMissingPrevEventsIfNeeded(
+          snapshotIncomplete = await this.fetchMissingPrevEventsIfNeeded(
             input.origin,
             input.txnId,
             roomId,
             room.room_version,
+            normalizedPdu,
+            logger,
+            input.disableGapFill ?? false,
+          );
+          await this.fetchMissingAuthEventsIfNeeded(
+            input.origin,
+            input.txnId,
+            roomId,
             normalizedPdu,
             logger,
           );
@@ -238,6 +273,14 @@ export class MatrixFederationService {
         if (!pduOrigin) {
           pduResults[eventId] = { error: "Invalid sender format" };
           rejectedPduCount += 1;
+          continue;
+        }
+
+        if (snapshotIncomplete && !input.historicalOnly) {
+          const reason = "Missing prev events could not be resolved";
+          pduResults[eventId] = {};
+          rejectedPduCount += 1;
+          await this.repository.recordProcessedPdu(eventId, pduOrigin, roomId, false, reason);
           continue;
         }
 
@@ -336,7 +379,7 @@ export class MatrixFederationService {
           }
         }
 
-        if (room) {
+        if (room && !input.historicalOnly) {
           const aclPolicy = createServerAclPolicy(await this.repository.getRoomState(roomId));
           const aclDecision = aclPolicy.allowPdu(input.origin, roomId, normalizedPdu);
           if (aclDecision.kind === "deny") {
@@ -363,6 +406,47 @@ export class MatrixFederationService {
             let roomState = await this.repository.getRoomState(roomId);
             const inviteStrippedState = await this.repository.getInviteStrippedState(roomId);
             roomState = resolveMembershipAuthState(roomId, roomState, inviteStrippedState);
+            const authDependencyError = await this.validateAuthEventDependencies(normalizedPdu);
+            if (authDependencyError) {
+              if (snapshotIncomplete && authDependencyError.startsWith("Missing auth event ")) {
+                await runFederationEffect(
+                  logger.warn("federation.transaction.soft_fail", {
+                    room_id: roomId,
+                    event_id: eventId,
+                    event_type: normalizedPdu.type,
+                    error_message: authDependencyError,
+                  }),
+                );
+                await this.repository.recordProcessedPdu(
+                  eventId,
+                  pduOrigin,
+                  roomId,
+                  false,
+                  authDependencyError,
+                );
+                pduResults[eventId] = {};
+                rejectedPduCount += 1;
+                continue;
+              }
+              await emitEffectWarning("[federation-service] rejected PDU", {
+                roomId,
+                eventId,
+                type: normalizedPdu.type,
+                sender: normalizedPdu.sender,
+                stateKey: normalizedPdu.state_key,
+                reason: authDependencyError,
+              });
+              pduResults[eventId] = { error: authDependencyError };
+              rejectedPduCount += 1;
+              await this.repository.recordProcessedPdu(
+                eventId,
+                pduOrigin,
+                roomId,
+                false,
+                authDependencyError,
+              );
+              continue;
+            }
             const authResult = checkEventAuth(normalizedPdu, roomState, room.room_version);
             if (!authResult.allowed) {
               const partialStateJoin = await getPartialStateJoinForRoom(
@@ -412,7 +496,25 @@ export class MatrixFederationService {
         acceptedPduCount += 1;
         await this.repository.recordProcessedPdu(normalizedEventId, pduOrigin, roomId, true);
 
-        await this.storeAcceptedPdu(normalizedPdu);
+        if (input.historicalOnly) {
+          await this.repository.storeIncomingEvent(normalizedPdu);
+        } else {
+          await this.storeAcceptedPdu(normalizedPdu);
+          const db = isD1Database(this.appContext.capabilities.sql.connection)
+            ? this.appContext.capabilities.sql.connection
+            : undefined;
+          const cache = this.appContext.capabilities.kv.cache as KVNamespace | undefined;
+          if (db && cache) {
+            await fanoutEventToRemoteServers(
+              db,
+              cache,
+              this.appContext.capabilities.config.serverName,
+              roomId,
+              normalizedPdu,
+              [input.origin],
+            );
+          }
+        }
       } catch (error) {
         const eventId = incomingEventId || "unknown";
         pduResults[eventId] = {
@@ -471,9 +573,10 @@ export class MatrixFederationService {
     roomVersion: string,
     pdu: PDU,
     logger: ReturnType<typeof withLogContext>,
-  ): Promise<void> {
+    disableGapFill: boolean,
+  ): Promise<boolean> {
     if (hasRelationContent(pdu)) {
-      return;
+      return false;
     }
 
     const partialStateJoin = await getPartialStateJoinForRoom(
@@ -481,30 +584,41 @@ export class MatrixFederationService {
       roomId,
     );
     if (partialStateJoin) {
-      return;
+      return false;
     }
 
     const prevEvents = pdu.prev_events ?? [];
     if (prevEvents.length === 0) {
-      return;
+      return false;
     }
 
     const missingPrevEvents: string[] = [];
     for (const prevEventId of prevEvents) {
       const existing = await this.repository.getEvent(prevEventId);
-      if (!existing) {
+      const processed = await this.repository.getProcessedPdu(prevEventId);
+      if (!existing && (!processed || !processed.accepted)) {
         missingPrevEvents.push(prevEventId);
       }
     }
 
     if (missingPrevEvents.length === 0) {
-      return;
+      return false;
+    }
+
+    if (disableGapFill) {
+      return await this.fetchStateSnapshotForMissingPrevEvent(
+        origin,
+        roomId,
+        missingPrevEvents[0],
+        logger,
+      );
     }
 
     const latestKnownEvents = await this.repository.getLatestRoomEvents(roomId, 1);
-    const earliestEventId = latestKnownEvents[0]?.event_id;
+    const earliestKnownEvent = latestKnownEvents[0];
+    const earliestEventId = earliestKnownEvent?.event_id;
     if (!earliestEventId) {
-      return;
+      return false;
     }
 
     await runFederationEffect(
@@ -513,9 +627,23 @@ export class MatrixFederationService {
         event_id: pdu.event_id,
         room_version: roomVersion,
         earliest_event_count: 1,
+        earliest_event_id: earliestEventId,
+        earliest_event_type: earliestKnownEvent.type,
+        earliest_event_sender: earliestKnownEvent.sender,
+        earliest_event_state_key: earliestKnownEvent.state_key,
+        earliest_event_depth: earliestKnownEvent.depth,
         missing_prev_event_count: missingPrevEvents.length,
       }),
     );
+    await emitEffectWarning("[federation-service] gap fill boundary", {
+      roomId,
+      incomingEventId: pdu.event_id,
+      earliestEventId,
+      earliestEventType: earliestKnownEvent.type,
+      earliestEventSender: earliestKnownEvent.sender,
+      earliestEventStateKey: earliestKnownEvent.state_key,
+      earliestEventDepth: earliestKnownEvent.depth,
+    });
 
     const response = await federationPost(
       origin,
@@ -538,7 +666,7 @@ export class MatrixFederationService {
           error_message: `get_missing_events returned ${response.status}`,
         }),
       );
-      return;
+      return false;
     }
 
     const data = (await response.json()) as { events?: unknown[] };
@@ -550,17 +678,25 @@ export class MatrixFederationService {
       : [];
 
     if (rawEvents.length === 0) {
-      return;
+      return false;
     }
 
-    await this.processTransaction({
+    const missingEventsResult = await this.processTransaction({
       origin,
       txnId: `${txnId}:missing:${pdu.event_id}`,
       body: {
         pdus: rawEvents,
         edus: [],
       },
+      disableGapFill: true,
     });
+
+    for (const fetchedEventId of Object.keys(missingEventsResult.pdus)) {
+      const processed = await this.repository.getProcessedPdu(fetchedEventId);
+      if (processed && !processed.accepted) {
+        return true;
+      }
+    }
 
     await runFederationEffect(
       logger.info("federation.transaction.gap_fill_result", {
@@ -569,6 +705,188 @@ export class MatrixFederationService {
         fetched_event_count: rawEvents.length,
       }),
     );
+    return false;
+  }
+
+  private async fetchStateSnapshotForMissingPrevEvent(
+    origin: string,
+    roomId: string,
+    prevEventId: string,
+    logger: ReturnType<typeof withLogContext>,
+  ): Promise<boolean> {
+    const stateIdsResponse = await federationGet(
+      origin,
+      `/_matrix/federation/v1/state_ids/${encodeURIComponent(roomId)}?event_id=${encodeURIComponent(prevEventId)}`,
+      this.appContext.capabilities.config.serverName,
+      this.appContext.capabilities.sql.connection as D1Database,
+      this.appContext.capabilities.kv.cache as KVNamespace,
+    );
+
+    if (!stateIdsResponse.ok) {
+      await runFederationEffect(
+        logger.warn("federation.transaction.state_snapshot_error", {
+          room_id: roomId,
+          event_id: prevEventId,
+          error_message: `state_ids returned ${stateIdsResponse.status}`,
+        }),
+      );
+      return true;
+    }
+
+    const stateIds = (await stateIdsResponse.json()) as {
+      pdu_ids?: unknown[];
+      auth_chain_ids?: unknown[];
+    };
+    const snapshotEventIds = Array.from(
+      new Set(
+        [...(Array.isArray(stateIds.pdu_ids) ? stateIds.pdu_ids : []), ...(Array.isArray(stateIds.auth_chain_ids) ? stateIds.auth_chain_ids : [])]
+          .filter((eventId): eventId is string => typeof eventId === "string"),
+      ),
+    );
+
+    const missingSnapshotEventIds: string[] = [];
+    for (const eventId of snapshotEventIds) {
+      const existing = await this.repository.getEvent(eventId);
+      const processed = await this.repository.getProcessedPdu(eventId);
+      if (!existing && !processed) {
+        missingSnapshotEventIds.push(eventId);
+      }
+    }
+
+    for (const eventId of missingSnapshotEventIds) {
+      const eventResponse = await federationGet(
+        origin,
+        `/_matrix/federation/v1/event/${encodeURIComponent(eventId)}`,
+        this.appContext.capabilities.config.serverName,
+        this.appContext.capabilities.sql.connection as D1Database,
+        this.appContext.capabilities.kv.cache as KVNamespace,
+      );
+
+      if (!eventResponse.ok) {
+        await runFederationEffect(
+          logger.warn("federation.transaction.state_snapshot_event_missing", {
+            room_id: roomId,
+            event_id: eventId,
+            error_message: `event returned ${eventResponse.status}`,
+          }),
+        );
+        continue;
+      }
+
+      await runFederationEffect(
+        logger.info("federation.transaction.state_snapshot_event_seen", {
+          room_id: roomId,
+          event_id: eventId,
+        }),
+      );
+    }
+
+    await runFederationEffect(
+      logger.info("federation.transaction.state_snapshot_result", {
+        room_id: roomId,
+        event_id: prevEventId,
+        state_event_count: Array.isArray(stateIds.pdu_ids) ? stateIds.pdu_ids.length : 0,
+        auth_chain_event_count: Array.isArray(stateIds.auth_chain_ids)
+          ? stateIds.auth_chain_ids.length
+          : 0,
+        missing_snapshot_event_count: missingSnapshotEventIds.length,
+      }),
+    );
+    return missingSnapshotEventIds.length > 0;
+  }
+
+  private async fetchMissingAuthEventsIfNeeded(
+    origin: string,
+    txnId: string,
+    roomId: string,
+    pdu: PDU,
+    logger: ReturnType<typeof withLogContext>,
+  ): Promise<void> {
+    const authEvents = pdu.auth_events ?? [];
+    if (authEvents.length === 0) {
+      return;
+    }
+
+    const missingAuthEvents: string[] = [];
+    for (const authEventId of authEvents) {
+      const existing = await this.repository.getEvent(authEventId);
+      const processed = await this.repository.getProcessedPdu(authEventId);
+      if (!existing && !processed) {
+        missingAuthEvents.push(authEventId);
+      }
+    }
+
+    if (missingAuthEvents.length === 0) {
+      return;
+    }
+
+    const response = await federationGet(
+      origin,
+      `/_matrix/federation/v1/event_auth/${encodeURIComponent(roomId)}/${encodeURIComponent(pdu.event_id)}`,
+      this.appContext.capabilities.config.serverName,
+      this.appContext.capabilities.sql.connection as D1Database,
+      this.appContext.capabilities.kv.cache as KVNamespace,
+    );
+
+    if (!response.ok) {
+      await runFederationEffect(
+        logger.warn("federation.transaction.auth_chain_error", {
+          room_id: roomId,
+          event_id: pdu.event_id,
+          error_message: `event_auth returned ${response.status}`,
+        }),
+      );
+      return;
+    }
+
+    const data = (await response.json()) as {
+      auth_chain?: unknown[];
+      auth_events?: unknown[];
+    };
+    const rawAuthEvents = (Array.isArray(data.auth_chain) ? data.auth_chain : data.auth_events) ?? [];
+    const authPdus = rawAuthEvents.filter(
+      (event): event is Record<string, unknown> =>
+        event !== null && typeof event === "object" && !Array.isArray(event),
+    );
+
+    if (authPdus.length === 0) {
+      return;
+    }
+
+    await this.processTransaction({
+      origin,
+      txnId: `${txnId}:auth:${pdu.event_id}`,
+      body: {
+        pdus: authPdus,
+        edus: [],
+      },
+      disableGapFill: true,
+      historicalOnly: true,
+    });
+
+    await runFederationEffect(
+      logger.info("federation.transaction.auth_chain_result", {
+        room_id: roomId,
+        event_id: pdu.event_id,
+        fetched_event_count: authPdus.length,
+      }),
+    );
+  }
+
+  private async validateAuthEventDependencies(pdu: PDU): Promise<string | null> {
+    for (const authEventId of pdu.auth_events ?? []) {
+      const processed = await this.repository.getProcessedPdu(authEventId);
+      if (processed && !processed.accepted) {
+        return `Auth event ${authEventId} was rejected`;
+      }
+
+      const existing = await this.repository.getEvent(authEventId);
+      if (!existing) {
+        return `Missing auth event ${authEventId}`;
+      }
+    }
+
+    return null;
   }
 
   private async storeAcceptedPdu(pdu: PDU): Promise<void> {

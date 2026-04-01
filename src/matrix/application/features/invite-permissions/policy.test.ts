@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  IGNORED_USER_LIST_EVENT_TYPE,
   MSC4155_INVITE_PERMISSION_EVENT_TYPE,
   decideInvitePermission,
   extractInvitePermissionConfigFromAccountData,
@@ -89,5 +90,21 @@ describe("invite-permissions policy", () => {
       ignoredServers: [],
       blockedServers: [],
     });
+  });
+
+  it("treats ignored users account data as invite suppression input", () => {
+    const config = extractInvitePermissionConfigFromAccountData([
+      {
+        type: IGNORED_USER_LIST_EVENT_TYPE,
+        content: {
+          ignored_users: {
+            "@bob:hs2": {},
+          },
+        },
+      },
+    ]);
+
+    expect(config.ignoredUsers).toEqual(["@bob:hs2"]);
+    expect(shouldSuppressInviteInSync(config, "@bob:hs2")).toBe(true);
   });
 });

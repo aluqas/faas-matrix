@@ -2,7 +2,7 @@ import type { AppContext } from "../../foundation/app-context";
 import { withIdempotency, type IdempotencyStore } from "../../foundation/idempotency";
 import { Errors, MatrixApiError } from "../../utils/errors";
 import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
-import type { PDU, RoomJoinWorkflowStatus, RoomPowerLevelsContent } from "../../types";
+import { ErrorCodes, type PDU, type RoomJoinWorkflowStatus, type RoomPowerLevelsContent } from "../../types";
 import type { EventPipeline } from "../domain/event-pipeline";
 import type { RoomRepository } from "../repositories/interfaces";
 import {
@@ -124,6 +124,31 @@ function getPowerLevelsContent(powerLevelsEvent: PDU | null): RoomPowerLevelsCon
   }
 
   return content as RoomPowerLevelsContent;
+}
+
+function toRemoteJoinWorkflowError(status: RoomJoinWorkflowStatus): MatrixApiError {
+  const output = status.output;
+  const message = output?.error ?? "Failed to join remote room";
+  const errorStatus = output?.errorStatus;
+  const errorCode = output?.errorErrcode;
+
+  if (errorStatus === 404 || errorCode === ErrorCodes.M_NOT_FOUND) {
+    return Errors.notFound(message);
+  }
+
+  if (errorStatus === 403 || errorCode === ErrorCodes.M_FORBIDDEN) {
+    return Errors.forbidden(message);
+  }
+
+  if (errorStatus === 429 || errorCode === ErrorCodes.M_LIMIT_EXCEEDED) {
+    return Errors.limitExceeded(message);
+  }
+
+  if (typeof errorStatus === "number" && typeof errorCode === "string") {
+    return new MatrixApiError(errorCode, message, errorStatus);
+  }
+
+  return Errors.unknown(message);
 }
 
 function getUserPowerLevel(powerLevels: RoomPowerLevelsContent, userId: string): number {
@@ -432,7 +457,7 @@ export class MatrixRoomService {
         return { room_id: validated.roomId };
       }
 
-      throw Errors.unknown("Failed to join remote room");
+      throw toRemoteJoinWorkflowError(status);
     }
 
     if (!room) {

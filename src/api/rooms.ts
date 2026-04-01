@@ -27,9 +27,11 @@ import {
 } from "../services/database";
 import { getPartialStateJoin } from "../matrix/application/features/partial-state/tracker";
 import { FORGOTTEN_ROOM_ACCOUNT_DATA_TYPE } from "../matrix/application/room-account-data";
+import { EventQueryService } from "../matrix/application/event-query-service";
 import roomMembershipRoutes from "./rooms/membership";
 import roomQueryRoutes from "./rooms/query";
 const app = new Hono<AppEnv>();
+const eventQueries = new EventQueryService();
 
 app.route("/", roomMembershipRoutes);
 app.route("/", roomQueryRoutes);
@@ -602,14 +604,8 @@ app.get("/_matrix/client/v3/rooms/:roomId/event/:eventId", requireAuth(), async 
   const roomId = c.req.param("roomId");
   const eventId = c.req.param("eventId");
 
-  // Check membership
-  const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== "join") {
-    return Errors.forbidden("Not a member of this room").toResponse();
-  }
-
-  const event = await getEvent(c.env.DB, eventId);
-  if (!event || event.room_id !== roomId) {
+  const event = await eventQueries.getVisibleEventForUser(c.env.DB, roomId, eventId, userId);
+  if (!event) {
     return Errors.notFound("Event not found").toResponse();
   }
 
@@ -629,13 +625,8 @@ app.get("/_matrix/client/r0/rooms/:roomId/event/:eventId", requireAuth(), async 
   const roomId = c.req.param("roomId");
   const eventId = c.req.param("eventId");
 
-  const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== "join") {
-    return Errors.forbidden("Not a member of this room").toResponse();
-  }
-
-  const event = await getEvent(c.env.DB, eventId);
-  if (!event || event.room_id !== roomId) {
+  const event = await eventQueries.getVisibleEventForUser(c.env.DB, roomId, eventId, userId);
+  if (!event) {
     return Errors.notFound("Event not found").toResponse();
   }
 

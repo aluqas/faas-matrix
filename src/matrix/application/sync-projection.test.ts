@@ -318,6 +318,57 @@ describe("sync-projection", () => {
     expect(projection.inviteRooms[roomId]).toBeUndefined();
   });
 
+  it("suppresses invite rooms when ignored users account data ignores the inviter", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.inviteRooms = [roomId];
+    repo.globalAccountData = [
+      {
+        type: "m.ignored_user_list",
+        content: {
+          ignored_users: {
+            "@bob:hs2": {},
+          },
+        },
+      },
+    ];
+    repo.memberships.set(`${roomId}:@alice:hs1`, { membership: "invite", eventId: "$invite" });
+    repo.eventsById.set("$invite", {
+      event_id: "$invite",
+      room_id: roomId,
+      sender: "@bob:hs2",
+      type: "m.room.member",
+      state_key: "@alice:hs1",
+      content: { membership: "invite" },
+      origin_server_ts: 10,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    repo.roomStates.set(roomId, [
+      {
+        event_id: "$invite",
+        room_id: roomId,
+        sender: "@bob:hs2",
+        type: "m.room.member",
+        state_key: "@alice:hs1",
+        content: { membership: "invite" },
+        origin_server_ts: 10,
+        depth: 1,
+        auth_events: [],
+        prev_events: [],
+      },
+    ]);
+
+    const projection = await projectMembershipRooms(repo, {
+      userId: "@alice:hs1",
+      sincePosition: 0,
+      includeLeave: false,
+    });
+
+    expect(projection.inviteRooms[roomId]).toBeUndefined();
+  });
+
   it("adds the invite membership event to invite_state when stripped state omits it", async () => {
     const repo = new FakeSyncRepository();
     const roomId = "!room:hs1";

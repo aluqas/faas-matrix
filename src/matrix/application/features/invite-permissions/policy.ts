@@ -3,6 +3,7 @@ import { parseUserId } from "../../../../utils/ids";
 
 export const STABLE_INVITE_PERMISSION_EVENT_TYPE = "m.invite_permission_config";
 export const MSC4155_INVITE_PERMISSION_EVENT_TYPE = "org.matrix.msc4155.invite_permission_config";
+export const IGNORED_USER_LIST_EVENT_TYPE = "m.ignored_user_list";
 
 export type InvitePermissionAction = "allow" | "ignore" | "block";
 
@@ -42,6 +43,19 @@ function readStringArray(record: Record<string, unknown>, key: string): string[]
   }
 
   return value.filter((entry): entry is string => typeof entry === "string");
+}
+
+function readIgnoredUsers(content: unknown): string[] {
+  if (!isRecord(content)) {
+    return [];
+  }
+
+  const ignoredUsers = content["ignored_users"];
+  if (!isRecord(ignoredUsers)) {
+    return [];
+  }
+
+  return Object.keys(ignoredUsers);
 }
 
 function wildcardToRegExp(pattern: string): RegExp {
@@ -90,56 +104,77 @@ export function parseInvitePermissionConfig(content: unknown): InvitePermissionC
 export function extractInvitePermissionConfigFromAccountData(
   accountData: AccountDataEvent[],
 ): InvitePermissionConfig {
+  const ignoredUsers = accountData
+    .filter((event) => event.type === IGNORED_USER_LIST_EVENT_TYPE)
+    .flatMap((event) => readIgnoredUsers(event.content));
+
   const stable = accountData.find((event) => event.type === STABLE_INVITE_PERMISSION_EVENT_TYPE);
   if (stable) {
-    return parseInvitePermissionConfig(stable.content);
+    const parsed = parseInvitePermissionConfig(stable.content);
+    return {
+      ...parsed,
+      ignoredUsers: Array.from(new Set([...parsed.ignoredUsers, ...ignoredUsers])),
+    };
   }
 
   const unstable = accountData.find((event) => event.type === MSC4155_INVITE_PERMISSION_EVENT_TYPE);
   if (unstable) {
-    return parseInvitePermissionConfig(unstable.content);
+    const parsed = parseInvitePermissionConfig(unstable.content);
+    return {
+      ...parsed,
+      ignoredUsers: Array.from(new Set([...parsed.ignoredUsers, ...ignoredUsers])),
+    };
   }
 
-  return defaultInvitePermissionConfig();
+  return {
+    ...defaultInvitePermissionConfig(),
+    ignoredUsers: Array.from(new Set(ignoredUsers)),
+  };
 }
 
 export async function loadInvitePermissionConfig(
   db: D1Database,
   userId: string,
 ): Promise<InvitePermissionConfig> {
-  const row = await db
+  const rows = await db
     .prepare(
       `
       SELECT event_type, content
       FROM account_data
       WHERE user_id = ? AND room_id = '' AND deleted = 0
-        AND event_type IN (?, ?)
+        AND event_type IN (?, ?, ?)
       ORDER BY CASE event_type
         WHEN ? THEN 0
         WHEN ? THEN 1
+        WHEN ? THEN 2
         ELSE 2
       END
-      LIMIT 1
     `,
     )
     .bind(
       userId,
       STABLE_INVITE_PERMISSION_EVENT_TYPE,
       MSC4155_INVITE_PERMISSION_EVENT_TYPE,
+      IGNORED_USER_LIST_EVENT_TYPE,
       STABLE_INVITE_PERMISSION_EVENT_TYPE,
       MSC4155_INVITE_PERMISSION_EVENT_TYPE,
+      IGNORED_USER_LIST_EVENT_TYPE,
     )
-    .first<{ event_type: string; content: string }>();
+    .all<{ event_type: string; content: string }>();
 
-  if (!row) {
+  if (rows.results.length === 0) {
     return defaultInvitePermissionConfig();
   }
 
-  try {
-    return parseInvitePermissionConfig(JSON.parse(row.content));
-  } catch {
-    return defaultInvitePermissionConfig();
-  }
+  const accountData: AccountDataEvent[] = rows.results.flatMap((row) => {
+    try {
+      return [{ type: row.event_type, content: JSON.parse(row.content) as Record<string, unknown> }];
+    } catch {
+      return [];
+    }
+  });
+
+  return extractInvitePermissionConfigFromAccountData(accountData);
 }
 
 export function decideInvitePermission(

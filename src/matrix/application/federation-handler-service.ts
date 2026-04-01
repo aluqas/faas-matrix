@@ -1,4 +1,4 @@
-import { storeEvent } from "../../services/database";
+import { getAuthChain, storeEvent } from "../../services/database";
 import type { PDU } from "../../types";
 import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
 import type { FederationRepository } from "../repositories/interfaces";
@@ -120,22 +120,7 @@ export async function loadFederationStateBundle(
     }
   }
 
-  const authChain: PDU[] = [];
-  for (const authEventId of authChainIds) {
-    const authEvent = await db
-      .prepare(
-        `SELECT event_id, room_id, sender, event_type, state_key, content, origin_server_ts, depth,
-                auth_events, prev_events, hashes, signatures, unsigned
-         FROM events
-         WHERE event_id = ?`,
-      )
-      .bind(authEventId)
-      .first<StoredEventRow>();
-
-    if (authEvent) {
-      authChain.push(rowToPdu(authEvent));
-    }
-  }
+  const authChain = await getAuthChain(db, Array.from(authChainIds));
 
   const serversInRoom = Array.from(
     new Set(
