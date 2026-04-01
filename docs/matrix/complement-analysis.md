@@ -3,30 +3,30 @@
 Complement black-box integration test results and failure root-cause analysis.
 Last updated: 2026-04-01. Based on test runs test1–test10 plus targeted Complement reruns on 2026-03-31 and 2026-04-01.
 
-## Current Full-Run Status (2026-03-31)
+## Current Full-Run Status (2026-04-01)
 
 Latest full run:
 
-- Top-level summary from [`2026-03-31_11-09-17.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-03-31_11-09-17.log): **71 total / 17 pass / 52 fail / 2 skip**
-- Progress tracking in the table below uses `bun run complement:analyze --last 1 --depth 7`, which counts reached subtests: **291 reached / 124 pass (43%) / 160 fail / 7 skip**
+- Top-level summary from [`2026-04-01_14-37-09.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-01_14-37-09.log): **85 total / 58 pass / 27 fail**
+- Progress tracking in the table below uses `bun run complement:analyze --last 1 --depth 7`, which counts reached subtests: **404 reached / 301 pass (75%) / 90 fail / 13 skip**
 
-Important targeted reruns on 2026-03-31 and 2026-04-01 are greener than the single full run in several high-priority buckets:
+The latest full run is much healthier than test10, but a few buckets still need targeted follow-up because targeted reruns are greener than the aggregated run:
 
-- `TestACLs` passes in targeted reruns after the state-event pipeline / reference-hash fixes, but flaked in the full run because the Complement blueprint did not become healthy in time.
-- `TestOutboundFederationProfile`, `TestRemotePresence`, `TestRemoteTyping`, `TestToDeviceMessagesOverFederation`, and `TestSyncOmitsStateChangeOnFilteredEvents` all pass in targeted reruns.
+- `TestACLs`, `TestOutboundFederationProfile`, `TestRemotePresence`, `TestRemoteTyping`, `TestToDeviceMessagesOverFederation`, `TestSyncOmitsStateChangeOnFilteredEvents`, `TestInboundCanReturnMissingEvents`, `TestGetMissingEventsGapFilling`, and `TestEventAuth` are now green in the latest full run.
 - `TestInboundCanReturnMissingEvents`, `TestGetMissingEventsGapFilling`, and `TestEventAuth` all pass in targeted reruns on 2026-04-01.
 - `TestPartialStateJoin/CanReceiveTypingDuringPartialStateJoin` passes in a targeted rerun on 2026-04-01.
 - The room/surface correctness bucket is now green in targeted reruns: `TestUnknownEndpoints`, `TestServerCapabilities`, `TestRoomAlias`, `TestRoomDeleteAlias`, `TestRoomCanonicalAlias`, `TestRemoteAliasRequestsUnderstandUnicode`, `TestRoomCreate`, `TestRoomState`, `TestRoomForget`, `TestRoomMembers`, and `TestUnbanViaInvite`.
 - The auth/account-lifecycle bucket is now broadly green in targeted reruns: `TestLogin`, `TestLogout`, `TestRegistration`, `TestChangePassword`, `TestChangePasswordPushers`, `TestDeactivateAccount`, `TestTxnIdWithRefreshToken`, `TestDeviceManagement`, `TestWriteMDirectAccountData`, and `TestRemovingAccountData`.
 - `TestSearch`, `TestDeviceListUpdates`, `TestDeviceListsUpdateOverFederation`, `TestDeviceListsUpdateOverFederationOnRoomJoin`, `TestUserAppearsInChangedDeviceListOnJoinOverFederation`, `TestClientSpacesSummary`, `TestClientSpacesSummaryJoinRules`, `TestFederatedClientSpaces`, `TestThreadSubscriptions`, and `TestMSC4308ThreadSubscriptionsSlidingSync` all pass in targeted reruns on 2026-04-01.
 
-The 2026-03-31 full run still reports older failures, but the currently active targeted buckets are narrower than test10-era priorities:
+Current active failure clusters in the 2026-04-01 full run:
 
 - federation key authentication / inbound key verification
-- knocking / knock auth and transition coverage
-- event relationships, historical visibility, and some delayed-event / MSC-owned-state buckets
-- media federation / remote media buckets
-- infrastructure flake in blueprint startup for a few large suites
+- rejected-auth / corrupted-auth federation correctness
+- partial-state join and a small sync/presence regression bucket
+- delayed events / request encoding / JSON handling
+- media federation / remote media
+- a few buckets that are green in targeted reruns but still unstable in full-run aggregation
 
 ## Test Run Progression
 
@@ -42,6 +42,7 @@ The 2026-03-31 full run still reports older failures, but the currently active t
 | test8 | 245   | 67 (27%)  | 171  | 7    | `TestWriteMDirectAccountData` newly passing; `TestRemovingAccountData` passing.                                       |
 | test9 | 295   | 104 (35%) | 184  | 7    | 37 new passes over test8. Federation invite/leave flow green; restricted remote joins and parts of knocking improved. |
 | test10 | 291  | 124 (43%) | 160  | 7    | 2026-03-31 full run at analyzer depth 7. High-priority federation bucket is mostly green in targeted reruns; current failures concentrate in device-lists, partial-state joins, room correctness, auth/account lifecycle, search, and delayed events. |
+| test11 | 404  | 301 (75%) | 90   | 13   | 2026-04-01 full run at analyzer depth 7. Major gains in federation correctness, room/surface correctness, device-lists, search, spaces, and auth/account lifecycle. Remaining failures concentrate in federation auth, rejected-auth, partial-state joins, delayed events, media, and a few unstable regressions. |
 
 > `test1`–`test10` totals are analyzer counts from `bun run complement:analyze --depth 7`, not the top-level `complement-run.ts` summary. The latest full run's top-level summary is `71 / 17 / 52 / 2`.
 
