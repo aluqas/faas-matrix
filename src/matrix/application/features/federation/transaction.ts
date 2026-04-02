@@ -3,7 +3,7 @@ import type { SignedTransport } from "../../../../fedcore/contracts";
 import type { FederationRepository } from "../../../repositories/interfaces";
 import { emitEffectWarning } from "../../effect-debug";
 import { runFederationEffect } from "../../effect-runtime";
-import { withLogContext } from "../../logging";
+import { requireLogContext, withLogContext } from "../../logging";
 import {
   type FederationTransactionEnvelope,
   type FederationTransactionResult,
@@ -21,13 +21,19 @@ export async function processFederationTransaction(
   ports: FederationTransactionPorts,
   input: FederationTransactionEnvelope,
 ): Promise<FederationTransactionResult> {
-  const logger = withLogContext({
-    component: "federation",
-    operation: "transaction",
-    origin: input.origin,
-    txn_id: input.txnId,
-    debugEnabled: ports.appContext.profile.name === "complement",
-  });
+  const logger = withLogContext(
+    requireLogContext(
+      "federation.transaction",
+      {
+        component: "federation",
+        operation: "transaction",
+        origin: input.origin,
+        txn_id: input.txnId,
+        debugEnabled: ports.appContext.profile.name === "complement",
+      },
+      ["origin", "txn_id"],
+    ),
+  );
   await runFederationEffect(
     logger.info("federation.transaction.start", {
       pdu_count: input.body.pdus?.length ?? 0,

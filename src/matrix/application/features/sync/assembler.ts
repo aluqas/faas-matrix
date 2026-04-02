@@ -3,7 +3,7 @@ import type { SyncResponse } from "../../../../types";
 import type { SyncRepository } from "../../../repositories/interfaces";
 import { getPartialStateJoin, takePartialStateJoinCompletion } from "../partial-state/tracker";
 import { runClientEffect } from "../../effect-runtime";
-import { withLogContext } from "../../logging";
+import { requireLogContext, withLogContext } from "../../logging";
 import { shouldIncludeRoom } from "../../sync-projection";
 import {
   buildSyncToken,
@@ -24,13 +24,19 @@ export async function assembleSyncResponse(
   ports: SyncAssemblerPorts,
   input: SyncAssemblerInput,
 ): Promise<SyncResponse> {
-  const logger = withLogContext({
-    component: "sync",
-    operation: "assembler",
-    user_id: input.userId,
-    device_id: input.deviceId ?? undefined,
-    debugEnabled: ports.appContext.profile.name === "complement",
-  });
+  const logger = withLogContext(
+    requireLogContext(
+      "sync.assembler",
+      {
+        component: "sync",
+        operation: "assembler",
+        user_id: input.userId,
+        device_id: input.deviceId ?? undefined,
+        debugEnabled: ports.appContext.profile.name === "complement",
+      },
+      ["user_id"],
+    ),
+  );
   await runClientEffect(
     logger.debug("sync.assembler.start", {
       has_device_id: Boolean(input.deviceId),

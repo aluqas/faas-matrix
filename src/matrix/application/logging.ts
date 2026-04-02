@@ -18,6 +18,19 @@ export interface LogContext {
   debugEnabled?: boolean | undefined;
 }
 
+export type RequiredLogContextKey = keyof Pick<
+  LogContext,
+  | "request_id"
+  | "txn_id"
+  | "room_id"
+  | "event_id"
+  | "user_id"
+  | "device_id"
+  | "origin"
+  | "destination"
+  | "room_version"
+>;
+
 type LogFields = Record<string, unknown>;
 type Logger = {
   debug: (event: LogEventName, fields?: LogFields) => Effect.Effect<void>;
@@ -178,4 +191,23 @@ export function withLogContext(context: LogContext): Logger {
     warn: (event, fields = {}) => logWarn(event, context, fields),
     error: (event, error, fields = {}) => logError(event, context, error, fields),
   };
+}
+
+export function requireLogContext(
+  scope: string,
+  context: LogContext,
+  requiredKeys: RequiredLogContextKey[],
+): LogContext {
+  const missing = requiredKeys.filter((key) => {
+    const value = context[key];
+    return value === undefined || value === "";
+  });
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required log context for ${scope}: ${missing.join(", ")}`,
+    );
+  }
+
+  return context;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { Effect } from "effect";
-import { logError, logInfo, withLogContext } from "./logging";
+import { logError, logInfo, requireLogContext, withLogContext } from "./logging";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -65,5 +65,36 @@ describe("logging", () => {
     expect(payload["error_name"]).toBe("Error");
     expect(payload["error_message"]).toBe("boom");
     expect(typeof payload["error_stack"]).toBe("string");
+  });
+
+  it("rejects missing required correlation fields", () => {
+    expect(() =>
+      requireLogContext(
+        "federation.transaction",
+        {
+          component: "federation",
+          operation: "transaction",
+        },
+        ["origin", "txn_id"],
+      ),
+    ).toThrow("Missing required log context for federation.transaction: origin, txn_id");
+  });
+
+  it("accepts log contexts with required correlation fields", () => {
+    expect(
+      requireLogContext(
+        "sync.assembler",
+        {
+          component: "sync",
+          operation: "assembler",
+          user_id: "@alice:test",
+        },
+        ["user_id"],
+      ),
+    ).toMatchObject({
+      component: "sync",
+      operation: "assembler",
+      user_id: "@alice:test",
+    });
   });
 });
