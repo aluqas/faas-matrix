@@ -3,11 +3,11 @@
  * Run Complement tests against the faas-matrix homeserver image.
  *
  * Usage:
- *   bun run scripts/complement-run.ts [options] [TestName ...]
- *   bun run scripts/complement-run.ts --pkg ./tests/csapi TestAddAccountData
- *   bun run scripts/complement-run.ts --full
- *   bun run scripts/complement-run.ts --list-packages TestAddAccountData
- *   bun run scripts/complement-run.ts --build-only
+ *   bun run testing/complement/run.ts [options] [TestName ...]
+ *   bun run testing/complement/run.ts --pkg ./tests/csapi TestAddAccountData
+ *   bun run testing/complement/run.ts --full
+ *   bun run testing/complement/run.ts --list-packages TestAddAccountData
+ *   bun run testing/complement/run.ts --build-only
  *
  * Environment:
  *   COMPLEMENT_DIR  complement checkout path (default: .saqula/complement)
@@ -34,7 +34,7 @@ import {
   topLevelTestName,
   writeJsonArtifact,
   type ComplementTestIndex,
-} from "./complement-harness.ts";
+} from "./harness.ts";
 
 interface CliOptions {
   listPattern: string | null;
@@ -51,14 +51,14 @@ type DockerLogCapture = {
   stop: () => Promise<void>;
 };
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
+const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const complementDir = process.env.COMPLEMENT_DIR ?? path.join(repoRoot, ".saqula/complement");
 const image = process.env.IMAGE ?? "complement-faas-matrix";
 const dirty = process.env.DIRTY ?? "0";
 const parallel = process.env.PARALLEL ?? "1";
 let noBuild = process.env.NO_BUILD; // undefined = auto-detect
 
-const indexPath = path.join(repoRoot, "scripts", "complement-test-index.json");
+const indexPath = path.join(repoRoot, "testing", "complement", "test-index.json");
 const args = process.argv.slice(2);
 const options = parseArgs(args);
 
@@ -121,7 +121,7 @@ const dockerLogsEnabled = options.startupDebug || (process.env.DOCKER_LOGS ?? "1
 if (noBuild === undefined) {
   noBuild = "0";
   try {
-    const raw = await $`git rev-parse HEAD:src HEAD:migrations HEAD:docker/complement`
+    const raw = await $`git rev-parse HEAD:src HEAD:migrations HEAD:testing/complement/docker`
       .cwd(repoRoot)
       .text();
     const hash = `${dirty}:${createHash("sha256").update(raw).digest("hex")}`;
@@ -369,11 +369,11 @@ async function listTests(pattern: string): Promise<void> {
 
 async function buildImage() {
   console.log(`==> Building Docker image ${image} (DIRTY=${dirty})...`);
-  const dockerfile = path.join(repoRoot, "docker/complement/Dockerfile");
+  const dockerfile = path.join(repoRoot, "testing/complement/docker/Dockerfile");
   await $`docker build --build-arg DIRTY_RUNS=${dirty} -f ${dockerfile} -t ${image} ${repoRoot}`;
 
   try {
-    const raw = await $`git rev-parse HEAD:src HEAD:migrations HEAD:docker/complement`
+    const raw = await $`git rev-parse HEAD:src HEAD:migrations HEAD:testing/complement/docker`
       .cwd(repoRoot)
       .text();
     const hash = `${dirty}:${createHash("sha256").update(raw).digest("hex")}`;

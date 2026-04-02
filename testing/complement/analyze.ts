@@ -5,7 +5,7 @@
  * Logs are named YYYY-MM-DD_HH-MM-SS.log (newest first).
  *
  * Usage:
- *   bun run scripts/complement-analyze.ts [options]
+ *   bun run testing/complement/analyze.ts [options]
  *
  * Options:
  *   --depth N     include subtests up to depth N (default: 0)
@@ -14,7 +14,7 @@
  */
 
 import path from "path";
-import { loadLogs, summarize, delta, byCat, pct } from "./complement-log.ts";
+import { loadLogs, summarize, delta, byCat, pct } from "./log.ts";
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -35,7 +35,7 @@ for (let i = 0; i < args.length; i++) {
 // Load logs
 // ---------------------------------------------------------------------------
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
+const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const logsDir = path.join(repoRoot, "logs");
 
 const parsed = loadLogs(logsDir, depth, lastN);

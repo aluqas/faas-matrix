@@ -2,11 +2,11 @@
 
 import fs from "fs";
 import path from "path";
-import { buildComplementTestIndex } from "./complement-harness.ts";
+import { buildComplementTestIndex } from "./harness.ts";
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
+const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const testsRoot = path.join(repoRoot, ".saqula/complement/tests");
-const outputPath = path.join(repoRoot, "scripts/complement-test-index.json");
+const outputPath = path.join(repoRoot, "testing/complement/test-index.json");
 
 if (!fs.existsSync(testsRoot)) {
   console.error(`Complement tests not found: ${testsRoot}`);

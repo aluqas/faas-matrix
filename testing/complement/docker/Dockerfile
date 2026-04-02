@@ -17,7 +17,7 @@ RUN node_modules/.bin/wrangler deploy \
       --config wrangler.complement.jsonc \
   && sed -i 's|"main": "src/index.ts"|"main": "dist/index.js"|' wrangler.complement.jsonc
 
-# Stage 2: runtime — nginx/cert setup; only rebuilds when docker/complement changes
+# Stage 2: runtime — nginx/cert setup; only rebuilds when testing/complement/docker changes
 FROM node:20-bookworm-slim AS runtime
 
 RUN apt-get update \
@@ -32,10 +32,11 @@ COPY --from=builder /app/wrangler.complement.jsonc ./wrangler.complement.jsonc
 COPY package.json ./
 COPY migrations ./migrations
 
-COPY docker/complement/entrypoint.sh /usr/local/bin/complement-entrypoint
-COPY docker/complement/nginx.conf.template /etc/faas-matrix/complement-nginx.conf.template
+COPY testing/complement/docker/entrypoint.sh /usr/local/bin/complement-entrypoint
+COPY testing/complement/docker/nginx.conf.template /etc/faas-matrix/complement-nginx.conf.template
+COPY testing/complement/docker/lib /usr/local/lib/faas-matrix-complement
 
-RUN chmod +x /usr/local/bin/complement-entrypoint
+RUN chmod +x /usr/local/bin/complement-entrypoint /usr/local/lib/faas-matrix-complement/*.sh
 
 ARG DIRTY_RUNS=0
 ENV COMPLEMENT_ENABLE_DIRTY_RUNS=$DIRTY_RUNS

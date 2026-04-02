@@ -15,14 +15,14 @@ This is meant for early Complement and out-of-repo CSAPI coverage. It is not a f
 ## Files
 
 - [`wrangler.complement.jsonc`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/wrangler.complement.jsonc)
-- [`docker/complement/Dockerfile`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/docker/complement/Dockerfile)
-- [`docker/complement/entrypoint.sh`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/docker/complement/entrypoint.sh)
-- [`docker/complement/nginx.conf.template`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/docker/complement/nginx.conf.template)
+- [`testing/complement/docker/Dockerfile`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/testing/complement/docker/Dockerfile)
+- [`testing/complement/docker/entrypoint.sh`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/testing/complement/docker/entrypoint.sh)
+- [`testing/complement/docker/nginx.conf.template`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/testing/complement/docker/nginx.conf.template)
 
 ## Build
 
 ```bash
-docker build -f docker/complement/Dockerfile -t complement-faas-matrix .
+docker build -f testing/complement/docker/Dockerfile -t complement-faas-matrix .
 ```
 
 ## Complement Usage
@@ -63,9 +63,9 @@ If the CA files are absent, the container falls back to a self-signed certificat
 
 ## Runner Behavior
 
-`scripts/complement-run.ts` is package-aware.
+[`testing/complement/run.ts`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/testing/complement/run.ts) is package-aware.
 
-- Explicit test names auto-resolve to a single Go package using [`scripts/complement-test-index.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/scripts/complement-test-index.json).
+- Explicit test names auto-resolve to a single Go package using [`testing/complement/test-index.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/testing/complement/test-index.json).
 - `--full` is the only mode that falls back to `./tests/...` by default.
 - `--pkg` bypasses auto-resolution when a test name is ambiguous or when you want to run a whole package.
 - `--startup-debug` enables:
@@ -98,6 +98,8 @@ The classifier separates:
 - `mixed`
 
 This is intended to keep targeted TDD runs usable even when full runs are noisy.
+
+Harness code now lives under [`testing/complement/README.md`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/testing/complement/README.md), and the container wrapper lives under [`testing/complement/docker/`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/testing/complement/docker).
 
 ## Current Limits
 

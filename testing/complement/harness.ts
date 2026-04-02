@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { parseLog, summarize, type Summary } from "./complement-log.ts";
+import { parseLog, summarize, type Summary } from "./log.ts";
 
 export type FailureClassification = "implementation_fail" | "startup_flake" | "infra_flake";
 export type OverallClassification = FailureClassification | "mixed" | null;

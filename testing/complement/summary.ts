@@ -3,11 +3,11 @@
  * Print a pass/fail summary for a single Complement log file.
  * Called by complement-run.sh after each test run.
  *
- * Usage: bun run scripts/complement-summary.ts <logfile>
+ * Usage: bun run testing/complement/summary.ts <logfile>
  */
 
 import fs from "fs";
-import { parseLog, summarize } from "./complement-log.ts";
+import { parseLog, summarize } from "./log.ts";
 
 const logPath = process.argv[2];
 if (!logPath) {

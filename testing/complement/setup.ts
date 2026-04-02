@@ -2,7 +2,7 @@
 /**
  * Set up the Complement test harness for faas-matrix.
  *
- * Usage: bun run scripts/complement-setup.ts
+ * Usage: bun run testing/complement/setup.ts
  *
  * Environment:
  *   COMPLEMENT_DIR  target directory (default: .saqula/complement)
@@ -13,7 +13,7 @@ import { $ } from "bun";
 import fs from "fs";
 import path from "path";
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
+const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const complementDir = process.env.COMPLEMENT_DIR ?? path.join(repoRoot, ".saqula/complement");
 
 // Pinned to the commit used during development; update when upgrading complement.

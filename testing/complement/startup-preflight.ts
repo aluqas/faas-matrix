@@ -143,7 +143,7 @@ function fail(message: string): never {
 }
 
 function printHelp(): void {
-  console.log("Usage: bun run scripts/complement-startup-preflight.ts [options]");
+  console.log("Usage: bun run testing/complement/startup-preflight.ts [options]");
   console.log("  --iterations <n>   number of startup iterations (default: 2)");
   console.log("  --timeout <sec>    readiness timeout in seconds (default: 40)");
   console.log("  --image <name>     docker image to run (default: complement-faas-matrix)");

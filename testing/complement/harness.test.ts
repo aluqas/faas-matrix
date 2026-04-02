@@ -9,7 +9,7 @@ import {
   extractTestsFromGoFile,
   resolveComplementPackages,
   topLevelTestName,
-} from "./complement-harness.ts";
+} from "./harness.ts";
 
 const tempDirs: string[] = [];
 
