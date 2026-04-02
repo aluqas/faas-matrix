@@ -69,10 +69,12 @@ If the CA files are absent, the container falls back to a self-signed certificat
 - `--full` is the only mode that falls back to `./tests/...` by default.
 - `--pkg` bypasses auto-resolution when a test name is ambiguous or when you want to run a whole package.
 - `--startup-debug` enables:
-  - `COMPLEMENT_SPAWN_HS_TIMEOUT_SECS=90` by default
+  - `COMPLEMENT_SPAWN_HS_TIMEOUT_SECS=60` by default
   - `COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS=1`
   - `WRANGLER_LOG_LEVEL=info`
   - entrypoint phase logging for container startup
+- non-`--full` targeted runs now default to `COMPLEMENT_SPAWN_HS_TIMEOUT_SECS=40` to reduce false negatives from slow local startup without making routine TDD too slow
+- if a single bucket still needs a wider ceiling, pass `--spawn-timeout <seconds>` explicitly instead of raising the global default
 
 Each run writes:
 
@@ -80,6 +82,13 @@ Each run writes:
 - docker sidecar log: `logs/<ts>.docker.log`
 - machine summary: `logs/<ts>.summary.json`
 - flake classification: `logs/<ts>.classified.json`
+
+For startup profiling without running a full Complement package, use:
+
+- `bun run complement:startup:preflight -- --iterations 3`
+- `bun run complement:startup:preflight -- --iterations 3 --instances 2`
+
+This runs the Complement image directly, polls `/_internal/ready`, and prints phase timings from the entrypoint JSON logs. By default it reuses `/data` across iterations so you can see whether cached startup state is actually helping.
 
 The classifier separates:
 

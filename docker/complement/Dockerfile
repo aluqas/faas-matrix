@@ -42,6 +42,6 @@ ENV COMPLEMENT_ENABLE_DIRTY_RUNS=$DIRTY_RUNS
 
 EXPOSE 8008 8448
 
-HEALTHCHECK --interval=10s --timeout=5s --retries=12 CMD curl -fsS http://127.0.0.1:8008/_matrix/client/versions >/dev/null || exit 1
+HEALTHCHECK --interval=2s --timeout=2s --start-period=1s --retries=30 CMD curl -fsS http://127.0.0.1:8008/_internal/ready >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/local/bin/complement-entrypoint"]

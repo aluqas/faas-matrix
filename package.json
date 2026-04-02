@@ -18,6 +18,7 @@
     "complement:setup": "bun run scripts/complement-setup.ts",
     "complement:index": "bun run scripts/complement-index-tests.mjs",
     "complement:build": "bun run scripts/complement-run.ts --build-only",
+    "complement:startup:preflight": "bun run scripts/complement-startup-preflight.ts",
     "complement:run": "bun run scripts/complement-run.ts",
     "complement:run:debug": "bun run scripts/complement-run.ts --startup-debug",
     "complement:run:fast": "NO_BUILD=1 bun run scripts/complement-run.ts",

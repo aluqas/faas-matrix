@@ -49,7 +49,6 @@ const STARTUP_PATTERNS = [
   { id: "deploy_base_image", regex: /failed to deployBaseImage/i },
   { id: "health_starting", regex: /health: starting/i },
   { id: "server_up_timeout", regex: /failed to check server is up|timed out checking for homeserver to be up/i },
-  { id: "construct_blueprint", regex: /ConstructBlueprintIfNotExist|failed to ConstructBlueprint/i },
 ];
 
 export function topLevelTestName(testName: string): string {

@@ -89,15 +89,22 @@ const packagesToRun = packageResolution.packages;
 const runFilter = buildRunFilter(options.tests);
 const fullRun = options.full || (options.explicitPackages.length === 0 && options.tests.length === 0);
 const spawnTimeoutSeconds =
-  options.spawnTimeoutSeconds ?? (options.startupDebug ? 90 : null);
+  options.spawnTimeoutSeconds ?? (options.startupDebug ? 60 : fullRun ? null : 40);
 
 const logPath =
   process.env.LOG ??
   (() => {
     const dir = path.join(repoRoot, "logs");
     fs.mkdirSync(dir, { recursive: true });
-    const ts = new Date().toISOString().replace("T", "_").replace(/:/g, "-").slice(0, 19);
-    return path.join(dir, `${ts}.log`);
+    const baseTs = new Date().toISOString().replace("T", "_").replace(/:/g, "-").slice(0, 19);
+    const pidSuffix = process.pid;
+    let candidate = path.join(dir, `${baseTs}-${pidSuffix}.log`);
+    let suffix = 1;
+    while (fs.existsSync(candidate)) {
+      candidate = path.join(dir, `${baseTs}-${pidSuffix}-${suffix}.log`);
+      suffix += 1;
+    }
+    return candidate;
   })();
 const dockerLogPath = logPath.endsWith(".log")
   ? logPath.replace(/\.log$/, ".docker.log")

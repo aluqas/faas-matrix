@@ -37,6 +37,8 @@ CLIENT_PORT="${CLIENT_PORT:-8008}"
 FEDERATION_PORT="${FEDERATION_PORT:-8448}"
 PERSIST_DIR="${PERSIST_DIR:-/data/wrangler}"
 PERSIST_SENTINEL="${PERSIST_DIR}/.container-hostname"
+TEMPLATE_DIR="${TEMPLATE_DIR:-/data/wrangler-template}"
+TEMPLATE_VERSION_FILE="${TEMPLATE_DIR}/.schema-hash"
 SERVER_NAME="${SERVER_NAME:-hs1}"
 SERVER_VERSION="${SERVER_VERSION:-0.1.0-complement}"
 MATRIX_FEATURE_PROFILE="${MATRIX_FEATURE_PROFILE:-complement}"
@@ -47,6 +49,51 @@ DEV_VARS_FILE="${APP_DIR}/.dev.vars"
 NGINX_TEMPLATE="/etc/faas-matrix/complement-nginx.conf.template"
 NGINX_CONFIG="/etc/nginx/nginx.conf"
 WRANGLER_BIN="${APP_DIR}/node_modules/.bin/wrangler"
+
+compute_schema_hash() {
+  (
+    for file in ./migrations/schema.sql ./migrations/[0-9]*.sql "./${WRANGLER_CONFIG}"; do
+      printf '%s\n' "${file}"
+      cat "${file}"
+    done
+  ) | openssl dgst -sha256 -r | awk '{print $1}'
+}
+
+ensure_d1_template() {
+  local schema_hash="$1"
+
+  if [ -f "${TEMPLATE_VERSION_FILE}" ]; then
+    local existing_hash
+    existing_hash="$(cat "${TEMPLATE_VERSION_FILE}" 2>/dev/null || true)"
+    if [ "${existing_hash}" = "${schema_hash}" ] && [ -n "$(find "${TEMPLATE_DIR}" -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
+      log_json info startup.template.reuse "Reusing cached local D1 template" \
+        schema_hash "${schema_hash}"
+      return
+    fi
+  fi
+
+  local build_dir
+  build_dir="$(mktemp -d /tmp/wrangler-template-XXXXXX)"
+  rm -rf "${TEMPLATE_DIR}"
+  mkdir -p "${TEMPLATE_DIR}"
+
+  log_json info startup.template.build.begin "Building cached local D1 template" \
+    schema_hash "${schema_hash}"
+  local combined_sql
+  combined_sql="$(mktemp /tmp/migrations-XXXXXX.sql)"
+  cat ./migrations/schema.sql ./migrations/[0-9]*.sql > "${combined_sql}"
+  "${WRANGLER_BIN}" d1 execute tuwunel-db \
+    --config "${WRANGLER_CONFIG}" \
+    --local \
+    --persist-to "${build_dir}" \
+    --file "${combined_sql}" >/dev/null
+  rm -f "${combined_sql}"
+  cp -a "${build_dir}/." "${TEMPLATE_DIR}/"
+  printf '%s' "${schema_hash}" > "${TEMPLATE_VERSION_FILE}"
+  rm -rf "${build_dir}"
+  log_json info startup.template.build.end "Built cached local D1 template" \
+    schema_hash "${schema_hash}"
+}
 
 log_json info startup.begin "Starting complement wrapper" \
   server_name "${SERVER_NAME}" \
@@ -72,7 +119,7 @@ else
     current_hostname "${CURRENT_CONTAINER_HOSTNAME}"
 fi
 
-mkdir -p "${PERSIST_DIR}" "${TLS_DIR}"
+mkdir -p "${PERSIST_DIR}" "${TLS_DIR}" "${TEMPLATE_DIR}"
 printf '%s' "${CURRENT_CONTAINER_HOSTNAME}" > "${PERSIST_SENTINEL}"
 
 log_json info startup.ca_install "Installing Complement CA bundle when present"
@@ -135,19 +182,22 @@ sed \
 cd "${APP_DIR}"
 
 log_json info startup.migrate.begin "Preparing local D1 schema" needs_init "${NEEDS_INIT}"
+SCHEMA_HASH="$(compute_schema_hash)"
 if [ "${NEEDS_INIT}" = "1" ]; then
-  COMBINED_SQL="$(mktemp /tmp/migrations-XXXXXX.sql)"
-  cat ./migrations/schema.sql ./migrations/[0-9]*.sql > "${COMBINED_SQL}"
-  "${WRANGLER_BIN}" d1 execute tuwunel-db \
-    --config "${WRANGLER_CONFIG}" \
-    --local \
-    --persist-to "${PERSIST_DIR}" \
-    --file "${COMBINED_SQL}" >/dev/null
-  rm -f "${COMBINED_SQL}"
-  log_json info startup.migrate.end "Applied local D1 schema" needs_init "${NEEDS_INIT}"
+  ensure_d1_template "${SCHEMA_HASH}"
+  log_json info startup.template.restore.begin "Restoring cached local D1 template" \
+    schema_hash "${SCHEMA_HASH}"
+  cp -a "${TEMPLATE_DIR}/." "${PERSIST_DIR}/"
+  printf '%s' "${CURRENT_CONTAINER_HOSTNAME}" > "${PERSIST_SENTINEL}"
+  log_json info startup.template.restore.end "Restored cached local D1 template" \
+    schema_hash "${SCHEMA_HASH}"
+  log_json info startup.migrate.end "Restored local D1 schema from template" \
+    needs_init "${NEEDS_INIT}" \
+    schema_hash "${SCHEMA_HASH}"
 else
   log_json info startup.migrate.end "Skipped local D1 schema because persisted state was reused" \
-    needs_init "${NEEDS_INIT}"
+    needs_init "${NEEDS_INIT}" \
+    schema_hash "${SCHEMA_HASH}"
 fi
 
 log_json info startup.wrangler.begin "Starting wrangler dev" \
@@ -177,14 +227,15 @@ trap cleanup INT TERM EXIT
 
 log_json info startup.wrangler.ready_wait.begin "Waiting for wrangler /versions healthcheck"
 ATTEMPTS=0
-until curl -fsS "http://127.0.0.1:${WRANGLER_PORT}/_matrix/client/versions" >/dev/null 2>&1; do
+MAX_ATTEMPTS=80
+until curl -fsS "http://127.0.0.1:${WRANGLER_PORT}/_internal/ready" >/dev/null 2>&1; do
   ATTEMPTS=$((ATTEMPTS + 1))
-  if [ "${ATTEMPTS}" -ge 20 ]; then
+  if [ "${ATTEMPTS}" -ge "${MAX_ATTEMPTS}" ]; then
     log_json error startup.wrangler.ready_wait.end "Wrangler dev did not become healthy in time" \
       attempts "${ATTEMPTS}"
     exit 1
   fi
-  sleep 1
+  sleep 0.25
 done
 log_json info startup.wrangler.ready_wait.end "Wrangler dev became healthy" attempts "${ATTEMPTS}"
 

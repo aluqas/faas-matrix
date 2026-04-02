@@ -1,7 +1,7 @@
 // Matrix Homeserver on Cloudflare Workers
 // Main entry point
 
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import type { AppEnv } from "./types";
@@ -17,7 +17,6 @@ import media from "./api/media";
 import voip from "./api/voip";
 import keys from "./api/keys";
 import federation from "./api/federation";
-import admin from "./api/admin";
 import keyBackups from "./api/key-backups";
 import toDevice from "./api/to-device";
 import push from "./api/push";
@@ -34,14 +33,7 @@ import account from "./api/account";
 import search from "./api/search";
 import serverNotices from "./api/server-notices";
 import report from "./api/report";
-import calls from "./api/calls";
-import rtc from "./api/rtc";
-import appservice from "./api/appservice";
-import identity from "./api/identity";
 // import qrLogin from './api/qr-login'; // QR feature commented out - requires MSC4108/OIDC for Element X
-import oidcAuth from "./api/oidc-auth";
-import oauth from "./api/oauth";
-import { adminDashboardHtml } from "./admin/dashboard";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { requireAuth } from "./middleware/auth";
 import { analyticsMiddleware } from "./middleware/analytics";
@@ -74,6 +66,28 @@ export {
 // strict: false normalises trailing slashes so e.g. PUT /state/m.room.join_rules/
 // (empty stateKey) matches the /:stateKey? route correctly.
 const app = new Hono<AppEnv>({ strict: false });
+
+type LazyRouteModule = { default: { fetch: typeof app.fetch } };
+
+async function dispatchLazyRoute(
+  c: Context<AppEnv>,
+  loader: () => Promise<LazyRouteModule>,
+) {
+  const module = await loader();
+  return module.default.fetch(c.req.raw, c.env, c.executionCtx);
+}
+
+async function renderAdminDashboard(serverName: string): Promise<string> {
+  const module = await import("./admin/dashboard");
+  return module.adminDashboardHtml(serverName);
+}
+
+// Minimal readiness endpoint for Complement/startup health checks.
+// Keep this before global middleware so deploy/startup probes avoid logger,
+// analytics, app-context construction, and rate limiting.
+app.get("/_internal/ready", (c) => {
+  return c.json({ ready: true, server: "matrix-worker" });
+});
 
 // CORS for Matrix clients - MUST BE FIRST to ensure headers are always sent
 // (even on error responses from rate limiter or other middleware)
@@ -108,8 +122,8 @@ app.post("/_internal/federation/recover", async (c) => {
 
 // Admin dashboard - serve HTML with security headers
 app.get("/admin", (c) => {
-  const html = adminDashboardHtml(c.env.SERVER_NAME);
-  return c.html(html, 200, {
+  return renderAdminDashboard(c.env.SERVER_NAME).then((html) =>
+    c.html(html, 200, {
     // Content-Security-Policy for XSS protection
     // 'unsafe-inline' is needed for the inline scripts/styles in the dashboard
     // This could be improved by moving scripts to external files with nonces
@@ -118,31 +132,45 @@ app.get("/admin", (c) => {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-  });
+    }),
+  );
 });
 
 app.get("/admin/", (c) => {
-  const html = adminDashboardHtml(c.env.SERVER_NAME);
-  return c.html(html, 200, {
+  return renderAdminDashboard(c.env.SERVER_NAME).then((html) =>
+    c.html(html, 200, {
     "Content-Security-Policy":
       "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-  });
+    }),
+  );
 });
 
-// Admin API routes
-app.route("/", admin);
+// Lazily load infrequently-used heavy modules to reduce worker startup cost,
+// especially for Complement cold starts.
+const loadAdmin = () => import("./api/admin");
+const loadOidcAuth = () => import("./api/oidc-auth");
+const loadOauth = () => import("./api/oauth");
+const loadCalls = () => import("./api/calls");
+const loadRtc = () => import("./api/rtc");
+const loadAppservice = () => import("./api/appservice");
+const loadIdentity = () => import("./api/identity");
+
+app.all("/admin/api/*", (c) => dispatchLazyRoute(c, loadAdmin));
+app.all("/_synapse/admin/*", (c) => dispatchLazyRoute(c, loadAdmin));
+app.all("/_matrix/client/v3/admin/*", (c) => dispatchLazyRoute(c, loadAdmin));
 
 // QR code login landing page - commented out, requires MSC4108/OIDC for Element X
 // app.route('/', qrLogin);
 
 // OIDC/SSO authentication
-app.route("/", oidcAuth);
+app.all("/auth/oidc/*", (c) => dispatchLazyRoute(c, loadOidcAuth));
+app.all("/_matrix/client/v1/auth_metadata", (c) => dispatchLazyRoute(c, loadOidcAuth));
 
 // OAuth 2.0 provider endpoints
-app.route("/", oauth);
+app.all("/oauth/*", (c) => dispatchLazyRoute(c, loadOauth));
 
 // Matrix version discovery
 app.route("/", versions);
@@ -173,16 +201,22 @@ app.route("/", serverNotices);
 app.route("/", report);
 
 // Cloudflare Calls-based video calling API
-app.route("/", calls);
+app.all("/_matrix/client/v3/rooms/:roomId/call", (c) => dispatchLazyRoute(c, loadCalls));
+app.all("/_matrix/client/v3/rooms/:roomId/call/:action", (c) => dispatchLazyRoute(c, loadCalls));
+app.all("/calls/*", (c) => dispatchLazyRoute(c, loadCalls));
 
 // MatrixRTC (LiveKit) JWT service for Element X calls
-app.route("/", rtc);
+app.all("/_matrix/client/unstable/org.matrix.msc4143/rtc/transports", (c) =>
+  dispatchLazyRoute(c, loadRtc),
+);
+app.all("/livekit/*", (c) => dispatchLazyRoute(c, loadRtc));
 
 // Application Service API
-app.route("/", appservice);
+app.all("/_matrix/app/v1/*", (c) => dispatchLazyRoute(c, loadAppservice));
 
 // Identity Service API
-app.route("/", identity);
+app.all("/_matrix/identity/v2", (c) => dispatchLazyRoute(c, loadIdentity));
+app.all("/_matrix/identity/v2/*", (c) => dispatchLazyRoute(c, loadIdentity));
 
 // Server-Server (Federation) API
 app.route("/", federation);

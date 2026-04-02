@@ -152,6 +152,32 @@ describe("complement harness", () => {
     });
   });
 
+  it("does not treat ConstructBlueprint stack traces as startup flakes by themselves", () => {
+    const logContent = [
+      JSON.stringify({ Action: "run", Test: "TestPartialStateJoin" }),
+      JSON.stringify({
+        Action: "output",
+        Test: "TestPartialStateJoin/Subcase",
+        Output:
+          "github.com/matrix-org/complement/internal/docker.(*Builder).ConstructBlueprintIfNotExist(...)\n",
+      }),
+      JSON.stringify({
+        Action: "output",
+        Test: "TestPartialStateJoin/Subcase",
+        Output: "rooms.join.!room:hs1.state.events does not exist\n",
+      }),
+      JSON.stringify({ Action: "fail", Test: "TestPartialStateJoin" }),
+    ].join("\n");
+
+    const classified = classifyComplementRun(logContent, "[docker:hs1] startup.begin\n");
+    expect(classified.overallClassification).toBe("implementation_fail");
+    expect(classified.failures[0]).toMatchObject({
+      test: "TestPartialStateJoin",
+      classification: "implementation_fail",
+      reasons: ["assertion_or_behavior_mismatch"],
+    });
+  });
+
   it("builds a compact run summary artifact with classification", () => {
     const logContent = [
       JSON.stringify({ Action: "run", Test: "TestSync" }),

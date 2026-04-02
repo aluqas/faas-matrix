@@ -94,3 +94,4 @@ console.log("    bun run complement:index         # regenerate the test-name pac
 console.log("    bun run complement:run -- --list # list all test names");
 console.log("    bun run complement:run -- TestLogin             # auto-resolve package");
 console.log("    bun run complement:run:debug -- TestContentMediaV1");
+console.log("    bun run complement:startup:preflight -- --iterations 3");
