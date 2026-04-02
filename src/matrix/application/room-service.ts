@@ -2,7 +2,12 @@ import type { AppContext } from "../../foundation/app-context";
 import { withIdempotency, type IdempotencyStore } from "../../foundation/idempotency";
 import { Errors, MatrixApiError } from "../../utils/errors";
 import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
-import { ErrorCodes, type PDU, type RoomJoinWorkflowStatus, type RoomPowerLevelsContent } from "../../types";
+import {
+  ErrorCodes,
+  type PDU,
+  type RoomJoinWorkflowStatus,
+  type RoomPowerLevelsContent,
+} from "../../types";
 import type { EventPipeline } from "../domain/event-pipeline";
 import type { RoomRepository } from "../repositories/interfaces";
 import {
@@ -22,6 +27,7 @@ import {
 } from "../../utils/crypto";
 import { parseUserId } from "../../utils/ids";
 import { parseDeviceKeysPayload } from "../../api/keys-contracts";
+import { getSharedServersInRoomsWithUserIncludingPartialState } from "./features/partial-state/shared-servers";
 import {
   authorizeBan,
   authorizeKick,
@@ -590,7 +596,9 @@ export class MatrixRoomService {
                   localServerName: this.appContext.capabilities.config.serverName,
                   now: () => this.appContext.capabilities.clock.now(),
                   getSharedRemoteServers: (userId) =>
-                    db ? getServersInRoomsWithUser(db, userId) : Promise.resolve([]),
+                    db
+                      ? getSharedServersInRoomsWithUserIncludingPartialState(db, cache, userId)
+                      : Promise.resolve([]),
                   getUserDevices: (userId) =>
                     db ? getUserDevices(db, userId) : Promise.resolve([]),
                   getStoredDeviceKeys: (userId, deviceId) =>

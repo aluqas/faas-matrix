@@ -1,5 +1,8 @@
 import type { DeviceKeysPayload } from "../../../../api/keys-contracts";
 import type {
+  DeviceListBroadcastInput,
+  DeviceListBroadcastPorts,
+  DeviceListBroadcastResult,
   DeviceListJoinUpdateInput,
   DeviceListJoinUpdatePorts,
   DeviceListJoinUpdateResult,
@@ -17,14 +20,58 @@ function getDeviceDisplayName(
   return device.display_name;
 }
 
+function getDestinations(localServerName: string, sharedServers: string[]): string[] {
+  return [...new Set(sharedServers)].filter((server) => server !== localServerName);
+}
+
+export async function publishDeviceListUpdateToSharedServers(
+  input: DeviceListBroadcastInput,
+  ports: DeviceListBroadcastPorts,
+): Promise<DeviceListBroadcastResult> {
+  const sharedServers = input.sharedServers ?? (await ports.getSharedRemoteServers(input.userId));
+  const destinations = getDestinations(ports.localServerName, sharedServers);
+
+  if (destinations.length === 0) {
+    return {
+      destinations: [],
+      sentCount: 0,
+    };
+  }
+
+  const content: Record<string, unknown> = {
+    user_id: input.userId,
+    device_id: input.deviceId,
+    stream_id: ports.now(),
+    deleted: Boolean(input.deleted),
+  };
+  if (!input.deleted && typeof input.deviceDisplayName === "string" && input.deviceDisplayName) {
+    content["device_display_name"] = input.deviceDisplayName;
+  }
+  if (!input.deleted && input.keys) {
+    content["keys"] = input.keys;
+  }
+
+  for (const destination of destinations) {
+    await ports.queueEdu(destination, "m.device_list_update", content);
+  }
+
+  return {
+    destinations,
+    sentCount: destinations.length,
+  };
+}
+
 export async function publishDeviceListUpdatesForNewlySharedServers(
   input: DeviceListJoinUpdateInput,
   ports: DeviceListJoinUpdatePorts,
 ): Promise<DeviceListJoinUpdateResult> {
-  const currentlySharedServers = await ports.getSharedRemoteServers(input.userId);
-  const destinations = [...new Set(currentlySharedServers)]
-    .filter((server) => server !== ports.localServerName)
-    .filter((server) => !input.previouslySharedServers.includes(server));
+  const discoveredSharedServers = await ports.getSharedRemoteServers(input.userId);
+  const currentlySharedServers = [
+    ...new Set([...discoveredSharedServers, ...(input.sharedServersAfterJoin ?? [])]),
+  ];
+  const destinations = getDestinations(ports.localServerName, currentlySharedServers).filter(
+    (server) => !input.previouslySharedServers.includes(server),
+  );
 
   if (destinations.length === 0) {
     return {

@@ -45,6 +45,11 @@ import {
   markPartialStateJoinCompleted,
   markPartialStateJoin,
 } from "../matrix/application/features/partial-state/tracker";
+import {
+  clearPartialStateJoinMetadata,
+  getSharedServersInRoomsWithUserIncludingPartialState,
+  upsertPartialStateJoinMetadata,
+} from "../matrix/application/features/partial-state/shared-servers";
 
 export type JoinParams = RoomJoinWorkflowParams;
 export type JoinResult = RoomJoinWorkflowResult;
@@ -182,92 +187,92 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
     try {
       // Step 1: For remote joins, get join template from remote server
       // Try each candidate server in order until one succeeds
-        let remoteEventTemplate: RemoteJoinTemplate | null = null;
-        let successfulRemoteServer: string | undefined = remoteServer;
-        if (isRemote && (remoteServer || remoteServers?.length)) {
-          const candidates = remoteServers?.length
-            ? remoteServers
-            : remoteServer
+      let remoteEventTemplate: RemoteJoinTemplate | null = null;
+      let successfulRemoteServer: string | undefined = remoteServer;
+      if (isRemote && (remoteServer || remoteServers?.length)) {
+        const candidates = remoteServers?.length
+          ? remoteServers
+          : remoteServer
             ? [remoteServer]
             : [];
-          const makeJoinResult = (await step.do(
-            "make-join",
-            {
-              retries: {
-                limit: 3,
-                delay: 5000,
+        const makeJoinResult = (await step.do(
+          "make-join",
+          {
+            retries: {
+              limit: 3,
+              delay: 5000,
               backoff: "exponential",
             },
             timeout: 30000,
-            },
-            async () => {
-              let lastError: Error | undefined;
-              let lastNonRetryableError: RemoteJoinHttpError | undefined;
-              for (const candidate of candidates) {
-                try {
-                  const result = await this.makeJoinRequest(candidate, roomId, userId);
-                  return {
-                    success: true,
-                    value: {
-                      remoteEventTemplate: result,
-                      remoteServer: candidate,
-                    },
-                  } satisfies RemoteJoinStepSuccess<{
-                    remoteEventTemplate: RemoteJoinTemplate;
-                    remoteServer: string;
-                  }>;
-                } catch (err) {
-                  if (err instanceof RemoteJoinHttpError && !err.retryable) {
-                    lastNonRetryableError = err;
-                    await runWorkflowEffect(
-                      logger.warn("room_join.workflow.make_join_terminal_error", {
-                        destination: candidate,
-                        error_message: err.message,
-                        status: err.status,
-                        errcode: err.errcode,
-                      }),
-                    );
-                    continue;
-                  }
-
-                  lastError = err instanceof Error ? err : new Error(String(err));
+          },
+          async () => {
+            let lastError: Error | undefined;
+            let lastNonRetryableError: RemoteJoinHttpError | undefined;
+            for (const candidate of candidates) {
+              try {
+                const result = await this.makeJoinRequest(candidate, roomId, userId);
+                return {
+                  success: true,
+                  value: {
+                    remoteEventTemplate: result,
+                    remoteServer: candidate,
+                  },
+                } satisfies RemoteJoinStepSuccess<{
+                  remoteEventTemplate: RemoteJoinTemplate;
+                  remoteServer: string;
+                }>;
+              } catch (err) {
+                if (err instanceof RemoteJoinHttpError && !err.retryable) {
+                  lastNonRetryableError = err;
                   await runWorkflowEffect(
-                    logger.warn("room_join.workflow.make_join_retry", {
+                    logger.warn("room_join.workflow.make_join_terminal_error", {
                       destination: candidate,
-                      error_message: lastError.message,
+                      error_message: err.message,
+                      status: err.status,
+                      errcode: err.errcode,
                     }),
                   );
+                  continue;
                 }
+
+                lastError = err instanceof Error ? err : new Error(String(err));
+                await runWorkflowEffect(
+                  logger.warn("room_join.workflow.make_join_retry", {
+                    destination: candidate,
+                    error_message: lastError.message,
+                  }),
+                );
               }
+            }
 
-              if (!lastError && lastNonRetryableError) {
-                return {
-                  success: false,
-                  failure: toWorkflowFailure(lastNonRetryableError),
-                } satisfies RemoteJoinStepFailure;
-              }
+            if (!lastError && lastNonRetryableError) {
+              return {
+                success: false,
+                failure: toWorkflowFailure(lastNonRetryableError),
+              } satisfies RemoteJoinStepFailure;
+            }
 
-              throw lastError ?? new Error("All remote servers failed for make_join");
-            },
-          )) as
-            | RemoteJoinStepSuccess<{
-                remoteEventTemplate: RemoteJoinTemplate;
-                remoteServer: string;
-              }>
-            | RemoteJoinStepFailure;
+            throw lastError ?? new Error("All remote servers failed for make_join");
+          },
+        )) as
+          | RemoteJoinStepSuccess<{
+              remoteEventTemplate: RemoteJoinTemplate;
+              remoteServer: string;
+            }>
+          | RemoteJoinStepFailure;
 
-          if (!makeJoinResult.success) {
-            return {
-              eventId: "",
-              roomId,
-              success: false,
-              ...makeJoinResult.failure,
-            };
-          }
-
-          remoteEventTemplate = makeJoinResult.value.remoteEventTemplate;
-          successfulRemoteServer = makeJoinResult.value.remoteServer;
+        if (!makeJoinResult.success) {
+          return {
+            eventId: "",
+            roomId,
+            success: false,
+            ...makeJoinResult.failure,
+          };
         }
+
+        remoteEventTemplate = makeJoinResult.value.remoteEventTemplate;
+        successfulRemoteServer = makeJoinResult.value.remoteServer;
+      }
 
       // Step 2: Create and sign the join event
       const joinEventData = parseWorkflowJson<JoinWorkflowEvent>(
@@ -287,6 +292,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
       // Step 3: For remote joins, send signed event to remote server and process room state
       let partialStateEventId: string | undefined;
+      let remoteSendJoinResponse: RemoteSendJoinResponse | undefined;
       if (isRemote && successfulRemoteServer && joinEventData) {
         const sendJoinResult = parseWorkflowJson<
           RemoteJoinStepSuccess<RemoteSendJoinResponse> | RemoteJoinStepFailure
@@ -329,6 +335,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
           };
         }
         const sendJoinResponse = sendJoinResult.value;
+        remoteSendJoinResponse = sendJoinResponse;
 
         // Process the room state received from the remote server
         await step.do("process-remote-state", async () => {
@@ -349,13 +356,16 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
           }
 
           await step.do("mark-partial-state", async () => {
-            await markPartialStateJoin(this.env.CACHE, {
+            const marker = {
               roomId,
               userId,
               eventId: partialStateEventId!,
               startedAt: Date.now(),
               ...withDefined("remoteServer", successfulRemoteServer),
-            });
+              ...withDefined("serversInRoom", sendJoinResponse.servers_in_room),
+            };
+            await upsertPartialStateJoinMetadata(this.env.DB, marker);
+            await markPartialStateJoin(this.env.CACHE, marker);
           });
         }
       }
@@ -401,8 +411,10 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
               eventId: partialStateEventId!,
               startedAt: Date.now(),
               ...withDefined("remoteServer", successfulRemoteServer),
+              ...withDefined("serversInRoom", remoteSendJoinResponse?.servers_in_room),
             });
             await clearPartialStateJoin(this.env.CACHE, userId, roomId);
+            await clearPartialStateJoinMetadata(this.env.DB, userId, roomId);
             await this.notifyMemberBatch([{ userId }], joinEventData);
           },
         );
@@ -429,12 +441,17 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
             {
               userId,
               previouslySharedServers: preJoinSharedServers,
+              sharedServersAfterJoin: remoteSendJoinResponse?.servers_in_room,
             },
             {
               localServerName: this.env.SERVER_NAME,
               now: () => Date.now(),
               getSharedRemoteServers: (sharedUserId) =>
-                getServersInRoomsWithUser(this.env.DB, sharedUserId),
+                getSharedServersInRoomsWithUserIncludingPartialState(
+                  this.env.DB,
+                  this.env.CACHE,
+                  sharedUserId,
+                ),
               getUserDevices: (deviceUserId) => getUserDevices(this.env.DB, deviceUserId),
               getStoredDeviceKeys: (deviceUserId, deviceId) =>
                 getStoredDeviceKeysFromKv(this.env.DEVICE_KEYS, deviceUserId, deviceId),

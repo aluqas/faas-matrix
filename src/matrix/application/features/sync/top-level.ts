@@ -1,10 +1,7 @@
 import type { AppContext } from "../../../../foundation/app-context";
 import type { SyncResponse } from "../../../../types";
 import type { SyncRepository } from "../../../repositories/interfaces";
-import {
-  projectDeviceLists,
-  projectGlobalAccountData,
-} from "../../sync-projection";
+import { projectDeviceLists, projectGlobalAccountData } from "../../sync-projection";
 import { projectPresenceEvents } from "../presence/project";
 import type { TopLevelSyncResult } from "./contracts";
 
@@ -35,9 +32,8 @@ export async function projectTopLevelSync(
   let currentToDevicePos = input.sinceToDevice;
   let toDeviceEvents: NonNullable<SyncResponse["to_device"]>["events"] = [];
   let deviceOneTimeKeysCount: NonNullable<SyncResponse["device_one_time_keys_count"]> = {};
-  let deviceUnusedFallbackKeyTypes: NonNullable<
-    SyncResponse["device_unused_fallback_key_types"]
-  > = [];
+  let deviceUnusedFallbackKeyTypes: NonNullable<SyncResponse["device_unused_fallback_key_types"]> =
+    [];
 
   if (input.deviceId) {
     const toDeviceResult = await ports.repository.getToDeviceMessages(

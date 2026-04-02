@@ -9,8 +9,8 @@ import type { AppEnv } from "../types";
 import type { PresenceState } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
-import { getServersInRoomsWithUser } from "../services/database";
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
+import { getSharedServersInRoomsWithUserIncludingPartialState } from "../matrix/application/features/partial-state/shared-servers";
 import { executePresenceCommand } from "../matrix/application/features/presence/command";
 import type { PresenceEduContent } from "../matrix/application/features/presence/contracts";
 import { getPresenceForUsers as loadPresenceForUsers } from "../matrix/application/features/presence/project";
@@ -93,7 +93,7 @@ app.put("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
           );
         },
         async resolveInterestedServers(userId: string) {
-          return getServersInRoomsWithUser(db, userId);
+          return getSharedServersInRoomsWithUserIncludingPartialState(db, c.env.CACHE, userId);
         },
         async queueEdu(destination: string, content: PresenceEduContent) {
           await queueFederationEdu(c.env, destination, "m.presence", content);

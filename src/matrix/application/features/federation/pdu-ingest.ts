@@ -50,6 +50,29 @@ export interface PduIngestPorts {
   ) => Promise<FederationTransactionResult>;
 }
 
+const PARTIAL_STATE_DEFERRED_MEMBERSHIP_AUTH_ERRORS = new Set([
+  "Sender is not joined to the room",
+  "Sender must be joined to kick",
+  "Only the original inviter can rescind an invite",
+  "Insufficient power level to invite",
+  "Insufficient power level to kick",
+  "Cannot kick user with equal or higher power",
+  "Insufficient power level to ban",
+  "Cannot ban user with equal or higher power",
+  "Insufficient power level to unban",
+]);
+
+export function shouldDeferPartialStateMembershipAuthFailure(
+  eventType: string,
+  errorMessage: string | undefined,
+): boolean {
+  return (
+    eventType === "m.room.member" &&
+    typeof errorMessage === "string" &&
+    PARTIAL_STATE_DEFERRED_MEMBERSHIP_AUTH_ERRORS.has(errorMessage)
+  );
+}
+
 function isD1Database(value: unknown): value is D1Database {
   return (
     typeof value === "object" &&
@@ -492,8 +515,13 @@ export async function ingestFederationPdu(
   logger: StructuredLogger,
 ): Promise<PduIngestResult> {
   const pdu = toRawFederationPdu(input.rawPdu);
-  const { roomId, sender, eventType, content, eventId: incomingEventId } =
-    extractRawFederationPduFields(pdu);
+  const {
+    roomId,
+    sender,
+    eventType,
+    content,
+    eventId: incomingEventId,
+  } = extractRawFederationPduFields(pdu);
 
   if (!roomId || !sender || !eventType || !content) {
     return {
@@ -629,6 +657,7 @@ export async function ingestFederationPdu(
   if (normalizedPdu.signatures) {
     let signatureValid = false;
     const cache = ports.appContext.capabilities.kv.cache as KVNamespace;
+    const signatureCandidate = input.rawPdu as Record<string, unknown>;
     const signatories = Object.keys(normalizedPdu.signatures);
     for (const signatory of signatories) {
       const signaturesForSignatory = normalizedPdu.signatures[signatory];
@@ -639,14 +668,14 @@ export async function ingestFederationPdu(
       for (const keyId of keyIds) {
         try {
           const validByService = await verifyRemoteSignature(
-            normalizedPdu as unknown as Record<string, unknown>,
+            signatureCandidate,
             signatory,
             keyId,
             ports.appContext.capabilities.sql.connection as D1Database,
             cache,
           );
           const validByTransport = await ports.signedTransport.verifyJson(
-            normalizedPdu as unknown as Record<string, unknown>,
+            signatureCandidate,
             signatory,
             keyId,
           );
@@ -664,7 +693,13 @@ export async function ingestFederationPdu(
     }
 
     if (!signatureValid && pduOrigin !== input.origin) {
-      await ports.repository.recordProcessedPdu(eventId, pduOrigin, roomId, false, "Invalid signature");
+      await ports.repository.recordProcessedPdu(
+        eventId,
+        pduOrigin,
+        roomId,
+        false,
+        "Invalid signature",
+      );
       return {
         kind: "rejected",
         eventId,
@@ -711,7 +746,13 @@ export async function ingestFederationPdu(
             ? Object.keys(input.rawPdu["unsigned"] as Record<string, unknown>).sort()
             : [],
       });
-      await ports.repository.recordProcessedPdu(eventId, pduOrigin, roomId, false, "Content hash mismatch");
+      await ports.repository.recordProcessedPdu(
+        eventId,
+        pduOrigin,
+        roomId,
+        false,
+        "Content hash mismatch",
+      );
       return {
         kind: "rejected",
         eventId,
@@ -722,7 +763,10 @@ export async function ingestFederationPdu(
   }
 
   if (room) {
-    const authDependencyError = await validateAuthEventDependencies(ports.repository, normalizedPdu);
+    const authDependencyError = await validateAuthEventDependencies(
+      ports.repository,
+      normalizedPdu,
+    );
     if (authDependencyError) {
       if (
         !input.historicalOnly &&
@@ -737,7 +781,13 @@ export async function ingestFederationPdu(
             error_message: authDependencyError,
           }),
         );
-        await ports.repository.recordProcessedPdu(eventId, pduOrigin, roomId, false, authDependencyError);
+        await ports.repository.recordProcessedPdu(
+          eventId,
+          pduOrigin,
+          roomId,
+          false,
+          authDependencyError,
+        );
         return {
           kind: "soft_failed",
           eventId,
@@ -753,7 +803,13 @@ export async function ingestFederationPdu(
         stateKey: normalizedPdu.state_key,
         reason: authDependencyError,
       });
-      await ports.repository.recordProcessedPdu(eventId, pduOrigin, roomId, false, authDependencyError);
+      await ports.repository.recordProcessedPdu(
+        eventId,
+        pduOrigin,
+        roomId,
+        false,
+        authDependencyError,
+      );
       return {
         kind: "rejected",
         eventId,
@@ -774,7 +830,13 @@ export async function ingestFederationPdu(
         eventType: normalizedPdu.type,
         reason: aclDecision.reason,
       });
-      await ports.repository.recordProcessedPdu(eventId, pduOrigin, roomId, false, aclDecision.reason);
+      await ports.repository.recordProcessedPdu(
+        eventId,
+        pduOrigin,
+        roomId,
+        false,
+        aclDecision.reason,
+      );
       return {
         kind: "rejected",
         eventId,
@@ -795,8 +857,9 @@ export async function ingestFederationPdu(
         );
         if (
           partialStateJoin &&
-          authResult.error === "Sender is not joined to the room" &&
-          normalizedPdu.type !== "m.room.member"
+          ((authResult.error === "Sender is not joined to the room" &&
+            normalizedPdu.type !== "m.room.member") ||
+            shouldDeferPartialStateMembershipAuthFailure(normalizedPdu.type, authResult.error))
         ) {
           await runFederationEffect(
             logger.warn("federation.pdu.partial_state_auth_deferred", {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { publishDeviceListUpdatesForNewlySharedServers } from "./command";
-import type { DeviceListJoinUpdatePorts } from "./contracts";
+import {
+  publishDeviceListUpdateToSharedServers,
+  publishDeviceListUpdatesForNewlySharedServers,
+} from "./command";
+import type { DeviceListBroadcastPorts, DeviceListJoinUpdatePorts } from "./contracts";
 
 function createPorts(
   overrides: Partial<DeviceListJoinUpdatePorts> = {},
@@ -123,5 +126,132 @@ describe("publishDeviceListUpdatesForNewlySharedServers", () => {
       },
     });
     expect(missingKeyPorts.sent[1]?.content).not.toHaveProperty("keys");
+  });
+
+  it("unions handshake-provided shared servers with the database view", async () => {
+    const ports = createPorts({
+      async getSharedRemoteServers() {
+        return ["hs2"];
+      },
+    });
+
+    const result = await publishDeviceListUpdatesForNewlySharedServers(
+      {
+        userId: "@alice:hs1",
+        previouslySharedServers: [],
+        sharedServersAfterJoin: ["hs2", "hs3", "hs4"],
+      },
+      ports,
+    );
+
+    expect(result).toEqual({
+      destinations: ["hs2", "hs3", "hs4"],
+      sentCount: 6,
+      deviceCount: 2,
+    });
+    expect(ports.sent.map((entry) => entry.destination)).toEqual([
+      "hs2",
+      "hs2",
+      "hs3",
+      "hs3",
+      "hs4",
+      "hs4",
+    ]);
+  });
+});
+
+describe("publishDeviceListUpdateToSharedServers", () => {
+  function createBroadcastPorts(
+    overrides: Partial<DeviceListBroadcastPorts> = {},
+  ): DeviceListBroadcastPorts & {
+    sent: Array<{ destination: string; eduType: string; content: Record<string, unknown> }>;
+  } {
+    const sent: Array<{ destination: string; eduType: string; content: Record<string, unknown> }> =
+      [];
+
+    return {
+      localServerName: "hs1",
+      now: () => 2000,
+      async getSharedRemoteServers() {
+        return ["hs1", "hs2", "hs3"];
+      },
+      async queueEdu(destination, eduType, content) {
+        sent.push({ destination, eduType, content });
+      },
+      ...overrides,
+      sent,
+    };
+  }
+
+  it("broadcasts a single device update to all currently shared remote servers", async () => {
+    const ports = createBroadcastPorts();
+
+    const result = await publishDeviceListUpdateToSharedServers(
+      {
+        userId: "@alice:hs1",
+        deviceId: "A",
+        deviceDisplayName: "Phone",
+        keys: {
+          user_id: "@alice:hs1",
+          device_id: "A",
+          keys: {
+            "ed25519:A": "key-A",
+          },
+        },
+      },
+      ports,
+    );
+
+    expect(result).toEqual({
+      destinations: ["hs2", "hs3"],
+      sentCount: 2,
+    });
+    expect(ports.sent).toHaveLength(2);
+    expect(ports.sent[0]).toMatchObject({
+      destination: "hs2",
+      eduType: "m.device_list_update",
+      content: {
+        user_id: "@alice:hs1",
+        device_id: "A",
+        device_display_name: "Phone",
+        deleted: false,
+        stream_id: 2000,
+      },
+    });
+    expect(ports.sent[0]?.content).toHaveProperty("keys");
+  });
+
+  it("omits keys and display name for deleted device updates", async () => {
+    const ports = createBroadcastPorts({
+      async getSharedRemoteServers() {
+        return ["hs2"];
+      },
+    });
+
+    const result = await publishDeviceListUpdateToSharedServers(
+      {
+        userId: "@alice:hs1",
+        deviceId: "A",
+        deviceDisplayName: "Phone",
+        deleted: true,
+      },
+      ports,
+    );
+
+    expect(result).toEqual({
+      destinations: ["hs2"],
+      sentCount: 1,
+    });
+    expect(ports.sent[0]).toMatchObject({
+      destination: "hs2",
+      content: {
+        user_id: "@alice:hs1",
+        device_id: "A",
+        deleted: true,
+        stream_id: 2000,
+      },
+    });
+    expect(ports.sent[0]?.content).not.toHaveProperty("keys");
+    expect(ports.sent[0]?.content).not.toHaveProperty("device_display_name");
   });
 });

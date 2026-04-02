@@ -4,6 +4,7 @@ import { MatrixSyncService } from "./sync-service";
 import type { SyncRepository } from "../repositories/interfaces";
 import type { PDU } from "../../types";
 import { FORGOTTEN_ROOM_ACCOUNT_DATA_TYPE } from "./room-account-data";
+import { runClientEffect } from "./effect-runtime";
 
 class FakeSyncRepository implements SyncRepository {
   waitCalls = 0;
@@ -198,12 +199,14 @@ describe("MatrixSyncService", () => {
     const repo = new FakeSyncRepository();
     const service = new MatrixSyncService(createTestAppContext(), repo);
 
-    const response = await service.syncUser({
-      userId: "@alice:test",
-      deviceId: null,
-      since: "s2_td0",
-      timeout: 2000,
-    });
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s2_td0",
+        timeout: 2000,
+      }),
+    );
 
     expect(repo.waitCalls).toBe(1);
     expect(response.next_batch).toBe("s5_td0_dk7");
@@ -230,11 +233,13 @@ describe("MatrixSyncService", () => {
     ]);
 
     const service = new MatrixSyncService(createTestAppContext(), repo);
-    const response = await service.syncUser({
-      userId: "@alice:test",
-      deviceId: null,
-      since: "s1_td0_dk0",
-    });
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s1_td0_dk0",
+      }),
+    );
 
     expect(response.rooms?.invite?.[roomId]).toBeUndefined();
     expect(response.rooms?.leave?.[roomId]?.timeline?.events[0]).toMatchObject({
@@ -265,11 +270,13 @@ describe("MatrixSyncService", () => {
     ]);
 
     const service = new MatrixSyncService(createTestAppContext(), repo);
-    const response = await service.syncUser({
-      userId: "@alice:test",
-      deviceId: null,
-      since: "s1_td0_dk0",
-    });
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s1_td0_dk0",
+      }),
+    );
 
     expect(response.rooms?.join?.[roomId]).toBeUndefined();
     expect(response.rooms?.leave?.[roomId]?.timeline?.events[0]).toMatchObject({
@@ -283,12 +290,14 @@ describe("MatrixSyncService", () => {
     const repo = new FakeSyncRepository();
     const service = new MatrixSyncService(createTestAppContext(), repo);
 
-    const response = await service.syncUser({
-      userId: "@alice:test",
-      deviceId: null,
-      since: "s1_td0_dk0",
-      timeout: 1000,
-    });
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s1_td0_dk0",
+        timeout: 1000,
+      }),
+    );
 
     expect(response.rooms?.invite).toBeUndefined();
     expect(response.rooms?.leave).toBeUndefined();
@@ -329,11 +338,13 @@ describe("MatrixSyncService", () => {
     ]);
 
     const service = new MatrixSyncService(createTestAppContext(), repo);
-    const response = await service.syncUser({
-      userId: "@alice:test",
-      deviceId: null,
-      since: "s1_td0",
-    });
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s1_td0",
+      }),
+    );
 
     expect(response.rooms?.leave?.[roomId]?.timeline?.events[0]).toMatchObject({
       event_id: "$leave",
@@ -366,16 +377,18 @@ describe("MatrixSyncService", () => {
     ]);
 
     const service = new MatrixSyncService(createTestAppContext(), repo);
-    const response = await service.syncUser({
-      userId: "@alice:test",
-      deviceId: null,
-      since: undefined,
-      filterParam: JSON.stringify({
-        room: {
-          include_leave: true,
-        },
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: undefined,
+        filterParam: JSON.stringify({
+          room: {
+            include_leave: true,
+          },
+        }),
       }),
-    });
+    );
 
     expect(response.rooms?.leave?.[roomId]).toBeUndefined();
   });
@@ -407,24 +420,28 @@ describe("MatrixSyncService", () => {
       repo,
     );
 
-    const eager = await service.syncUser({
-      userId: "@alice:test",
-      deviceId: null,
-      since: "s1_td0_dk0",
-    });
+    const eager = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s1_td0_dk0",
+      }),
+    );
     expect(eager.rooms?.join?.[roomId]).toBeUndefined();
 
-    const lazy = await service.syncUser({
-      userId: "@alice:test",
-      deviceId: null,
-      since: "s1_td0_dk0",
-      filterParam: JSON.stringify({
-        room: {
-          timeline: { lazy_load_members: true },
-          state: { lazy_load_members: true },
-        },
+    const lazy = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s1_td0_dk0",
+        filterParam: JSON.stringify({
+          room: {
+            timeline: { lazy_load_members: true },
+            state: { lazy_load_members: true },
+          },
+        }),
       }),
-    });
+    );
     expect(lazy.rooms?.join?.[roomId]).toBeDefined();
   });
 
@@ -467,11 +484,13 @@ describe("MatrixSyncService", () => {
       repo,
     );
 
-    const response = await service.syncUser({
-      userId: "@alice:test",
-      deviceId: null,
-      since: "s5_td0_dk0",
-    });
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s5_td0_dk0",
+      }),
+    );
 
     expect(response.rooms?.join?.[roomId]?.state?.events).toEqual([
       expect.objectContaining({

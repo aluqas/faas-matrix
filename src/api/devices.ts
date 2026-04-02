@@ -4,13 +4,78 @@
 // Manages user devices for E2EE and session management.
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
+import type { AppEnv, Env } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { verifyPassword } from "../utils/crypto";
 import { deleteDevice as deleteStoredDevice } from "../services/database";
+import { recordDeviceKeyChange } from "../services/device-key-changes";
+import { publishDeviceListUpdateToSharedServers } from "../matrix/application/features/device-lists/command";
+import { getSharedServersInRoomsWithUserIncludingPartialState } from "../matrix/application/features/partial-state/shared-servers";
+import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
+import { parseDeviceKeysPayload, type DeviceKeysPayload } from "./keys-contracts";
 
 const app = new Hono<AppEnv>();
+
+function getUserKeysDO(env: Env, userId: string): DurableObjectStub {
+  const id = env.USER_KEYS.idFromName(userId);
+  return env.USER_KEYS.get(id);
+}
+
+async function getStoredDeviceKeys(
+  env: Env,
+  userId: string,
+  deviceId: string,
+): Promise<DeviceKeysPayload | null> {
+  const stub = getUserKeysDO(env, userId);
+  const response = await stub.fetch(
+    new Request(`http://internal/device-keys/get?device_id=${encodeURIComponent(deviceId)}`),
+  );
+  if (!response.ok) {
+    return null;
+  }
+
+  return parseDeviceKeysPayload(await response.json().catch(() => null));
+}
+
+async function putStoredDeviceKeys(
+  env: Env,
+  userId: string,
+  deviceId: string,
+  keys: DeviceKeysPayload,
+): Promise<void> {
+  const stub = getUserKeysDO(env, userId);
+  const response = await stub.fetch(
+    new Request("http://internal/device-keys/put", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_id: deviceId, keys }),
+    }),
+  );
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "unknown error");
+    throw new Error(`Failed to store device keys in DO: ${response.status} ${errorText}`);
+  }
+
+  await env.DEVICE_KEYS.put(`device:${userId}:${deviceId}`, JSON.stringify(keys));
+}
+
+function withUpdatedDisplayName(
+  keys: DeviceKeysPayload,
+  displayName: string | null | undefined,
+): DeviceKeysPayload {
+  const nextUnsigned = { ...(keys.unsigned ?? {}) };
+  if (typeof displayName === "string" && displayName.length > 0) {
+    nextUnsigned["device_display_name"] = displayName;
+  } else {
+    delete nextUnsigned["device_display_name"];
+  }
+
+  return {
+    ...keys,
+    unsigned: nextUnsigned,
+  };
+}
 
 function buildPasswordUiaResponse(session: string, error?: string) {
   return {
@@ -124,6 +189,40 @@ app.put("/_matrix/client/v3/devices/:deviceId", requireAuth(), async (c) => {
     `)
       .bind(body.display_name, userId, deviceId)
       .run();
+
+    let deviceKeys: DeviceKeysPayload | null = null;
+    try {
+      const existingKeys = await getStoredDeviceKeys(c.env, userId, deviceId);
+      if (existingKeys) {
+        deviceKeys = withUpdatedDisplayName(existingKeys, body.display_name);
+        await putStoredDeviceKeys(c.env, userId, deviceId, deviceKeys);
+      }
+    } catch (error) {
+      console.error("[devices] failed to update stored device keys", error);
+    }
+
+    await recordDeviceKeyChange(db, userId, deviceId, "update");
+
+    try {
+      await publishDeviceListUpdateToSharedServers(
+        {
+          userId,
+          deviceId,
+          deviceDisplayName: typeof body.display_name === "string" ? body.display_name : undefined,
+          keys: deviceKeys,
+        },
+        {
+          localServerName: c.env.SERVER_NAME,
+          now: () => Date.now(),
+          getSharedRemoteServers: (sharedUserId) =>
+            getSharedServersInRoomsWithUserIncludingPartialState(db, c.env.CACHE, sharedUserId),
+          queueEdu: (destination, eduType, content) =>
+            queueFederationEdu(c.env, destination, eduType, content),
+        },
+      );
+    } catch (error) {
+      console.error("[devices] failed to publish device list update", error);
+    }
   }
 
   return c.json({});

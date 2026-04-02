@@ -966,7 +966,9 @@ app.get("/_matrix/federation/v1/state_ids/:roomId", async (c) => {
       }),
     ),
   );
-  const authChainIds = (await getAuthChain(c.env.DB, rootAuthEventIds)).map((event) => event.event_id);
+  const authChainIds = (await getAuthChain(c.env.DB, rootAuthEventIds)).map(
+    (event) => event.event_id,
+  );
 
   return c.json({
     pdu_ids: stateEventIds,

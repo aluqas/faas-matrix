@@ -53,10 +53,7 @@ async function sleep(delayMs: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
-async function fetchWithFederationRetry(
-  url: string,
-  init: RequestInit,
-): Promise<Response> {
+async function fetchWithFederationRetry(url: string, init: RequestInit): Promise<Response> {
   let lastError: unknown;
 
   for (const [index, delayMs] of FEDERATION_FETCH_RETRY_DELAYS_MS.entries()) {
@@ -64,7 +61,10 @@ async function fetchWithFederationRetry(
       return await fetch(url, init);
     } catch (error) {
       lastError = error;
-      if (!isRetryableFederationFetchError(error) || index === FEDERATION_FETCH_RETRY_DELAYS_MS.length - 1) {
+      if (
+        !isRetryableFederationFetchError(error) ||
+        index === FEDERATION_FETCH_RETRY_DELAYS_MS.length - 1
+      ) {
         throw error;
       }
       console.warn(`Retrying federation fetch for ${url}:`, error);

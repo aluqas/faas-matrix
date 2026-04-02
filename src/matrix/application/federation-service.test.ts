@@ -329,7 +329,11 @@ describe("MatrixFederationService", () => {
       auth_events: ["$create", "$pl"],
       prev_events: ["$pl"],
     });
-    repo.roomState = [repo.events.get("$create"), repo.events.get("$pl"), repo.events.get("$member")];
+    repo.roomState = [
+      repo.events.get("$create"),
+      repo.events.get("$pl"),
+      repo.events.get("$member"),
+    ];
     repo.processedPdus.set("$rejected-auth", {
       accepted: false,
       rejectionReason: "Insufficient power level",

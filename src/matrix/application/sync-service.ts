@@ -1,7 +1,9 @@
+import { Effect } from "effect";
 import type { AppContext } from "../../foundation/app-context";
 import type { SyncResponse } from "../../types";
+import type { InfraError } from "./domain-error";
 import type { SyncRepository } from "../repositories/interfaces";
-import { projectSyncResponse } from "./features/sync/project";
+import { projectSyncResponseEffect } from "./features/sync/project";
 import { buildSyncToken, parseSyncToken, type SyncUserInput } from "./features/sync/contracts";
 
 export { buildSyncToken, parseSyncToken, type SyncUserInput };
@@ -12,7 +14,7 @@ export class MatrixSyncService {
     private readonly repository: SyncRepository,
   ) {}
 
-  async syncUser(input: SyncUserInput): Promise<SyncResponse> {
-    return projectSyncResponse(this.appContext, this.repository, input);
+  syncUser(input: SyncUserInput): Effect.Effect<SyncResponse, InfraError> {
+    return projectSyncResponseEffect(this.appContext, this.repository, input);
   }
 }

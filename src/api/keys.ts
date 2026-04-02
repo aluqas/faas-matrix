@@ -15,13 +15,16 @@ import { Hono } from "hono";
 import type { AppEnv, Env } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
-import { FEDERATION_OUTBOUND_DO_NAME } from "../matrix/application/features/shared/federation-edu-queue";
+import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
 import { federationPost } from "../services/federation-keys";
 import { verifyPassword } from "../utils/crypto";
 import { generateOpaqueId } from "../utils/ids";
+import { recordDeviceKeyChange } from "../services/device-key-changes";
 import { getPasswordHash } from "../services/database";
 import { runClientEffect } from "../matrix/application/effect-runtime";
 import { withLogContext } from "../matrix/application/logging";
+import { publishDeviceListUpdateToSharedServers } from "../matrix/application/features/device-lists/command";
+import { getSharedServersInRoomsWithUserIncludingPartialState } from "../matrix/application/features/partial-state/shared-servers";
 import { parseSyncToken } from "../matrix/application/features/sync/contracts";
 import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
 import {
@@ -324,45 +327,6 @@ async function putDeviceKeysToDO(
 }
 
 // ============================================
-// Helper Functions
-// ============================================
-
-async function getNextStreamPosition(db: D1Database, streamName: string): Promise<number> {
-  await db
-    .prepare(`
-    UPDATE stream_positions SET position = position + 1 WHERE stream_name = ?
-  `)
-    .bind(streamName)
-    .run();
-
-  const result = await db
-    .prepare(`
-    SELECT position FROM stream_positions WHERE stream_name = ?
-  `)
-    .bind(streamName)
-    .first<{ position: number }>();
-
-  return result?.position || 1;
-}
-
-async function recordKeyChange(
-  db: D1Database,
-  userId: string,
-  deviceId: string | null,
-  changeType: string,
-): Promise<void> {
-  const streamPosition = await getNextStreamPosition(db, "device_keys");
-
-  await db
-    .prepare(`
-    INSERT INTO device_key_changes (user_id, device_id, change_type, stream_position)
-    VALUES (?, ?, ?, ?)
-  `)
-    .bind(userId, deviceId, changeType, streamPosition)
-    .run();
-}
-
-// ============================================
 // Device Keys
 // ============================================
 
@@ -432,41 +396,29 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
     await c.env.DEVICE_KEYS.put(`device:${userId}:${deviceId}`, JSON.stringify(device_keys));
 
     // Record key change for /keys/changes
-    await recordKeyChange(db, userId, deviceId, "update");
+    await recordDeviceKeyChange(db, userId, deviceId, "update");
 
     // Queue outbound m.device_list_update EDUs to federated servers
     try {
-      const { getServersInRoomsWithUser } = await import("../services/database");
-      const remoteServers = await getServersInRoomsWithUser(db, userId);
-      const localServer = c.env.SERVER_NAME;
-      const uniqueServers = [...new Set(remoteServers)].filter((s) => s !== localServer);
-
-      for (const server of uniqueServers) {
-        const fedDO = c.env.FEDERATION.get(
-          c.env.FEDERATION.idFromName(FEDERATION_OUTBOUND_DO_NAME),
-        );
-        await fedDO.fetch(
-          new Request("http://internal/send-edu", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              destination: server,
-              edu_type: "m.device_list_update",
-              content: {
-                user_id: userId,
-                device_id: deviceId,
-                device_display_name:
-                  typeof device_keys.unsigned?.["device_display_name"] === "string"
-                    ? device_keys.unsigned["device_display_name"]
-                    : undefined,
-                stream_id: Date.now(),
-                keys: device_keys,
-                deleted: false,
-              },
-            }),
-          }),
-        );
-      }
+      await publishDeviceListUpdateToSharedServers(
+        {
+          userId,
+          deviceId,
+          deviceDisplayName:
+            typeof device_keys.unsigned?.["device_display_name"] === "string"
+              ? device_keys.unsigned["device_display_name"]
+              : undefined,
+          keys: device_keys,
+        },
+        {
+          localServerName: c.env.SERVER_NAME,
+          now: () => Date.now(),
+          getSharedRemoteServers: (sharedUserId) =>
+            getSharedServersInRoomsWithUserIncludingPartialState(db, c.env.CACHE, sharedUserId),
+          queueEdu: (destination, eduType, content) =>
+            queueFederationEdu(c.env, destination, eduType, content),
+        },
+      );
     } catch (fedErr) {
       await runClientEffect(
         logger.error("keys.command.async_error", fedErr, {
@@ -1357,7 +1309,7 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
     `)
       .bind(userId, keyId, JSON.stringify(master_key))
       .run();
-    await recordKeyChange(db, userId, null, "update");
+    await recordDeviceKeyChange(db, userId, null, "update");
   }
 
   if (self_signing_key) {
@@ -1492,7 +1444,7 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
         }
 
         // Record key change for sync notifications
-        await recordKeyChange(db, userId, signedKeyObj.device_id || null, "update");
+        await recordDeviceKeyChange(db, userId, signedKeyObj.device_id || null, "update");
       } catch (err) {
         await runClientEffect(
           logger.error("keys.command.error", err, {

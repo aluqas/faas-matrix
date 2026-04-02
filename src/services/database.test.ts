@@ -261,11 +261,7 @@ describe("database state helpers", () => {
       },
     ]);
 
-    const events = await getLatestForwardExtremities(
-      db as unknown as D1Database,
-      "!room:test",
-      1,
-    );
+    const events = await getLatestForwardExtremities(db as unknown as D1Database, "!room:test", 1);
 
     expect(events.map((event) => event.event_id)).toEqual(["$join"]);
   });

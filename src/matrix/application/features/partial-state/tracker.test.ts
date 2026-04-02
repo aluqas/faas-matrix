@@ -3,6 +3,7 @@ import {
   clearPartialStateJoin,
   getPartialStateJoin,
   getPartialStateJoinForRoom,
+  listPartialStateJoinsForUser,
   markPartialStateJoinCompleted,
   markPartialStateJoin,
   takePartialStateJoinCompletion,
@@ -31,6 +32,17 @@ class FakeKvNamespace {
   async delete(key: string): Promise<void> {
     this.values.delete(key);
   }
+
+  async list(options?: { prefix?: string; cursor?: string }) {
+    const prefix = options?.prefix ?? "";
+    return {
+      keys: Array.from(this.values.keys())
+        .filter((key) => key.startsWith(prefix))
+        .map((name) => ({ name })),
+      list_complete: true,
+      cursor: "",
+    };
+  }
 }
 
 describe("partial-state tracker", () => {
@@ -42,6 +54,7 @@ describe("partial-state tracker", () => {
       userId: "@alice:test",
       eventId: "$prev",
       remoteServer: "hs2",
+      serversInRoom: ["hs2", "hs3"],
       startedAt: 1234,
     });
 
@@ -50,6 +63,7 @@ describe("partial-state tracker", () => {
       userId: "@alice:test",
       eventId: "$prev",
       remoteServer: "hs2",
+      serversInRoom: ["hs2", "hs3"],
       startedAt: 1234,
     });
     await expect(getPartialStateJoinForRoom(cache, "!room:test")).resolves.toEqual({
@@ -57,6 +71,7 @@ describe("partial-state tracker", () => {
       userId: "@alice:test",
       eventId: "$prev",
       remoteServer: "hs2",
+      serversInRoom: ["hs2", "hs3"],
       startedAt: 1234,
     });
   });
@@ -85,6 +100,7 @@ describe("partial-state tracker", () => {
       eventId: "$event",
       startedAt: 1,
       remoteServer: "remote.test",
+      serversInRoom: ["hs2", "hs3"],
     });
 
     await expect(
@@ -95,9 +111,52 @@ describe("partial-state tracker", () => {
       eventId: "$event",
       startedAt: 1,
       remoteServer: "remote.test",
+      serversInRoom: ["hs2", "hs3"],
     });
     await expect(
       takePartialStateJoinCompletion(cache, "@alice:test", "!room:test"),
     ).resolves.toBeNull();
+  });
+
+  it("lists partial-state joins for a user", async () => {
+    const cache = new FakeKvNamespace() as unknown as KVNamespace;
+
+    await markPartialStateJoin(cache, {
+      roomId: "!one:test",
+      userId: "@alice:test",
+      eventId: "$one",
+      startedAt: 1,
+      serversInRoom: ["hs2"],
+    });
+    await markPartialStateJoin(cache, {
+      roomId: "!two:test",
+      userId: "@alice:test",
+      eventId: "$two",
+      startedAt: 2,
+      serversInRoom: ["hs3"],
+    });
+    await markPartialStateJoin(cache, {
+      roomId: "!three:test",
+      userId: "@bob:test",
+      eventId: "$three",
+      startedAt: 3,
+    });
+
+    await expect(listPartialStateJoinsForUser(cache, "@alice:test")).resolves.toEqual([
+      {
+        roomId: "!one:test",
+        userId: "@alice:test",
+        eventId: "$one",
+        startedAt: 1,
+        serversInRoom: ["hs2"],
+      },
+      {
+        roomId: "!two:test",
+        userId: "@alice:test",
+        eventId: "$two",
+        startedAt: 2,
+        serversInRoom: ["hs3"],
+      },
+    ]);
   });
 });

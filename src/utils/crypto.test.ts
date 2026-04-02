@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   calculateContentHash,
+  canonicalJson,
   decodeMatrixBase64,
   normalizeMatrixBase64,
   verifyContentHash,
@@ -65,5 +66,30 @@ describe("crypto content hashes", () => {
 
   it("normalizes urlsafe base64 into standard unpadded base64", () => {
     expect(normalizeMatrixBase64("-___")).toBe("+///");
+  });
+
+  it("produces different canonical JSON when event_id encoding changes", () => {
+    const rawEvent = {
+      event_id: "$abc+/def",
+      type: "m.room.member",
+      room_id: "!room:test",
+      sender: "@alice:test",
+      state_key: "@alice:test",
+      content: {
+        membership: "join",
+      },
+      origin: "test",
+      origin_server_ts: 1234,
+      depth: 2,
+      auth_events: ["$create:test"],
+      prev_events: ["$prev:test"],
+    };
+
+    expect(canonicalJson(rawEvent)).not.toBe(
+      canonicalJson({
+        ...rawEvent,
+        event_id: "$abc-_def",
+      }),
+    );
   });
 });

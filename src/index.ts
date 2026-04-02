@@ -66,10 +66,7 @@ const app = new Hono<AppEnv>({ strict: false });
 
 type LazyRouteModule = { default: { fetch: typeof app.fetch } };
 
-async function dispatchLazyRoute(
-  c: Context<AppEnv>,
-  loader: () => Promise<LazyRouteModule>,
-) {
+async function dispatchLazyRoute(c: Context<AppEnv>, loader: () => Promise<LazyRouteModule>) {
   const module = await loader();
   return module.default.fetch(c.req.raw, c.env, c.executionCtx);
 }
@@ -121,14 +118,14 @@ app.post("/_internal/federation/recover", async (c) => {
 app.get("/admin", (c) => {
   return renderAdminDashboard(c.env.SERVER_NAME).then((html) =>
     c.html(html, 200, {
-    // Content-Security-Policy for XSS protection
-    // 'unsafe-inline' is needed for the inline scripts/styles in the dashboard
-    // This could be improved by moving scripts to external files with nonces
-    "Content-Security-Policy":
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'",
-    "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
+      // Content-Security-Policy for XSS protection
+      // 'unsafe-inline' is needed for the inline scripts/styles in the dashboard
+      // This could be improved by moving scripts to external files with nonces
+      "Content-Security-Policy":
+        "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
     }),
   );
 });
@@ -136,11 +133,11 @@ app.get("/admin", (c) => {
 app.get("/admin/", (c) => {
   return renderAdminDashboard(c.env.SERVER_NAME).then((html) =>
     c.html(html, 200, {
-    "Content-Security-Policy":
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'",
-    "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
+      "Content-Security-Policy":
+        "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
     }),
   );
 });

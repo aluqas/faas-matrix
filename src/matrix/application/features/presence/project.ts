@@ -1,8 +1,6 @@
 import type { PresenceState } from "../../../../types";
 import type { SyncEventFilter } from "../../sync-projection";
 import { applyEventFilter } from "../../sync-projection";
-import { runClientEffect } from "../../effect-runtime";
-import { withLogContext } from "../../logging";
 import type { PresenceProjectionQuery, PresenceSyncProjection } from "./contracts";
 
 const PRESENCE_TIMEOUT = 5 * 60 * 1000;
@@ -129,40 +127,26 @@ export async function projectPresenceEvents(
   cache: KVNamespace | undefined,
   query: PresenceProjectionQuery,
 ): Promise<PresenceSyncProjection> {
-  const logger = withLogContext({
-    component: "presence",
-    operation: "project",
-    user_id: query.userId,
-    debugEnabled: query.debugEnabled,
-  });
   const visibleUsers = await listVisibleUsers(db, query.userId, query.roomIds);
   const presenceByUser = await getPresenceForUsers(db, visibleUsers, cache);
 
-  const events = Object.entries(presenceByUser).map(([sender, content]) => ({
-    type: "m.presence" as const,
-    sender,
-    content: {
-      presence: content.presence,
-      ...(content.status_msg !== undefined ? { status_msg: content.status_msg } : {}),
-      ...(content.last_active_ago !== undefined
-        ? { last_active_ago: content.last_active_ago }
-        : {}),
-      ...(content.currently_active !== undefined
-        ? { currently_active: content.currently_active }
-        : {}),
-    },
-  }));
-
-  const projection = {
-    events: applyEventFilter(events, query.filter as SyncEventFilter | undefined),
+  return {
+    events: applyEventFilter(
+      Object.entries(presenceByUser).map(([sender, content]) => ({
+        type: "m.presence" as const,
+        sender,
+        content: {
+          presence: content.presence,
+          ...(content.status_msg !== undefined ? { status_msg: content.status_msg } : {}),
+          ...(content.last_active_ago !== undefined
+            ? { last_active_ago: content.last_active_ago }
+            : {}),
+          ...(content.currently_active !== undefined
+            ? { currently_active: content.currently_active }
+            : {}),
+        },
+      })),
+      query.filter as SyncEventFilter | undefined,
+    ),
   };
-  await runClientEffect(
-    logger.debug("presence.project.result", {
-      room_count: query.roomIds.length,
-      visible_user_count: visibleUsers.length,
-      event_count: projection.events.length,
-    }),
-  );
-
-  return projection;
 }

@@ -3,6 +3,7 @@ export interface PartialStateJoinMarker {
   userId: string;
   eventId: string;
   remoteServer?: string;
+  serversInRoom?: string[];
   startedAt: number;
 }
 
@@ -26,6 +27,43 @@ function buildPartialStateCompletionCacheKey(userId: string, roomId: string): st
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parsePartialStateJoinMarker(
+  raw: unknown,
+  defaults: Partial<Pick<PartialStateJoinMarker, "roomId" | "userId">> = {},
+): PartialStateJoinMarker | null {
+  if (!isPlainObject(raw)) {
+    return null;
+  }
+
+  const roomId = typeof raw["roomId"] === "string" ? raw["roomId"] : defaults.roomId;
+  const userId = typeof raw["userId"] === "string" ? raw["userId"] : defaults.userId;
+  const eventId = raw["eventId"];
+  const startedAt = raw["startedAt"];
+  if (
+    typeof roomId !== "string" ||
+    typeof userId !== "string" ||
+    typeof eventId !== "string" ||
+    typeof startedAt !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    roomId,
+    userId,
+    eventId,
+    startedAt,
+    ...(typeof raw["remoteServer"] === "string" ? { remoteServer: raw["remoteServer"] } : {}),
+    ...(Array.isArray(raw["serversInRoom"])
+      ? {
+          serversInRoom: raw["serversInRoom"].filter(
+            (entry): entry is string => typeof entry === "string",
+          ),
+        }
+      : {}),
+  };
 }
 
 export async function markPartialStateJoin(
@@ -54,23 +92,7 @@ export async function getPartialStateJoin(
   }
 
   const raw = await cache.get(buildPartialStateJoinCacheKey(userId, roomId), "json");
-  if (!isPlainObject(raw)) {
-    return null;
-  }
-
-  const eventId = raw["eventId"];
-  const startedAt = raw["startedAt"];
-  if (typeof eventId !== "string" || typeof startedAt !== "number") {
-    return null;
-  }
-
-  return {
-    roomId,
-    userId,
-    eventId,
-    startedAt,
-    ...(typeof raw["remoteServer"] === "string" ? { remoteServer: raw["remoteServer"] } : {}),
-  };
+  return parsePartialStateJoinMarker(raw, { roomId, userId });
 }
 
 export async function clearPartialStateJoin(
@@ -117,24 +139,13 @@ export async function takePartialStateJoinCompletion(
 
   const key = buildPartialStateCompletionCacheKey(userId, roomId);
   const raw = await cache.get(key, "json");
-  if (!isPlainObject(raw)) {
-    return null;
-  }
-
-  const eventId = raw["eventId"];
-  const startedAt = raw["startedAt"];
-  if (typeof eventId !== "string" || typeof startedAt !== "number") {
+  const marker = parsePartialStateJoinMarker(raw, { roomId, userId });
+  if (!marker) {
     return null;
   }
 
   await cache.delete(key);
-  return {
-    roomId,
-    userId,
-    eventId,
-    startedAt,
-    ...(typeof raw["remoteServer"] === "string" ? { remoteServer: raw["remoteServer"] } : {}),
-  };
+  return marker;
 }
 
 export async function getPartialStateJoinForRoom(
@@ -146,22 +157,34 @@ export async function getPartialStateJoinForRoom(
   }
 
   const raw = await cache.get(buildPartialStateRoomCacheKey(roomId), "json");
-  if (!isPlainObject(raw)) {
-    return null;
+  return parsePartialStateJoinMarker(raw, { roomId });
+}
+
+export async function listPartialStateJoinsForUser(
+  cache: KVNamespace | undefined,
+  userId: string,
+): Promise<PartialStateJoinMarker[]> {
+  if (!cache || typeof cache.list !== "function") {
+    return [];
   }
 
-  const userId = raw["userId"];
-  const eventId = raw["eventId"];
-  const startedAt = raw["startedAt"];
-  if (typeof userId !== "string" || typeof eventId !== "string" || typeof startedAt !== "number") {
-    return null;
-  }
+  const prefix = `${PARTIAL_STATE_JOIN_PREFIX}:${userId}:`;
+  const markers: PartialStateJoinMarker[] = [];
+  let cursor: string | undefined;
 
-  return {
-    roomId,
-    userId,
-    eventId,
-    startedAt,
-    ...(typeof raw["remoteServer"] === "string" ? { remoteServer: raw["remoteServer"] } : {}),
-  };
+  do {
+    const page = await cache.list({ prefix, ...(cursor ? { cursor } : {}) });
+    const pageMarkers = await Promise.all(
+      page.keys.map(async (key) => parsePartialStateJoinMarker(await cache.get(key.name, "json"))),
+    );
+    for (const marker of pageMarkers) {
+      if (marker) {
+        markers.push(marker);
+      }
+    }
+
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+
+  return markers;
 }

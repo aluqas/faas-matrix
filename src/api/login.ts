@@ -31,9 +31,7 @@ import { requireAuth, extractAccessToken } from "../middleware/auth";
 
 const app = new Hono<AppEnv>();
 
-type ParsedJsonBody =
-  | { ok: true; value: unknown }
-  | { ok: false; reason: "not_json" | "bad_json" };
+type ParsedJsonBody = { ok: true; value: unknown } | { ok: false; reason: "not_json" | "bad_json" };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -110,7 +108,9 @@ app.post("/_matrix/client/v3/login", async (c) => {
   const parsedBody = await parseJsonBody(c.req.raw);
   if (!parsedBody.ok) {
     return (
-      parsedBody.reason === "not_json" ? Errors.notJson("Request body is not valid UTF-8 JSON") : Errors.badJson()
+      parsedBody.reason === "not_json"
+        ? Errors.notJson("Request body is not valid UTF-8 JSON")
+        : Errors.badJson()
     ).toResponse();
   }
   if (!isRecord(parsedBody.value)) {
@@ -121,8 +121,7 @@ app.post("/_matrix/client/v3/login", async (c) => {
   const identifier = isRecord(body["identifier"]) ? body["identifier"] : null;
   const password = typeof body["password"] === "string" ? body["password"] : undefined;
   const token = typeof body["token"] === "string" ? body["token"] : undefined;
-  const deviceIdFromBody =
-    typeof body["device_id"] === "string" ? body["device_id"] : undefined;
+  const deviceIdFromBody = typeof body["device_id"] === "string" ? body["device_id"] : undefined;
   const initialDeviceDisplayName =
     typeof body["initial_device_display_name"] === "string"
       ? body["initial_device_display_name"]
@@ -287,7 +286,9 @@ app.post("/_matrix/client/v3/refresh", async (c) => {
   const parsedBody = await parseJsonBody(c.req.raw);
   if (!parsedBody.ok) {
     return (
-      parsedBody.reason === "not_json" ? Errors.notJson("Request body is not valid UTF-8 JSON") : Errors.badJson()
+      parsedBody.reason === "not_json"
+        ? Errors.notJson("Request body is not valid UTF-8 JSON")
+        : Errors.badJson()
     ).toResponse();
   }
   if (!isRecord(parsedBody.value)) {
@@ -383,7 +384,9 @@ app.post("/_matrix/client/v3/register", async (c) => {
   const parsedBody = await parseJsonBody(c.req.raw);
   if (!parsedBody.ok) {
     return (
-      parsedBody.reason === "not_json" ? Errors.notJson("Request body is not valid UTF-8 JSON") : Errors.badJson()
+      parsedBody.reason === "not_json"
+        ? Errors.notJson("Request body is not valid UTF-8 JSON")
+        : Errors.badJson()
     ).toResponse();
   }
   if (!isRecord(parsedBody.value)) {
@@ -392,8 +395,7 @@ app.post("/_matrix/client/v3/register", async (c) => {
   const body = parsedBody.value;
   const username = typeof body["username"] === "string" ? body["username"] : undefined;
   const password = typeof body["password"] === "string" ? body["password"] : undefined;
-  const deviceIdFromBody =
-    typeof body["device_id"] === "string" ? body["device_id"] : undefined;
+  const deviceIdFromBody = typeof body["device_id"] === "string" ? body["device_id"] : undefined;
   const initialDeviceDisplayName =
     typeof body["initial_device_display_name"] === "string"
       ? body["initial_device_display_name"]

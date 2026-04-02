@@ -4,10 +4,7 @@ import type { FederationRepository } from "../../../repositories/interfaces";
 import { emitEffectWarning } from "../../effect-debug";
 import { runFederationEffect } from "../../effect-runtime";
 import { requireLogContext, withLogContext } from "../../logging";
-import {
-  type FederationTransactionEnvelope,
-  type FederationTransactionResult,
-} from "./contracts";
+import { type FederationTransactionEnvelope, type FederationTransactionResult } from "./contracts";
 import { ingestFederationEdu } from "./edu-ingest";
 import { ingestFederationPdu } from "./pdu-ingest";
 

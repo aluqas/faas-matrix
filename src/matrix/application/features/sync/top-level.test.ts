@@ -25,7 +25,11 @@ class FakeSyncRepository implements SyncRepository {
   async getUnusedFallbackKeyTypes() {
     return ["signed_curve25519"];
   }
-  async getDeviceListChanges(_userId: string, sinceEventPosition: number, sinceDeviceKeyPosition: number) {
+  async getDeviceListChanges(
+    _userId: string,
+    sinceEventPosition: number,
+    sinceDeviceKeyPosition: number,
+  ) {
     if (sinceEventPosition === 0 && sinceDeviceKeyPosition === 0) {
       return { changed: ["@bootstrap:test"], left: [] };
     }

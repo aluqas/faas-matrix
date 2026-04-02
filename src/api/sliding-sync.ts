@@ -1,15 +1,26 @@
 // Sliding Sync API (MSC3575 & MSC4186)
 // Implements both the original sliding sync and simplified sliding sync
 
+import { Effect } from "effect";
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
+import { runClientEffect } from "../matrix/application/effect-runtime";
 import { getTypingForRooms } from "./typing";
 import { getReceiptsForRooms } from "./receipts";
 import { countNotificationsWithRules } from "../services/push-rule-evaluator";
 import { projectDeviceLists } from "../matrix/application/sync-projection";
 import { CloudflareSyncRepository } from "../runtime/cloudflare/matrix-repositories";
+import type { ConnectionState } from "../matrix/application/features/sync/effect-ports";
+import {
+  didSlidingSyncListChange,
+  firstTimeRead,
+  readMarkerChanged,
+  shouldIncludeSlidingSyncRoom,
+  trackSlidingSyncRoomReadState,
+} from "../matrix/application/features/sync/sliding-sync-shared";
+import { getThreadSubscriptionsExtension } from "../matrix/application/features/sync/thread-subscriptions";
 // Room cache helper available for future optimizations
 // import { getRoomMetadata, invalidateRoomCache, type RoomMetadata } from '../services/room-cache';
 
@@ -187,140 +198,7 @@ interface ExtensionsResponse {
   };
 }
 
-// Connection state stored in Durable Object (previously KV, migrated to avoid rate limits)
-interface ConnectionState {
-  userId: string;
-  pos: number; // Actual stream_ordering from database
-  lastAccess: number;
-  roomStates: Record<
-    string,
-    {
-      lastStreamOrdering: number; // Last stream_ordering sent for this room
-      sentState: boolean;
-    }
-  >;
-  listStates: Record<
-    string,
-    {
-      roomIds: string[];
-      count: number;
-    }
-  >;
-  // Track last-sent notification counts to detect changes even without new timeline events
-  roomNotificationCounts?: Record<string, number>;
-  // Track last-sent m.fully_read event IDs to detect when user marks as read
-  roomFullyReadMarkers?: Record<string, string>;
-  // Track if initial sync has been completed to prevent ephemeral spam on reconnects
-  initialSyncComplete?: boolean;
-  // Track rooms we've sent as "read" (notification_count = 0) to avoid resending
-  roomSentAsRead?: Record<string, boolean>;
-}
-
 const THREAD_SUBSCRIPTIONS_EVENT_TYPE = "io.element.msc4306.thread_subscriptions";
-
-interface ThreadSubscriptionRecord {
-  automatic: boolean;
-  subscribed: boolean;
-}
-
-function parseThreadSubscriptionRecord(value: unknown): ThreadSubscriptionRecord | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-
-  const automaticValue = (value as Record<string, unknown>)["automatic"];
-  const subscribedValue = (value as Record<string, unknown>)["subscribed"];
-  return {
-    automatic: automaticValue === true,
-    subscribed: subscribedValue !== false,
-  };
-}
-
-function parseThreadSubscriptionsContent(
-  rawContent: string,
-): Record<string, ThreadSubscriptionRecord> {
-  try {
-    const parsed = JSON.parse(rawContent) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-
-    const subscriptions: Record<string, ThreadSubscriptionRecord> = {};
-    for (const [threadRootId, value] of Object.entries(parsed as Record<string, unknown>)) {
-      const record = parseThreadSubscriptionRecord(value);
-      if (record) {
-        subscriptions[threadRootId] = record;
-      }
-    }
-    return subscriptions;
-  } catch {
-    return {};
-  }
-}
-
-async function getThreadSubscriptionsExtension(
-  db: D1Database,
-  userId: string,
-  roomIds?: string[],
-): Promise<NonNullable<ExtensionsResponse["io.element.msc4308.thread_subscriptions"]>> {
-  let query = `
-    SELECT room_id, content
-    FROM account_data
-    WHERE user_id = ? AND event_type = ? AND room_id != '' AND deleted = 0
-  `;
-  const params: (string | number)[] = [userId, THREAD_SUBSCRIPTIONS_EVENT_TYPE];
-
-  if (roomIds && roomIds.length > 0) {
-    query += ` AND room_id IN (${roomIds.map(() => "?").join(", ")})`;
-    params.push(...roomIds);
-  }
-
-  const subscriptionRows = await db
-    .prepare(query)
-    .bind(...params)
-    .all<{ room_id: string; content: string }>();
-
-  const subscribed: Record<string, Record<string, { bump_stamp: number; automatic: boolean }>> = {};
-
-  for (const row of subscriptionRows.results) {
-    const roomSubscriptions = parseThreadSubscriptionsContent(row.content);
-    const threadRootIds = Object.keys(roomSubscriptions);
-    const activeThreadRootIds = threadRootIds.filter((threadRootId) => {
-      return roomSubscriptions[threadRootId]?.subscribed;
-    });
-    if (activeThreadRootIds.length === 0) {
-      continue;
-    }
-
-    const bumpStampRows = await db
-      .prepare(
-        `
-        SELECT event_id, origin_server_ts
-        FROM events
-        WHERE room_id = ? AND event_id IN (${activeThreadRootIds.map(() => "?").join(", ")})
-      `,
-      )
-      .bind(row.room_id, ...activeThreadRootIds)
-      .all<{ event_id: string; origin_server_ts: number }>();
-
-    const bumpStampByEventId = new Map(
-      bumpStampRows.results.map((event) => [event.event_id, event.origin_server_ts] as const),
-    );
-
-    subscribed[row.room_id] = {};
-    for (const [threadRootId, subscription] of Object.entries(roomSubscriptions)) {
-      if (!subscription.subscribed) {
-        continue;
-      }
-      subscribed[row.room_id][threadRootId] = {
-        bump_stamp: bumpStampByEventId.get(threadRootId) ?? Date.now(),
-        automatic: subscription.automatic,
-      };
-    }
-  }
-
-  return Object.keys(subscribed).length > 0 ? { subscribed } : {};
-}
 
 // Helper to get the current maximum stream ordering from the database
 async function getCurrentStreamPosition(db: D1Database): Promise<number> {
@@ -330,13 +208,11 @@ async function getCurrentStreamPosition(db: D1Database): Promise<number> {
   return result?.max_pos ?? 0;
 }
 
-// Helper to get or create connection state using Durable Object (not KV - avoids rate limits)
-async function getConnectionState(
+async function loadConnectionState(
   syncDO: DurableObjectNamespace,
   userId: string,
   connId: string,
 ): Promise<ConnectionState | null> {
-  // Use userId as the DO ID so each user has their own DO instance
   const doId = syncDO.idFromName(userId);
   const stub = syncDO.get(doId);
 
@@ -347,30 +223,23 @@ async function getConnectionState(
     );
 
     if (!response.ok) {
-      // DO returned error (400 for bad params, 500 for internal error)
-      // Throw so caller knows DO is unavailable vs state not found
       const errorText = await response.text().catch(() => "unknown error");
       throw new Error(`DO fetch failed: ${response.status} - ${errorText}`);
     }
 
-    // 200 with null body means state not found (this is expected for new connections)
-    // 200 with state object means found
-    const data = await response.json();
-    return data as ConnectionState | null;
+    return (await response.json()) as ConnectionState | null;
   } catch (error) {
-    // Log but rethrow - caller should handle DO unavailability
     console.error("[sliding-sync] Failed to get connection state from DO:", error);
     throw error;
   }
 }
 
-async function saveConnectionState(
+async function persistConnectionState(
   syncDO: DurableObjectNamespace,
   userId: string,
   connId: string,
   state: ConnectionState,
 ): Promise<void> {
-  // Use userId as the DO ID so each user has their own DO instance
   const doId = syncDO.idFromName(userId);
   const stub = syncDO.get(doId);
 
@@ -385,12 +254,48 @@ async function saveConnectionState(
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText = await response.text().catch(() => "unknown error");
       throw new Error(`DO save failed: ${response.status} - ${errorText}`);
     }
   } catch (error) {
-    // Log but don't throw - state can be rebuilt on next sync
     console.error("[sliding-sync] Failed to save connection state to DO:", error);
+  }
+}
+
+async function waitForSlidingSyncEvents(
+  syncDO: DurableObjectNamespace,
+  userId: string,
+  timeoutMs: number,
+): Promise<{ hasEvents: boolean }> {
+  const doId = syncDO.idFromName(userId);
+  const stub = syncDO.get(doId);
+  const response = await stub.fetch(
+    new Request("http://internal/wait-for-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ timeout: timeoutMs }),
+    }),
+  );
+  return (await response.json()) as { hasEvents: boolean };
+}
+
+async function getFullyReadMarker(db: D1Database, userId: string, roomId: string): Promise<string> {
+  const fullyReadResult = await db
+    .prepare(`
+      SELECT content FROM account_data
+      WHERE user_id = ? AND room_id = ? AND event_type = 'm.fully_read'
+    `)
+    .bind(userId, roomId)
+    .first<{ content: string }>();
+
+  if (!fullyReadResult) {
+    return "";
+  }
+
+  try {
+    return JSON.parse(fullyReadResult.content).event_id || "";
+  } catch {
+    return "";
   }
 }
 
@@ -908,19 +813,14 @@ async function getInviteRoomData(
   return result;
 }
 
-// MSC3575 Sliding Sync endpoint
-app.post("/_matrix/client/unstable/org.matrix.msc3575/sync", requireAuth(), async (c) => {
+async function buildMsc3575SlidingSyncResponse(
+  c: Context<AppEnv>,
+  body: SlidingSyncRequest,
+): Promise<SlidingSyncResponse | Response> {
   const userId = c.get("userId");
   const db = c.env.DB;
   const syncDO = c.env.SYNC; // Use Durable Object for connection state (not KV - avoids rate limits)
   const cache = c.env.CACHE; // KV for presence lookups (read-only, no rate limit issues)
-
-  let body: SlidingSyncRequest;
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
-  }
 
   const connId = body.conn_id || "default";
   // Note: timeout is parsed but not used yet (for future long-polling support)
@@ -933,7 +833,7 @@ app.post("/_matrix/client/unstable/org.matrix.msc3575/sync", requireAuth(), asyn
   // Get or create connection state
   let connectionState: ConnectionState | null;
   try {
-    connectionState = await getConnectionState(syncDO, userId, connId);
+    connectionState = await loadConnectionState(syncDO, userId, connId);
   } catch (error) {
     // DO unavailable - return error so client knows to retry
     console.error("[sliding-sync MSC3575] DO unavailable:", error);
@@ -1032,10 +932,7 @@ app.post("/_matrix/client/unstable/org.matrix.msc3575/sync", requireAuth(), asyn
 
       // Check if the list has changed since last sync
       const previousListState = connectionState.listStates[listKey];
-      const listChanged =
-        !previousListState ||
-        previousListState.count !== rooms.length ||
-        JSON.stringify(previousListState.roomIds) !== JSON.stringify(roomIds);
+      const listChanged = didSlidingSyncListChange(previousListState, roomIds, rooms.length);
 
       // Only include ops if the list changed (or it's an initial sync)
       if (listChanged) {
@@ -1091,53 +988,37 @@ app.post("/_matrix/client/unstable/org.matrix.msc3575/sync", requireAuth(), asyn
           hasPrevCount && currentNotificationCount !== prevNotificationCount;
 
         // Check if m.fully_read marker changed
-        const fullyReadResult = await db
-          .prepare(`
-          SELECT content FROM account_data
-          WHERE user_id = ? AND room_id = ? AND event_type = 'm.fully_read'
-        `)
-          .bind(userId, roomInfo.roomId)
-          .first<{ content: string }>();
-        let currentFullyRead = "";
-        if (fullyReadResult) {
-          try {
-            currentFullyRead = JSON.parse(fullyReadResult.content).event_id || "";
-          } catch {
-            /* ignore */
-          }
-        }
-        const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomInfo.roomId] ?? "";
-        const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== "";
+        const currentFullyRead = await getFullyReadMarker(db, userId, roomInfo.roomId);
+        const fullyReadChanged = readMarkerChanged(
+          connectionState.roomFullyReadMarkers?.[roomInfo.roomId],
+          currentFullyRead,
+        );
 
         // Track if this is the first time we're sending this room as "read" (notification_count = 0)
         // This ensures Element X receives the room with 0 unread count at least once
-        const firstTimeRead =
-          currentNotificationCount === 0 && !connectionState.roomSentAsRead?.[roomInfo.roomId];
+        const shouldMarkFirstRead = firstTimeRead(
+          connectionState,
+          roomInfo.roomId,
+          currentNotificationCount,
+        );
 
         // Include room if it's initial, has new events, notification count changed, fully_read changed, OR first time read
         if (
-          isInitialRoom ||
-          (roomData.timeline && roomData.timeline.length > 0) ||
-          notificationCountChanged ||
-          fullyReadChanged ||
-          firstTimeRead
+          shouldIncludeSlidingSyncRoom({
+            isInitialRoom,
+            timelineEventCount: roomData.timeline?.length ?? 0,
+            notificationCountChanged,
+            fullyReadChanged,
+            firstTimeRead: shouldMarkFirstRead,
+          })
         ) {
           response.rooms[roomInfo.roomId] = roomData;
-
-          // Update tracked state
-          connectionState.roomNotificationCounts = connectionState.roomNotificationCounts || {};
-          connectionState.roomNotificationCounts[roomInfo.roomId] = currentNotificationCount;
-          connectionState.roomFullyReadMarkers = connectionState.roomFullyReadMarkers || {};
-          connectionState.roomFullyReadMarkers[roomInfo.roomId] = currentFullyRead;
-
-          // Track room read status - set when read, clear when unread
-          connectionState.roomSentAsRead = connectionState.roomSentAsRead || {};
-          if (currentNotificationCount === 0) {
-            connectionState.roomSentAsRead[roomInfo.roomId] = true;
-          } else {
-            // Clear flag when there are unread messages so room will be included again when read
-            delete connectionState.roomSentAsRead[roomInfo.roomId];
-          }
+          trackSlidingSyncRoomReadState(
+            connectionState,
+            roomInfo.roomId,
+            currentNotificationCount,
+            currentFullyRead,
+          );
         }
 
         // Mark as sent with stream ordering tracking
@@ -1203,52 +1084,32 @@ app.post("/_matrix/client/unstable/org.matrix.msc3575/sync", requireAuth(), asyn
         hasPrevCount && currentNotificationCount !== prevNotificationCount;
 
       // Check if m.fully_read marker changed
-      const fullyReadResult = await db
-        .prepare(`
-        SELECT content FROM account_data
-        WHERE user_id = ? AND room_id = ? AND event_type = 'm.fully_read'
-      `)
-        .bind(userId, roomId)
-        .first<{ content: string }>();
-      let currentFullyRead = "";
-      if (fullyReadResult) {
-        try {
-          currentFullyRead = JSON.parse(fullyReadResult.content).event_id || "";
-        } catch {
-          /* ignore */
-        }
-      }
-      const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomId] ?? "";
-      const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== "";
+      const currentFullyRead = await getFullyReadMarker(db, userId, roomId);
+      const fullyReadChanged = readMarkerChanged(
+        connectionState.roomFullyReadMarkers?.[roomId],
+        currentFullyRead,
+      );
 
       // Track if this is the first time we're sending this room as "read" (notification_count = 0)
-      const firstTimeRead =
-        currentNotificationCount === 0 && !connectionState.roomSentAsRead?.[roomId];
+      const shouldMarkFirstRead = firstTimeRead(connectionState, roomId, currentNotificationCount);
 
       // Include room if it's initial, has new events, notification count changed, fully_read changed, OR first time read
       if (
-        isInitialRoom ||
-        (roomData.timeline && roomData.timeline.length > 0) ||
-        notificationCountChanged ||
-        fullyReadChanged ||
-        firstTimeRead
+        shouldIncludeSlidingSyncRoom({
+          isInitialRoom,
+          timelineEventCount: roomData.timeline?.length ?? 0,
+          notificationCountChanged,
+          fullyReadChanged,
+          firstTimeRead: shouldMarkFirstRead,
+        })
       ) {
         response.rooms[roomId] = roomData;
-
-        // Update tracked state
-        connectionState.roomNotificationCounts = connectionState.roomNotificationCounts || {};
-        connectionState.roomNotificationCounts[roomId] = currentNotificationCount;
-        connectionState.roomFullyReadMarkers = connectionState.roomFullyReadMarkers || {};
-        connectionState.roomFullyReadMarkers[roomId] = currentFullyRead;
-
-        // Track room read status - set when read, clear when unread
-        connectionState.roomSentAsRead = connectionState.roomSentAsRead || {};
-        if (currentNotificationCount === 0) {
-          connectionState.roomSentAsRead[roomId] = true;
-        } else {
-          // Clear flag when there are unread messages so room will be included again when read
-          delete connectionState.roomSentAsRead[roomId];
-        }
+        trackSlidingSyncRoomReadState(
+          connectionState,
+          roomId,
+          currentNotificationCount,
+          currentFullyRead,
+        );
       }
 
       const newStreamOrdering = roomData.maxStreamOrdering || roomSincePos;
@@ -1467,12 +1328,34 @@ app.post("/_matrix/client/unstable/org.matrix.msc3575/sync", requireAuth(), asyn
 
   // ALWAYS save connection state - using DO now (not KV), no rate limit concerns
   try {
-    await saveConnectionState(syncDO, userId, connId, connectionState);
+    await persistConnectionState(syncDO, userId, connId, connectionState);
   } catch (error) {
     console.error("[sliding-sync MSC3575] Failed to save connection state:", error);
   }
 
-  return c.json(response);
+  return response;
+}
+
+// MSC3575 Sliding Sync endpoint
+app.post("/_matrix/client/unstable/org.matrix.msc3575/sync", requireAuth(), async (c) => {
+  let body: SlidingSyncRequest;
+  try {
+    body = await c.req.json();
+  } catch {
+    return Errors.badJson().toResponse();
+  }
+
+  try {
+    const response = await runClientEffect(
+      Effect.promise(() => buildMsc3575SlidingSyncResponse(c, body)),
+    );
+    return response instanceof Response ? response : c.json(response);
+  } catch (error) {
+    if (error instanceof Error && "toResponse" in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
+  }
 });
 
 // Helper to detect if a request looks like it's from the iOS NSE (Notification Service Extension)
@@ -1535,21 +1418,17 @@ function detectNSERequest(
   return { isLikelyNSE, indicators };
 }
 
-// MSC4186 Simplified Sliding Sync handler (shared between endpoints)
-async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
+// MSC4186 Simplified Sliding Sync builder (shared between endpoints)
+async function buildSimplifiedSlidingSyncResponse(
+  c: Context<AppEnv>,
+  body: SlidingSyncRequest,
+): Promise<SlidingSyncResponse | Response> {
   const userId = c.get("userId");
   const db = c.env.DB;
   const syncDO = c.env.SYNC; // Use Durable Object for connection state (not KV - avoids rate limits)
 
   // Capture User-Agent for NSE detection
   const userAgent = c.req.header("User-Agent");
-
-  let body: SlidingSyncRequest;
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
-  }
 
   const connId = body.conn_id || "default";
 
@@ -1580,7 +1459,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   // Get or create connection state
   let connectionState: ConnectionState | null;
   try {
-    connectionState = await getConnectionState(syncDO, userId, connId);
+    connectionState = await loadConnectionState(syncDO, userId, connId);
   } catch (error) {
     // DO unavailable - return error so client knows to retry
     console.error("[sliding-sync] DO unavailable:", error);
@@ -1701,10 +1580,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
 
       // Check if the list has changed since last sync
       const previousListState = connectionState.listStates[listKey];
-      const listChanged =
-        !previousListState ||
-        previousListState.count !== rooms.length ||
-        JSON.stringify(previousListState.roomIds) !== JSON.stringify(roomIds);
+      const listChanged = didSlidingSyncListChange(previousListState, roomIds, rooms.length);
 
       // Only include ops if the list changed (or it's an initial sync)
       if (listChanged) {
@@ -1761,54 +1637,38 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
           hasPrevCount && currentNotificationCount !== prevNotificationCount;
 
         // Check if m.fully_read marker changed (Element X uses this for encrypted rooms)
-        const fullyReadResult = await db
-          .prepare(`
-          SELECT content FROM account_data
-          WHERE user_id = ? AND room_id = ? AND event_type = 'm.fully_read'
-        `)
-          .bind(userId, roomInfo.roomId)
-          .first<{ content: string }>();
-        let currentFullyRead = "";
-        if (fullyReadResult) {
-          try {
-            currentFullyRead = JSON.parse(fullyReadResult.content).event_id || "";
-          } catch {
-            /* ignore */
-          }
-        }
-        const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomInfo.roomId] ?? "";
-        const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== "";
+        const currentFullyRead = await getFullyReadMarker(db, userId, roomInfo.roomId);
+        const fullyReadChanged = readMarkerChanged(
+          connectionState.roomFullyReadMarkers?.[roomInfo.roomId],
+          currentFullyRead,
+        );
 
         // Track if this is the first time we're sending this room as "read" (notification_count = 0)
         // This ensures Element X receives the room with 0 unread count at least once
-        const firstTimeRead =
-          currentNotificationCount === 0 && !connectionState.roomSentAsRead?.[roomInfo.roomId];
+        const shouldMarkFirstRead = firstTimeRead(
+          connectionState,
+          roomInfo.roomId,
+          currentNotificationCount,
+        );
 
         // Include room if it's initial, has new events, notification count changed, fully_read changed, OR first time read
         if (
-          isInitialRoom ||
-          (roomData.timeline && roomData.timeline.length > 0) ||
-          notificationCountChanged ||
-          fullyReadChanged ||
-          firstTimeRead
+          shouldIncludeSlidingSyncRoom({
+            isInitialRoom,
+            timelineEventCount: roomData.timeline?.length ?? 0,
+            notificationCountChanged,
+            fullyReadChanged,
+            firstTimeRead: shouldMarkFirstRead,
+          })
         ) {
           hasChanges = true; // Mark that we have actual changes
           response.rooms[roomInfo.roomId] = roomData;
-
-          // Update tracked state
-          connectionState.roomNotificationCounts = connectionState.roomNotificationCounts || {};
-          connectionState.roomNotificationCounts[roomInfo.roomId] = currentNotificationCount;
-          connectionState.roomFullyReadMarkers = connectionState.roomFullyReadMarkers || {};
-          connectionState.roomFullyReadMarkers[roomInfo.roomId] = currentFullyRead;
-
-          // Track room read status - set when read, clear when unread
-          connectionState.roomSentAsRead = connectionState.roomSentAsRead || {};
-          if (currentNotificationCount === 0) {
-            connectionState.roomSentAsRead[roomInfo.roomId] = true;
-          } else {
-            // Clear flag when there are unread messages so room will be included again when read
-            delete connectionState.roomSentAsRead[roomInfo.roomId];
-          }
+          trackSlidingSyncRoomReadState(
+            connectionState,
+            roomInfo.roomId,
+            currentNotificationCount,
+            currentFullyRead,
+          );
         }
 
         // Update room state tracking
@@ -1875,27 +1735,14 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
         hasPrevCount && currentNotificationCount !== prevNotificationCount;
 
       // Check if m.fully_read marker changed (Element X uses this for encrypted rooms)
-      const fullyReadResult = await db
-        .prepare(`
-        SELECT content FROM account_data
-        WHERE user_id = ? AND room_id = ? AND event_type = 'm.fully_read'
-      `)
-        .bind(userId, roomId)
-        .first<{ content: string }>();
-      let currentFullyRead = "";
-      if (fullyReadResult) {
-        try {
-          currentFullyRead = JSON.parse(fullyReadResult.content).event_id || "";
-        } catch {
-          /* ignore */
-        }
-      }
-      const prevFullyRead = connectionState.roomFullyReadMarkers?.[roomId] ?? "";
-      const fullyReadChanged = currentFullyRead !== prevFullyRead && currentFullyRead !== "";
+      const currentFullyRead = await getFullyReadMarker(db, userId, roomId);
+      const fullyReadChanged = readMarkerChanged(
+        connectionState.roomFullyReadMarkers?.[roomId],
+        currentFullyRead,
+      );
 
       // Track if this is the first time we're sending this room as "read" (notification_count = 0)
-      const firstTimeRead =
-        currentNotificationCount === 0 && !connectionState.roomSentAsRead?.[roomId];
+      const shouldMarkFirstRead = firstTimeRead(connectionState, roomId, currentNotificationCount);
 
       // For room subscriptions, ALWAYS include room data because client explicitly requested it
       // This is different from list-based sync - room subscriptions mean "give me this room's data"
@@ -1905,28 +1752,21 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
 
       // Also track for legacy reasons (notification changes, read status)
       if (
-        isInitialRoom ||
-        (roomData.timeline && roomData.timeline.length > 0) ||
-        notificationCountChanged ||
-        fullyReadChanged ||
-        firstTimeRead
+        shouldIncludeSlidingSyncRoom({
+          isInitialRoom,
+          timelineEventCount: roomData.timeline?.length ?? 0,
+          notificationCountChanged,
+          fullyReadChanged,
+          firstTimeRead: shouldMarkFirstRead,
+          explicitSubscription: true,
+        })
       ) {
-        // Already included above, but update tracking state
-
-        // Update tracked state
-        connectionState.roomNotificationCounts = connectionState.roomNotificationCounts || {};
-        connectionState.roomNotificationCounts[roomId] = currentNotificationCount;
-        connectionState.roomFullyReadMarkers = connectionState.roomFullyReadMarkers || {};
-        connectionState.roomFullyReadMarkers[roomId] = currentFullyRead;
-
-        // Track room read status - set when read, clear when unread
-        connectionState.roomSentAsRead = connectionState.roomSentAsRead || {};
-        if (currentNotificationCount === 0) {
-          connectionState.roomSentAsRead[roomId] = true;
-        } else {
-          // Clear flag when there are unread messages so room will be included again when read
-          delete connectionState.roomSentAsRead[roomId];
-        }
+        trackSlidingSyncRoomReadState(
+          connectionState,
+          roomId,
+          currentNotificationCount,
+          currentFullyRead,
+        );
       }
 
       const newStreamOrdering = roomData.maxStreamOrdering || roomSincePos;
@@ -2171,9 +2011,14 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
 
     if (body.extensions["io.element.msc4308.thread_subscriptions"]) {
       const requestedRooms = body.extensions["io.element.msc4308.thread_subscriptions"].rooms;
-      const threadSubscriptions = await getThreadSubscriptionsExtension(db, userId, requestedRooms);
-      if (threadSubscriptions.subscribed) {
-        response.extensions["io.element.msc4308.thread_subscriptions"] = threadSubscriptions;
+      const subscribed = await getThreadSubscriptionsExtension(
+        db,
+        userId,
+        THREAD_SUBSCRIPTIONS_EVENT_TYPE,
+        requestedRooms,
+      );
+      if (subscribed) {
+        response.extensions["io.element.msc4308.thread_subscriptions"] = { subscribed };
       }
     }
   }
@@ -2252,7 +2097,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   // Always advance position to prevent client re-sync loops
   // Previously we only set pos when hasChanges, but this caused clients to receive
   // the same pos twice and immediately re-sync, thinking it was stale
-  response.pos = String(currentStreamPos);
+  response.pos = String(Math.max(currentStreamPos, maxStreamOrdering));
   connectionState.pos = currentStreamPos;
 
   // Mark initial sync as complete so ephemeral fallback doesn't run again on reconnects
@@ -2274,7 +2119,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   // Previously we only saved when hasChanges, but this caused initialSyncComplete
   // to not persist, resulting in ephemeral data spam on every request
   try {
-    await saveConnectionState(syncDO, userId, connId, connectionState);
+    await persistConnectionState(syncDO, userId, connId, connectionState);
   } catch (error) {
     console.error("[sliding-sync] Failed to save connection state:", error);
     // Don't return error here - state can be rebuilt on next request
@@ -2287,16 +2132,7 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
   if (!hasChanges && timeout > 0) {
     console.log("[sliding-sync] No changes, waiting for events via DO, timeout:", timeout, "ms");
     try {
-      const doId = syncDO.idFromName(userId);
-      const stub = syncDO.get(doId);
-      const waitResponse = await stub.fetch(
-        new Request("http://internal/wait-for-events", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ timeout }),
-        }),
-      );
-      const waitResult = (await waitResponse.json()) as { hasEvents: boolean };
+      const waitResult = await waitForSlidingSyncEvents(syncDO, userId, timeout);
 
       if (waitResult.hasEvents) {
         console.log("[sliding-sync] Woken up early - events arrived");
@@ -2311,7 +2147,28 @@ async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
     }
   }
 
-  return c.json(response);
+  return response;
+}
+
+async function handleSimplifiedSlidingSync(c: Context<AppEnv>) {
+  let body: SlidingSyncRequest;
+  try {
+    body = await c.req.json();
+  } catch {
+    return Errors.badJson().toResponse();
+  }
+
+  try {
+    const response = await runClientEffect(
+      Effect.promise(() => buildSimplifiedSlidingSyncResponse(c, body)),
+    );
+    return response instanceof Response ? response : c.json(response);
+  } catch (error) {
+    if (error instanceof Error && "toResponse" in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
+    throw error;
+  }
 }
 
 // MSC4186 Simplified Sliding Sync - unstable endpoint (used by Element X)

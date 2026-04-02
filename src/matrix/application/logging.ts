@@ -204,9 +204,7 @@ export function requireLogContext(
   });
 
   if (missing.length > 0) {
-    throw new Error(
-      `Missing required log context for ${scope}: ${missing.join(", ")}`,
-    );
+    throw new Error(`Missing required log context for ${scope}: ${missing.join(", ")}`);
   }
 
   return context;

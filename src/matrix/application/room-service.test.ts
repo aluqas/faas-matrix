@@ -125,7 +125,9 @@ class MemoryRoomRepository implements RoomRepository {
   }
 }
 
-function createTestAppContext(roomJoinStatus: RoomJoinWorkflowStatus = { status: "complete", output: { success: true } }) {
+function createTestAppContext(
+  roomJoinStatus: RoomJoinWorkflowStatus = { status: "complete", output: { success: true } },
+) {
   let eventCounter = 0;
   let roomCounter = 0;
   const pushCalls: Array<Record<string, unknown>> = [];

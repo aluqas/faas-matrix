@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
+import { runClientEffect } from "../matrix/application/effect-runtime";
 import type { SyncUserInput } from "../matrix/application/features/sync/contracts";
 
 const app = new Hono<AppEnv>();
@@ -20,7 +21,7 @@ app.get("/_matrix/client/v3/sync", requireAuth(), async (c) => {
       ...(since ? { since } : {}),
       ...(filterParam ? { filterParam } : {}),
     };
-    const response = await c.get("appContext").services.sync.syncUser(input);
+    const response = await runClientEffect(c.get("appContext").services.sync.syncUser(input));
     return c.json(response);
   } catch (error) {
     if (error instanceof Error && "toResponse" in error) {

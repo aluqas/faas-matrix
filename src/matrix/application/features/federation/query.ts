@@ -14,9 +14,7 @@ export async function runFederationQuery(
   ports: FederationQueryPorts,
   input: FederationQueryInput,
 ): Promise<
-  | FederationProfile
-  | { events: unknown[]; limited: boolean; auth_chain: unknown[] }
-  | null
+  FederationProfile | { events: unknown[]; limited: boolean; auth_chain: unknown[] } | null
 > {
   if (input.kind === "profile") {
     return federationQueryService.getProfile({

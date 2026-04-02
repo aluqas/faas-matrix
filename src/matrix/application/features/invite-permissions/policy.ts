@@ -168,7 +168,9 @@ export async function loadInvitePermissionConfig(
 
   const accountData: AccountDataEvent[] = rows.results.flatMap((row) => {
     try {
-      return [{ type: row.event_type, content: JSON.parse(row.content) as Record<string, unknown> }];
+      return [
+        { type: row.event_type, content: JSON.parse(row.content) as Record<string, unknown> },
+      ];
     } catch {
       return [];
     }
