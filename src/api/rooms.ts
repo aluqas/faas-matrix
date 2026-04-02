@@ -23,7 +23,6 @@ import {
   getRoomByAlias,
   deleteRoomAlias,
   getEvent,
-  notifyUsersOfEvent,
 } from "../services/database";
 import { getPartialStateJoin } from "../matrix/application/features/partial-state/tracker";
 import { FORGOTTEN_ROOM_ACCOUNT_DATA_TYPE } from "../matrix/application/room-account-data";
@@ -804,27 +803,10 @@ app.put("/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId", requireAuth()
   const targetEventId = c.req.param("eventId");
   const txnId = c.req.param("txnId");
 
-  // Check membership
-  const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== "join") {
-    return Errors.forbidden("Not a member of this room").toResponse();
-  }
-
   // Get the target event
   const targetEvent = await getEvent(c.env.DB, targetEventId);
-  if (!targetEvent || targetEvent.room_id !== roomId) {
+  if (targetEvent && targetEvent.room_id !== roomId) {
     return Errors.notFound("Event not found").toResponse();
-  }
-
-  // Check power levels for redaction
-  const powerLevelsEvent = await getStateEvent(c.env.DB, roomId, "m.room.power_levels");
-  const powerLevels = (powerLevelsEvent?.content as any) || {};
-  const userPower = powerLevels.users?.[userId] ?? powerLevels.users_default ?? 0;
-  const redactPower = powerLevels.redact ?? 50;
-
-  // Users can redact their own messages, or need redact power level
-  if (targetEvent.sender !== userId && userPower < redactPower) {
-    return Errors.forbidden("Insufficient power level to redact").toResponse();
   }
 
   let body: any = {};
@@ -834,19 +816,6 @@ app.put("/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId", requireAuth()
     // Body is optional for redaction
   }
 
-  // Create redaction event
-  const eventId = await generateEventId(c.env.SERVER_NAME);
-
-  const createEvent = await getStateEvent(c.env.DB, roomId, "m.room.create");
-
-  const authEvents: string[] = [];
-  if (createEvent) authEvents.push(createEvent.event_id);
-  if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-  if (membership) authEvents.push(membership.eventId);
-
-  const { events: latestEvents } = await getRoomEvents(c.env.DB, roomId, undefined, 1);
-  const prevEvents = latestEvents.map((e) => e.event_id);
-
   const redactionContent: any = {
     redacts: targetEventId,
   };
@@ -854,33 +823,24 @@ app.put("/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId", requireAuth()
     redactionContent.reason = body.reason;
   }
 
-  const event: PDU = {
-    event_id: eventId,
-    room_id: roomId,
-    sender: userId,
-    type: "m.room.redaction",
+  const response = await c.get("appContext").services.rooms.sendEvent({
+    userId,
+    roomId,
+    eventType: "m.room.redaction",
+    txnId,
     content: redactionContent,
     redacts: targetEventId,
-    origin_server_ts: Date.now(),
-    unsigned: { transaction_id: txnId },
-    depth: (latestEvents[0]?.depth ?? 0) + 1,
-    auth_events: authEvents,
-    prev_events: prevEvents,
-  };
+  });
 
-  await storeEvent(c.env.DB, event);
+  if (targetEvent) {
+    await c.env.DB.prepare(`
+      UPDATE events SET redacted_because = ? WHERE event_id = ?
+    `)
+      .bind(response.event_id, targetEventId)
+      .run();
+  }
 
-  // Mark the original event as redacted
-  await c.env.DB.prepare(`
-    UPDATE events SET redacted_because = ? WHERE event_id = ?
-  `)
-    .bind(eventId, targetEventId)
-    .run();
-
-  // Notify room members about the redaction
-  await notifyUsersOfEvent(c.env, roomId, eventId, "m.room.redaction");
-
-  return c.json({ event_id: eventId });
+  return c.json(response);
 });
 
 // GET /_matrix/client/v3/rooms/:roomId/context/:eventId - Get context around an event

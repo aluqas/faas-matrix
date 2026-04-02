@@ -101,6 +101,10 @@ class MemoryRoomRepository implements RoomRepository {
     return this.rooms.get(roomId) ?? null;
   }
 
+  async getEvent(eventId: string): Promise<PDU | null> {
+    return this.storedEvents.find((event) => event.event_id === eventId) ?? null;
+  }
+
   async getMembership(roomId: string, userId: string): Promise<MembershipRecord | null> {
     return this.memberships.get(this.membershipKey(roomId, userId)) ?? null;
   }

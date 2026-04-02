@@ -6,6 +6,7 @@ import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { generateOpaqueId } from "../utils/ids";
 import { validateUrlForPreview } from "../utils/url-validator";
+import { federationGet } from "../services/federation-keys";
 
 const app = new Hono<AppEnv>();
 
@@ -30,6 +31,46 @@ export const SUPPORTED_TYPES = [
   "text/plain",
   "application/octet-stream",
 ];
+
+async function fetchRemoteMedia(
+  c: import("hono").Context<AppEnv>,
+  serverName: string,
+  path: string,
+  fallbackFilename?: string,
+): Promise<Response | null> {
+  const response = await federationGet(
+    serverName,
+    path,
+    c.env.SERVER_NAME,
+    c.env.DB,
+    c.env.CACHE,
+  ).catch(() => null);
+
+  if (!response?.ok) {
+    return null;
+  }
+
+  const headers = new Headers();
+  const contentType = response.headers.get("Content-Type");
+  if (contentType) {
+    headers.set("Content-Type", contentType);
+  }
+  const cacheControl = response.headers.get("Cache-Control");
+  if (cacheControl) {
+    headers.set("Cache-Control", cacheControl);
+  } else {
+    headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  }
+
+  const contentDisposition =
+    response.headers.get("Content-Disposition") ??
+    (fallbackFilename ? `inline; filename="${fallbackFilename}"` : null);
+  if (contentDisposition) {
+    headers.set("Content-Disposition", contentDisposition);
+  }
+
+  return new Response(response.body, { status: response.status, headers });
+}
 
 // POST /_matrix/media/v3/upload - Upload media
 app.post("/_matrix/media/v3/upload", requireAuth(), async (c) => {
@@ -82,9 +123,13 @@ app.get("/_matrix/media/v3/download/:serverName/:mediaId", async (c) => {
   const serverName = c.req.param("serverName");
   const mediaId = c.req.param("mediaId");
 
-  // Only serve local media for now
   if (serverName !== c.env.SERVER_NAME) {
-    return Errors.notFound("Remote media not supported").toResponse();
+    const remoteResponse = await fetchRemoteMedia(
+      c,
+      serverName,
+      `/_matrix/federation/v1/media/download/${encodeURIComponent(mediaId)}`,
+    );
+    return remoteResponse ?? Errors.notFound("Media not found").toResponse();
   }
 
   // Get from R2
@@ -116,9 +161,14 @@ app.get("/_matrix/media/v3/download/:serverName/:mediaId/:filename", async (c) =
   const mediaId = c.req.param("mediaId");
   const requestedFilename = c.req.param("filename");
 
-  // Only serve local media for now
   if (serverName !== c.env.SERVER_NAME) {
-    return Errors.notFound("Remote media not supported").toResponse();
+    const remoteResponse = await fetchRemoteMedia(
+      c,
+      serverName,
+      `/_matrix/federation/v1/media/download/${encodeURIComponent(mediaId)}`,
+      requestedFilename,
+    );
+    return remoteResponse ?? Errors.notFound("Media not found").toResponse();
   }
 
   // Get from R2
@@ -148,9 +198,13 @@ app.get("/_matrix/media/v3/thumbnail/:serverName/:mediaId", async (c) => {
   const height = Math.min(parseInt(c.req.query("height") || "96"), 1920);
   const method = c.req.query("method") || "scale";
 
-  // Only serve local media for now
   if (serverName !== c.env.SERVER_NAME) {
-    return Errors.notFound("Remote media not supported").toResponse();
+    const remoteResponse = await fetchRemoteMedia(
+      c,
+      serverName,
+      `/_matrix/federation/v1/media/thumbnail/${encodeURIComponent(mediaId)}?width=${width}&height=${height}&method=${encodeURIComponent(method)}`,
+    );
+    return remoteResponse ?? Errors.notFound("Media not found").toResponse();
   }
 
   // Get media metadata
@@ -552,7 +606,12 @@ app.get("/_matrix/client/v1/media/download/:serverName/:mediaId", requireAuth(),
   const mediaId = c.req.param("mediaId");
 
   if (serverName !== c.env.SERVER_NAME) {
-    return Errors.notFound("Remote media not supported").toResponse();
+    const remoteResponse = await fetchRemoteMedia(
+      c,
+      serverName,
+      `/_matrix/federation/v1/media/download/${encodeURIComponent(mediaId)}`,
+    );
+    return remoteResponse ?? Errors.notFound("Media not found").toResponse();
   }
 
   const object = await c.env.MEDIA.get(mediaId);
@@ -586,7 +645,13 @@ app.get(
     const requestedFilename = c.req.param("filename");
 
     if (serverName !== c.env.SERVER_NAME) {
-      return Errors.notFound("Remote media not supported").toResponse();
+      const remoteResponse = await fetchRemoteMedia(
+        c,
+        serverName,
+        `/_matrix/federation/v1/media/download/${encodeURIComponent(mediaId)}`,
+        requestedFilename,
+      );
+      return remoteResponse ?? Errors.notFound("Media not found").toResponse();
     }
 
     const object = await c.env.MEDIA.get(mediaId);
@@ -616,7 +681,12 @@ app.get("/_matrix/client/v1/media/thumbnail/:serverName/:mediaId", requireAuth()
   const method = c.req.query("method") || "scale";
 
   if (serverName !== c.env.SERVER_NAME) {
-    return Errors.notFound("Remote media not supported").toResponse();
+    const remoteResponse = await fetchRemoteMedia(
+      c,
+      serverName,
+      `/_matrix/federation/v1/media/thumbnail/${encodeURIComponent(mediaId)}?width=${width}&height=${height}&method=${encodeURIComponent(method)}`,
+    );
+    return remoteResponse ?? Errors.notFound("Media not found").toResponse();
   }
 
   // Get media metadata

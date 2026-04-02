@@ -1,4 +1,12 @@
 import type { SyncResponse } from "../../../../types";
+import type { SyncProjectionResult } from "../../sync-projection";
+import type { PresenceSyncProjection } from "../presence/contracts";
+
+export interface SyncCursor {
+  events: number;
+  toDevice: number;
+  deviceKeys: number;
+}
 
 export interface SyncUserInput {
   userId: string;
@@ -13,6 +21,24 @@ export interface SyncTokenPosition {
   events: number;
   toDevice: number;
   deviceKeys: number;
+}
+
+export interface SyncAssemblerInput extends SyncUserInput {}
+
+export interface RoomDeltaResult {
+  joinedRooms: NonNullable<SyncResponse["rooms"]>["join"];
+}
+
+export interface MembershipRoomsResult extends SyncProjectionResult {}
+
+export interface TopLevelSyncResult {
+  accountData: NonNullable<SyncResponse["account_data"]>["events"];
+  toDeviceEvents: NonNullable<SyncResponse["to_device"]>["events"];
+  deviceLists?: SyncResponse["device_lists"];
+  presence: PresenceSyncProjection;
+  deviceOneTimeKeysCount: NonNullable<SyncResponse["device_one_time_keys_count"]>;
+  deviceUnusedFallbackKeyTypes: NonNullable<SyncResponse["device_unused_fallback_key_types"]>;
+  currentToDevicePos: number;
 }
 
 export interface SyncProjectionSummary {

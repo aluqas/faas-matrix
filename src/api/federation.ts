@@ -13,7 +13,6 @@ import {
   sha256,
   verifySignature,
 } from "../utils/crypto";
-import { isLocalServerName, parseUserId } from "../utils/ids";
 import { requireFederationAuth } from "../middleware/federation-auth";
 import {
   getServerSigningKey,
@@ -55,16 +54,12 @@ import {
   validateSendLeaveRequest,
   validateThirdPartyInviteExchangeRequest,
 } from "../matrix/application/federation-validation";
-import { FederationQueryService } from "../matrix/application/federation-query-service";
-import {
-  buildFederatedEventRelationshipsResponse,
-  type EventRelationshipsRequest,
-} from "../matrix/application/relationship-service";
+import { type EventRelationshipsRequest } from "../matrix/application/relationship-service";
+import { runFederationQuery } from "../matrix/application/features/federation/query";
 import federationQueryRoutes from "./federation/query";
 import federationSpaceRoutes from "./federation/spaces";
 
 const app = new Hono<AppEnv>();
-const federationQueryService = new FederationQueryService();
 
 function canonicalJsonResponse(body: Record<string, unknown>): Response {
   return new Response(canonicalJson(body), {
@@ -1859,31 +1854,38 @@ app.get("/_matrix/federation/v1/query/profile", async (c) => {
     return Errors.missingParam("user_id").toResponse();
   }
 
-  const parsed = parseUserId(userId);
-  if (!parsed || !isLocalServerName(parsed.serverName, c.env.SERVER_NAME)) {
-    return Errors.notFound("User not found").toResponse();
+  const userIdMatch = userId.match(/^@[^:]+:(.+)$/);
+  if (!userIdMatch || !isValidServerName(userIdMatch[1] ?? "")) {
+    return Errors.invalidParam("user_id", "Invalid user_id").toResponse();
   }
 
-  const profile = await federationQueryService.getProfile({
-    userId,
-    field,
-    localServerName: c.env.SERVER_NAME,
-    db: c.env.DB,
-    cache: c.env.CACHE,
-  });
+  const profile = await runFederationQuery(
+    {
+      localServerName: c.env.SERVER_NAME,
+      db: c.env.DB,
+      cache: c.env.CACHE,
+    },
+    {
+      kind: "profile",
+      userId,
+      ...(field ? { field } : {}),
+    },
+  );
 
   if (!profile) {
     return Errors.notFound("User not found").toResponse();
   }
 
+  const federationProfile = profile as { displayname: string | null; avatar_url: string | null };
+
   if (field === "displayname") {
-    return c.json({ displayname: profile.displayname });
+    return c.json({ displayname: federationProfile.displayname });
   }
   if (field === "avatar_url") {
-    return c.json({ avatar_url: profile.avatar_url });
+    return c.json({ avatar_url: federationProfile.avatar_url });
   }
 
-  return c.json(profile);
+  return c.json(federationProfile);
 });
 
 // ============================================
@@ -1947,7 +1949,22 @@ app.post("/_matrix/federation/unstable/event_relationships", async (c) => {
     return Errors.badJson().toResponse();
   }
 
-  const result = await buildFederatedEventRelationshipsResponse(c.env.DB, request);
+  const result = await runFederationQuery(
+    {
+      localServerName: c.env.SERVER_NAME,
+      db: c.env.DB,
+      cache: c.env.CACHE,
+    },
+    {
+      kind: "event_relationships",
+      eventId: request.eventId,
+      roomId: request.roomId,
+      direction: request.direction,
+      includeParent: request.includeParent,
+      recentFirst: request.recentFirst,
+      maxDepth: request.maxDepth,
+    },
+  );
   if (!result) {
     return Errors.notFound("Event not found").toResponse();
   }

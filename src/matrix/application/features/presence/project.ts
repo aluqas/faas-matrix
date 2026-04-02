@@ -143,9 +143,13 @@ export async function projectPresenceEvents(
     sender,
     content: {
       presence: content.presence,
-      status_msg: content.status_msg,
-      last_active_ago: content.last_active_ago,
-      currently_active: content.currently_active,
+      ...(content.status_msg !== undefined ? { status_msg: content.status_msg } : {}),
+      ...(content.last_active_ago !== undefined
+        ? { last_active_ago: content.last_active_ago }
+        : {}),
+      ...(content.currently_active !== undefined
+        ? { currently_active: content.currently_active }
+        : {}),
     },
   }));
 

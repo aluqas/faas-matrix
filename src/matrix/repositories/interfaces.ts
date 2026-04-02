@@ -112,6 +112,7 @@ export interface RoomRepository {
   ): Promise<void>;
   notifyUsersOfEvent(roomId: string, eventId: string, eventType: string): Promise<void>;
   getRoom(roomId: string): Promise<Room | null>;
+  getEvent(eventId: string): Promise<PDU | null>;
   getMembership(roomId: string, userId: string): Promise<MembershipRecord | null>;
   getStateEvent(roomId: string, eventType: string, stateKey?: string): Promise<PDU | null>;
   getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]>;

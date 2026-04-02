@@ -32,6 +32,48 @@ interface RemoteServerKey {
 
 // Cache TTL for remote server keys (5 minutes for KV, longer in D1)
 const KEY_CACHE_TTL = 5 * 60;
+const FEDERATION_FETCH_RETRY_DELAYS_MS = [250, 500, 1000] as const;
+
+function isRetryableFederationFetchError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("network connection lost") ||
+    message.includes("certificate is not yet valid") ||
+    message.includes("fetch failed") ||
+    message.includes("connection reset") ||
+    message.includes("connection refused")
+  );
+}
+
+async function sleep(delayMs: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+async function fetchWithFederationRetry(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  let lastError: unknown;
+
+  for (const [index, delayMs] of FEDERATION_FETCH_RETRY_DELAYS_MS.entries()) {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableFederationFetchError(error) || index === FEDERATION_FETCH_RETRY_DELAYS_MS.length - 1) {
+        throw error;
+      }
+      console.warn(`Retrying federation fetch for ${url}:`, error);
+      await sleep(delayMs);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(`Failed to fetch ${url}`);
+}
 
 /**
  * Fetch and cache a remote server's signing keys
@@ -117,7 +159,7 @@ async function fetchKeysFromRemote(
   const discovery = await discoverServer(serverName, cache);
   const serverUrl = buildServerUrl(discovery);
 
-  const response = await fetch(`${serverUrl}/_matrix/key/v2/server`, {
+  const response = await fetchWithFederationRetry(`${serverUrl}/_matrix/key/v2/server`, {
     headers: {
       Accept: "application/json",
     },
@@ -219,7 +261,7 @@ export async function fetchRawServerKeyResponse(
     const discovery = await discoverServer(serverName, cache);
     const serverUrl = buildServerUrl(discovery);
 
-    const response = await fetch(`${serverUrl}/_matrix/key/v2/server`, {
+    const response = await fetchWithFederationRetry(`${serverUrl}/_matrix/key/v2/server`, {
       headers: {
         Accept: "application/json",
       },
@@ -579,7 +621,7 @@ export async function makeFederationRequest(
     options.body = JSON.stringify(body);
   }
 
-  return fetch(`${serverUrl}${path}`, options);
+  return fetchWithFederationRetry(`${serverUrl}${path}`, options);
 }
 
 /**

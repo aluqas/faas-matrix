@@ -1,5 +1,5 @@
 import type { SyncEventFilter } from "../../sync-projection";
-import type { PresenceState } from "../../../../types";
+import type { PresenceEvent, PresenceState } from "../../../../types";
 
 export interface PresenceCommandInput {
   userId: string;
@@ -29,16 +29,7 @@ export interface PresenceCommandPorts {
 }
 
 export interface PresenceSyncProjection {
-  events: Array<{
-    type: "m.presence";
-    sender: string;
-    content: {
-      presence: PresenceState;
-      status_msg?: string | undefined;
-      last_active_ago?: number | undefined;
-      currently_active?: boolean | undefined;
-    };
-  }>;
+  events: PresenceEvent[];
 }
 
 export interface PresenceProjectionQuery {

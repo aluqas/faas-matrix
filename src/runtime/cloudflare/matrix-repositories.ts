@@ -154,6 +154,10 @@ export class CloudflareRoomRepository implements RoomRepository {
     return getRoom(this.env.DB, roomId);
   }
 
+  getEvent(eventId: string): Promise<PDU | null> {
+    return getEvent(this.env.DB, eventId);
+  }
+
   getMembership(roomId: string, userId: string) {
     return getMembership(this.env.DB, roomId, userId);
   }

@@ -68,6 +68,7 @@ export interface SendEventInput {
   stateKey?: string;
   txnId: string;
   content: Record<string, unknown>;
+  redacts?: string;
 }
 
 export interface LeaveRoomInput {
@@ -1041,6 +1042,23 @@ export class MatrixRoomService {
                 throw Errors.forbidden("Not a member of this room");
               }
 
+              if (input.eventType === "m.room.redaction" && input.redacts) {
+                const powerLevelsEvent = await this.repository.getStateEvent(
+                  input.roomId,
+                  "m.room.power_levels",
+                );
+                const powerLevels = getPowerLevelsContent(powerLevelsEvent);
+                const targetEvent = await this.repository.getEvent(input.redacts);
+                const userPower = getUserPowerLevel(powerLevels, auth.userId);
+                const redactPower = powerLevels.redact ?? 50;
+                const isOwnEvent =
+                  targetEvent?.room_id === input.roomId && targetEvent.sender === auth.userId;
+
+                if (!isOwnEvent && userPower < redactPower) {
+                  throw Errors.forbidden("Insufficient power level to redact");
+                }
+              }
+
               if (input.stateKey?.startsWith("@")) {
                 const powerLevelsEvent = await this.repository.getStateEvent(
                   input.roomId,
@@ -1083,6 +1101,7 @@ export class MatrixRoomService {
                 sender: auth.userId,
                 type: input.eventType,
                 ...withOptionalValue("state_key", input.stateKey),
+                ...withOptionalValue("redacts", input.redacts),
                 content: input.content,
                 origin_server_ts: this.appContext.capabilities.clock.now(),
                 unsigned: { transaction_id: input.txnId },
