@@ -11,9 +11,7 @@ import versions from "./api/versions";
 import login from "./api/login";
 import rooms from "./api/rooms";
 import sync from "./api/sync";
-import slidingSync from "./api/sliding-sync";
 import profile from "./api/profile";
-import media from "./api/media";
 import voip from "./api/voip";
 import keys from "./api/keys";
 import federation from "./api/federation";
@@ -30,7 +28,6 @@ import aliases from "./api/aliases";
 import relations from "./api/relations";
 import spaces from "./api/spaces";
 import account from "./api/account";
-import search from "./api/search";
 import serverNotices from "./api/server-notices";
 import report from "./api/report";
 // import qrLogin from './api/qr-login'; // QR feature commented out - requires MSC4108/OIDC for Element X
@@ -157,6 +154,9 @@ const loadCalls = () => import("./api/calls");
 const loadRtc = () => import("./api/rtc");
 const loadAppservice = () => import("./api/appservice");
 const loadIdentity = () => import("./api/identity");
+const loadSlidingSync = () => import("./api/sliding-sync");
+const loadMedia = () => import("./api/media");
+const loadSearch = () => import("./api/search");
 
 app.all("/admin/api/*", (c) => dispatchLazyRoute(c, loadAdmin));
 app.all("/_synapse/admin/*", (c) => dispatchLazyRoute(c, loadAdmin));
@@ -179,9 +179,7 @@ app.route("/", versions);
 app.route("/", login);
 app.route("/", rooms);
 app.route("/", sync);
-app.route("/", slidingSync);
 app.route("/", profile);
-app.route("/", media);
 app.route("/", voip);
 app.route("/", keys);
 app.route("/", keyBackups);
@@ -199,6 +197,19 @@ app.route("/", spaces);
 app.route("/", account);
 app.route("/", serverNotices);
 app.route("/", report);
+
+app.all("/_matrix/client/unstable/org.matrix.msc3575/sync", (c) =>
+  dispatchLazyRoute(c, loadSlidingSync),
+);
+app.all("/_matrix/client/unstable/org.matrix.simplified_msc3575/sync", (c) =>
+  dispatchLazyRoute(c, loadSlidingSync),
+);
+app.all("/_matrix/client/v4/sync", (c) => dispatchLazyRoute(c, loadSlidingSync));
+
+app.all("/_matrix/media/*", (c) => dispatchLazyRoute(c, loadMedia));
+app.all("/_matrix/client/v1/media/*", (c) => dispatchLazyRoute(c, loadMedia));
+
+app.all("/_matrix/client/v3/search", (c) => dispatchLazyRoute(c, loadSearch));
 
 // Cloudflare Calls-based video calling API
 app.all("/_matrix/client/v3/rooms/:roomId/call", (c) => dispatchLazyRoute(c, loadCalls));
@@ -316,8 +327,7 @@ app.get("/_matrix/client/v3/user/:userId/filter/:filterId", requireAuth(), async
 
 // Presence endpoints now handled by presence.ts
 
-// Search endpoint - now handled by search.ts
-app.route("/", search);
+// Search endpoint is lazy-loaded above.
 
 // Typing notifications now handled by typing.ts
 

@@ -88,8 +88,9 @@ const packageResolution = resolvePackages(indexPath, options);
 const packagesToRun = packageResolution.packages;
 const runFilter = buildRunFilter(options.tests);
 const fullRun = options.full || (options.explicitPackages.length === 0 && options.tests.length === 0);
+const federationHeavyRun = packagesToRun.includes("./tests") || packagesToRun.includes("./tests/...");
 const spawnTimeoutSeconds =
-  options.spawnTimeoutSeconds ?? (options.startupDebug ? 60 : fullRun ? null : 40);
+  options.spawnTimeoutSeconds ?? (options.startupDebug ? 60 : fullRun || federationHeavyRun ? 60 : 40);
 
 const logPath =
   process.env.LOG ??

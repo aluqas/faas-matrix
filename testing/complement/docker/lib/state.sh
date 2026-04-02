@@ -1,5 +1,35 @@
 #!/usr/bin/env bash
 
+has_populated_directory() {
+  local dir="$1"
+  [ -d "${dir}" ] && [ -n "$(find "${dir}" -mindepth 1 -maxdepth 1 2>/dev/null)" ]
+}
+
+restore_image_template() {
+  local schema_hash="$1"
+  if [ ! -f "${IMAGE_TEMPLATE_VERSION_FILE}" ]; then
+    return 1
+  fi
+
+  local image_hash
+  image_hash="$(cat "${IMAGE_TEMPLATE_VERSION_FILE}" 2>/dev/null || true)"
+  if [ "${image_hash}" != "${schema_hash}" ]; then
+    return 1
+  fi
+
+  if ! has_populated_directory "${IMAGE_TEMPLATE_DIR}"; then
+    return 1
+  fi
+
+  rm -rf "${TEMPLATE_DIR}"
+  mkdir -p "${TEMPLATE_DIR}"
+  cp -a "${IMAGE_TEMPLATE_DIR}/." "${TEMPLATE_DIR}/"
+  printf '%s' "${schema_hash}" > "${TEMPLATE_VERSION_FILE}"
+  log_json info startup.template.image_reuse "Restored cached local D1 template from image" \
+    schema_hash "${schema_hash}"
+  return 0
+}
+
 compute_schema_hash() {
   (
     for file in ./migrations/schema.sql ./migrations/[0-9]*.sql "./${WRANGLER_CONFIG}"; do
@@ -20,6 +50,10 @@ ensure_d1_template() {
         schema_hash "${schema_hash}"
       return
     fi
+  fi
+
+  if restore_image_template "${schema_hash}"; then
+    return
   fi
 
   local build_dir

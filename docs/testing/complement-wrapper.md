@@ -73,7 +73,8 @@ If the CA files are absent, the container falls back to a self-signed certificat
   - `COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS=1`
   - `WRANGLER_LOG_LEVEL=info`
   - entrypoint phase logging for container startup
-- non-`--full` targeted runs now default to `COMPLEMENT_SPAWN_HS_TIMEOUT_SECS=40` to reduce false negatives from slow local startup without making routine TDD too slow
+- targeted runs default to `COMPLEMENT_SPAWN_HS_TIMEOUT_SECS=40` to keep routine TDD short
+- full runs and `--pkg ./tests` default to `COMPLEMENT_SPAWN_HS_TIMEOUT_SECS=60` because federation-heavy multi-server startup regularly exceeds the targeted budget
 - if a single bucket still needs a wider ceiling, pass `--spawn-timeout <seconds>` explicitly instead of raising the global default
 
 Each run writes:

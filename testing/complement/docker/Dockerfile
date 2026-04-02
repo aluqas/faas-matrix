@@ -17,6 +17,18 @@ RUN node_modules/.bin/wrangler deploy \
       --config wrangler.complement.jsonc \
   && sed -i 's|"main": "src/index.ts"|"main": "dist/index.js"|' wrangler.complement.jsonc
 
+# Build an image-local D1 template so each container does not need to replay migrations on first boot
+RUN mkdir -p /app/d1-template \
+  && cat ./migrations/schema.sql ./migrations/[0-9]*.sql > /tmp/migrations.sql \
+  && node_modules/.bin/wrangler d1 execute tuwunel-db \
+      --config wrangler.complement.jsonc \
+      --local \
+      --persist-to /app/d1-template \
+      --file /tmp/migrations.sql >/dev/null \
+  && rm -f /tmp/migrations.sql \
+  && (for file in ./migrations/schema.sql ./migrations/[0-9]*.sql ./wrangler.complement.jsonc; do printf '%s\n' "${file}"; cat "${file}"; done) \
+      | sha256sum | awk '{print $1}' > /app/d1-template/.schema-hash
+
 # Stage 2: runtime — nginx/cert setup; only rebuilds when testing/complement/docker changes
 FROM node:20-bookworm-slim AS runtime
 
@@ -29,6 +41,7 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/wrangler.complement.jsonc ./wrangler.complement.jsonc
+COPY --from=builder /app/d1-template /opt/faas-matrix-d1-template
 COPY package.json ./
 COPY migrations ./migrations
 

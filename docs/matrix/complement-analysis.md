@@ -1,265 +1,275 @@
-# Complement Gap Analysis
+# Complement Status
 
-Complement black-box integration test results and failure root-cause analysis.
-Last updated: 2026-04-02. Based on test runs test1–test12 plus targeted Complement reruns on 2026-03-31, 2026-04-01, and 2026-04-02.
+Current-state Complement status for this repository.
+Last updated: 2026-04-02.
 
-## Current Full-Run Status (2026-04-02)
+This document is intentionally current-state only. Historical progression and old run-to-run comparisons are out of scope here.
 
-The Complement harness now tracks three separate views:
+## Evidence Model
 
-- `latest full run`: the newest full aggregate run, even if it is noisy
-- `last stable full run`: the most recent broad run whose signal is not dominated by startup/deploy flake
-- `flake backlog`: failures classified as startup/deploy or infra instability, tracked separately from implementation regressions
+Use two Complement views:
 
-The runner also emits per-run artifacts next to the raw log:
+- `stable full-run baseline`
+  - broad aggregate run used for docs and spec evidence
+  - should be readable without startup/deploy noise dominating the result
+- `deep diagnostic run`
+  - broad aggregate run with relaxed package timeout to expose more buckets
+  - useful for reach and triage, but not the baseline when classification is mixed
 
-- `logs/<ts>.summary.json`
-- `logs/<ts>.classified.json`
-- `logs/<ts>.docker.log`
+Per-run artifacts:
 
-Latest full run:
+- raw log: `logs/<ts>.log`
+- docker log: `logs/<ts>.docker.log`
+- compact summary: `logs/<ts>.summary.json`
+- failure classifier: `logs/<ts>.classified.json`
 
-- Top-level summary from [`2026-04-01_22-40-58.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-01_22-40-58.log): **71 total / 45 pass / 26 fail**
-- Progress tracking in the table below uses `bun run complement:analyze --last 1 --depth 7`, which counts reached subtests: **321 reached / 233 pass (73%) / 75 fail / 13 skip**
+Evidence policy:
 
-The latest full run is flakier than the 2026-04-01 stable full run, so it should be read together with targeted reruns and flake classification:
+- clean targeted green is positive implementation evidence
+- stable aggregate red is implementation evidence when classification is `implementation_fail`
+- mixed diagnostic red is a backlog signal until reproduced cleanly
+- startup/deploy and infra buckets are tracked separately from implementation gaps
 
-- The previous stable full run [`2026-04-01_14-37-09.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-01_14-37-09.log) is still useful as the broader health baseline: **404 reached / 301 pass (75%) / 90 fail / 13 skip** at analyzer depth 7.
-- The latest full run reintroduced startup-flake failures in otherwise green buckets such as `TestACLs`, `TestDeviceManagement`, `TestDeviceListsUpdateOverFederation`, `TestRemotePresence`, `TestRemoteAliasRequestsUnderstandUnicode`, `TestSearch`, `TestThreadSubscriptions`, `TestMSC4308ThreadSubscriptionsSlidingSync`, and `TestUnbanViaInvite`.
-- `TestOutboundFederationProfile`, `TestRemoteTyping`, `TestToDeviceMessagesOverFederation`, `TestSyncOmitsStateChangeOnFilteredEvents`, `TestInboundCanReturnMissingEvents`, `TestGetMissingEventsGapFilling`, `TestEventAuth`, `TestCorruptedAuthChain`, `TestInboundFederationKeys`, `TestRequestEncodingFails`, and `TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6` are green in the latest full run.
-- `TestInboundCanReturnMissingEvents`, `TestGetMissingEventsGapFilling`, and `TestEventAuth` all pass in targeted reruns on 2026-04-01.
-- `TestPartialStateJoin/CanReceiveTypingDuringPartialStateJoin` passes in a targeted rerun on 2026-04-01.
-- The room/surface correctness bucket remains green in targeted reruns: `TestUnknownEndpoints`, `TestServerCapabilities`, `TestRoomAlias`, `TestRoomDeleteAlias`, `TestRoomCanonicalAlias`, `TestRemoteAliasRequestsUnderstandUnicode`, `TestRoomCreate`, `TestRoomState`, `TestRoomForget`, `TestRoomMembers`, and `TestUnbanViaInvite`.
-- The auth/account-lifecycle bucket remains broadly green in targeted reruns: `TestLogin`, `TestLogout`, `TestRegistration`, `TestChangePassword`, `TestChangePasswordPushers`, `TestDeactivateAccount`, `TestTxnIdWithRefreshToken`, `TestDeviceManagement`, `TestWriteMDirectAccountData`, and `TestRemovingAccountData`.
-- `TestSearch`, `TestDeviceListUpdates`, `TestDeviceListsUpdateOverFederation`, `TestDeviceListsUpdateOverFederationOnRoomJoin`, `TestUserAppearsInChangedDeviceListOnJoinOverFederation`, `TestClientSpacesSummary`, `TestClientSpacesSummaryJoinRules`, `TestFederatedClientSpaces`, `TestThreadSubscriptions`, and `TestMSC4308ThreadSubscriptionsSlidingSync` all stay green in targeted reruns, despite the latest full run regressing some of them due to deployment instability.
+## Stable Full-Run Baseline
 
-Evidence handling:
+Artifacts:
 
-- clean targeted green remains positive implementation evidence
-- aggregate full-run red with `startup_flake` classification is tracked as flake backlog, not as immediate implementation regression
-- aggregate full-run red with assertion or behavior mismatch remains implementation evidence
+- raw log: [`2026-04-02_04-32-47-8585.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-02_04-32-47-8585.log)
+- summary: [`2026-04-02_04-32-47-8585.summary.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-02_04-32-47-8585.summary.json)
+- classified: [`2026-04-02_04-32-47-8585.classified.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-02_04-32-47-8585.classified.json)
 
-Current active failure clusters in the 2026-04-02 full run:
+Result:
 
-- blueprint/container startup flake causing false negatives in otherwise-green suites
-- rejected-auth federation correctness (`TestInboundFederationRejectsEventsWithRejectedAuthEvents`)
-- inbound federation profile edge cases (`TestInboundFederationProfile`)
-- partial-state join aggregate suite (`TestPartialStateJoin`) and join failover / alias federation residuals
-- delayed events, top-level `/sync`/presence, DM/invite filtering, and push-rule polling
-- media federation / remote media
+- top-level summary: `50 total / 37 pass / 11 fail / 2 skip`
+- analyzer depth-7 parse: `248 reached / 203 pass / 38 fail / 7 skip`
+- overall classification: `implementation_fail`
 
-## Test Run Progression
+Interpretation:
 
-| Run   | Total | Pass      | Fail | Skip | Notes                                                                                                                 |
-| ----- | ----- | --------- | ---- | ---- | --------------------------------------------------------------------------------------------------------------------- |
-| test1 | 62    | 0 (0%)    | 62   | 0    | Baseline. Migration schema gaps cause 500 on most routes.                                                             |
-| test2 | 71    | 0 (0%)    | 71   | 0    | Additional test suites added. Same root causes.                                                                       |
-| test3 | 21    | 2 (10%)   | 19   | 0    | Migration fix applied. Timeout at 603s (server slower now it works).                                                  |
-| test4 | 42    | 3 (7%)    | 39   | 0    | Migration batching fix. Container startup faster, more tests complete.                                                |
-| test5 | 200   | 34 (17%)  | 165  | 1    | TypeScript pre-bundle + nginx simplification. First broad coverage.                                                   |
-| test6 | 336   | 96 (29%)  | 233  | 7    | Broader test suite. 93 new passes (CS API, media, room management).                                                   |
-| test7 | 322   | 111 (34%) | 204  | 7    | 15 new passes (Registration, RoomCreate, RoomState, publicRooms).                                                     |
-| test8 | 245   | 67 (27%)  | 171  | 7    | `TestWriteMDirectAccountData` newly passing; `TestRemovingAccountData` passing.                                       |
-| test9 | 295   | 104 (35%) | 184  | 7    | 37 new passes over test8. Federation invite/leave flow green; restricted remote joins and parts of knocking improved. |
-| test10 | 291  | 124 (43%) | 160  | 7    | 2026-03-31 full run at analyzer depth 7. High-priority federation bucket is mostly green in targeted reruns; current failures concentrate in device-lists, partial-state joins, room correctness, auth/account lifecycle, search, and delayed events. |
-| test11 | 404  | 301 (75%) | 90   | 13   | 2026-04-01 full run at analyzer depth 7. Major gains in federation correctness, room/surface correctness, device-lists, search, spaces, and auth/account lifecycle. Remaining failures concentrate in federation auth, rejected-auth, partial-state joins, delayed events, media, and a few unstable regressions. |
-| test12 | 321  | 233 (73%) | 75   | 13   | 2026-04-02 full run at analyzer depth 7. Slightly lower reach than test11 because blueprint/container startup flake reintroduced false negatives in several otherwise-green buckets. Remaining real failures still cluster around rejected-auth, inbound federation profile edges, partial-state aggregate behavior, delayed events, sync/presence, DM/invite filtering, push rules, and media. |
+- this is the current docs/spec baseline
+- this run did not end up dominated by startup/deploy flake
+- remaining red buckets are implementation work, not harness noise
 
-> `test1`–`test12` totals are analyzer counts from `bun run complement:analyze --depth 7`, not the top-level `complement-run.ts` summary. The latest full run's top-level summary is `71 / 45 / 26 / 0`.
+## Deep Diagnostic Run
 
-**Cumulative fixes that produced pass gains (test1 → test9):**
+Artifacts:
 
-- `TestIsDirectFlagLocal` ✅
-- `TestInboundFederationProfile/Inbound_federation_can_query_profile_data` ✅
-- `TestJoinViaRoomIDAndServerName` ✅
-- 31 additional tests newly reachable in test5 (SendLeave, SendKnock, RestrictedRooms, media thumbnails, etc.)
-- 93 additional tests in test6 (CS API basics: Login, Registration, Rooms, Media, Profile, Receipts, Presence, Devices, AccountData, DelayedEvents)
-- 15 additional tests in test7 (Registration completeness, RoomCreate/RoomState/publicRooms)
-- `TestWriteMDirectAccountData` ✅ (test8)
-- `TestRemovingAccountData` ✅ (test8, MSC3391 DELETE account_data)
-- `TestFederationRoomsInvite` ✅ (test9)
-- `TestCannotSendNonLeaveViaSendLeaveV1` ✅ (test9)
-- `TestCannotSendNonLeaveViaSendLeaveV2` ✅ (test9)
-- `TestRestrictedRoomsRemoteJoin` ✅ subtests in test9
-- `TestRestrictedRoomsRemoteJoinInMSC3787Room` ✅ subtests in test9
-- Multiple `TestKnocking` / `TestKnockingInMSC3787Room` subtests newly passing in test9
-- `TestACLs` ✅ in targeted rerun (2026-03-31)
-- `TestOutboundFederationProfile` ✅ (2026-03-31)
-- `TestRemotePresence` ✅ (2026-03-31)
-- `TestRemoteTyping` ✅ (2026-03-31)
-- `TestToDeviceMessagesOverFederation` ✅ (2026-03-31)
-- `TestSyncOmitsStateChangeOnFilteredEvents` ✅ (2026-03-31)
-- `TestInboundCanReturnMissingEvents` ✅ (2026-04-01)
-- `TestGetMissingEventsGapFilling` ✅ (2026-04-01)
-- `TestEventAuth` ✅ (2026-04-01)
-- `TestPartialStateJoin/CanReceiveTypingDuringPartialStateJoin` ✅ (2026-04-01)
-- `TestUnknownEndpoints` ✅ (2026-04-01)
-- `TestServerCapabilities` ✅ (2026-04-01)
-- `TestRoomAlias` ✅ (2026-04-01)
-- `TestRoomDeleteAlias` ✅ (2026-04-01)
-- `TestRoomCanonicalAlias` ✅ (2026-04-01)
-- `TestRemoteAliasRequestsUnderstandUnicode` ✅ (2026-04-01)
-- `TestRoomCreate` ✅ (2026-04-01)
-- `TestRoomState` ✅ (2026-04-01)
-- `TestRoomForget` ✅ (2026-04-01)
-- `TestRoomMembers` ✅ (2026-04-01)
-- `TestUnbanViaInvite` ✅ (2026-04-01)
-- `TestLogin` ✅ (2026-04-01)
-- `TestLogout` ✅ (2026-04-01)
-- `TestRegistration` ✅ (2026-04-01)
-- `TestChangePassword` ✅ (2026-04-01)
-- `TestChangePasswordPushers` ✅ (2026-04-01)
-- `TestDeactivateAccount` ✅ (2026-04-01)
-- `TestTxnIdWithRefreshToken` ✅ (2026-04-01)
-- `TestDeviceManagement` ✅ (2026-04-01)
-- `TestSearch` ✅ (2026-04-01)
-- `TestDeviceListUpdates` ✅ (2026-04-01)
-- `TestDeviceListsUpdateOverFederation` ✅ (2026-04-01)
-- `TestDeviceListsUpdateOverFederationOnRoomJoin` ✅ (2026-04-01)
-- `TestUserAppearsInChangedDeviceListOnJoinOverFederation` ✅ (2026-04-01)
-- `TestClientSpacesSummary` ✅ (2026-04-01)
-- `TestClientSpacesSummaryJoinRules` ✅ (2026-04-01)
-- `TestFederatedClientSpaces` ✅ (2026-04-01)
-- `TestThreadSubscriptions` ✅ (2026-04-01)
-- `TestMSC4308ThreadSubscriptionsSlidingSync` ✅ (2026-04-01)
+- raw log: [`2026-04-02_05-29-07-70996.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-02_05-29-07-70996.log)
+- summary: [`2026-04-02_05-29-07-70996.summary.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-02_05-29-07-70996.summary.json)
+- classified: [`2026-04-02_05-29-07-70996.classified.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-02_05-29-07-70996.classified.json)
 
----
+Result:
 
-## Infrastructure Fixes Applied
+- top-level summary: `207 total / 118 pass / 87 fail / 2 skip`
+- analyzer depth-7 parse: `795 reached / 526 pass / 249 fail / 20 skip`
+- overall classification: `mixed`
 
-These are not spec failures but blocked all test progress:
+Interpretation:
 
-### 1. Migration double-execution (`entrypoint.sh`)
+- this run exists because the default `go test` package timeout was clipping reach
+- it is useful for discovering deeper implementation buckets
+- it is not the stable baseline because startup/deploy and infra noise reappear
 
-`./migrations/*.sql` glob included `schema.sql`, causing it to run twice. Combined with persistent `PERSIST_DIR`, this produced `SQLITE_ERROR: duplicate column name: private_key_jwk` on container start, preventing health check from passing for federation (hs2) containers.
+What it proved:
 
-**Fix:** `rm -rf "${PERSIST_DIR}"` on startup + glob changed to `./migrations/[0-9]*.sql`.
+- the lower reach in the stable run was materially affected by package timeout
+- there is substantially more exercised surface behind the current stable baseline
+- some remaining failures are only visible once packages are allowed to run much longer
 
-### 2. Migration called 16× per container start
+## Current Green Evidence
 
-Each migration file was a separate `wrangler d1 execute` invocation. Wrangler starts Node.js + loads its bundle on each call (~2–3s each = 30–50s per container).
+These are currently green in either the stable full-run baseline or clean targeted reruns and should be treated as positive evidence:
 
-**Fix:** Concatenate all SQL files and run a single wrangler call.
+- federation EDU / transaction hot paths
+  - `TestACLs`
+  - `TestOutboundFederationProfile`
+  - `TestRemotePresence`
+  - `TestRemoteTyping`
+  - `TestToDeviceMessagesOverFederation`
+  - `TestInboundCanReturnMissingEvents`
+  - `TestGetMissingEventsGapFilling`
+  - `TestEventAuth`
+- sync / filtering / device-list hot paths
+  - `TestSyncOmitsStateChangeOnFilteredEvents`
+  - `TestDeviceManagement`
+  - `TestDeviceListsUpdateOverFederation`
+  - `TestUserAppearsInChangedDeviceListOnJoinOverFederation`
+  - `TestInviteFiltering`
+- room and client-surface correctness
+  - `TestUnknownEndpoints`
+  - `TestServerCapabilities`
+  - `TestRoomAlias`
+  - `TestRoomDeleteAlias`
+  - `TestRoomCanonicalAlias`
+  - `TestRoomState`
+  - `TestRoomForget`
+  - `TestRoomMembers`
+  - `TestUnbanViaInvite`
+- auth and account lifecycle
+  - `TestLogin`
+  - `TestLogout`
+  - `TestRegistration`
+  - `TestChangePassword`
+  - `TestChangePasswordPushers`
+  - `TestDeactivateAccount`
+  - `TestTxnIdWithRefreshToken`
+  - `TestWriteMDirectAccountData`
+  - `TestRemovingAccountData`
+- media, spaces, threading, and related client behavior
+  - `TestContentMediaV1`
+  - `TestContentCSAPIMediaV1`
+  - `TestSearch` in targeted reruns
+  - `TestClientSpacesSummary`
+  - `TestClientSpacesSummaryJoinRules`
+  - `TestFederatedClientSpaces`
+  - `TestThreadSubscriptions`
 
-### 3. TypeScript compiled on every container start
+## Stable Failure Buckets
 
-`wrangler dev` re-bundles and compiles TypeScript from source on each container start.
+These are the implementation buckets still red in the stable full-run baseline.
 
-**Fix:** `wrangler deploy --dry-run --outdir dist` in Dockerfile build step; entrypoint uses `--no-bundle` to serve the pre-compiled bundle.
+### 1. Sync aggregate residuals
 
-### 4. nginx proxying client traffic unnecessarily
+- `TestSync`
+- `TestPresence`
+- `TestPartialStateJoin`
+- `TestMSC4308ThreadSubscriptionsSlidingSync`
 
-nginx proxied both port 8008 (HTTP) and 8448 (HTTPS). Port 8008 needed no TLS termination.
+Working interpretation:
 
-**Fix:** wrangler now listens directly on `0.0.0.0:8008`. nginx retained only for port 8448 (TLS termination for federation).
+- remaining issues are in aggregate semantics, not basic route reachability
+- likely pressure points are lazy-loaded membership state, incremental sliding-sync merge behavior, and partial-state interaction with top-level projection
 
----
+### 2. Federation query/auth residuals
 
-## Failure Categories (historical root causes; updated with current TDD status)
+- `TestInboundFederationKeys`
+- `TestInboundFederationProfile`
 
-The buckets below were first isolated in test5. As of test9 and the targeted Complement TDD reruns on 2026-03-30, the federation invite/leave/join core path has improved substantially: `TestFederationRoomsInvite`, `TestJoinViaRoomIDAndServerName`, `TestCannotSendNonLeaveViaSendLeaveV1`, and `TestCannotSendNonLeaveViaSendLeaveV2` are now passing, and restricted remote joins moved forward as well.
+Working interpretation:
 
-For 2026-03-31 planning, treat the sections below as historical context. The current blockers are the "Current Full-Run Status" buckets above; several older federation buckets are no longer the primary risks.
+- core transaction and auth paths are healthier than before
+- the remaining red area is query/auth edge behavior, especially key/profile handling rather than baseline `/send` correctness
 
-### A. Federation invite / leave full flow is now passing
+### 3. Device-list propagation on room join
 
-**Tests:** `TestFederationRoomsInvite`
-**Current status:** Passing as of 2026-03-30 targeted rerun. Remote `/federation/v2/invite`, room bootstrap, `invite_room_state`, incoming `unsigned`, local leave/kick federation fanout, `send_leave` persistence, invite-only stub cleanup, and final `/sync` classification now line up with Complement expectations.
-**What fixed it:** Centralized `m.room.member` transition handling, remote join workflow completion wait, idempotent event persistence, and stricter federation leave validation.
-**Spec ref:** server-server-api.md §Inviting to a room
-**Priority:** Resolved for this Complement suite; keep an eye on related downstream suites rather than treating invite flow itself as a current blocker.
+- `TestDeviceListsUpdateOverFederationOnRoomJoin`
 
-### B. `send_join` accepts non-join events (14 failures)
+Working interpretation:
 
-**Tests:** `TestCannotSendNonJoinViaSendJoinV1` (7), `TestCannotSendNonJoinViaSendJoinV2` (7)
-**Error:** `make_join` returns 200, but `send_join` does not reject events whose `type` or `content.membership` is not `join`.
-**Root cause:** `send_join` handler in `src/api/federation.ts` likely missing event-type validation before persistence.
-**Spec ref:** server-server-api.md §Joining Rooms
-**Priority:** High — spec requires rejection of non-join events via this endpoint.
+- broad device-list propagation is mostly green
+- the residual bug is specifically the room-join propagation case
 
-### C. Missing events endpoint returns empty/errors (5 failures)
+### 4. Room/event semantics
 
-**Tests:** `TestInboundCanReturnMissingEvents`
-**Error:** No server logs in output — endpoint likely returns immediately without fetching.
-**Root cause:** `GET /_matrix/federation/v1/get_missing_events/:roomId` implementation does not traverse the event DAG to find requested events.
-**Spec ref:** server-server-api.md §Retrieving Missing Events
-**Priority:** High — needed for federation state recovery.
+- `TestRoomCreate`
+- `TestFetchEvent`
+- `TestDelayedEvents`
 
-### D. Invited-room sync is no longer blocked on invite/leave classification
+Working interpretation:
 
-**Tests:** `TestDeviceListsUpdateOverFederation` (4), `TestIsDirectFlagFederation` (1), `TestFederationRoomsInvite`
-**Current status:** `invite_state.events` is populated for federation invites, join `unsigned.prev_content` is preserved, and the invite-only leave/reject/rescind `/sync` classification issues uncovered by `TestFederationRoomsInvite` are now fixed.
-**Remaining gap:** If `TestDeviceListsUpdateOverFederation` or `TestIsDirectFlagFederation` still fail, they should now be treated as downstream device-list / DM evidence problems rather than the older invite-only membership-classification bug.
-**Root cause:** The original `invite_stripped_state` cleanup and leave visibility problem was real, but the targeted federation invite TDD resolved it for the exercised paths.
-**Code ref:** `src/matrix/application/sync-service.ts`, federation invite/leave handling
-**Spec ref:** client-server-api/\_index.md §Syncing — invite_state
-**Priority:** Medium — no longer the primary federation blocker; revisit when rerunning DM/device-list suites.
+- room create still has topic/rich-topic/state representation mismatch
+- event retrieval and delayed-event behavior are still not fully aligned with Complement expectations
 
-### E. Unknown endpoints return 404 instead of 405 (5 failures)
+### 5. MSC-specific bucket
 
-**Tests:** `TestUnknownEndpoints`
-**Error:** `PATCH /_matrix/media/v3/upload` → 404; spec requires 405 Method Not Allowed when the path is known but the method is not.
-**Root cause:** Hono route definitions do not register the path with all methods, so unregistered methods fall through to a 404 catch-all instead of 405.
-**Spec ref:** client-server-api/\_index.md §API Standards — Unknown endpoints
-**Priority:** Medium — quick fix, affects Complement's unknown-endpoint test suite.
+- `TestMSC3757OwnedState`
 
-### F. Restricted room state/routing remains mostly local-side now
+Working interpretation:
 
-**Tests:** `TestRestrictedRoomsLocalJoin` (3), `TestRestrictedRoomsLocalJoinInMSC3787Room` (3)
-**Error:** `PUT /rooms/:id/state/m.room.join_rules/` → 404 `M_UNRECOGNIZED`
-**Current status:** Remote restricted-join suites improved significantly in test9, but local restricted-join coverage still fails on the empty-`state_key` room-state route.
-**Root cause:** Route definition in `src/api/rooms.ts` likely requires `:stateKey` to be non-empty. Trailing `/` (empty state_key) is not handled.
-**Spec ref:** client-server-api/\_index.md §Room State
-**Priority:** Medium — blocks restricted room tests.
+- this remains isolated enough to keep separate from the generic sync/federation buckets
 
-### G. Space hierarchy does not reflect redactions (6 failures)
+## Diagnostic-Only Expansion Buckets
 
-**Tests:** `TestClientSpacesSummary`
-**Error:** `/hierarchy` returns child rooms even after `m.space.child` event is redacted.
-**Root cause:** `src/api/spaces.ts` hierarchy traversal reads current state without checking redaction status of `m.space.child` events.
-**Spec ref:** client-server-api modules/spaces.md
-**Priority:** Medium.
+The 60m diagnostic run surfaced broader red areas that are not yet part of the stable baseline.
 
-### H. Rate limiter triggers during tests (11+ failures)
+### Room versions / restricted rooms / creator rules
 
-**Tests:** `TestMSC4289PrivilegedRoomCreators` (12+), others
-**Error:** `429 M_LIMIT_EXCEEDED` returned during rapid sequential requests within a single test.
-**Root cause:** Rate limiter `RateLimitDurableObject` does not distinguish test environments. Complement hammers endpoints in rapid sequence, hitting limits designed for production.
-**Code ref:** `src/durable-objects/RateLimitDurableObject.ts`, middleware
-**Priority:** Medium — test environment should disable or relax rate limiting. `MATRIX_FEATURE_PROFILE=core` could gate it.
+- `TestMSC4289PrivilegedRoomCreators*`
+- `TestMSC4291RoomIDAsHashOfCreateEvent*`
+- `TestMSC4297StateResolutionV2_1*`
+- `TestRestrictedRooms*`
+- `TestKnockRoomsInPublicRoomsDirectory*`
 
-### I. Unimplemented or out-of-scope (remaining ~100 failures)
+### Sync, filters, and room timeline semantics
 
-Features not yet implemented. Not regressions.
+- `TestFilter`
+- `TestJson`
+- `TestEvent`
+- `TestSyncTimelineGap`
+- `TestRoomMessagesLazyLoading*`
+- `TestOlderLeftRoomsNotInLeaveSection`
 
-| Category                           | Tests                                                                                                 | Notes                                                                                                                                           |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| To-device over federation          | `TestToDeviceMessagesOverFederation` (4)                                                              | Federation EDU delivery for to-device                                                                                                           |
-| Remote presence                    | `TestRemotePresence` (3)                                                                              | Presence EDU federation                                                                                                                         |
-| Federation invite full flow        | `TestFederationRoomsInvite` pass                                                                      | Invite, reject, rescind, repeated invite/reject, and already-participating homeserver paths now pass targeted rerun and appear in test9 results |
-| Remote join validation             | `TestJoinFederatedRoomWithUnverifiableEvents` (5)                                                     | Unverifiable event rejection                                                                                                                    |
-| Auth chain / state resolution      | `TestEventAuth`, `TestCorruptedAuthChain`, `TestInboundFederationRejectsEventsWithRejectedAuthEvents` | Event auth correctness                                                                                                                          |
-| Knocking                           | `TestKnocking`, `TestKnockingInMSC3787Room`                                                           | Several subtests started passing in test9, but the suite remains one of the largest failure buckets                                             |
-| MSC4289 (Privileged room creators) | 12+                                                                                                   | v12 room feature, not yet implemented                                                                                                           |
-| MSC4291 (Room ID as hash)          | 5+                                                                                                    | Experimental room version                                                                                                                       |
-| MSC4297 (State resolution v2)      | 2                                                                                                     | State resolution extension                                                                                                                      |
-| MSC4311                            | 1                                                                                                     |                                                                                                                                                 |
-| Remote media                       | `TestContentMediaV1`, `TestRemotePngThumbnail`                                                        | `media.ts` explicitly returns "not supported"                                                                                                   |
-| Spaces federation                  | `TestFederatedClientSpaces`, `TestRestrictedRoomsSpacesSummaryFederation`                             |                                                                                                                                                 |
+### Federation residuals outside the stable baseline
 
----
+- `TestFederationRoomsInvite`
+- `TestInboundCanReturnMissingEvents`
+- `TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6`
+- `TestMessagesOverFederation`
+- `TestFederationKeyUploadQuery`
 
-## Fix Priority Summary
+### Client config, devices, and push
 
-| Priority  | Category                                          | Estimated scope                                                     |
-| --------- | ------------------------------------------------- | ------------------------------------------------------------------- |
-| 🔴 High   | B — send_join event type validation               | `federation.ts` handler check                                       |
-| 🔴 High   | C — get_missing_events implementation             | `federation.ts` DAG traversal                                       |
-| 🔴 High   | Knocking / knock auth and transitions             | room-version 7/11 knock flow correctness                            |
-| 🟡 Medium | Jump-to-date endpoint                             | event lookup / timestamp boundary semantics                         |
-| 🟡 Medium | D — downstream DM/device-list federation evidence | rerun targeted suites now that invite/leave classification is fixed |
-| 🟡 Medium | E — 405 vs 404 unknown methods                    | Hono route registration                                             |
-| 🟡 Medium | F — empty state_key routing                       | `rooms.ts` route pattern                                            |
-| 🟡 Medium | G — space hierarchy + redactions                  | `spaces.ts` state filter                                            |
-| 🟡 Medium | H — rate limiter in test env                      | Feature profile or env flag                                         |
-| ⚪ Later  | I — unimplemented features                        | Scoped per MSC/spec section                                         |
+- `TestPollsLocalPushRules`
+- `TestPushSync`
+- `TestUploadKey`
+- `TestE2EKeyBackupReplaceRoomKeyRules`
+- `TestKeyChangesLocal`
+
+### Search, usernames, public room surfaces
+
+- `TestSearch`
+- `TestRoomSpecificUsernameAtJoin`
+- `TestRoomSpecificUsernameChange`
+- `TestPublicRooms`
+- `TestRoomSummary`
+- `TestJumpToDateEndpoint`
+- `TestArchivedRoomsHistory`
+
+### Media and async upload surfaces
+
+- `TestAsyncUpload`
+- `TestRoomImageRoundtrip`
+- `TestMediaWithoutFileName`
+- `TestUrlPreview`
+
+These buckets are real work candidates, but they should not automatically be treated as baseline regressions until reproduced cleanly outside mixed-run noise.
+
+## Flake Backlog
+
+Current flake backlog should be read from the 60m diagnostic run, not the stable baseline.
+
+### Startup/deploy flake
+
+- `TestChangePassword`
+- `TestMSC3757OwnedState`
+- `TestMSC3967`
+- `TestPollsLocalPushRules`
+
+### Infra / transport skew
+
+- `TestFederationThumbnail`
+- `TestMSC4297StateResolutionV2_1_starts_from_empty_set`
+- `TestMSC4297StateResolutionV2_1_includes_conflicted_subgraph`
+- `TestPartialStateJoin`
+
+Working interpretation:
+
+- startup stability is materially better than before, but not fully eliminated in broad diagnostic runs
+- mixed federation/media transport issues still exist and can pollute very deep aggregate runs
+
+## Operational Guidance
+
+Use these rules when reading Complement results:
+
+1. docs and spec evidence should be updated from the stable full-run baseline plus clean targeted reruns
+2. the 60m run is for finding hidden buckets, not for baseline pass-rate claims
+3. if a bucket is red only in the 60m mixed run, reproduce it targeted before treating it as a current regression
+4. if a bucket is red in the stable baseline, it is active implementation work
+
+## Current Priority Order
+
+1. `TestPartialStateJoin`, `TestSync`, `TestPresence`, `TestMSC4308ThreadSubscriptionsSlidingSync`
+2. `TestInboundFederationKeys`, `TestInboundFederationProfile`
+3. `TestDeviceListsUpdateOverFederationOnRoomJoin`
+4. `TestRoomCreate`, `TestFetchEvent`, `TestDelayedEvents`
+5. `TestMSC3757OwnedState`

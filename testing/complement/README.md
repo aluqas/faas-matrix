@@ -59,6 +59,13 @@ Debug-only runner behavior:
   - enables always-print-server-logs
   - raises Wrangler log verbosity
 
+Timeout defaults:
+
+- targeted runs: `40s`
+- full runs and `--pkg ./tests`: `60s`
+- `--startup-debug`: `60s`
+- `--spawn-timeout <seconds>` overrides any default
+
 ## Usage
 
 ```bash
