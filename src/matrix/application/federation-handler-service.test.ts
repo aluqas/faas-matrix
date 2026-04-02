@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
+import type { PDU } from "../../types";
 import type { FederationRepository } from "../repositories/interfaces";
+import { PARTIAL_STATE_AUTH_DEFERRED_UNSIGNED_KEY } from "./features/federation/partial-state-membership";
 import {
   handleFederationDeviceListEdu,
   handleFederationDirectToDeviceEdu,
   handleFederationPresenceEdu,
   handleFederationReceiptEdu,
   handleFederationTypingEdu,
+  shouldApplyMembershipStateSnapshot,
 } from "./federation-handler-service";
 
 class FakeFederationRepository implements Pick<
@@ -133,6 +136,114 @@ class FakeD1Database {
 }
 
 describe("federation-handler-service", () => {
+  it("does not let workflow snapshots overwrite non-provisional membership state", () => {
+    expect(
+      shouldApplyMembershipStateSnapshot(
+        {
+          event_id: "$leave",
+          type: "m.room.member",
+          sender: "@elsie:remote.test",
+          state_key: "@elsie:remote.test",
+          content: { membership: "leave" },
+        },
+        {
+          event_id: "$join",
+          type: "m.room.member",
+          content: { membership: "join" },
+        },
+        "workflow",
+      ),
+    ).toBe(false);
+    expect(
+      shouldApplyMembershipStateSnapshot(
+        {
+          event_id: "$join",
+          type: "m.room.member",
+          sender: "@elsie:remote.test",
+          state_key: "@elsie:remote.test",
+          content: { membership: "join" },
+        },
+        {
+          event_id: "$join",
+          type: "m.room.member",
+          content: { membership: "join" },
+        },
+        "workflow",
+      ),
+    ).toBe(true);
+    expect(
+      shouldApplyMembershipStateSnapshot(
+        undefined,
+        {
+          event_id: "$join",
+          type: "m.room.member",
+          content: { membership: "join" },
+        },
+        "workflow",
+      ),
+    ).toBe(true);
+    expect(
+      shouldApplyMembershipStateSnapshot(
+        {
+          event_id: "$leave",
+          type: "m.room.member",
+          sender: "@elsie:remote.test",
+          state_key: "@elsie:remote.test",
+          content: { membership: "leave" },
+        },
+        {
+          event_id: "$join",
+          type: "m.room.member",
+          content: { membership: "join" },
+        },
+        "federation",
+      ),
+    ).toBe(true);
+  });
+
+  it("lets workflow snapshots restore partial-state deferred membership events", () => {
+    expect(
+      shouldApplyMembershipStateSnapshot(
+        {
+          event_id: "$kick",
+          type: "m.room.member",
+          sender: "@derek:remote.test",
+          state_key: "@elsie:remote.test",
+          content: { membership: "leave" },
+          unsigned: {
+            [PARTIAL_STATE_AUTH_DEFERRED_UNSIGNED_KEY]: "Insufficient power level to kick",
+          } as PDU["unsigned"],
+        },
+        {
+          event_id: "$join",
+          type: "m.room.member",
+          content: { membership: "join" },
+        },
+        "workflow",
+      ),
+    ).toBe(true);
+    expect(
+      shouldApplyMembershipStateSnapshot(
+        {
+          event_id: "$self-leave",
+          type: "m.room.member",
+          sender: "@elsie:remote.test",
+          state_key: "@elsie:remote.test",
+          content: { membership: "leave" },
+          unsigned: {
+            [PARTIAL_STATE_AUTH_DEFERRED_UNSIGNED_KEY]: "Not a member of the room",
+          } as PDU["unsigned"],
+        },
+        {
+          event_id: "$join",
+          type: "m.room.member",
+          content: { membership: "join" },
+        },
+        "workflow",
+      ),
+    ).toBe(true);
+  });
+
   it("applies presence EDUs through the repository", async () => {
     const repository = new FakeFederationRepository();
 

@@ -5,14 +5,38 @@ describe("partial-state membership auth deferral", () => {
   it("defers kick-style membership auth failures while partial state is incomplete", () => {
     expect(
       shouldDeferPartialStateMembershipAuthFailure(
-        "m.room.member",
+        {
+          type: "m.room.member",
+          sender: "@alice:test",
+          state_key: "@bob:test",
+          content: { membership: "leave" },
+        },
         "Insufficient power level to kick",
       ),
     ).toBe(true);
     expect(
       shouldDeferPartialStateMembershipAuthFailure(
-        "m.room.member",
+        {
+          type: "m.room.member",
+          sender: "@alice:test",
+          state_key: "@bob:test",
+          content: { membership: "leave" },
+        },
         "Cannot kick user with equal or higher power",
+      ),
+    ).toBe(true);
+  });
+
+  it("defers self-leave auth failures when partial state omitted the prior join", () => {
+    expect(
+      shouldDeferPartialStateMembershipAuthFailure(
+        {
+          type: "m.room.member",
+          sender: "@elsie:remote.test",
+          state_key: "@elsie:remote.test",
+          content: { membership: "leave" },
+        },
+        "Not a member of the room",
       ),
     ).toBe(true);
   });
@@ -20,12 +44,35 @@ describe("partial-state membership auth deferral", () => {
   it("does not defer unrelated auth failures or non-membership events", () => {
     expect(
       shouldDeferPartialStateMembershipAuthFailure(
-        "m.room.message",
+        {
+          type: "m.room.message",
+          sender: "@alice:test",
+          content: {},
+        },
         "Insufficient power level to kick",
       ),
     ).toBe(false);
     expect(
-      shouldDeferPartialStateMembershipAuthFailure("m.room.member", "Room is tombstoned"),
+      shouldDeferPartialStateMembershipAuthFailure(
+        {
+          type: "m.room.member",
+          sender: "@alice:test",
+          state_key: "@alice:test",
+          content: { membership: "leave" },
+        },
+        "Room is tombstoned",
+      ),
+    ).toBe(false);
+    expect(
+      shouldDeferPartialStateMembershipAuthFailure(
+        {
+          type: "m.room.member",
+          sender: "@alice:test",
+          state_key: "@bob:test",
+          content: { membership: "leave" },
+        },
+        "Not a member of the room",
+      ),
     ).toBe(false);
   });
 });

@@ -115,7 +115,8 @@ export function validateLeavePreconditions(
   if (
     currentMembership === "join" ||
     currentMembership === "invite" ||
-    currentMembership === "knock"
+    currentMembership === "knock" ||
+    currentMembership === "leave"
   ) {
     return Effect.void;
   }

@@ -89,6 +89,12 @@ describe("room-membership-policy", () => {
     );
   });
 
+  it("allows idempotent leave when the user already left", async () => {
+    const effect = validateLeavePreconditions("leave");
+
+    await expect(Effect.runPromise(effect)).resolves.toBeUndefined();
+  });
+
   it("rejects invites from users without invite power", async () => {
     const effect = authorizeLocalInvite({
       inviterMembership: "join",

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   clearPartialStateJoin,
+  getPartialStateJoinCompletion,
   getPartialStateJoin,
   getPartialStateJoinForRoom,
+  listPartialStateJoinCompletionsForUser,
   listPartialStateJoinsForUser,
   markPartialStateJoinCompleted,
   markPartialStateJoin,
@@ -116,6 +118,66 @@ describe("partial-state tracker", () => {
     await expect(
       takePartialStateJoinCompletion(cache, "@alice:test", "!room:test"),
     ).resolves.toBeNull();
+  });
+
+  it("reads and lists partial-state completion markers without consuming them", async () => {
+    const cache = new FakeKvNamespace() as unknown as KVNamespace;
+
+    await markPartialStateJoinCompleted(cache, {
+      roomId: "!one:test",
+      userId: "@alice:test",
+      eventId: "$one",
+      startedAt: 1,
+      serversInRoom: ["hs2"],
+    });
+    await markPartialStateJoinCompleted(cache, {
+      roomId: "!two:test",
+      userId: "@alice:test",
+      eventId: "$two",
+      startedAt: 2,
+      serversInRoom: ["hs3"],
+    });
+    await markPartialStateJoinCompleted(cache, {
+      roomId: "!three:test",
+      userId: "@bob:test",
+      eventId: "$three",
+      startedAt: 3,
+    });
+
+    await expect(getPartialStateJoinCompletion(cache, "@alice:test", "!one:test")).resolves.toEqual(
+      {
+        roomId: "!one:test",
+        userId: "@alice:test",
+        eventId: "$one",
+        startedAt: 1,
+        serversInRoom: ["hs2"],
+      },
+    );
+    await expect(listPartialStateJoinCompletionsForUser(cache, "@alice:test")).resolves.toEqual([
+      {
+        roomId: "!one:test",
+        userId: "@alice:test",
+        eventId: "$one",
+        startedAt: 1,
+        serversInRoom: ["hs2"],
+      },
+      {
+        roomId: "!two:test",
+        userId: "@alice:test",
+        eventId: "$two",
+        startedAt: 2,
+        serversInRoom: ["hs3"],
+      },
+    ]);
+    await expect(getPartialStateJoinCompletion(cache, "@alice:test", "!one:test")).resolves.toEqual(
+      {
+        roomId: "!one:test",
+        userId: "@alice:test",
+        eventId: "$one",
+        startedAt: 1,
+        serversInRoom: ["hs2"],
+      },
+    );
   });
 
   it("lists partial-state joins for a user", async () => {

@@ -1,6 +1,6 @@
 import { getServersInRoomsWithUser } from "../../../../services/database";
 import type { PartialStateJoinMarker } from "./tracker";
-import { listPartialStateJoinsForUser } from "./tracker";
+import { listPartialStateJoinCompletionsForUser, listPartialStateJoinsForUser } from "./tracker";
 
 export const PARTIAL_STATE_JOIN_METADATA_EVENT_TYPE = "io.tuwunel.partial_state_join";
 const PARTIAL_STATE_JOIN_METADATA_TTL_MS = 15 * 60 * 1000;
@@ -67,6 +67,79 @@ async function listPersistedPartialStateJoins(
     );
 }
 
+function mergeServersInRoom(
+  left: string[] | undefined,
+  right: string[] | undefined,
+): string[] | undefined {
+  const merged = [...(left ?? []), ...(right ?? [])];
+  if (merged.length === 0) {
+    return undefined;
+  }
+
+  return [...new Set(merged)];
+}
+
+function mergePartialStateJoinMarker(
+  current: PartialStateJoinMarker | undefined,
+  next: PartialStateJoinMarker,
+): PartialStateJoinMarker {
+  if (!current) {
+    return next;
+  }
+
+  return {
+    ...current,
+    ...next,
+    startedAt: Math.max(current.startedAt, next.startedAt),
+    eventId: next.startedAt >= current.startedAt ? next.eventId : current.eventId,
+    remoteServer:
+      next.startedAt >= current.startedAt
+        ? (next.remoteServer ?? current.remoteServer)
+        : (current.remoteServer ?? next.remoteServer),
+    ...(mergeServersInRoom(current.serversInRoom, next.serversInRoom)
+      ? { serversInRoom: mergeServersInRoom(current.serversInRoom, next.serversInRoom) }
+      : {}),
+  };
+}
+
+export function resolveSharedServersWithPartialState(input: {
+  sharedServers: string[];
+  persistedJoins: PartialStateJoinMarker[];
+  kvJoins: PartialStateJoinMarker[];
+  completedJoins: PartialStateJoinMarker[];
+}): string[] {
+  const completedRoomIds = new Set(input.completedJoins.map((marker) => marker.roomId));
+  const activeRoomIds = new Set(input.kvJoins.map((marker) => marker.roomId));
+  const partialStateMarkersByRoom = new Map<string, PartialStateJoinMarker>();
+
+  for (const marker of input.persistedJoins) {
+    if (completedRoomIds.has(marker.roomId) && !activeRoomIds.has(marker.roomId)) {
+      continue;
+    }
+
+    partialStateMarkersByRoom.set(
+      marker.roomId,
+      mergePartialStateJoinMarker(partialStateMarkersByRoom.get(marker.roomId), marker),
+    );
+  }
+
+  for (const marker of input.kvJoins) {
+    partialStateMarkersByRoom.set(
+      marker.roomId,
+      mergePartialStateJoinMarker(partialStateMarkersByRoom.get(marker.roomId), marker),
+    );
+  }
+
+  return [
+    ...new Set([
+      ...input.sharedServers,
+      ...Array.from(partialStateMarkersByRoom.values()).flatMap(
+        (marker) => marker.serversInRoom ?? [],
+      ),
+    ]),
+  ];
+}
+
 export async function upsertPartialStateJoinMetadata(
   db: D1Database,
   marker: PartialStateJoinMarker,
@@ -114,17 +187,17 @@ export async function getSharedServersInRoomsWithUserIncludingPartialState(
   cache: KVNamespace | undefined,
   userId: string,
 ): Promise<string[]> {
-  const [sharedServers, persistedJoins, kvJoins] = await Promise.all([
+  const [sharedServers, persistedJoins, kvJoins, completedJoins] = await Promise.all([
     getServersInRoomsWithUser(db, userId),
     listPersistedPartialStateJoins(db, userId),
     listPartialStateJoinsForUser(cache, userId),
+    listPartialStateJoinCompletionsForUser(cache, userId),
   ]);
 
-  return [
-    ...new Set([
-      ...sharedServers,
-      ...persistedJoins.flatMap((marker) => marker.serversInRoom ?? []),
-      ...kvJoins.flatMap((marker) => marker.serversInRoom ?? []),
-    ]),
-  ];
+  return resolveSharedServersWithPartialState({
+    sharedServers,
+    persistedJoins,
+    kvJoins,
+    completedJoins,
+  });
 }

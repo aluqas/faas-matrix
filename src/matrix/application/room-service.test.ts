@@ -561,6 +561,62 @@ describe("MatrixRoomService", () => {
     });
   });
 
+  it("treats repeated leave requests as a no-op", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    await repo.createRoom("!room1:test", "10", "@creator:test", true);
+    await repo.storeEvent({
+      event_id: "$create",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.create",
+      state_key: "",
+      content: { creator: "@creator:test", room_version: "10" },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    await repo.storeEvent({
+      event_id: "$power",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.power_levels",
+      state_key: "",
+      content: {},
+      origin_server_ts: 2,
+      depth: 2,
+      auth_events: [],
+      prev_events: ["$create"],
+    });
+    await repo.storeEvent({
+      event_id: "$leave",
+      room_id: "!room1:test",
+      sender: "@alice:test",
+      type: "m.room.member",
+      state_key: "@alice:test",
+      content: { membership: "leave" },
+      origin_server_ts: 3,
+      depth: 3,
+      auth_events: ["$create", "$power"],
+      prev_events: ["$power"],
+    });
+    await repo.updateMembership("!room1:test", "@alice:test", "leave", "$leave");
+
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+    const initialEventCount = repo.storedEvents.length;
+
+    await service.leaveRoom({ userId: "@alice:test", roomId: "!room1:test" });
+
+    expect(repo.memberships.get("!room1:test:@alice:test")?.membership).toBe("leave");
+    expect(repo.storedEvents).toHaveLength(initialEventCount);
+  });
+
   it("invites a user through the membership persistence boundary", async () => {
     const repo = new MemoryRoomRepository();
     const { appContext } = createTestAppContext();

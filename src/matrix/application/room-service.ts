@@ -664,6 +664,10 @@ export class MatrixRoomService {
       },
       buildEvent: async (_pipelineInput, auth) => {
         const currentMembership = await this.repository.getMembership(input.roomId, auth.userId);
+        if (currentMembership?.membership === "leave") {
+          return undefined;
+        }
+
         const createEvent = await this.repository.getStateEvent(input.roomId, "m.room.create");
         const powerLevelsEvent = await this.repository.getStateEvent(
           input.roomId,
@@ -709,10 +713,18 @@ export class MatrixRoomService {
         });
       },
       persist: async (_pipelineInput, _auth, event) => {
+        if (!event) {
+          return { alreadyLeft: true };
+        }
+
         await this.repository.persistMembershipEvent(input.roomId, event, "client");
-        return { eventId: event.event_id };
+        return { eventId: event.event_id, alreadyLeft: false };
       },
-      fanout: async (_pipelineInput, _auth, event) => {
+      fanout: async (_pipelineInput, _auth, event, persisted) => {
+        if (!event || persisted.alreadyLeft) {
+          return;
+        }
+
         await this.repository.notifyUsersOfEvent(input.roomId, event.event_id, "m.room.member");
         const db = this.appContext.capabilities.sql.connection as D1Database;
         const cache = this.appContext.capabilities.kv.cache as KVNamespace;

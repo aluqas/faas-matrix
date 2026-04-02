@@ -1,5 +1,5 @@
-import { getAuthChain, storeEvent } from "../../services/database";
-import type { PDU } from "../../types";
+import { getAuthChain, getEvent, storeEvent, updateMembership } from "../../services/database";
+import type { Membership, PDU } from "../../types";
 import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
 import type { FederationRepository } from "../repositories/interfaces";
 import type { RealtimeCapability } from "../../foundation/runtime-capabilities";
@@ -17,6 +17,12 @@ import { ingestTypingEdu } from "./features/typing/ingest";
 import type { TypingEduContent } from "./features/typing/contracts";
 import { ingestDirectToDeviceEdu } from "./features/to-device/ingest";
 import type { DirectToDeviceEduContent } from "./features/to-device/contracts";
+import {
+  getMembershipEventMembership,
+  getPartialStateDeferredPreviousEventId,
+  getPartialStateDeferredPreviousMembership,
+  isPartialStateDeferredMembershipEvent,
+} from "./features/federation/partial-state-membership";
 
 type StoredEventRow = {
   event_id: string;
@@ -152,12 +158,117 @@ export async function persistFederationMembershipEvent(
     await storeEvent(db, input.event);
   }
 
+  if (!shouldApplyMembershipStateSnapshot(context.currentMemberEvent, input.event, input.source)) {
+    return;
+  }
+
   await applyMembershipTransitionToDatabase(db, {
     roomId: input.roomId,
     event: input.event,
     source: input.source ?? "federation",
     context,
   });
+}
+
+export function shouldApplyMembershipStateSnapshot(
+  currentMembershipEvent:
+    | Pick<PDU, "event_id" | "type" | "sender" | "state_key" | "content" | "unsigned">
+    | null
+    | undefined,
+  incomingEvent: Pick<PDU, "event_id" | "type" | "content">,
+  source: MembershipTransitionSource | undefined,
+): boolean {
+  if (source !== "workflow") {
+    return true;
+  }
+
+  if (!currentMembershipEvent) {
+    return true;
+  }
+
+  if (currentMembershipEvent.event_id === incomingEvent.event_id) {
+    return true;
+  }
+
+  if (getMembershipEventMembership(incomingEvent) !== "join") {
+    return false;
+  }
+
+  return isPartialStateDeferredMembershipEvent(currentMembershipEvent);
+}
+
+function isRestorableDeferredMembership(input: {
+  currentEvent: PDU;
+  previousMembership: Membership | null;
+}): boolean {
+  const currentMembership = getMembershipEventMembership(input.currentEvent);
+  return (
+    isPartialStateDeferredMembershipEvent(input.currentEvent) &&
+    input.previousMembership === "join" &&
+    (currentMembership === "leave" || currentMembership === "ban")
+  );
+}
+
+export async function restoreDeferredPartialStateMemberships(
+  db: D1Database,
+  roomId: string,
+): Promise<number> {
+  const stateRows = await db
+    .prepare(
+      `SELECT state_key, event_id
+       FROM room_state
+       WHERE room_id = ? AND event_type = 'm.room.member'`,
+    )
+    .bind(roomId)
+    .all<{ state_key: string; event_id: string }>();
+
+  let restored = 0;
+  for (const row of stateRows.results) {
+    const currentEvent = await getEvent(db, row.event_id);
+    if (!currentEvent) {
+      continue;
+    }
+
+    const previousEventId = getPartialStateDeferredPreviousEventId(currentEvent);
+    const previousMembership = getPartialStateDeferredPreviousMembership(currentEvent);
+    if (
+      !previousEventId ||
+      !previousMembership ||
+      !isRestorableDeferredMembership({ currentEvent, previousMembership })
+    ) {
+      continue;
+    }
+
+    const previousEvent = await getEvent(db, previousEventId);
+    if (
+      !previousEvent ||
+      previousEvent.type !== "m.room.member" ||
+      previousEvent.state_key !== row.state_key
+    ) {
+      continue;
+    }
+
+    const previousContent = previousEvent.content as { displayname?: string; avatar_url?: string };
+    await db
+      .prepare(
+        `INSERT OR REPLACE INTO room_state (room_id, event_type, state_key, event_id)
+         VALUES (?, 'm.room.member', ?, ?)`,
+      )
+      .bind(roomId, row.state_key, previousEventId)
+      .run();
+    await updateMembership(
+      db,
+      roomId,
+      row.state_key,
+      previousMembership,
+      previousEventId,
+      previousContent.displayname,
+      previousContent.avatar_url,
+    );
+    restored += 1;
+  }
+
+  return restored;
 }
 
 export async function persistInviteStrippedState(

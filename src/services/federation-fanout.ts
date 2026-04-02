@@ -84,7 +84,11 @@ export function collectRemoteServersForEvent(
   excludeServers: string[] = [],
 ): string[] {
   const remoteServers = new Set<string>();
-  const excluded = new Set(excludeServers.filter((server) => server !== localServerName));
+  const excluded = new Set(
+    [...excludeServers, ...Object.keys(event.signatures ?? {})].filter(
+      (server) => server !== localServerName,
+    ),
+  );
 
   for (const member of memberships) {
     const server = extractServerNameFromMatrixId(member.user_id);
@@ -156,20 +160,31 @@ export async function fanoutEventToRemoteServers(
 
   const members = await db
     .prepare(
-      `SELECT DISTINCT user_id, membership
-       FROM (
-         SELECT user_id, membership
+      `WITH current_memberships AS (
+         SELECT room_id, user_id, membership
          FROM room_memberships
          WHERE room_id = ?
+
          UNION
-         SELECT rs.state_key AS user_id,
-                json_extract(e.content, '$.membership') AS membership
+
+         SELECT
+           rs.room_id,
+           rs.state_key AS user_id,
+           json_extract(e.content, '$.membership') AS membership
          FROM room_state rs
          JOIN events e ON rs.event_id = e.event_id
          WHERE rs.room_id = ?
            AND rs.event_type = 'm.room.member'
            AND rs.state_key IS NOT NULL
-       )`,
+           AND NOT EXISTS (
+             SELECT 1
+             FROM room_memberships rm
+             WHERE rm.room_id = rs.room_id
+               AND rm.user_id = rs.state_key
+           )
+       )
+       SELECT DISTINCT user_id, membership
+       FROM current_memberships`,
     )
     .bind(roomId, roomId)
     .all<MembershipServerRow>();

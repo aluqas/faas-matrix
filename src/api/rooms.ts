@@ -24,7 +24,10 @@ import {
   deleteRoomAlias,
   getEvent,
 } from "../services/database";
-import { getPartialStateJoin } from "../matrix/application/features/partial-state/tracker";
+import {
+  getPartialStateJoin,
+  getPartialStateJoinCompletion,
+} from "../matrix/application/features/partial-state/tracker";
 import { FORGOTTEN_ROOM_ACCOUNT_DATA_TYPE } from "../matrix/application/room-account-data";
 import { EventQueryService } from "../matrix/application/event-query-service";
 import roomMembershipRoutes from "./rooms/membership";
@@ -127,11 +130,14 @@ async function waitForPartialStateJoinCompletion(
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const marker = await getPartialStateJoin(cache, userId, roomId);
+    const [marker, completion] = await Promise.all([
+      getPartialStateJoin(cache, userId, roomId),
+      getPartialStateJoinCompletion(cache, userId, roomId),
+    ]);
     if (!marker) {
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, completion ? 25 : 100));
   }
 }
 
@@ -363,7 +369,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/state", requireAuth(), async (c) => {
 
   // Check membership
   const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== "join") {
+  if (!membership || (membership.membership !== "join" && membership.membership !== "leave")) {
     return Errors.forbidden("Not a member of this room").toResponse();
   }
 
@@ -502,7 +508,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/members", requireAuth(), async (c) => 
 
   // Check membership
   const membership = await getMembership(c.env.DB, roomId, userId);
-  if (!membership || membership.membership !== "join") {
+  if (!membership || (membership.membership !== "join" && membership.membership !== "leave")) {
     return Errors.forbidden("Not a member of this room").toResponse();
   }
 

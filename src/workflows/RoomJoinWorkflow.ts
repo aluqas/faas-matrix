@@ -25,7 +25,10 @@ import {
   applyMembershipTransitionToDatabase,
   loadMembershipTransitionContext,
 } from "../matrix/application/membership-transition-service";
-import { persistFederationStateSnapshot } from "../matrix/application/federation-handler-service";
+import {
+  persistFederationStateSnapshot,
+  restoreDeferredPartialStateMemberships,
+} from "../matrix/application/federation-handler-service";
 import {
   type JsonObject,
   type RoomJoinWorkflowResult,
@@ -47,7 +50,6 @@ import {
 } from "../matrix/application/features/partial-state/tracker";
 import {
   clearPartialStateJoinMetadata,
-  getSharedServersInRoomsWithUserIncludingPartialState,
   upsertPartialStateJoinMetadata,
 } from "../matrix/application/features/partial-state/shared-servers";
 
@@ -405,6 +407,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
               partialStateEventId!,
               roomVersion,
             );
+            await restoreDeferredPartialStateMemberships(this.env.DB, roomId);
             await markPartialStateJoinCompleted(this.env.CACHE, {
               roomId,
               userId,
@@ -413,8 +416,6 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
               ...withDefined("remoteServer", successfulRemoteServer),
               ...withDefined("serversInRoom", remoteSendJoinResponse?.servers_in_room),
             });
-            await clearPartialStateJoin(this.env.CACHE, userId, roomId);
-            await clearPartialStateJoinMetadata(this.env.DB, userId, roomId);
             await this.notifyMemberBatch([{ userId }], joinEventData);
           },
         );
@@ -422,36 +423,16 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
       await step.do("publish-device-lists", async () => {
         try {
-          const roomEncryptionEvent = await getStateEvent(
-            this.env.DB,
-            roomId,
-            "m.room.encryption",
-            "",
-          );
-          if (!roomEncryptionEvent) {
-            await runWorkflowEffect(
-              logger.info("room_join.workflow.device_list_share_skipped", {
-                reason: "room_not_encrypted",
-              }),
-            );
-            return;
-          }
-
           const published = await publishDeviceListUpdatesForNewlySharedServers(
             {
               userId,
               previouslySharedServers: preJoinSharedServers,
-              sharedServersAfterJoin: remoteSendJoinResponse?.servers_in_room,
             },
             {
               localServerName: this.env.SERVER_NAME,
               now: () => Date.now(),
               getSharedRemoteServers: (sharedUserId) =>
-                getSharedServersInRoomsWithUserIncludingPartialState(
-                  this.env.DB,
-                  this.env.CACHE,
-                  sharedUserId,
-                ),
+                getServersInRoomsWithUser(this.env.DB, sharedUserId),
               getUserDevices: (deviceUserId) => getUserDevices(this.env.DB, deviceUserId),
               getStoredDeviceKeys: (deviceUserId, deviceId) =>
                 getStoredDeviceKeysFromKv(this.env.DEVICE_KEYS, deviceUserId, deviceId),
@@ -475,6 +456,13 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
           );
         }
       });
+
+      if (partialStateEventId) {
+        await step.do("finalize-partial-state", async () => {
+          await clearPartialStateJoin(this.env.CACHE, userId, roomId);
+          await clearPartialStateJoinMetadata(this.env.DB, userId, roomId);
+        });
+      }
 
       // Step 5: Get room members for notification
       const members = (await step.do("get-members", async () => {

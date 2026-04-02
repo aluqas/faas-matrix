@@ -268,18 +268,31 @@ export class CloudflareSyncRepository implements SyncRepository {
         FROM remote_device_list_streams rdls
         WHERE rdls.stream_id > ?
           AND EXISTS (
-            WITH joined_members AS (
-              SELECT room_id, user_id
+            WITH current_memberships AS (
+              SELECT room_id, user_id, membership
               FROM room_memberships
-              WHERE membership = 'join'
 
               UNION
 
-              SELECT rs.room_id, rs.state_key AS user_id
+              SELECT
+                rs.room_id,
+                rs.state_key AS user_id,
+                json_extract(e.content, '$.membership') AS membership
               FROM room_state rs
               JOIN events e ON rs.event_id = e.event_id
               WHERE rs.event_type = 'm.room.member'
-                AND json_extract(e.content, '$.membership') = 'join'
+                AND rs.state_key IS NOT NULL
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM room_memberships rm
+                  WHERE rm.room_id = rs.room_id
+                    AND rm.user_id = rs.state_key
+                )
+            ),
+            joined_members AS (
+              SELECT room_id, user_id
+              FROM current_memberships
+              WHERE membership = 'join'
             ),
             requester_joined_rooms AS (
               SELECT room_id
@@ -321,22 +334,35 @@ export class CloudflareSyncRepository implements SyncRepository {
               AND shared_target.membership = 'join'
               AND shared_requester.room_id != e.room_id
           )
-      `)
+        `)
           .bind(userId, sinceEventPosition, userId, userId)
           .all<{ user_id: string }>(),
         this.env.DB.prepare(`
-        WITH joined_members AS (
-          SELECT room_id, user_id
+        WITH current_memberships AS (
+          SELECT room_id, user_id, membership
           FROM room_memberships
-          WHERE membership = 'join'
 
           UNION
 
-          SELECT rs.room_id, rs.state_key AS user_id
+          SELECT
+            rs.room_id,
+            rs.state_key AS user_id,
+            json_extract(e.content, '$.membership') AS membership
           FROM room_state rs
           JOIN events e ON rs.event_id = e.event_id
           WHERE rs.event_type = 'm.room.member'
-            AND json_extract(e.content, '$.membership') = 'join'
+            AND rs.state_key IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM room_memberships rm
+              WHERE rm.room_id = rs.room_id
+                AND rm.user_id = rs.state_key
+            )
+        ),
+        joined_members AS (
+          SELECT room_id, user_id
+          FROM current_memberships
+          WHERE membership = 'join'
         )
         SELECT DISTINCT joined_members.user_id
         FROM events requester_join_event

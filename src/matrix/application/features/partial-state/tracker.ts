@@ -148,6 +148,19 @@ export async function takePartialStateJoinCompletion(
   return marker;
 }
 
+export async function getPartialStateJoinCompletion(
+  cache: KVNamespace | undefined,
+  userId: string,
+  roomId: string,
+): Promise<PartialStateJoinMarker | null> {
+  if (!cache) {
+    return null;
+  }
+
+  const raw = await cache.get(buildPartialStateCompletionCacheKey(userId, roomId), "json");
+  return parsePartialStateJoinMarker(raw, { roomId, userId });
+}
+
 export async function getPartialStateJoinForRoom(
   cache: KVNamespace | undefined,
   roomId: string,
@@ -169,6 +182,35 @@ export async function listPartialStateJoinsForUser(
   }
 
   const prefix = `${PARTIAL_STATE_JOIN_PREFIX}:${userId}:`;
+  const markers: PartialStateJoinMarker[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await cache.list({ prefix, ...(cursor ? { cursor } : {}) });
+    const pageMarkers = await Promise.all(
+      page.keys.map(async (key) => parsePartialStateJoinMarker(await cache.get(key.name, "json"))),
+    );
+    for (const marker of pageMarkers) {
+      if (marker) {
+        markers.push(marker);
+      }
+    }
+
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+
+  return markers;
+}
+
+export async function listPartialStateJoinCompletionsForUser(
+  cache: KVNamespace | undefined,
+  userId: string,
+): Promise<PartialStateJoinMarker[]> {
+  if (!cache || typeof cache.list !== "function") {
+    return [];
+  }
+
+  const prefix = `${PARTIAL_STATE_COMPLETED_PREFIX}:${userId}:`;
   const markers: PartialStateJoinMarker[] = [];
   let cursor: string | undefined;
 

@@ -805,21 +805,27 @@ export async function getMembership(
     .prepare(
       `
       WITH membership_sources AS (
+        SELECT membership, event_id, 1 AS precedence
+        FROM room_memberships
+        WHERE room_id = ? AND user_id = ?
+
+        UNION ALL
+
         SELECT
           json_extract(e.content, '$.membership') AS membership,
           rs.event_id AS event_id,
-          0 AS precedence
+          2 AS precedence
         FROM room_state rs
         JOIN events e ON rs.event_id = e.event_id
         WHERE rs.room_id = ?
           AND rs.event_type = 'm.room.member'
           AND rs.state_key = ?
-
-        UNION ALL
-
-        SELECT membership, event_id, 1 AS precedence
-        FROM room_memberships
-        WHERE room_id = ? AND user_id = ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM room_memberships rm
+            WHERE rm.room_id = rs.room_id
+              AND rm.user_id = rs.state_key
+          )
       )
       SELECT membership, event_id
       FROM membership_sources
@@ -877,6 +883,12 @@ export async function getUserRooms(
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.event_type = 'm.room.member'
         AND rs.state_key = ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM room_memberships rm
+          WHERE rm.room_id = rs.room_id
+            AND rm.user_id = rs.state_key
+        )
     )
     SELECT DISTINCT room_id
     FROM membership_sources
@@ -1122,28 +1134,36 @@ export async function getStateAtEvent(db: D1Database, eventId: string): Promise<
 export async function getServersInRoomsWithUser(db: D1Database, userId: string): Promise<string[]> {
   const result = await db
     .prepare(`
-    WITH joined_rooms AS (
-      SELECT room_id
+    WITH current_memberships AS (
+      SELECT room_id, user_id, membership
       FROM room_memberships
-      WHERE user_id = ? AND membership = 'join'
+
       UNION
-      SELECT rs.room_id
+
+      SELECT
+        rs.room_id,
+        rs.state_key AS user_id,
+        json_extract(e.content, '$.membership') AS membership
       FROM room_state rs
       JOIN events e ON rs.event_id = e.event_id
       WHERE rs.event_type = 'm.room.member'
-        AND rs.state_key = ?
-        AND json_extract(e.content, '$.membership') = 'join'
+        AND rs.state_key IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM room_memberships rm
+          WHERE rm.room_id = rs.room_id
+            AND rm.user_id = rs.state_key
+        )
+    ),
+    joined_rooms AS (
+      SELECT room_id
+      FROM current_memberships
+      WHERE user_id = ? AND membership = 'join'
     ),
     joined_members AS (
       SELECT room_id, user_id
-      FROM room_memberships
+      FROM current_memberships
       WHERE membership = 'join'
-      UNION
-      SELECT rs.room_id, rs.state_key AS user_id
-      FROM room_state rs
-      JOIN events e ON rs.event_id = e.event_id
-      WHERE rs.event_type = 'm.room.member'
-        AND json_extract(e.content, '$.membership') = 'join'
     )
     SELECT DISTINCT
       CASE
@@ -1154,7 +1174,7 @@ export async function getServersInRoomsWithUser(db: D1Database, userId: string):
     JOIN joined_members jm ON jr.room_id = jm.room_id
     WHERE jm.user_id != ?
   `)
-    .bind(userId, userId, userId)
+    .bind(userId, userId)
     .all<{ server_name: string | null }>();
 
   return result.results.map((r) => r.server_name).filter((s): s is string => s !== null);
