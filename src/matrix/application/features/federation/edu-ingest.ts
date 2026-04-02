@@ -1,10 +1,11 @@
+import { Effect } from "effect";
 import type { AppContext } from "../../../../foundation/app-context";
 import type { FederationRepository } from "../../../repositories/interfaces";
 import { createServerAclPolicy } from "../server-acl/policy";
 import type { PresenceEduContent } from "../presence/contracts";
 import type { TypingEduContent } from "../typing/contracts";
 import type { DirectToDeviceEduContent } from "../to-device/contracts";
-import { emitEffectWarning } from "../../effect-debug";
+import { emitEffectWarningEffect } from "../../effect-debug";
 import {
   handleFederationDeviceListEdu,
   handleFederationDirectToDeviceEdu,
@@ -22,6 +23,7 @@ import {
 export interface EduIngestPorts {
   appContext: AppContext;
   repository: FederationRepository;
+  runEffect<A, E>(effect: Effect.Effect<A, E>): Promise<A>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -81,12 +83,14 @@ export async function ingestFederationEdu(
       ...(userId ? { userId } : {}),
     });
     if (aclDecision.kind === "deny") {
-      await emitEffectWarning("[federation.edu] ACL rejected", {
-        origin: input.origin,
-        roomId,
-        eduType,
-        reason: aclDecision.reason,
-      });
+      await ports.runEffect(
+        emitEffectWarningEffect("[federation.edu] ACL rejected", {
+          origin: input.origin,
+          roomId,
+          eduType,
+          reason: aclDecision.reason,
+        }),
+      );
       return {
         kind: "rejected",
         eduType,

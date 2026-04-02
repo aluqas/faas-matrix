@@ -1,8 +1,8 @@
+import { Effect } from "effect";
 import type { AppContext } from "../../../../foundation/app-context";
 import type { SignedTransport } from "../../../../fedcore/contracts";
 import type { FederationRepository } from "../../../repositories/interfaces";
-import { emitEffectWarning } from "../../effect-debug";
-import { runFederationEffect } from "../../effect-runtime";
+import { emitEffectWarningEffect } from "../../effect-debug";
 import { requireLogContext, withLogContext } from "../../logging";
 import { type FederationTransactionEnvelope, type FederationTransactionResult } from "./contracts";
 import { ingestFederationEdu } from "./edu-ingest";
@@ -12,6 +12,7 @@ export interface FederationTransactionPorts {
   appContext: AppContext;
   repository: FederationRepository;
   signedTransport: SignedTransport;
+  runEffect<A, E>(effect: Effect.Effect<A, E>): Promise<A>;
 }
 
 export async function processFederationTransaction(
@@ -31,18 +32,20 @@ export async function processFederationTransaction(
       ["origin", "txn_id"],
     ),
   );
-  await runFederationEffect(
+  await ports.runEffect(
     logger.info("federation.transaction.start", {
       pdu_count: input.body.pdus?.length ?? 0,
       edu_count: input.body.edus?.length ?? 0,
     }),
   );
-  await emitEffectWarning("[federation.transaction] start", {
-    origin: input.origin,
-    txnId: input.txnId,
-    pdus: input.body.pdus?.length ?? 0,
-    edus: input.body.edus?.length ?? 0,
-  });
+  await ports.runEffect(
+    emitEffectWarningEffect("[federation.transaction] start", {
+      origin: input.origin,
+      txnId: input.txnId,
+      pdus: input.body.pdus?.length ?? 0,
+      edus: input.body.edus?.length ?? 0,
+    }),
+  );
 
   const cached = await ports.repository.getCachedTransaction(input.origin, input.txnId);
   if (cached) {
@@ -77,6 +80,7 @@ export async function processFederationTransaction(
         repository: ports.repository,
         signedTransport: ports.signedTransport,
         processTransaction: processNestedTransaction,
+        runEffect: ports.runEffect,
       },
       {
         origin: input.origin,
@@ -91,7 +95,7 @@ export async function processFederationTransaction(
     if (pduResult.kind === "accepted") {
       result.pdus[pduResult.eventId] = {};
       result.acceptedPduCount += 1;
-      await runFederationEffect(
+      await ports.runEffect(
         logger.info("federation.pdu.accepted", {
           event_id: pduResult.eventId,
         }),
@@ -103,7 +107,7 @@ export async function processFederationTransaction(
       result.pdus[pduResult.eventId] = {};
       result.rejectedPduCount += 1;
       result.softFailedEventIds.push(pduResult.eventId);
-      await runFederationEffect(
+      await ports.runEffect(
         logger.warn("federation.pdu.soft_failed", {
           event_id: pduResult.eventId,
           error_message: pduResult.reason,
@@ -121,7 +125,7 @@ export async function processFederationTransaction(
       error: pduResult.reason || "Unknown error",
     };
     result.rejectedPduCount += 1;
-    await runFederationEffect(
+    await ports.runEffect(
       logger.warn("federation.pdu.rejected", {
         event_id: pduResult.eventId,
         error_message: pduResult.reason || "Unknown error",
@@ -135,19 +139,20 @@ export async function processFederationTransaction(
         {
           appContext: ports.appContext,
           repository: ports.repository,
+          runEffect: ports.runEffect,
         },
         { origin: input.origin, rawEdu },
       );
       if (eduResult.kind === "applied") {
         result.processedEduCount += 1;
-        await runFederationEffect(
+        await ports.runEffect(
           logger.info("federation.edu.applied", {
             edu_type: eduResult.eduType,
             room_count: eduResult.roomIds.length,
           }),
         );
       } else if (eduResult.kind === "rejected") {
-        await runFederationEffect(
+        await ports.runEffect(
           logger.warn("federation.edu.rejected", {
             edu_type: eduResult.eduType,
             error_message: eduResult.reason,
@@ -155,17 +160,19 @@ export async function processFederationTransaction(
         );
       }
     } catch (error) {
-      await runFederationEffect(
+      await ports.runEffect(
         logger.warn("federation.transaction.edu_error", {
           edu_type: typeof rawEdu["edu_type"] === "string" ? rawEdu["edu_type"] : undefined,
           error_message: error instanceof Error ? error.message : String(error),
         }),
       );
-      await emitEffectWarning("[federation.transaction] EDU error", {
-        origin: input.origin,
-        eduType: typeof rawEdu["edu_type"] === "string" ? rawEdu["edu_type"] : undefined,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      await ports.runEffect(
+        emitEffectWarningEffect("[federation.transaction] EDU error", {
+          origin: input.origin,
+          eduType: typeof rawEdu["edu_type"] === "string" ? rawEdu["edu_type"] : undefined,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
     }
   }
 
@@ -173,7 +180,7 @@ export async function processFederationTransaction(
     pdus: result.pdus,
   });
 
-  await runFederationEffect(
+  await ports.runEffect(
     logger.info("federation.transaction.result", {
       accepted_pdu_count: result.acceptedPduCount,
       rejected_pdu_count: result.rejectedPduCount,

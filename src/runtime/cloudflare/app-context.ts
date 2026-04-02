@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import type { AppEnv, Env, RoomJoinWorkflowParams, RoomJoinWorkflowStatus } from "../../types";
+import type { AppEnv, Env, PDU, RoomJoinWorkflowParams, RoomJoinWorkflowStatus } from "../../types";
 import type { AppContext } from "../../foundation/app-context";
 import { createFeatureProfile } from "../../foundation/config/feature-profile";
 import type { RuntimeCapabilities } from "../../foundation/runtime-capabilities";
@@ -10,7 +10,7 @@ import {
   formatRoomAlias,
 } from "../../utils/ids";
 import { createMatrixServiceRegistry, type MatrixServiceRegistry } from "../../matrix/services";
-import { getPartialStateJoin } from "../../matrix/application/features/partial-state/tracker";
+import { getPartialStateStatus } from "../../matrix/application/features/partial-state/tracker";
 import {
   CloudflareDeliveryQueue,
   CloudflareDiscoveryService,
@@ -21,7 +21,7 @@ import {
   CloudflareSyncRepository,
 } from "./matrix-repositories";
 import { CloudflareIdempotencyStore } from "./idempotency-store";
-import { queueFederationEdu } from "../../matrix/application/features/shared/federation-edu-queue";
+import { enqueueFederationEdu, enqueueFederationPdu } from "../../services/federation-outbound";
 
 function createRuntimeCapabilities(
   env: Env,
@@ -56,12 +56,12 @@ function createRuntimeCapabilities(
           status.status === "waiting"
         ) {
           if (params.isRemote) {
-            const partialStateJoin = await getPartialStateJoin(
+            const partialStateJoin = await getPartialStateStatus(
               env.CACHE,
               params.userId,
               params.roomId,
             );
-            if (partialStateJoin) {
+            if (partialStateJoin && partialStateJoin.phase !== "complete") {
               break;
             }
           }
@@ -143,7 +143,10 @@ function createRuntimeCapabilities(
     },
     federation: {
       async queueEdu(destination: string, eduType: string, content: Record<string, unknown>) {
-        await queueFederationEdu(env, destination, eduType, content);
+        await enqueueFederationEdu(env, destination, eduType, content);
+      },
+      async queuePdu(destination: string, roomId: string, pdu: PDU) {
+        await enqueueFederationPdu(env, destination, roomId, pdu);
       },
     },
     metrics: {

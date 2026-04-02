@@ -1,37 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { runFederationEffect } from "../../effect-runtime";
-import type { AppContext } from "../../../../foundation/app-context";
-import type { SignedTransport } from "../../../../fedcore/contracts";
+import { ingestFederationEdu } from "./edu-ingest";
 import type { FederationRepository } from "../../../repositories/interfaces";
-import { processFederationTransaction } from "./transaction";
+import type { AppContext } from "../../../../foundation/app-context";
 
-class FakeFederationRepository implements FederationRepository {
-  cached: Record<string, unknown> | null = null;
-  storedResponses: Array<{ origin: string; txnId: string; response: Record<string, unknown> }> = [];
+class FakeFederationRepository implements Pick<
+  FederationRepository,
+  "getRoom" | "getRoomState" | "storeProcessedEdu" | "upsertPresence" | "upsertRemoteDeviceList"
+> {
+  storedEdus: Array<{ origin: string; eduType: string; content: Record<string, unknown> }> = [];
+  presenceCalls = 0;
+  deviceListCalls = 0;
 
-  async getCachedTransaction() {
-    return this.cached;
-  }
-  async storeCachedTransaction(origin: string, txnId: string, response: Record<string, unknown>) {
-    this.storedResponses.push({ origin, txnId, response });
-  }
-  async getProcessedPdu() {
-    return null;
-  }
-  async recordProcessedPdu() {}
-  async createRoom() {}
   async getRoom(roomId: string) {
     if (roomId === "!room:test") {
       return { room_id: roomId, room_version: "10", is_public: true, created_at: 1 };
     }
     return null;
   }
-  async getEvent() {
-    return null;
-  }
-  async getLatestRoomEvents() {
-    return [];
-  }
+
   async getRoomState(roomId: string) {
     if (roomId !== "!room:test") {
       return [];
@@ -51,16 +38,18 @@ class FakeFederationRepository implements FederationRepository {
       },
     ];
   }
-  async getInviteStrippedState() {
-    return [];
+
+  async storeProcessedEdu(origin: string, eduType: string, content: Record<string, unknown>) {
+    this.storedEdus.push({ origin, eduType, content });
   }
-  async storeIncomingEvent() {}
-  async notifyUsersOfEvent() {}
-  async updateMembership() {}
-  async upsertRoomState() {}
-  async storeProcessedEdu() {}
-  async upsertPresence() {}
-  async upsertRemoteDeviceList() {}
+
+  async upsertPresence() {
+    this.presenceCalls += 1;
+  }
+
+  async upsertRemoteDeviceList() {
+    this.deviceListCalls += 1;
+  }
 }
 
 function createAppContext(): AppContext {
@@ -121,69 +110,71 @@ function createAppContext(): AppContext {
   } as AppContext;
 }
 
-describe("federation transaction contracts", () => {
-  it("short-circuits cached transaction responses", async () => {
+describe("federation edu ingest", () => {
+  it("rejects ACL-denied room-scoped EDUs through the injected effect runner", async () => {
     const repository = new FakeFederationRepository();
-    repository.cached = { pdus: { $cached: {} } };
+    const warnings: string[] = [];
 
-    const result = await processFederationTransaction(
+    const result = await ingestFederationEdu(
       {
         appContext: createAppContext(),
-        repository,
-        signedTransport: {} as SignedTransport,
-        runEffect: runFederationEffect,
-      },
-      {
-        origin: "remote.example",
-        txnId: "txn-1",
-        body: {},
-      },
-    );
-
-    expect(result).toEqual({
-      pdus: { $cached: {} },
-      acceptedPduCount: 0,
-      rejectedPduCount: 0,
-      processedEduCount: 0,
-      softFailedEventIds: [],
-    });
-  });
-
-  it("aggregates malformed PDU rejection and ACL-rejected EDU without touching the whole suite", async () => {
-    const repository = new FakeFederationRepository();
-
-    const result = await processFederationTransaction(
-      {
-        appContext: createAppContext(),
-        repository,
-        signedTransport: {} as SignedTransport,
-        runEffect: runFederationEffect,
+        repository: repository as unknown as FederationRepository,
+        async runEffect(effect) {
+          warnings.push("ran");
+          return runFederationEffect(effect);
+        },
       },
       {
         origin: "blocked.example",
-        txnId: "txn-2",
-        body: {
-          pdus: [{ event_id: "$broken" }],
-          edus: [
-            {
-              edu_type: "m.typing",
-              content: {
-                room_id: "!room:test",
-                user_id: "@bob:blocked.example",
-                typing: true,
-              },
-            },
-          ],
+        rawEdu: {
+          edu_type: "m.typing",
+          content: {
+            room_id: "!room:test",
+            user_id: "@alice:blocked.example",
+            typing: true,
+          },
         },
       },
     );
 
-    expect(result.rejectedPduCount).toBe(1);
-    expect(result.processedEduCount).toBe(0);
-    expect(result.pdus).toEqual({
-      $broken: { error: "Invalid PDU structure" },
+    expect(result).toEqual({
+      kind: "rejected",
+      eduType: "m.typing",
+      roomIds: ["!room:test"],
+      reason:
+        "Server blocked.example is denied by m.room.server_acl for EDU m.typing in !room:test",
     });
-    expect(repository.storedResponses).toHaveLength(1);
-    expect(repository.storedResponses[0]?.txnId).toBe("txn-2");
+    expect(warnings).toHaveLength(1);
+    expect(repository.storedEdus).toHaveLength(0);
+  });
+
+  it("stores applied presence EDUs and does not require room ACL checks", async () => {
+    const repository = new FakeFederationRepository();
+
+    const result = await ingestFederationEdu(
+      {
+        appContext: createAppContext(),
+        repository: repository as unknown as FederationRepository,
+        runEffect: runFederationEffect,
+      },
+      {
+        origin: "remote.example",
+        rawEdu: {
+          edu_type: "m.presence",
+          content: {
+            push: [
+              {
+                user_id: "@alice:remote.example",
+                presence: "online",
+              },
+            ],
+          },
+        },
+      },
+    );
+
+    expect(result.kind).toBe("applied");
+    expect(repository.presenceCalls).toBe(1);
+    expect(repository.storedEdus).toHaveLength(1);
   });
 });

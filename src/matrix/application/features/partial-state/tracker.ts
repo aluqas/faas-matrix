@@ -7,6 +7,12 @@ export interface PartialStateJoinMarker {
   startedAt: number;
 }
 
+export interface PartialStateStatus extends PartialStateJoinMarker {
+  phase: "partial" | "catchup_published" | "complete";
+  catchupPublishedAt?: number;
+  completedAt?: number;
+}
+
 const PARTIAL_STATE_JOIN_PREFIX = "partial_state_join";
 const PARTIAL_STATE_ROOM_PREFIX = "partial_state_room";
 const PARTIAL_STATE_COMPLETED_PREFIX = "partial_state_completed";
@@ -29,10 +35,22 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function parsePartialStateJoinMarker(
+function toJoinMarker(status: PartialStateStatus): PartialStateJoinMarker {
+  return {
+    roomId: status.roomId,
+    userId: status.userId,
+    eventId: status.eventId,
+    startedAt: status.startedAt,
+    ...(status.remoteServer ? { remoteServer: status.remoteServer } : {}),
+    ...(status.serversInRoom ? { serversInRoom: status.serversInRoom } : {}),
+  };
+}
+
+function parsePartialStateStatus(
   raw: unknown,
   defaults: Partial<Pick<PartialStateJoinMarker, "roomId" | "userId">> = {},
-): PartialStateJoinMarker | null {
+  defaultPhase: PartialStateStatus["phase"] = "partial",
+): PartialStateStatus | null {
   if (!isPlainObject(raw)) {
     return null;
   }
@@ -55,6 +73,10 @@ function parsePartialStateJoinMarker(
     userId,
     eventId,
     startedAt,
+    phase:
+      raw["phase"] === "catchup_published" || raw["phase"] === "complete"
+        ? raw["phase"]
+        : defaultPhase,
     ...(typeof raw["remoteServer"] === "string" ? { remoteServer: raw["remoteServer"] } : {}),
     ...(Array.isArray(raw["serversInRoom"])
       ? {
@@ -63,7 +85,82 @@ function parsePartialStateJoinMarker(
           ),
         }
       : {}),
+    ...(typeof raw["catchupPublishedAt"] === "number"
+      ? { catchupPublishedAt: raw["catchupPublishedAt"] }
+      : {}),
+    ...(typeof raw["completedAt"] === "number" ? { completedAt: raw["completedAt"] } : {}),
   };
+}
+
+export async function upsertPartialStateStatus(
+  cache: KVNamespace,
+  status: PartialStateStatus,
+  ttlSeconds = DEFAULT_TTL_SECONDS,
+): Promise<void> {
+  const serialized = JSON.stringify(status);
+  const writes: Promise<void>[] = [
+    cache.put(buildPartialStateJoinCacheKey(status.userId, status.roomId), serialized, {
+      expirationTtl: ttlSeconds,
+    }),
+  ];
+
+  if (status.phase === "complete") {
+    writes.push(cache.delete(buildPartialStateRoomCacheKey(status.roomId)));
+  } else {
+    writes.push(
+      cache.put(buildPartialStateRoomCacheKey(status.roomId), serialized, {
+        expirationTtl: ttlSeconds,
+      }),
+    );
+  }
+
+  await Promise.all(writes);
+}
+
+export async function getPartialStateStatus(
+  cache: KVNamespace | undefined,
+  userId: string,
+  roomId: string,
+): Promise<PartialStateStatus | null> {
+  if (!cache) {
+    return null;
+  }
+
+  const raw = await cache.get(buildPartialStateJoinCacheKey(userId, roomId), "json");
+  return parsePartialStateStatus(raw, { roomId, userId });
+}
+
+export async function getPartialStateCompletionStatus(
+  cache: KVNamespace | undefined,
+  userId: string,
+  roomId: string,
+): Promise<PartialStateStatus | null> {
+  if (!cache) {
+    return null;
+  }
+
+  const raw = await cache.get(buildPartialStateCompletionCacheKey(userId, roomId), "json");
+  return parsePartialStateStatus(raw, { roomId, userId }, "complete");
+}
+
+export async function consumePartialStateCompletionStatus(
+  cache: KVNamespace | undefined,
+  userId: string,
+  roomId: string,
+): Promise<PartialStateStatus | null> {
+  if (!cache) {
+    return null;
+  }
+
+  const key = buildPartialStateCompletionCacheKey(userId, roomId);
+  const raw = await cache.get(key, "json");
+  const status = parsePartialStateStatus(raw, { roomId, userId }, "complete");
+  if (!status) {
+    return null;
+  }
+
+  await cache.delete(key);
+  return status;
 }
 
 export async function markPartialStateJoin(
@@ -71,15 +168,34 @@ export async function markPartialStateJoin(
   marker: PartialStateJoinMarker,
   ttlSeconds = DEFAULT_TTL_SECONDS,
 ): Promise<void> {
-  const serialized = JSON.stringify(marker);
-  await Promise.all([
-    cache.put(buildPartialStateJoinCacheKey(marker.userId, marker.roomId), serialized, {
-      expirationTtl: ttlSeconds,
-    }),
-    cache.put(buildPartialStateRoomCacheKey(marker.roomId), serialized, {
-      expirationTtl: ttlSeconds,
-    }),
-  ]);
+  await upsertPartialStateStatus(
+    cache,
+    {
+      ...marker,
+      phase: "partial",
+    },
+    ttlSeconds,
+  );
+}
+
+export async function markPartialStateCatchupPublished(
+  cache: KVNamespace | undefined,
+  status: PartialStateStatus,
+  ttlSeconds = DEFAULT_TTL_SECONDS,
+): Promise<void> {
+  if (!cache) {
+    return;
+  }
+
+  await upsertPartialStateStatus(
+    cache,
+    {
+      ...status,
+      phase: "catchup_published",
+      catchupPublishedAt: status.catchupPublishedAt ?? Date.now(),
+    },
+    ttlSeconds,
+  );
 }
 
 export async function getPartialStateJoin(
@@ -91,8 +207,8 @@ export async function getPartialStateJoin(
     return null;
   }
 
-  const raw = await cache.get(buildPartialStateJoinCacheKey(userId, roomId), "json");
-  return parsePartialStateJoinMarker(raw, { roomId, userId });
+  const status = await getPartialStateStatus(cache, userId, roomId);
+  return status ? toJoinMarker(status) : null;
 }
 
 export async function clearPartialStateJoin(
@@ -121,7 +237,11 @@ export async function markPartialStateJoinCompleted(
 
   await cache.put(
     buildPartialStateCompletionCacheKey(marker.userId, marker.roomId),
-    JSON.stringify(marker),
+    JSON.stringify({
+      ...marker,
+      phase: "complete",
+      completedAt: Date.now(),
+    } satisfies PartialStateStatus),
     {
       expirationTtl: ttlSeconds,
     },
@@ -137,15 +257,12 @@ export async function takePartialStateJoinCompletion(
     return null;
   }
 
-  const key = buildPartialStateCompletionCacheKey(userId, roomId);
-  const raw = await cache.get(key, "json");
-  const marker = parsePartialStateJoinMarker(raw, { roomId, userId });
-  if (!marker) {
+  const status = await consumePartialStateCompletionStatus(cache, userId, roomId);
+  if (!status) {
     return null;
   }
 
-  await cache.delete(key);
-  return marker;
+  return toJoinMarker(status);
 }
 
 export async function getPartialStateJoinCompletion(
@@ -157,8 +274,8 @@ export async function getPartialStateJoinCompletion(
     return null;
   }
 
-  const raw = await cache.get(buildPartialStateCompletionCacheKey(userId, roomId), "json");
-  return parsePartialStateJoinMarker(raw, { roomId, userId });
+  const status = await getPartialStateCompletionStatus(cache, userId, roomId);
+  return status ? toJoinMarker(status) : null;
 }
 
 export async function getPartialStateJoinForRoom(
@@ -170,7 +287,8 @@ export async function getPartialStateJoinForRoom(
   }
 
   const raw = await cache.get(buildPartialStateRoomCacheKey(roomId), "json");
-  return parsePartialStateJoinMarker(raw, { roomId });
+  const status = parsePartialStateStatus(raw, { roomId });
+  return status ? toJoinMarker(status) : null;
 }
 
 export async function listPartialStateJoinsForUser(
@@ -188,7 +306,10 @@ export async function listPartialStateJoinsForUser(
   do {
     const page = await cache.list({ prefix, ...(cursor ? { cursor } : {}) });
     const pageMarkers = await Promise.all(
-      page.keys.map(async (key) => parsePartialStateJoinMarker(await cache.get(key.name, "json"))),
+      page.keys.map(async (key) => {
+        const status = parsePartialStateStatus(await cache.get(key.name, "json"));
+        return status ? toJoinMarker(status) : null;
+      }),
     );
     for (const marker of pageMarkers) {
       if (marker) {
@@ -217,7 +338,10 @@ export async function listPartialStateJoinCompletionsForUser(
   do {
     const page = await cache.list({ prefix, ...(cursor ? { cursor } : {}) });
     const pageMarkers = await Promise.all(
-      page.keys.map(async (key) => parsePartialStateJoinMarker(await cache.get(key.name, "json"))),
+      page.keys.map(async (key) => {
+        const status = parsePartialStateStatus(await cache.get(key.name, "json"), {}, "complete");
+        return status ? toJoinMarker(status) : null;
+      }),
     );
     for (const marker of pageMarkers) {
       if (marker) {
@@ -229,4 +353,64 @@ export async function listPartialStateJoinCompletionsForUser(
   } while (cursor);
 
   return markers;
+}
+
+export async function listPartialStateStatusesForUser(
+  cache: KVNamespace | undefined,
+  userId: string,
+): Promise<PartialStateStatus[]> {
+  if (!cache || typeof cache.list !== "function") {
+    return [];
+  }
+
+  const prefix = `${PARTIAL_STATE_JOIN_PREFIX}:${userId}:`;
+  const statuses: PartialStateStatus[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await cache.list({ prefix, ...(cursor ? { cursor } : {}) });
+    const pageStatuses = await Promise.all(
+      page.keys.map(async (key) => parsePartialStateStatus(await cache.get(key.name, "json"))),
+    );
+    for (const status of pageStatuses) {
+      if (status) {
+        statuses.push(status);
+      }
+    }
+
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+
+  return statuses;
+}
+
+export async function listPartialStateCompletionStatusesForUser(
+  cache: KVNamespace | undefined,
+  userId: string,
+): Promise<PartialStateStatus[]> {
+  if (!cache || typeof cache.list !== "function") {
+    return [];
+  }
+
+  const prefix = `${PARTIAL_STATE_COMPLETED_PREFIX}:${userId}:`;
+  const statuses: PartialStateStatus[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await cache.list({ prefix, ...(cursor ? { cursor } : {}) });
+    const pageStatuses = await Promise.all(
+      page.keys.map(async (key) =>
+        parsePartialStateStatus(await cache.get(key.name, "json"), {}, "complete"),
+      ),
+    );
+    for (const status of pageStatuses) {
+      if (status) {
+        statuses.push(status);
+      }
+    }
+
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+
+  return statuses;
 }

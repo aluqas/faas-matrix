@@ -132,6 +132,7 @@ function createTestAppContext(
   let roomCounter = 0;
   const pushCalls: Array<Record<string, unknown>> = [];
   const roomJoinCalls: RoomJoinWorkflowParams[] = [];
+  const deferredTasks: Promise<unknown>[] = [];
 
   const appContext = {
     profile: createFeatureProfile("full"),
@@ -182,11 +183,11 @@ function createTestAppContext(
     },
     services: {},
     defer(task: Promise<unknown>) {
-      void task;
+      deferredTasks.push(task);
     },
   } satisfies AppContext;
 
-  return { appContext, pushCalls, roomJoinCalls };
+  return { appContext, pushCalls, roomJoinCalls, deferredTasks };
 }
 
 describe("MatrixRoomService", () => {
@@ -276,6 +277,71 @@ describe("MatrixRoomService", () => {
         },
       },
     });
+  });
+
+  it("handles local knocking through the room service boundary", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    await repo.createRoom("!room1:test", "10", "@alice:test", false);
+    await repo.storeEvent({
+      event_id: "$create",
+      room_id: "!room1:test",
+      sender: "@alice:test",
+      type: "m.room.create",
+      state_key: "",
+      content: {
+        creator: "@alice:test",
+        room_version: "10",
+      },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    await repo.storeEvent({
+      event_id: "$join_rules",
+      room_id: "!room1:test",
+      sender: "@alice:test",
+      type: "m.room.join_rules",
+      state_key: "",
+      content: { join_rule: "knock" },
+      origin_server_ts: 2,
+      depth: 2,
+      auth_events: ["$create"],
+      prev_events: ["$create"],
+    });
+    await repo.updateMembership("!room1:test", "@alice:test", "join", "$alice_member");
+    await repo.storeEvent({
+      event_id: "$alice_member",
+      room_id: "!room1:test",
+      sender: "@alice:test",
+      type: "m.room.member",
+      state_key: "@alice:test",
+      content: { membership: "join" },
+      origin_server_ts: 3,
+      depth: 3,
+      auth_events: ["$create", "$join_rules"],
+      prev_events: ["$join_rules"],
+    });
+
+    const response = await service.knockRoom({
+      userId: "@bob:test",
+      roomId: "!room1:test",
+      reason: "let me in",
+    });
+
+    expect(response).toEqual({ room_id: "!room1:test" });
+    expect(repo.memberships.get("!room1:test:@bob:test")).toMatchObject({
+      membership: "knock",
+    });
+    expect(repo.notifyCount).toBe(1);
   });
 
   it("joins a public room through the event pipeline", async () => {

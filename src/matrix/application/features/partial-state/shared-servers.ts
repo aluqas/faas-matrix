@@ -1,6 +1,9 @@
 import { getServersInRoomsWithUser } from "../../../../services/database";
-import type { PartialStateJoinMarker } from "./tracker";
-import { listPartialStateJoinCompletionsForUser, listPartialStateJoinsForUser } from "./tracker";
+import type { PartialStateJoinMarker, PartialStateStatus } from "./tracker";
+import {
+  listPartialStateCompletionStatusesForUser,
+  listPartialStateStatusesForUser,
+} from "./tracker";
 
 export const PARTIAL_STATE_JOIN_METADATA_EVENT_TYPE = "io.tuwunel.partial_state_join";
 const PARTIAL_STATE_JOIN_METADATA_TTL_MS = 15 * 60 * 1000;
@@ -9,7 +12,7 @@ function parseMarkerContent(
   userId: string,
   roomId: string,
   content: string,
-): PartialStateJoinMarker | null {
+): PartialStateStatus | null {
   try {
     const parsed = JSON.parse(content) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -28,6 +31,10 @@ function parseMarkerContent(
       userId,
       eventId,
       startedAt,
+      phase:
+        record["phase"] === "catchup_published" || record["phase"] === "complete"
+          ? record["phase"]
+          : "partial",
       ...(typeof record["remoteServer"] === "string"
         ? { remoteServer: record["remoteServer"] }
         : {}),
@@ -38,6 +45,10 @@ function parseMarkerContent(
             ),
           }
         : {}),
+      ...(typeof record["catchupPublishedAt"] === "number"
+        ? { catchupPublishedAt: record["catchupPublishedAt"] }
+        : {}),
+      ...(typeof record["completedAt"] === "number" ? { completedAt: record["completedAt"] } : {}),
     };
   } catch {
     return null;
@@ -47,7 +58,7 @@ function parseMarkerContent(
 async function listPersistedPartialStateJoins(
   db: D1Database,
   userId: string,
-): Promise<PartialStateJoinMarker[]> {
+): Promise<PartialStateStatus[]> {
   const result = await db
     .prepare(
       `
@@ -63,7 +74,8 @@ async function listPersistedPartialStateJoins(
   return result.results
     .map((row) => parseMarkerContent(userId, row.room_id, row.content))
     .filter(
-      (marker): marker is PartialStateJoinMarker => marker !== null && marker.startedAt >= cutoff,
+      (marker): marker is PartialStateStatus =>
+        marker !== null && marker.startedAt >= cutoff && marker.phase !== "complete",
     );
 }
 
@@ -80,9 +92,9 @@ function mergeServersInRoom(
 }
 
 function mergePartialStateJoinMarker(
-  current: PartialStateJoinMarker | undefined,
-  next: PartialStateJoinMarker,
-): PartialStateJoinMarker {
+  current: PartialStateStatus | undefined,
+  next: PartialStateStatus,
+): PartialStateStatus {
   if (!current) {
     return next;
   }
@@ -104,13 +116,13 @@ function mergePartialStateJoinMarker(
 
 export function resolveSharedServersWithPartialState(input: {
   sharedServers: string[];
-  persistedJoins: PartialStateJoinMarker[];
-  kvJoins: PartialStateJoinMarker[];
-  completedJoins: PartialStateJoinMarker[];
+  persistedJoins: PartialStateStatus[];
+  kvJoins: PartialStateStatus[];
+  completedJoins: PartialStateStatus[];
 }): string[] {
   const completedRoomIds = new Set(input.completedJoins.map((marker) => marker.roomId));
   const activeRoomIds = new Set(input.kvJoins.map((marker) => marker.roomId));
-  const partialStateMarkersByRoom = new Map<string, PartialStateJoinMarker>();
+  const partialStateMarkersByRoom = new Map<string, PartialStateStatus>();
 
   for (const marker of input.persistedJoins) {
     if (completedRoomIds.has(marker.roomId) && !activeRoomIds.has(marker.roomId)) {
@@ -142,7 +154,7 @@ export function resolveSharedServersWithPartialState(input: {
 
 export async function upsertPartialStateJoinMetadata(
   db: D1Database,
-  marker: PartialStateJoinMarker,
+  marker: PartialStateJoinMarker | PartialStateStatus,
 ): Promise<void> {
   await db
     .prepare(
@@ -190,8 +202,8 @@ export async function getSharedServersInRoomsWithUserIncludingPartialState(
   const [sharedServers, persistedJoins, kvJoins, completedJoins] = await Promise.all([
     getServersInRoomsWithUser(db, userId),
     listPersistedPartialStateJoins(db, userId),
-    listPartialStateJoinsForUser(cache, userId),
-    listPartialStateJoinCompletionsForUser(cache, userId),
+    listPartialStateStatusesForUser(cache, userId),
+    listPartialStateCompletionStatusesForUser(cache, userId),
   ]);
 
   return resolveSharedServersWithPartialState({

@@ -35,12 +35,47 @@ export function truncateDebugText(value: string, maxLength: number = 1200): stri
   return `${value.slice(0, maxLength)}...<truncated>`;
 }
 
+export function emitEffectWarningEffect(
+  label: string,
+  fields: DebugFields = {},
+): Effect.Effect<void> {
+  return logger.warn("compat.effect_debug.warning", {
+    label,
+    ...toSerializableFields(fields),
+  });
+}
+
 export async function emitEffectWarning(label: string, fields: DebugFields = {}): Promise<void> {
-  await runFederationEffect(
-    logger.warn("compat.effect_debug.warning", {
-      label,
-      ...toSerializableFields(fields),
-    }),
+  await runFederationEffect(emitEffectWarningEffect(label, fields));
+}
+
+export function traceEffectPromiseEffect<A>(
+  label: string,
+  fields: DebugFields,
+  operation: () => Promise<A>,
+  options: TraceOptions<A> = {},
+): Effect.Effect<A, Error> {
+  return Effect.tryPromise({
+    try: operation,
+    catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+  }).pipe(
+    Effect.tap((value) =>
+      logger.warn("compat.effect_debug.trace_ok", {
+        label,
+        ...toSerializableFields({ ...fields, ...options.onSuccess?.(value) }),
+      }),
+    ),
+    Effect.tapError((error) =>
+      logger.error(
+        "compat.effect_debug.trace_error",
+        error,
+        toSerializableFields({
+          label,
+          ...fields,
+          ...options.onError?.(error),
+        }),
+      ),
+    ),
   );
 }
 
@@ -50,28 +85,5 @@ export async function traceEffectPromise<A>(
   operation: () => Promise<A>,
   options: TraceOptions<A> = {},
 ): Promise<A> {
-  return await runFederationEffect(
-    Effect.tryPromise({
-      try: operation,
-      catch: (error) => (error instanceof Error ? error : new Error(String(error))),
-    }).pipe(
-      Effect.tap((value) =>
-        logger.warn("compat.effect_debug.trace_ok", {
-          label,
-          ...toSerializableFields({ ...fields, ...options.onSuccess?.(value) }),
-        }),
-      ),
-      Effect.tapError((error) =>
-        logger.error(
-          "compat.effect_debug.trace_error",
-          error,
-          toSerializableFields({
-            label,
-            ...fields,
-            ...options.onError?.(error),
-          }),
-        ),
-      ),
-    ),
-  );
+  return await runFederationEffect(traceEffectPromiseEffect(label, fields, operation, options));
 }

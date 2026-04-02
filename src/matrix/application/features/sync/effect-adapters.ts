@@ -1,6 +1,9 @@
 import { Effect } from "effect";
 import type { SyncRepository } from "../../../repositories/interfaces";
-import { getPartialStateJoin, takePartialStateJoinCompletion } from "../partial-state/tracker";
+import {
+  consumePartialStateCompletionStatus,
+  getPartialStateStatus,
+} from "../partial-state/tracker";
 import type { PartialStatePort, SyncQueryPort } from "./effect-ports";
 import { toInfraError } from "./effect-ports";
 
@@ -107,15 +110,15 @@ export function createEffectSyncQueryPort(repository: SyncRepository): SyncQuery
 
 export function createEffectPartialStatePort(cache: KVNamespace | undefined): PartialStatePort {
   return {
-    getPartialStateJoin: (userId, roomId) =>
+    getPartialStateStatus: (userId, roomId) =>
       Effect.tryPromise({
-        try: () => getPartialStateJoin(cache, userId, roomId),
-        catch: (cause) => toInfraError("Failed to load partial-state join marker", cause),
+        try: () => getPartialStateStatus(cache, userId, roomId),
+        catch: (cause) => toInfraError("Failed to load partial-state status", cause),
       }),
-    takePartialStateJoinCompletion: (userId, roomId) =>
+    takePartialStateCompletionStatus: (userId, roomId) =>
       Effect.tryPromise({
-        try: () => takePartialStateJoinCompletion(cache, userId, roomId),
-        catch: (cause) => toInfraError("Failed to consume partial-state completion marker", cause),
+        try: () => consumePartialStateCompletionStatus(cache, userId, roomId),
+        catch: (cause) => toInfraError("Failed to consume partial-state completion status", cause),
       }),
   };
 }

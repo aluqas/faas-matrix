@@ -1,4 +1,4 @@
-import type { RoomJoinWorkflowParams, RoomJoinWorkflowStatus } from "../types";
+import type { PDU, RoomJoinWorkflowParams, RoomJoinWorkflowStatus } from "../types";
 
 export interface SqlCapability<TConnection = unknown> {
   connection: TConnection;
@@ -51,6 +51,7 @@ export interface RealtimeCapability {
 
 export interface FederationCapability {
   queueEdu?(destination: string, eduType: string, content: Record<string, unknown>): Promise<void>;
+  queuePdu?(destination: string, roomId: string, pdu: PDU): Promise<void>;
 }
 
 export interface MetricsCapability {

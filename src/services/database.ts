@@ -2,6 +2,7 @@
 
 import type { User, Device, Room, PDU, Membership, Env, StrippedStateEvent } from "../types";
 import { fanoutEventToRemoteServers } from "./federation-fanout";
+import { createFederationOutboundPort } from "./federation-outbound";
 
 type StoredEventRow = {
   event_id: string;
@@ -1245,8 +1246,8 @@ export async function fanoutEventToFederation(
 ): Promise<void> {
   try {
     await fanoutEventToRemoteServers(
+      createFederationOutboundPort(env),
       env.DB,
-      env.CACHE,
       env.SERVER_NAME,
       roomId,
       event,

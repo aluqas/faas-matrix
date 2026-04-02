@@ -6,6 +6,7 @@ import type {
   SyncRepository,
 } from "./repositories/interfaces";
 import { MatrixRoomService } from "./application/room-service";
+import { MatrixRoomQueryService } from "./application/room-query-service";
 import { MatrixSyncService } from "./application/sync-service";
 import { MatrixFederationService } from "./application/federation-service";
 import type { IdempotencyStore } from "../foundation/idempotency";
@@ -20,6 +21,7 @@ import type {
 
 export interface MatrixServiceRegistry {
   rooms: MatrixRoomService;
+  roomQueries: MatrixRoomQueryService;
   sync: MatrixSyncService;
   federation: MatrixFederationService;
   admin: AdminService;
@@ -50,6 +52,7 @@ export function createMatrixServiceRegistry(
       eventPipeline,
       options.idempotencyStore,
     ),
+    roomQueries: new MatrixRoomQueryService(options.appContext),
     sync: new MatrixSyncService(options.appContext, options.syncRepository),
     federation: new MatrixFederationService(
       options.appContext,

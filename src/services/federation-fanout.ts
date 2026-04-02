@@ -1,12 +1,9 @@
+import { Effect } from "effect";
 import type { PDU } from "../types";
 import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
 import { createServerAclPolicy } from "../matrix/application/features/server-acl/policy";
-import {
-  emitEffectWarning,
-  traceEffectPromise,
-  truncateDebugText,
-} from "../matrix/application/effect-debug";
-import { federationPut } from "./federation-keys";
+import { emitEffectWarningEffect } from "../matrix/application/effect-debug";
+import type { FederationOutboundPort } from "./federation-outbound";
 
 type MembershipServerRow = {
   user_id: string;
@@ -25,6 +22,27 @@ type ServerAclStateRow = {
   auth_events: string;
   prev_events: string;
 };
+
+export interface FederationFanoutPorts {
+  now(): number;
+  runEffect<A, E>(effect: Effect.Effect<A, E>): Promise<A>;
+  enqueuePdu(input: {
+    destination: string;
+    eventId: string;
+    roomId: string;
+    pdu: Record<string, unknown>;
+  }): Promise<void>;
+}
+
+export function createFederationFanoutPorts(
+  outbound: Pick<FederationOutboundPort, "enqueuePdu">,
+): FederationFanoutPorts {
+  return {
+    now: () => Date.now(),
+    runEffect: Effect.runPromise,
+    enqueuePdu: outbound.enqueuePdu,
+  };
+}
 
 function shouldOmitEventIdOverFederation(eventId: string): boolean {
   return !eventId.includes(":");
@@ -141,20 +159,22 @@ export function collectRemoteServersForEvent(
   return Array.from(remoteServers).filter((server) => !excluded.has(server));
 }
 
-export async function fanoutEventToRemoteServers(
+export async function fanoutEventToRemoteServersWithPorts(
+  ports: FederationFanoutPorts,
   db: D1Database,
-  cache: KVNamespace,
   localServerName: string,
   roomId: string,
   event: PDU,
   excludeServers: string[] = [],
 ): Promise<void> {
   if (!(await shouldFanoutEvent(db, localServerName, roomId, event))) {
-    await emitEffectWarning("[federation-fanout] skipped by ACL policy", {
-      roomId,
-      eventId: event.event_id,
-      eventType: event.type,
-    });
+    await ports.runEffect(
+      emitEffectWarningEffect("[federation-fanout] skipped by ACL policy", {
+        roomId,
+        eventId: event.event_id,
+        eventType: event.type,
+      }),
+    );
     return;
   }
 
@@ -197,35 +217,40 @@ export async function fanoutEventToRemoteServers(
     excludeServers,
   );
 
-  await emitEffectWarning("[federation-fanout] resolved targets", {
-    roomId,
-    eventId: event.event_id,
-    eventType: event.type,
-    membershipRows: members.results.length,
-    remoteServers,
-    authEvents: event.auth_events?.length ?? 0,
-    prevEvents: event.prev_events?.length ?? 0,
-    hasHashes: Boolean(event.hashes?.sha256),
-    signatureServers: Object.keys(event.signatures ?? {}),
-  });
+  await ports.runEffect(
+    emitEffectWarningEffect("[federation-fanout] resolved targets", {
+      roomId,
+      eventId: event.event_id,
+      eventType: event.type,
+      membershipRows: members.results.length,
+      remoteServers,
+      authEvents: event.auth_events?.length ?? 0,
+      prevEvents: event.prev_events?.length ?? 0,
+      hasHashes: Boolean(event.hashes?.sha256),
+      signatureServers: Object.keys(event.signatures ?? {}),
+    }),
+  );
 
   if (remoteServers.length === 0) {
     return;
   }
 
-  const txnId = `${Date.now()}-${event.event_id.substring(0, 8)}`;
   const payloadEvent = { ...event } as Record<string, unknown>;
   if (shouldOmitEventIdOverFederation(event.event_id)) {
     delete payloadEvent.event_id;
   }
-  const body = { pdus: [payloadEvent] };
 
   await Promise.all(
     remoteServers.map(async (server) => {
       try {
-        await traceEffectPromise(
-          "[federation-fanout] send",
-          {
+        await ports.enqueuePdu({
+          destination: server,
+          eventId: event.event_id,
+          roomId,
+          pdu: payloadEvent,
+        });
+        await ports.runEffect(
+          emitEffectWarningEffect("[federation-fanout] enqueued", {
             roomId,
             eventId: event.event_id,
             eventType: event.type,
@@ -233,41 +258,38 @@ export async function fanoutEventToRemoteServers(
             hasHashes: Boolean(event.hashes?.sha256),
             signatureServers: Object.keys(event.signatures ?? {}),
             omitsEventId: shouldOmitEventIdOverFederation(event.event_id),
-          },
-          async () => {
-            const response = await federationPut(
-              server,
-              `/_matrix/federation/v1/send/${encodeURIComponent(txnId)}`,
-              body,
-              localServerName,
-              db,
-              cache,
-            );
-            const responseBody = await response
-              .clone()
-              .text()
-              .catch((error) =>
-                error instanceof Error ? `<unavailable:${error.message}>` : "<unavailable>",
-              );
-            return {
-              status: response.status,
-              ok: response.ok,
-              responseBody: truncateDebugText(responseBody),
-            };
-          },
-          {
-            onSuccess: (result) => result,
-          },
+            queuedAt: ports.now(),
+          }),
         );
       } catch (error) {
-        await emitEffectWarning("[federation-fanout] send failure", {
-          roomId,
-          eventId: event.event_id,
-          eventType: event.type,
-          destination: server,
-          error,
-        });
+        await ports.runEffect(
+          emitEffectWarningEffect("[federation-fanout] send failure", {
+            roomId,
+            eventId: event.event_id,
+            eventType: event.type,
+            destination: server,
+            error,
+          }),
+        );
       }
     }),
+  );
+}
+
+export async function fanoutEventToRemoteServers(
+  outbound: Pick<FederationOutboundPort, "enqueuePdu">,
+  db: D1Database,
+  localServerName: string,
+  roomId: string,
+  event: PDU,
+  excludeServers: string[] = [],
+): Promise<void> {
+  await fanoutEventToRemoteServersWithPorts(
+    createFederationFanoutPorts(outbound),
+    db,
+    localServerName,
+    roomId,
+    event,
+    excludeServers,
   );
 }

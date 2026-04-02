@@ -6,6 +6,7 @@ import type {
   SignedTransport,
 } from "../../fedcore/contracts";
 import type { FederationRepository } from "../repositories/interfaces";
+import { runFederationEffect } from "./effect-runtime";
 import {
   processFederationTransaction,
   type FederationTransactionPorts,
@@ -41,6 +42,7 @@ export class MatrixFederationService {
       appContext: this.appContext,
       repository: this.repository,
       signedTransport: this.signedTransport,
+      runEffect: runFederationEffect,
     };
   }
 

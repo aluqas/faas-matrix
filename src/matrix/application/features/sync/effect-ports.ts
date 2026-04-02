@@ -12,7 +12,7 @@ import type {
   ReceiptEvent,
   UnreadNotificationSummary,
 } from "../../../repositories/interfaces";
-import type { PartialStateJoinMarker } from "../partial-state/tracker";
+import type { PartialStateStatus } from "../partial-state/tracker";
 import { InfraError } from "../../domain-error";
 
 export interface ConnectionState {
@@ -89,14 +89,14 @@ export interface SyncQueryPort {
 }
 
 export interface PartialStatePort {
-  getPartialStateJoin(
+  getPartialStateStatus(
     userId: string,
     roomId: string,
-  ): Effect.Effect<PartialStateJoinMarker | null, InfraError>;
-  takePartialStateJoinCompletion(
+  ): Effect.Effect<PartialStateStatus | null, InfraError>;
+  takePartialStateCompletionStatus(
     userId: string,
     roomId: string,
-  ): Effect.Effect<PartialStateJoinMarker | null, InfraError>;
+  ): Effect.Effect<PartialStateStatus | null, InfraError>;
 }
 
 export interface SlidingSyncStatePort {

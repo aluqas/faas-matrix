@@ -45,6 +45,7 @@ import { publishDeviceListUpdatesForNewlySharedServers } from "../matrix/applica
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
 import {
   clearPartialStateJoin,
+  markPartialStateCatchupPublished,
   markPartialStateJoinCompleted,
   markPartialStateJoin,
 } from "../matrix/application/features/partial-state/tracker";
@@ -408,15 +409,6 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
               roomVersion,
             );
             await restoreDeferredPartialStateMemberships(this.env.DB, roomId);
-            await markPartialStateJoinCompleted(this.env.CACHE, {
-              roomId,
-              userId,
-              eventId: partialStateEventId!,
-              startedAt: Date.now(),
-              ...withDefined("remoteServer", successfulRemoteServer),
-              ...withDefined("serversInRoom", remoteSendJoinResponse?.servers_in_room),
-            });
-            await this.notifyMemberBatch([{ userId }], joinEventData);
           },
         );
       }
@@ -458,9 +450,33 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       });
 
       if (partialStateEventId) {
+        await step.do("mark-partial-state-catchup-published", async () => {
+          const status = {
+            roomId,
+            userId,
+            eventId: partialStateEventId!,
+            startedAt: Date.now(),
+            phase: "catchup_published" as const,
+            catchupPublishedAt: Date.now(),
+            ...withDefined("remoteServer", successfulRemoteServer),
+            ...withDefined("serversInRoom", remoteSendJoinResponse?.servers_in_room),
+          };
+          await upsertPartialStateJoinMetadata(this.env.DB, status);
+          await markPartialStateCatchupPublished(this.env.CACHE, status);
+        });
+
         await step.do("finalize-partial-state", async () => {
+          await markPartialStateJoinCompleted(this.env.CACHE, {
+            roomId,
+            userId,
+            eventId: partialStateEventId!,
+            startedAt: Date.now(),
+            ...withDefined("remoteServer", successfulRemoteServer),
+            ...withDefined("serversInRoom", remoteSendJoinResponse?.servers_in_room),
+          });
           await clearPartialStateJoin(this.env.CACHE, userId, roomId);
           await clearPartialStateJoinMetadata(this.env.DB, userId, roomId);
+          await this.notifyMemberBatch([{ userId }], joinEventData);
         });
       }
 

@@ -1,5 +1,9 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { collectRemoteServersForEvent } from "./federation-fanout";
+import {
+  collectRemoteServersForEvent,
+  fanoutEventToRemoteServersWithPorts,
+} from "./federation-fanout";
 
 describe("collectRemoteServersForEvent", () => {
   it("does not echo membership events back to servers that already signed them", () => {
@@ -63,5 +67,78 @@ describe("collectRemoteServersForEvent", () => {
         ["hs1"],
       ),
     ).toEqual(["hs3"]);
+  });
+});
+
+describe("fanoutEventToRemoteServersWithPorts", () => {
+  it("uses injected ports for outbound delivery", async () => {
+    const sends: Array<{
+      destination: string;
+      eventId: string;
+      roomId: string;
+      pdu: Record<string, unknown>;
+    }> = [];
+    const db = {
+      prepare(query: string) {
+        const normalizedQuery = query.replace(/\s+/g, " ").trim();
+
+        return {
+          bind: () => ({
+            first: async <T>() => {
+              if (normalizedQuery.includes("rs.event_type = 'm.room.server_acl'")) {
+                return null as T | null;
+              }
+              return null as T | null;
+            },
+            all: async <T>() => {
+              if (normalizedQuery.includes("WITH current_memberships AS")) {
+                return {
+                  results: [
+                    { user_id: "@alice:hs1", membership: "join" },
+                    { user_id: "@bob:hs2", membership: "join" },
+                  ] as T[],
+                };
+              }
+              return { results: [] as T[] };
+            },
+          }),
+        };
+      },
+    } as unknown as D1Database;
+
+    await fanoutEventToRemoteServersWithPorts(
+      {
+        now: () => 123,
+        runEffect: Effect.runPromise,
+        async enqueuePdu(input) {
+          sends.push(input);
+        },
+      },
+      db,
+      "hs1",
+      "!room:hs1",
+      {
+        event_id: "$message:hs1",
+        room_id: "!room:hs1",
+        sender: "@alice:hs1",
+        type: "m.room.message",
+        content: { body: "hi" },
+        origin_server_ts: 1,
+        depth: 1,
+        auth_events: [],
+        prev_events: [],
+      },
+    );
+
+    expect(sends).toHaveLength(1);
+    expect(sends[0]).toMatchObject({
+      destination: "hs2",
+      eventId: "$message:hs1",
+      roomId: "!room:hs1",
+    });
+    expect(sends[0].pdu).toMatchObject({
+      event_id: "$message:hs1",
+      type: "m.room.message",
+    });
   });
 });

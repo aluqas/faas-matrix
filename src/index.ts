@@ -35,7 +35,7 @@ import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { requireAuth } from "./middleware/auth";
 import { analyticsMiddleware } from "./middleware/analytics";
 import { appContextMiddleware } from "./runtime/cloudflare/app-context";
-import { FEDERATION_OUTBOUND_DO_NAME } from "./matrix/application/features/shared/federation-edu-queue";
+import { FEDERATION_OUTBOUND_DO_NAME } from "./services/federation-outbound";
 import { handleAppError } from "./runtime/http-error-handler";
 
 // Import Durable Objects

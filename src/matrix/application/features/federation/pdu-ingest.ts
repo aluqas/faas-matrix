@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import type { AppContext } from "../../../../foundation/app-context";
 import type { SignedTransport } from "../../../../fedcore/contracts";
 import { verifyRemoteSignature } from "../../../../services/federation-keys";
@@ -15,8 +16,7 @@ import { extractServerNameFromMatrixId } from "../../../../utils/matrix-ids";
 import { fanoutEventToRemoteServers } from "../../../../services/federation-fanout";
 import type { FederationRepository } from "../../../repositories/interfaces";
 import { createServerAclPolicy } from "../server-acl/policy";
-import { emitEffectWarning } from "../../effect-debug";
-import { runFederationEffect } from "../../effect-runtime";
+import { emitEffectWarningEffect } from "../../effect-debug";
 import { withLogContext } from "../../logging";
 import {
   MembershipTransitionService,
@@ -49,6 +49,7 @@ export interface PduIngestPorts {
   processTransaction: (
     input: FederationTransactionEnvelope,
   ) => Promise<FederationTransactionResult>;
+  runEffect<A, E>(effect: Effect.Effect<A, E>): Promise<A>;
 }
 
 const PARTIAL_STATE_DEFERRED_MEMBERSHIP_AUTH_ERRORS = new Set([
@@ -145,7 +146,7 @@ async function fetchStateSnapshotForMissingPrevEvent(
   );
 
   if (!stateIdsResponse.ok) {
-    await runFederationEffect(
+    await ports.runEffect(
       logger.warn("federation.pdu.state_snapshot_error", {
         room_id: roomId,
         event_id: prevEventId,
@@ -187,7 +188,7 @@ async function fetchStateSnapshotForMissingPrevEvent(
     );
 
     if (!eventResponse.ok) {
-      await runFederationEffect(
+      await ports.runEffect(
         logger.warn("federation.pdu.state_snapshot_event_missing", {
           room_id: roomId,
           event_id: eventId,
@@ -197,7 +198,7 @@ async function fetchStateSnapshotForMissingPrevEvent(
       continue;
     }
 
-    await runFederationEffect(
+    await ports.runEffect(
       logger.info("federation.pdu.state_snapshot_event_seen", {
         room_id: roomId,
         event_id: eventId,
@@ -205,7 +206,7 @@ async function fetchStateSnapshotForMissingPrevEvent(
     );
   }
 
-  await runFederationEffect(
+  await ports.runEffect(
     logger.info("federation.pdu.state_snapshot_result", {
       room_id: roomId,
       event_id: prevEventId,
@@ -254,7 +255,7 @@ async function fetchMissingAuthEventsIfNeeded(
   );
 
   if (!response.ok) {
-    await runFederationEffect(
+    await ports.runEffect(
       logger.warn("federation.pdu.auth_chain_error", {
         room_id: roomId,
         event_id: pdu.event_id,
@@ -289,7 +290,7 @@ async function fetchMissingAuthEventsIfNeeded(
     historicalOnly: true,
   });
 
-  await runFederationEffect(
+  await ports.runEffect(
     logger.info("federation.pdu.auth_chain_result", {
       room_id: roomId,
       event_id: pdu.event_id,
@@ -359,7 +360,7 @@ async function fetchMissingPrevEventsIfNeeded(
     return false;
   }
 
-  await runFederationEffect(
+  await ports.runEffect(
     logger.info("federation.pdu.gap_fill_start", {
       room_id: roomId,
       event_id: pdu.event_id,
@@ -373,15 +374,17 @@ async function fetchMissingPrevEventsIfNeeded(
       missing_prev_event_count: missingPrevEvents.length,
     }),
   );
-  await emitEffectWarning("[federation.pdu] gap fill boundary", {
-    roomId,
-    incomingEventId: pdu.event_id,
-    earliestEventId,
-    earliestEventType: earliestKnownEvent.type,
-    earliestEventSender: earliestKnownEvent.sender,
-    earliestEventStateKey: earliestKnownEvent.state_key,
-    earliestEventDepth: earliestKnownEvent.depth,
-  });
+  await ports.runEffect(
+    emitEffectWarningEffect("[federation.pdu] gap fill boundary", {
+      roomId,
+      incomingEventId: pdu.event_id,
+      earliestEventId,
+      earliestEventType: earliestKnownEvent.type,
+      earliestEventSender: earliestKnownEvent.sender,
+      earliestEventStateKey: earliestKnownEvent.state_key,
+      earliestEventDepth: earliestKnownEvent.depth,
+    }),
+  );
 
   const response = await federationPost(
     origin,
@@ -397,7 +400,7 @@ async function fetchMissingPrevEventsIfNeeded(
   );
 
   if (!response.ok) {
-    await runFederationEffect(
+    await ports.runEffect(
       logger.warn("federation.pdu.gap_fill_error", {
         room_id: roomId,
         event_id: pdu.event_id,
@@ -433,7 +436,7 @@ async function fetchMissingPrevEventsIfNeeded(
     }
   }
 
-  await runFederationEffect(
+  await ports.runEffect(
     logger.info("federation.pdu.gap_fill_result", {
       room_id: roomId,
       event_id: pdu.event_id,
@@ -604,17 +607,19 @@ export async function ingestFederationPdu(
   }
 
   if (eventIdFormat !== "v1") {
-    await emitEffectWarning("[federation.pdu] normalized inbound", {
-      origin: input.origin,
-      roomId,
-      roomVersion,
-      eventType,
-      stateKey: typeof pdu.state_key === "string" ? pdu.state_key : undefined,
-      incomingEventId,
-      urlsafeEventId,
-      standardEventId,
-      normalizedEventId,
-    });
+    await ports.runEffect(
+      emitEffectWarningEffect("[federation.pdu] normalized inbound", {
+        origin: input.origin,
+        roomId,
+        roomVersion,
+        eventType,
+        stateKey: typeof pdu.state_key === "string" ? pdu.state_key : undefined,
+        incomingEventId,
+        urlsafeEventId,
+        standardEventId,
+        normalizedEventId,
+      }),
+    );
   }
 
   const normalizedPdu = {
@@ -759,25 +764,27 @@ export async function ingestFederationPdu(
         ...normalizedPdu,
         event_id: undefined,
       } as unknown as Record<string, unknown>);
-      await emitEffectWarning("[federation.pdu] content hash mismatch", {
-        origin: input.origin,
-        roomId,
-        roomVersion,
-        eventId,
-        eventType: normalizedPdu.type,
-        hadIncomingEventId: typeof input.rawPdu["event_id"] === "string",
-        expectedHash: normalizedPdu.hashes.sha256,
-        rawHash,
-        normalizedHash,
-        withoutEventIdHash,
-        rawKeys: Object.keys(input.rawPdu).sort(),
-        unsignedKeys:
-          input.rawPdu["unsigned"] &&
-          typeof input.rawPdu["unsigned"] === "object" &&
-          !Array.isArray(input.rawPdu["unsigned"])
-            ? Object.keys(input.rawPdu["unsigned"] as Record<string, unknown>).sort()
-            : [],
-      });
+      await ports.runEffect(
+        emitEffectWarningEffect("[federation.pdu] content hash mismatch", {
+          origin: input.origin,
+          roomId,
+          roomVersion,
+          eventId,
+          eventType: normalizedPdu.type,
+          hadIncomingEventId: typeof input.rawPdu["event_id"] === "string",
+          expectedHash: normalizedPdu.hashes.sha256,
+          rawHash,
+          normalizedHash,
+          withoutEventIdHash,
+          rawKeys: Object.keys(input.rawPdu).sort(),
+          unsignedKeys:
+            input.rawPdu["unsigned"] &&
+            typeof input.rawPdu["unsigned"] === "object" &&
+            !Array.isArray(input.rawPdu["unsigned"])
+              ? Object.keys(input.rawPdu["unsigned"] as Record<string, unknown>).sort()
+              : [],
+        }),
+      );
       await ports.repository.recordProcessedPdu(
         eventId,
         pduOrigin,
@@ -805,7 +812,7 @@ export async function ingestFederationPdu(
         snapshotIncomplete &&
         authDependencyError.startsWith("Missing auth event ")
       ) {
-        await runFederationEffect(
+        await ports.runEffect(
           logger.warn("federation.pdu.soft_failed", {
             room_id: roomId,
             event_id: eventId,
@@ -827,14 +834,16 @@ export async function ingestFederationPdu(
           requiresRefanout: false,
         };
       }
-      await emitEffectWarning("[federation.pdu] rejected", {
-        roomId,
-        eventId,
-        type: normalizedPdu.type,
-        sender: normalizedPdu.sender,
-        stateKey: normalizedPdu.state_key,
-        reason: authDependencyError,
-      });
+      await ports.runEffect(
+        emitEffectWarningEffect("[federation.pdu] rejected", {
+          roomId,
+          eventId,
+          type: normalizedPdu.type,
+          sender: normalizedPdu.sender,
+          stateKey: normalizedPdu.state_key,
+          reason: authDependencyError,
+        }),
+      );
       await ports.repository.recordProcessedPdu(
         eventId,
         pduOrigin,
@@ -855,13 +864,15 @@ export async function ingestFederationPdu(
     const aclPolicy = createServerAclPolicy(await ports.repository.getRoomState(roomId));
     const aclDecision = aclPolicy.allowPdu(input.origin, roomId, normalizedPdu);
     if (aclDecision.kind === "deny") {
-      await emitEffectWarning("[federation.pdu] ACL rejected", {
-        origin: input.origin,
-        roomId,
-        eventId,
-        eventType: normalizedPdu.type,
-        reason: aclDecision.reason,
-      });
+      await ports.runEffect(
+        emitEffectWarningEffect("[federation.pdu] ACL rejected", {
+          origin: input.origin,
+          roomId,
+          eventId,
+          eventType: normalizedPdu.type,
+          reason: aclDecision.reason,
+        }),
+      );
       await ports.repository.recordProcessedPdu(
         eventId,
         pduOrigin,
@@ -896,7 +907,7 @@ export async function ingestFederationPdu(
           if (normalizedPdu.type === "m.room.member" && authResult.error) {
             deferredPartialStateMembershipAuthReason = authResult.error;
           }
-          await runFederationEffect(
+          await ports.runEffect(
             logger.warn("federation.pdu.partial_state_auth_deferred", {
               room_id: roomId,
               event_id: eventId,
@@ -905,14 +916,16 @@ export async function ingestFederationPdu(
             }),
           );
         } else {
-          await emitEffectWarning("[federation.pdu] rejected", {
-            roomId,
-            eventId,
-            type: normalizedPdu.type,
-            sender: normalizedPdu.sender,
-            stateKey: normalizedPdu.state_key,
-            reason: authResult.error || "Auth failed",
-          });
+          await ports.runEffect(
+            emitEffectWarningEffect("[federation.pdu] rejected", {
+              roomId,
+              eventId,
+              type: normalizedPdu.type,
+              sender: normalizedPdu.sender,
+              stateKey: normalizedPdu.state_key,
+              reason: authResult.error || "Auth failed",
+            }),
+          );
           await ports.repository.recordProcessedPdu(
             eventId,
             pduOrigin,
@@ -944,11 +957,14 @@ export async function ingestFederationPdu(
     const db = isD1Database(ports.appContext.capabilities.sql.connection)
       ? ports.appContext.capabilities.sql.connection
       : undefined;
-    const cache = ports.appContext.capabilities.kv.cache as KVNamespace | undefined;
-    if (db && cache && !deferredPartialStateMembershipAuthReason) {
+    const queuePdu = ports.appContext.capabilities.federation?.queuePdu;
+    if (db && queuePdu && !deferredPartialStateMembershipAuthReason) {
       await fanoutEventToRemoteServers(
+        {
+          enqueuePdu: ({ destination, roomId: targetRoomId, pdu }) =>
+            queuePdu(destination, targetRoomId, pdu as unknown as PDU),
+        },
         db,
-        cache,
         ports.appContext.capabilities.config.serverName,
         roomId,
         normalizedPdu,

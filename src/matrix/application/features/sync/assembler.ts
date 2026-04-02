@@ -61,12 +61,19 @@ export function assembleSyncResponseEffect(
     const roomIdsForDelta: string[] = [];
     const forceFullStateRooms = new Set<string>();
     for (const roomId of visibleJoinedRoomIds) {
-      const partialStateJoin = yield* ports.partialState.getPartialStateJoin(input.userId, roomId);
-      if (partialStateJoin && !shouldExposePartialStateRoom()) {
+      const partialStateStatus = yield* ports.partialState.getPartialStateStatus(
+        input.userId,
+        roomId,
+      );
+      if (
+        partialStateStatus &&
+        partialStateStatus.phase !== "complete" &&
+        !shouldExposePartialStateRoom()
+      ) {
         continue;
       }
 
-      const partialStateCompletion = yield* ports.partialState.takePartialStateJoinCompletion(
+      const partialStateCompletion = yield* ports.partialState.takePartialStateCompletionStatus(
         input.userId,
         roomId,
       );
