@@ -6,6 +6,7 @@
 > Based on Complement test runs test1–test12 plus targeted reruns on 2026-03-31, 2026-04-01, and 2026-04-02.
 > Latest full run [`2026-04-01_22-40-58.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-01_22-40-58.log): 321 reached, 233 passing (73%), 75 failing, 13 skipped at analyzer depth 7. Top-level `complement-run.ts` summary for the same run is 71 total, 45 pass, 26 fail.
 > Updated 2026-04-02: this run is slightly flakier than the 2026-04-01 stable full run because blueprint/container startup flake reintroduced false negatives in several otherwise-green suites. Targeted reruns still keep `TestPartialStateJoin/CanReceiveTypingDuringPartialStateJoin`, the room/surface correctness bucket, the device-list federation join bucket, the spaces hierarchy bucket, and the thread-subscription bucket green where the aggregate run regressed.
+> Evidence policy: clean targeted green is treated as positive evidence. Full-run red classified as startup/deploy flake is tracked as `pending/flake` rather than immediate implementation regression.
 
 This section maps Complement results to the spec areas tracked above.
 `complement:pass` = at least one subtest passing. `complement:fail` = all subtests failing. `complement:gap` = not yet reached by any test in these runs.

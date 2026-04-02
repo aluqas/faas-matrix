@@ -1,0 +1,640 @@
+{
+  "TestACLs": [
+    "./tests"
+  ],
+  "TestAddAccountData": [
+    "./tests/csapi"
+  ],
+  "TestArchivedRoomsHistory": [
+    "./tests/csapi"
+  ],
+  "TestAsyncUpload": [
+    "./tests/csapi"
+  ],
+  "TestAvatarUrlUpdate": [
+    "./tests/csapi"
+  ],
+  "TestBannedUserCannotSendJoin": [
+    "./tests"
+  ],
+  "TestCannotKickLeftUser": [
+    "./tests/csapi"
+  ],
+  "TestCannotKickNonPresentUser": [
+    "./tests/csapi"
+  ],
+  "TestCannotSendKnockViaSendKnockInMSC3787Room": [
+    "./tests"
+  ],
+  "TestCannotSendNonJoinViaSendJoinV1": [
+    "./tests"
+  ],
+  "TestCannotSendNonJoinViaSendJoinV2": [
+    "./tests"
+  ],
+  "TestCannotSendNonKnockViaSendKnock": [
+    "./tests"
+  ],
+  "TestCannotSendNonLeaveViaSendLeaveV1": [
+    "./tests"
+  ],
+  "TestCannotSendNonLeaveViaSendLeaveV2": [
+    "./tests"
+  ],
+  "TestCanRegisterAdmin": [
+    "./tests/csapi"
+  ],
+  "TestChangePassword": [
+    "./tests/csapi"
+  ],
+  "TestChangePasswordPushers": [
+    "./tests/csapi"
+  ],
+  "TestClientSpacesSummary": [
+    "./tests"
+  ],
+  "TestClientSpacesSummaryJoinRules": [
+    "./tests"
+  ],
+  "TestComplementCanCreateValidV12Rooms": [
+    "./tests"
+  ],
+  "TestContent": [
+    "./tests/csapi"
+  ],
+  "TestContentCSAPIMediaV1": [
+    "./tests/csapi"
+  ],
+  "TestContentMediaV1": [
+    "./tests"
+  ],
+  "TestCorruptedAuthChain": [
+    "./tests"
+  ],
+  "TestCumulativeJoinLeaveJoinSync": [
+    "./tests/csapi"
+  ],
+  "TestDeactivateAccount": [
+    "./tests/csapi"
+  ],
+  "TestDelayedEvents": [
+    "./tests/msc4140"
+  ],
+  "TestDeletingDeviceRemovesDeviceLocalNotificationSettings": [
+    "./tests/msc3890"
+  ],
+  "TestDemotingUsersViaUsersDefault": [
+    "./tests/csapi"
+  ],
+  "TestDeviceListsUpdateOverFederation": [
+    "./tests"
+  ],
+  "TestDeviceListsUpdateOverFederationOnRoomJoin": [
+    "./tests"
+  ],
+  "TestDeviceListUpdates": [
+    "./tests/csapi"
+  ],
+  "TestDeviceManagement": [
+    "./tests/csapi"
+  ],
+  "TestDisplayNameUpdate": [
+    "./tests/csapi"
+  ],
+  "TestE2EKeyBackupReplaceRoomKeyRules": [
+    "./tests/csapi"
+  ],
+  "TestEvent": [
+    "./tests/csapi"
+  ],
+  "TestEventAuth": [
+    "./tests"
+  ],
+  "TestEventRelationships": [
+    "./tests/msc2836"
+  ],
+  "TestFederatedClientSpaces": [
+    "./tests"
+  ],
+  "TestFederatedEventRelationships": [
+    "./tests/msc2836"
+  ],
+  "TestFederationKeyUploadQuery": [
+    "./tests"
+  ],
+  "TestFederationRedactSendsWithoutEvent": [
+    "./tests"
+  ],
+  "TestFederationRejectInvite": [
+    "./tests"
+  ],
+  "TestFederationRoomsInvite": [
+    "./tests"
+  ],
+  "TestFederationThumbnail": [
+    "./tests"
+  ],
+  "TestFetchEvent": [
+    "./tests/csapi"
+  ],
+  "TestFetchEventNonWorldReadable": [
+    "./tests/csapi"
+  ],
+  "TestFetchEventWorldReadable": [
+    "./tests/csapi"
+  ],
+  "TestFetchHistoricalInvitedEventFromBeforeInvite": [
+    "./tests/csapi"
+  ],
+  "TestFetchHistoricalInvitedEventFromBetweenInvite": [
+    "./tests/csapi"
+  ],
+  "TestFetchHistoricalJoinedEventDenied": [
+    "./tests/csapi"
+  ],
+  "TestFetchHistoricalSharedEvent": [
+    "./tests/csapi"
+  ],
+  "TestFetchMessagesFromNonExistentRoom": [
+    "./tests/csapi"
+  ],
+  "TestFilter": [
+    "./tests/csapi"
+  ],
+  "TestFilterMessagesByRelType": [
+    "./tests/msc3874"
+  ],
+  "TestGappedSyncLeaveSection": [
+    "./tests/csapi"
+  ],
+  "TestGetFilteredRoomMembers": [
+    "./tests/csapi"
+  ],
+  "TestGetMissingEventsGapFilling": [
+    "./tests"
+  ],
+  "TestGetRoomMembers": [
+    "./tests/csapi"
+  ],
+  "TestGetRoomMembersAtPoint": [
+    "./tests/csapi"
+  ],
+  "TestInboundCanReturnMissingEvents": [
+    "./tests"
+  ],
+  "TestInboundFederationKeys": [
+    "./tests"
+  ],
+  "TestInboundFederationProfile": [
+    "./tests"
+  ],
+  "TestInboundFederationRejectsEventsWithRejectedAuthEvents": [
+    "./tests"
+  ],
+  "TestInviteFiltering": [
+    "./tests/msc4155"
+  ],
+  "TestInviteFromIgnoredUsersDoesNotAppearInSync": [
+    "./tests/csapi"
+  ],
+  "TestIsDirectFlagFederation": [
+    "./tests"
+  ],
+  "TestIsDirectFlagLocal": [
+    "./tests"
+  ],
+  "TestJoinFederatedRoomFailOver": [
+    "./tests"
+  ],
+  "TestJoinFederatedRoomFromApplicationServiceBridgeUser": [
+    "./tests"
+  ],
+  "TestJoinFederatedRoomWithUnverifiableEvents": [
+    "./tests"
+  ],
+  "TestJoinViaRoomIDAndServerName": [
+    "./tests"
+  ],
+  "TestJson": [
+    "./tests/csapi"
+  ],
+  "TestJumpToDateEndpoint": [
+    "./tests"
+  ],
+  "TestKeyChangesLocal": [
+    "./tests/csapi"
+  ],
+  "TestKeyClaimOrdering": [
+    "./tests/csapi"
+  ],
+  "TestKeysQueryWithDeviceIDAsObjectFails": [
+    "./tests/csapi"
+  ],
+  "TestKnocking": [
+    "./tests"
+  ],
+  "TestKnockingInMSC3787Room": [
+    "./tests"
+  ],
+  "TestKnockRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11": [
+    "./tests"
+  ],
+  "TestKnockRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12": [
+    "./tests"
+  ],
+  "TestKnockRoomsInPublicRoomsDirectory": [
+    "./tests"
+  ],
+  "TestKnockRoomsInPublicRoomsDirectoryInMSC3787Room": [
+    "./tests"
+  ],
+  "TestLeakyTyping": [
+    "./tests/csapi"
+  ],
+  "TestLeaveEventInviteRejection": [
+    "./tests/csapi"
+  ],
+  "TestLeaveEventVisibility": [
+    "./tests/csapi"
+  ],
+  "TestLeftRoomFixture": [
+    "./tests/csapi"
+  ],
+  "TestLocalPngThumbnail": [
+    "./tests"
+  ],
+  "TestLogin": [
+    "./tests/csapi"
+  ],
+  "TestLogout": [
+    "./tests/csapi"
+  ],
+  "TestMain": [
+    "./tests",
+    "./tests/csapi",
+    "./tests/msc2836",
+    "./tests/msc3391",
+    "./tests/msc3757",
+    "./tests/msc3874",
+    "./tests/msc3890",
+    "./tests/msc3902",
+    "./tests/msc3930",
+    "./tests/msc3967",
+    "./tests/msc4140",
+    "./tests/msc4155",
+    "./tests/msc4222",
+    "./tests/msc4306"
+  ],
+  "TestMediaConfig": [
+    "./tests/csapi"
+  ],
+  "TestMediaFilenames": [
+    "./tests"
+  ],
+  "TestMediaWithoutFileName": [
+    "./tests"
+  ],
+  "TestMediaWithoutFileNameCSMediaV1": [
+    "./tests"
+  ],
+  "TestMembershipOnEvents": [
+    "./tests/csapi"
+  ],
+  "TestMembersLocal": [
+    "./tests/csapi"
+  ],
+  "TestMessagesOverFederation": [
+    "./tests/csapi"
+  ],
+  "TestMSC3757OwnedState": [
+    "./tests/msc3757"
+  ],
+  "TestMSC3967": [
+    "./tests/msc3967"
+  ],
+  "TestMSC4289PrivilegedRoomCreators": [
+    "./tests"
+  ],
+  "TestMSC4289PrivilegedRoomCreators_Additional": [
+    "./tests"
+  ],
+  "TestMSC4289PrivilegedRoomCreators_AdditionalCreatorsAndInvited": [
+    "./tests"
+  ],
+  "TestMSC4289PrivilegedRoomCreators_AdditionalValidation": [
+    "./tests"
+  ],
+  "TestMSC4289PrivilegedRoomCreators_InvitedAreCreators": [
+    "./tests"
+  ],
+  "TestMSC4289PrivilegedRoomCreators_Upgrades": [
+    "./tests"
+  ],
+  "TestMSC4291RoomIDAsHashOfCreateEvent": [
+    "./tests"
+  ],
+  "TestMSC4291RoomIDAsHashOfCreateEvent_AuthEventsOmitsCreateEvent": [
+    "./tests"
+  ],
+  "TestMSC4291RoomIDAsHashOfCreateEvent_CannotSendCreateEvent": [
+    "./tests"
+  ],
+  "TestMSC4291RoomIDAsHashOfCreateEvent_RoomIDIsOnCreateEvent": [
+    "./tests"
+  ],
+  "TestMSC4291RoomIDAsHashOfCreateEvent_UpgradedRooms": [
+    "./tests"
+  ],
+  "TestMSC4297StateResolutionV2_1_includes_conflicted_subgraph": [
+    "./tests"
+  ],
+  "TestMSC4297StateResolutionV2_1_starts_from_empty_set": [
+    "./tests"
+  ],
+  "TestMSC4308ThreadSubscriptionsSlidingSync": [
+    "./tests/msc4306"
+  ],
+  "TestMSC4311FullCreateEventOnStrippedState": [
+    "./tests"
+  ],
+  "TestNetworkPartitionOrdering": [
+    "./tests"
+  ],
+  "TestNotPresentUserCannotBanOthers": [
+    "./tests/csapi"
+  ],
+  "TestOlderLeftRoomsNotInLeaveSection": [
+    "./tests/csapi"
+  ],
+  "TestOutboundFederationEventSizeGetMissingEvents": [
+    "./tests"
+  ],
+  "TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6": [
+    "./tests"
+  ],
+  "TestOutboundFederationProfile": [
+    "./tests"
+  ],
+  "TestOutboundFederationSend": [
+    "./tests"
+  ],
+  "TestPartialStateJoin": [
+    "./tests/msc3902"
+  ],
+  "TestPollsLocalPushRules": [
+    "./tests/msc3930"
+  ],
+  "TestPowerLevels": [
+    "./tests/csapi"
+  ],
+  "TestPresence": [
+    "./tests/csapi"
+  ],
+  "TestPresenceSyncDifferentRooms": [
+    "./tests/csapi"
+  ],
+  "TestProfileAvatarURL": [
+    "./tests/csapi"
+  ],
+  "TestProfileDisplayName": [
+    "./tests/csapi"
+  ],
+  "TestPublicRooms": [
+    "./tests/csapi"
+  ],
+  "TestPushRuleCacheHealth": [
+    "./tests/csapi"
+  ],
+  "TestPushRuleRoomUpgrade": [
+    "./tests/csapi"
+  ],
+  "TestPushSync": [
+    "./tests/csapi"
+  ],
+  "TestRedact": [
+    "./tests/csapi"
+  ],
+  "TestRegistration": [
+    "./tests/csapi"
+  ],
+  "TestRelations": [
+    "./tests/csapi"
+  ],
+  "TestRelationsPagination": [
+    "./tests/csapi"
+  ],
+  "TestRelationsPaginationSync": [
+    "./tests/csapi"
+  ],
+  "TestRemoteAliasRequestsUnderstandUnicode": [
+    "./tests"
+  ],
+  "TestRemotePngThumbnail": [
+    "./tests"
+  ],
+  "TestRemotePresence": [
+    "./tests"
+  ],
+  "TestRemoteTyping": [
+    "./tests"
+  ],
+  "TestRemovingAccountData": [
+    "./tests/msc3391"
+  ],
+  "TestRequestEncodingFails": [
+    "./tests/csapi"
+  ],
+  "TestRestrictedRoomsLocalJoin": [
+    "./tests"
+  ],
+  "TestRestrictedRoomsLocalJoinInMSC3787Room": [
+    "./tests"
+  ],
+  "TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11": [
+    "./tests"
+  ],
+  "TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12": [
+    "./tests"
+  ],
+  "TestRestrictedRoomsRemoteJoin": [
+    "./tests"
+  ],
+  "TestRestrictedRoomsRemoteJoinFailOver": [
+    "./tests"
+  ],
+  "TestRestrictedRoomsRemoteJoinFailOverInMSC3787Room": [
+    "./tests"
+  ],
+  "TestRestrictedRoomsRemoteJoinInMSC3787Room": [
+    "./tests"
+  ],
+  "TestRestrictedRoomsRemoteJoinLocalUser": [
+    "./tests"
+  ],
+  "TestRestrictedRoomsRemoteJoinLocalUserInMSC3787Room": [
+    "./tests"
+  ],
+  "TestRestrictedRoomsSpacesSummaryFederation": [
+    "./tests"
+  ],
+  "TestRestrictedRoomsSpacesSummaryLocal": [
+    "./tests"
+  ],
+  "TestRoomAlias": [
+    "./tests/csapi"
+  ],
+  "TestRoomCanonicalAlias": [
+    "./tests/csapi"
+  ],
+  "TestRoomCreate": [
+    "./tests/csapi"
+  ],
+  "TestRoomCreationReportsEventsToMyself": [
+    "./tests/csapi"
+  ],
+  "TestRoomDeleteAlias": [
+    "./tests/csapi"
+  ],
+  "TestRoomForget": [
+    "./tests/csapi"
+  ],
+  "TestRoomImageRoundtrip": [
+    "./tests/csapi"
+  ],
+  "TestRoomMembers": [
+    "./tests/csapi"
+  ],
+  "TestRoomMessagesLazyLoading": [
+    "./tests/csapi"
+  ],
+  "TestRoomMessagesLazyLoadingLocalUser": [
+    "./tests/csapi"
+  ],
+  "TestRoomReadMarkers": [
+    "./tests/csapi"
+  ],
+  "TestRoomReceipts": [
+    "./tests/csapi"
+  ],
+  "TestRoomsInvite": [
+    "./tests/csapi"
+  ],
+  "TestRoomSpecificUsernameAtJoin": [
+    "./tests/csapi"
+  ],
+  "TestRoomSpecificUsernameChange": [
+    "./tests/csapi"
+  ],
+  "TestRoomState": [
+    "./tests/csapi"
+  ],
+  "TestRoomSummary": [
+    "./tests/csapi"
+  ],
+  "TestSearch": [
+    "./tests/csapi"
+  ],
+  "TestSendAndFetchMessage": [
+    "./tests/csapi"
+  ],
+  "TestSendJoinPartialStateResponse": [
+    "./tests"
+  ],
+  "TestSendMessageWithTxn": [
+    "./tests/csapi"
+  ],
+  "TestServerCapabilities": [
+    "./tests/csapi"
+  ],
+  "TestServerNotices": [
+    "./tests/csapi"
+  ],
+  "TestSync": [
+    "./tests/csapi",
+    "./tests/msc4222"
+  ],
+  "TestSyncFilter": [
+    "./tests/csapi"
+  ],
+  "TestSyncLeaveSection": [
+    "./tests/csapi"
+  ],
+  "TestSyncOmitsStateChangeOnFilteredEvents": [
+    "./tests"
+  ],
+  "TestSyncTimelineGap": [
+    "./tests/csapi"
+  ],
+  "TestTentativeEventualJoiningAfterRejecting": [
+    "./tests/csapi"
+  ],
+  "TestThreadedReceipts": [
+    "./tests/csapi"
+  ],
+  "TestThreadReceiptsInSyncMSC4102": [
+    "./tests/csapi"
+  ],
+  "TestThreadsEndpoint": [
+    "./tests/csapi"
+  ],
+  "TestThreadSubscriptions": [
+    "./tests/msc4306"
+  ],
+  "TestToDeviceMessages": [
+    "./tests/csapi"
+  ],
+  "TestToDeviceMessagesOverFederation": [
+    "./tests"
+  ],
+  "TestTxnIdempotency": [
+    "./tests/csapi"
+  ],
+  "TestTxnIdempotencyScopedToDevice": [
+    "./tests/csapi"
+  ],
+  "TestTxnIdWithRefreshToken": [
+    "./tests/csapi"
+  ],
+  "TestTxnInEvent": [
+    "./tests/csapi"
+  ],
+  "TestTxnScopeOnLocalEcho": [
+    "./tests/csapi"
+  ],
+  "TestTyping": [
+    "./tests/csapi"
+  ],
+  "TestUnbanViaInvite": [
+    "./tests"
+  ],
+  "TestUnknownEndpoints": [
+    "./tests"
+  ],
+  "TestUnrejectRejectedEvents": [
+    "./tests"
+  ],
+  "TestUploadKey": [
+    "./tests/csapi"
+  ],
+  "TestUploadKeyIdempotency": [
+    "./tests/csapi"
+  ],
+  "TestUploadKeyIdempotencyOverlap": [
+    "./tests/csapi"
+  ],
+  "TestUrlPreview": [
+    "./tests/csapi"
+  ],
+  "TestUserAppearsInChangedDeviceListOnJoinOverFederation": [
+    "./tests"
+  ],
+  "TestVersionStructure": [
+    "./tests/csapi"
+  ],
+  "TestWithoutOwnedState": [
+    "./tests/msc3757"
+  ],
+  "TestWriteMDirectAccountData": [
+    "./tests"
+  ]
+}

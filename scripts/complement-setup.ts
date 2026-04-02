@@ -90,4 +90,7 @@ console.log();
 console.log("==> Setup complete. You can now run:");
 console.log("    bun run complement:full          # build image + run all tests + analyze");
 console.log("    bun run complement:run:fast      # skip build, run all tests");
+console.log("    bun run complement:index         # regenerate the test-name package index");
 console.log("    bun run complement:run -- --list # list all test names");
+console.log("    bun run complement:run -- TestLogin             # auto-resolve package");
+console.log("    bun run complement:run:debug -- TestContentMediaV1");

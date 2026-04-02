@@ -4,8 +4,9 @@
  *
  * Usage:
  *   bun run scripts/complement-run.ts [options] [TestName ...]
- *   bun run scripts/complement-run.ts "TestFoo/subcase_name"
- *   bun run scripts/complement-run.ts --list [PATTERN]
+ *   bun run scripts/complement-run.ts --pkg ./tests/csapi TestAddAccountData
+ *   bun run scripts/complement-run.ts --full
+ *   bun run scripts/complement-run.ts --list-packages TestAddAccountData
  *   bun run scripts/complement-run.ts --build-only
  *
  * Environment:
@@ -22,55 +23,73 @@ import { $ } from "bun";
 import { createHash } from "crypto";
 import fs from "fs";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { createInterface } from "node:readline";
 import path from "path";
+import { createInterface } from "node:readline";
+import {
+  buildRunSummaryArtifact,
+  classifyComplementRun,
+  loadComplementTestIndex,
+  printRunSummary,
+  resolveComplementPackages,
+  topLevelTestName,
+  writeJsonArtifact,
+  type ComplementTestIndex,
+} from "./complement-harness.ts";
+
+interface CliOptions {
+  listPattern: string | null;
+  buildOnly: boolean;
+  explicitPackages: string[];
+  full: boolean;
+  startupDebug: boolean;
+  spawnTimeoutSeconds: number | null;
+  listPackages: string | null;
+  tests: string[];
+}
+
+type DockerLogCapture = {
+  stop: () => Promise<void>;
+};
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const complementDir = process.env.COMPLEMENT_DIR ?? path.join(repoRoot, ".saqula/complement");
 const image = process.env.IMAGE ?? "complement-faas-matrix";
 const dirty = process.env.DIRTY ?? "0";
 const parallel = process.env.PARALLEL ?? "1";
-const dockerLogsEnabled = (process.env.DOCKER_LOGS ?? "1") !== "0";
 let noBuild = process.env.NO_BUILD; // undefined = auto-detect
 
+const indexPath = path.join(repoRoot, "scripts", "complement-test-index.json");
 const args = process.argv.slice(2);
+const options = parseArgs(args);
 
-// ---------------------------------------------------------------------------
-// --list
-// ---------------------------------------------------------------------------
-
-if (args[0] === "--list") {
-  const pattern = args[1] ?? ".*";
-  console.log(`==> Listing tests matching: ${pattern}`);
-  await $`COMPLEMENT_BASE_IMAGE=${image} go test ./tests/... -list ${pattern}`
-    .cwd(complementDir)
-    .nothrow();
+if (options.listPattern !== null) {
+  await listTests(options.listPattern);
   process.exit(0);
 }
 
-// ---------------------------------------------------------------------------
-// --build-only
-// ---------------------------------------------------------------------------
+if (options.listPackages !== null) {
+  const index = loadIndex(indexPath);
+  const packages = index[topLevelTestName(options.listPackages)] ?? [];
+  if (packages.length === 0) {
+    console.error(`No package mapping found for ${options.listPackages}.`);
+    console.error("Regenerate the index with: bun run complement:index");
+    process.exit(1);
+  }
+  console.log(packages.join("\n"));
+  process.exit(0);
+}
 
-if (args[0] === "--build-only") {
+if (options.buildOnly) {
   await buildImage();
   process.exit(0);
 }
 
-// ---------------------------------------------------------------------------
-// Test filter
-// ---------------------------------------------------------------------------
-
-let runFilter = "";
-if (args.length === 1) {
-  runFilter = args[0];
-} else if (args.length > 1) {
-  runFilter = args.join("|");
-}
-
-// ---------------------------------------------------------------------------
-// Log path (datetime-based, written to logs/)
-// ---------------------------------------------------------------------------
+const packageResolution = resolvePackages(indexPath, options);
+const packagesToRun = packageResolution.packages;
+const runFilter = buildRunFilter(options.tests);
+const fullRun = options.full || (options.explicitPackages.length === 0 && options.tests.length === 0);
+const spawnTimeoutSeconds =
+  options.spawnTimeoutSeconds ?? (options.startupDebug ? 90 : null);
 
 const logPath =
   process.env.LOG ??
@@ -83,10 +102,14 @@ const logPath =
 const dockerLogPath = logPath.endsWith(".log")
   ? logPath.replace(/\.log$/, ".docker.log")
   : `${logPath}.docker.log`;
+const summaryPath = logPath.endsWith(".log")
+  ? logPath.replace(/\.log$/, ".summary.json")
+  : `${logPath}.summary.json`;
+const classifiedPath = logPath.endsWith(".log")
+  ? logPath.replace(/\.log$/, ".classified.json")
+  : `${logPath}.classified.json`;
 
-// ---------------------------------------------------------------------------
-// Hash-based build skip
-// ---------------------------------------------------------------------------
+const dockerLogsEnabled = options.startupDebug || (process.env.DOCKER_LOGS ?? "1") !== "0";
 
 if (noBuild === undefined) {
   noBuild = "0";
@@ -104,52 +127,238 @@ if (noBuild === undefined) {
   } catch {}
 }
 
-// ---------------------------------------------------------------------------
-// Docker build
-// ---------------------------------------------------------------------------
-
 if (noBuild !== "1") {
   await buildImage();
 }
 
-// ---------------------------------------------------------------------------
-// Run tests
-// ---------------------------------------------------------------------------
-
 console.log(
-  `==> Running tests${runFilter ? ` (filter: ${runFilter})` : ""} (parallel=${parallel})...`,
+  `==> Running Complement${runFilter ? ` (filter: ${runFilter})` : ""} on ${packagesToRun.join(", ")} (parallel=${parallel})...`,
 );
 console.log(`    Log: ${logPath}`);
+console.log(`    Summary: ${summaryPath}`);
+console.log(`    Classification: ${classifiedPath}`);
 if (dockerLogsEnabled) {
   console.log(`    Docker log: ${dockerLogPath}`);
 }
+if (options.startupDebug) {
+  console.log(
+    `    Startup debug: enabled${spawnTimeoutSeconds ? ` (spawn timeout ${spawnTimeoutSeconds}s)` : ""}`,
+  );
+}
 
-const runArgs = ["-json", "-count=1", "-parallel", parallel];
-if (runFilter) runArgs.push("-run", runFilter);
+const runEnv = createComplementEnvironment({
+  image,
+  startupDebug: options.startupDebug,
+  spawnTimeoutSeconds,
+});
+const runArgs = ["test", ...packagesToRun, "-json", "-count=1", "-parallel", parallel];
+if (runFilter) {
+  runArgs.push("-run", runFilter);
+}
 
 const dockerCapture = dockerLogsEnabled ? startDockerLogCapture(dockerLogPath, image) : null;
 const logFd = fs.openSync(logPath, "w");
-const proc = Bun.spawn(["go", "test", "./tests/...", ...runArgs], {
+const proc = Bun.spawn(["go", ...runArgs], {
   cwd: complementDir,
-  env: { ...process.env, COMPLEMENT_BASE_IMAGE: image },
+  env: runEnv,
   stdout: logFd,
   stderr: logFd,
 });
-await proc.exited;
+const exitCode = await proc.exited;
 if (dockerCapture) {
   await dockerCapture.stop();
 }
 fs.closeSync(logFd);
 
-// ---------------------------------------------------------------------------
-// Inline summary
-// ---------------------------------------------------------------------------
+const logContent = fs.readFileSync(logPath, "utf8");
+const dockerLogContent = dockerLogsEnabled && fs.existsSync(dockerLogPath)
+  ? fs.readFileSync(dockerLogPath, "utf8")
+  : null;
+const classified = classifyComplementRun(logContent, dockerLogContent);
+const summary = buildRunSummaryArtifact({
+  logContent,
+  dockerLogContent,
+  packages: packagesToRun,
+  filter: runFilter || null,
+  requestedTests: options.tests,
+  fullRun,
+  startupDebug: options.startupDebug,
+  spawnTimeoutSeconds,
+});
 
-await $`bun run ${path.join(repoRoot, "scripts/complement-summary.ts")} ${logPath}`;
+writeJsonArtifact(classifiedPath, classified);
+writeJsonArtifact(summaryPath, summary);
+printRunSummary(summary);
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+process.exit(exitCode);
+
+function parseArgs(argv: string[]): CliOptions {
+  const options: CliOptions = {
+    listPattern: null,
+    buildOnly: false,
+    explicitPackages: [],
+    full: false,
+    startupDebug: false,
+    spawnTimeoutSeconds: null,
+    listPackages: null,
+    tests: [],
+  };
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--list") {
+      options.listPattern = argv[i + 1] ?? ".*";
+      if (argv[i + 1] !== undefined) {
+        i += 1;
+      }
+      continue;
+    }
+    if (arg === "--build-only") {
+      options.buildOnly = true;
+      continue;
+    }
+    if (arg === "--pkg") {
+      const packageName = argv[i + 1];
+      if (!packageName) {
+        fail(`Missing value for ${arg}`);
+      }
+      options.explicitPackages.push(packageName);
+      i += 1;
+      continue;
+    }
+    if (arg === "--full") {
+      options.full = true;
+      continue;
+    }
+    if (arg === "--startup-debug") {
+      options.startupDebug = true;
+      continue;
+    }
+    if (arg === "--spawn-timeout") {
+      const value = argv[i + 1];
+      if (!value) {
+        fail(`Missing value for ${arg}`);
+      }
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        fail(`Invalid ${arg} value: ${value}`);
+      }
+      options.spawnTimeoutSeconds = parsed;
+      i += 1;
+      continue;
+    }
+    if (arg === "--list-packages") {
+      const testName = argv[i + 1];
+      if (!testName) {
+        fail(`Missing value for ${arg}`);
+      }
+      options.listPackages = testName;
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--")) {
+      fail(`Unknown option: ${arg}`);
+    }
+    options.tests.push(arg);
+  }
+
+  return options;
+}
+
+function buildRunFilter(testNames: string[]): string {
+  if (testNames.length === 0) {
+    return "";
+  }
+  return testNames.length === 1 ? testNames[0] : testNames.join("|");
+}
+
+function loadIndex(indexFilePath: string): ComplementTestIndex {
+  if (!fs.existsSync(indexFilePath)) {
+    fail(`Complement test index not found: ${indexFilePath}\nRun \`bun run complement:index\` first.`);
+  }
+  return loadComplementTestIndex(indexFilePath);
+}
+
+function resolvePackages(
+  indexFilePath: string,
+  options: CliOptions,
+): { packages: string[]; resolvedByTest: Record<string, string> } {
+  if (options.explicitPackages.length > 0) {
+    return {
+      packages: [...new Set(options.explicitPackages)].sort(),
+      resolvedByTest: {},
+    };
+  }
+
+  if (options.full || options.tests.length === 0) {
+    return {
+      packages: ["./tests/..."],
+      resolvedByTest: {},
+    };
+  }
+
+  const index = loadIndex(indexFilePath);
+  const resolution = resolveComplementPackages(index, options.tests);
+  if (resolution.missing.length > 0) {
+    console.error("No Complement package mapping found for:");
+    for (const testName of resolution.missing) {
+      console.error(`  - ${testName}`);
+    }
+    console.error("Use exact top-level test names, regenerate the index with `bun run complement:index`, or pass --pkg.");
+    process.exit(1);
+  }
+  if (Object.keys(resolution.ambiguous).length > 0) {
+    console.error("Ambiguous Complement test package mapping:");
+    for (const [testName, packages] of Object.entries(resolution.ambiguous)) {
+      console.error(`  - ${testName}: ${packages.join(", ")}`);
+    }
+    console.error("Pass --pkg to disambiguate.");
+    process.exit(1);
+  }
+  if (resolution.packages.length === 0) {
+    fail("No Complement packages resolved.");
+  }
+  return {
+    packages: resolution.packages,
+    resolvedByTest: resolution.resolvedByTest,
+  };
+}
+
+function createComplementEnvironment(input: {
+  image: string;
+  startupDebug: boolean;
+  spawnTimeoutSeconds: number | null;
+}): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+
+  env.COMPLEMENT_BASE_IMAGE = input.image;
+  env.COMPLEMENT_SHARE_ENV_PREFIX = "FAASMATRIX_";
+  env.FAASMATRIX_MATRIX_FEATURE_PROFILE = "complement";
+
+  if (input.spawnTimeoutSeconds !== null) {
+    env.COMPLEMENT_SPAWN_HS_TIMEOUT_SECS = String(input.spawnTimeoutSeconds);
+  }
+
+  if (input.startupDebug) {
+    env.COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS = "1";
+    env.FAASMATRIX_COMPLEMENT_DEBUG_STARTUP = "1";
+    env.FAASMATRIX_WRANGLER_LOG_LEVEL = "info";
+  }
+
+  return env;
+}
+
+async function listTests(pattern: string): Promise<void> {
+  console.log(`==> Listing tests matching: ${pattern}`);
+  await $`COMPLEMENT_BASE_IMAGE=${image} go test ./tests/... -list ${pattern}`
+    .cwd(complementDir)
+    .nothrow();
+}
 
 async function buildImage() {
   console.log(`==> Building Docker image ${image} (DIRTY=${dirty})...`);
@@ -167,14 +376,11 @@ async function buildImage() {
   console.log(`Image built: ${image}`);
 }
 
-type DockerLogCapture = {
-  stop: () => Promise<void>;
-};
-
 function startDockerLogCapture(sidecarLogPath: string, targetImage: string): DockerLogCapture {
   fs.writeFileSync(sidecarLogPath, "");
   const logFd = fs.openSync(sidecarLogPath, "a");
   const followers = new Map<string, { proc: ChildProcessWithoutNullStreams; done: Promise<void> }>();
+  const seenContainers = new Set<string>();
   let stopped = false;
   let scanPromise: Promise<void> | null = null;
 
@@ -205,9 +411,10 @@ function startDockerLogCapture(sidecarLogPath: string, targetImage: string): Doc
     imageName === targetImage || imageName.includes("complement") || name.includes("complement_");
 
   const followContainer = (containerId: string, imageName: string, name: string) => {
-    if (stopped || followers.has(containerId)) {
+    if (stopped || followers.has(containerId) || seenContainers.has(containerId)) {
       return;
     }
+    seenContainers.add(containerId);
 
     appendLine(`===== container ${name} (${containerId}) image=${imageName} =====`);
     const proc = spawn("docker", ["logs", "-f", "--timestamps", containerId], {
@@ -267,31 +474,29 @@ function startDockerLogCapture(sidecarLogPath: string, targetImage: string): Doc
     }
   };
 
-  const scheduleScan = () => {
-    if (stopped || scanPromise) {
-      return;
+  scanPromise = (async () => {
+    while (!stopped) {
+      await scanRunningContainers();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    scanPromise = scanRunningContainers().finally(() => {
-      scanPromise = null;
-    });
-  };
-
-  scheduleScan();
-  const interval = setInterval(scheduleScan, 500);
+  })();
 
   return {
-    stop: async () => {
+    async stop() {
       stopped = true;
-      clearInterval(interval);
       if (scanPromise) {
         await scanPromise.catch(() => undefined);
       }
-      const completions = Array.from(followers.values()).map(({ proc, done }) => {
+      for (const { proc } of followers.values()) {
         proc.kill("SIGTERM");
-        return done.catch(() => undefined);
-      });
-      await Promise.all(completions);
+      }
+      await Promise.all([...followers.values()].map(({ done }) => done));
       fs.closeSync(logFd);
     },
   };
+}
+
+function fail(message: string): never {
+  console.error(message);
+  process.exit(1);
 }

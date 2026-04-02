@@ -5,12 +5,24 @@ Last updated: 2026-04-02. Based on test runs test1–test12 plus targeted Comple
 
 ## Current Full-Run Status (2026-04-02)
 
+The Complement harness now tracks three separate views:
+
+- `latest full run`: the newest full aggregate run, even if it is noisy
+- `last stable full run`: the most recent broad run whose signal is not dominated by startup/deploy flake
+- `flake backlog`: failures classified as startup/deploy or infra instability, tracked separately from implementation regressions
+
+The runner also emits per-run artifacts next to the raw log:
+
+- `logs/<ts>.summary.json`
+- `logs/<ts>.classified.json`
+- `logs/<ts>.docker.log`
+
 Latest full run:
 
 - Top-level summary from [`2026-04-01_22-40-58.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-01_22-40-58.log): **71 total / 45 pass / 26 fail**
 - Progress tracking in the table below uses `bun run complement:analyze --last 1 --depth 7`, which counts reached subtests: **321 reached / 233 pass (73%) / 75 fail / 13 skip**
 
-The latest full run is flakier than the 2026-04-01 stable full run, so it should be read together with targeted reruns:
+The latest full run is flakier than the 2026-04-01 stable full run, so it should be read together with targeted reruns and flake classification:
 
 - The previous stable full run [`2026-04-01_14-37-09.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-01_14-37-09.log) is still useful as the broader health baseline: **404 reached / 301 pass (75%) / 90 fail / 13 skip** at analyzer depth 7.
 - The latest full run reintroduced startup-flake failures in otherwise green buckets such as `TestACLs`, `TestDeviceManagement`, `TestDeviceListsUpdateOverFederation`, `TestRemotePresence`, `TestRemoteAliasRequestsUnderstandUnicode`, `TestSearch`, `TestThreadSubscriptions`, `TestMSC4308ThreadSubscriptionsSlidingSync`, and `TestUnbanViaInvite`.
@@ -20,6 +32,12 @@ The latest full run is flakier than the 2026-04-01 stable full run, so it should
 - The room/surface correctness bucket remains green in targeted reruns: `TestUnknownEndpoints`, `TestServerCapabilities`, `TestRoomAlias`, `TestRoomDeleteAlias`, `TestRoomCanonicalAlias`, `TestRemoteAliasRequestsUnderstandUnicode`, `TestRoomCreate`, `TestRoomState`, `TestRoomForget`, `TestRoomMembers`, and `TestUnbanViaInvite`.
 - The auth/account-lifecycle bucket remains broadly green in targeted reruns: `TestLogin`, `TestLogout`, `TestRegistration`, `TestChangePassword`, `TestChangePasswordPushers`, `TestDeactivateAccount`, `TestTxnIdWithRefreshToken`, `TestDeviceManagement`, `TestWriteMDirectAccountData`, and `TestRemovingAccountData`.
 - `TestSearch`, `TestDeviceListUpdates`, `TestDeviceListsUpdateOverFederation`, `TestDeviceListsUpdateOverFederationOnRoomJoin`, `TestUserAppearsInChangedDeviceListOnJoinOverFederation`, `TestClientSpacesSummary`, `TestClientSpacesSummaryJoinRules`, `TestFederatedClientSpaces`, `TestThreadSubscriptions`, and `TestMSC4308ThreadSubscriptionsSlidingSync` all stay green in targeted reruns, despite the latest full run regressing some of them due to deployment instability.
+
+Evidence handling:
+
+- clean targeted green remains positive implementation evidence
+- aggregate full-run red with `startup_flake` classification is tracked as flake backlog, not as immediate implementation regression
+- aggregate full-run red with assertion or behavior mismatch remains implementation evidence
 
 Current active failure clusters in the 2026-04-02 full run:
 

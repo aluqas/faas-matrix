@@ -33,6 +33,17 @@ For out-of-repo Complement tests:
 COMPLEMENT_BASE_IMAGE=complement-faas-matrix go test -v ./tests
 ```
 
+For local development inside this repository, prefer the wrapper scripts:
+
+```bash
+bun run complement:index
+bun run complement:run -- TestAddAccountData
+bun run complement:run -- --pkg ./tests/csapi TestAddAccountData
+bun run complement:run -- --list-packages TestContentMediaV1
+bun run complement:run:debug -- TestContentMediaV1
+bun run complement:full
+```
+
 The wrapper expects Complement to provide:
 
 - `SERVER_NAME`
@@ -44,10 +55,40 @@ If the CA files are absent, the container falls back to a self-signed certificat
 ## Runtime Notes
 
 - The entrypoint writes `.dev.vars` at container start so `SERVER_NAME` and the feature profile can be injected into `wrangler dev`.
+- Complement runs now default to `MATRIX_FEATURE_PROFILE=complement`, propagated from the host via `COMPLEMENT_SHARE_ENV_PREFIX=FAASMATRIX_`.
 - Local state is stored under `/data/wrangler`.
 - The wrapper applies `migrations/schema.sql` and then the numbered files under `migrations/` on every start with `wrangler d1 execute --local`.
 - The wrapper image uses Node.js to execute Wrangler even though the repository itself uses `bun`, because Wrangler's local runtime path is not supported under Bun.
 - Optional integrations such as email, LiveKit VPC service, and Cloudflare remote-only bindings are intentionally left out of the Complement config.
+
+## Runner Behavior
+
+`scripts/complement-run.ts` is package-aware.
+
+- Explicit test names auto-resolve to a single Go package using [`scripts/complement-test-index.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/scripts/complement-test-index.json).
+- `--full` is the only mode that falls back to `./tests/...` by default.
+- `--pkg` bypasses auto-resolution when a test name is ambiguous or when you want to run a whole package.
+- `--startup-debug` enables:
+  - `COMPLEMENT_SPAWN_HS_TIMEOUT_SECS=90` by default
+  - `COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS=1`
+  - `WRANGLER_LOG_LEVEL=info`
+  - entrypoint phase logging for container startup
+
+Each run writes:
+
+- raw test log: `logs/<ts>.log`
+- docker sidecar log: `logs/<ts>.docker.log`
+- machine summary: `logs/<ts>.summary.json`
+- flake classification: `logs/<ts>.classified.json`
+
+The classifier separates:
+
+- `implementation_fail`
+- `startup_flake`
+- `infra_flake`
+- `mixed`
+
+This is intended to keep targeted TDD runs usable even when full runs are noisy.
 
 ## Current Limits
 

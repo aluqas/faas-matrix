@@ -108,7 +108,7 @@
   "vars": {
     "SERVER_NAME": "hs1",
     "SERVER_VERSION": "0.1.0-complement",
-    "MATRIX_FEATURE_PROFILE": "core",
+    "MATRIX_FEATURE_PROFILE": "complement",
     "TURN_KEY_ID": "complement-turn-key",
     "LIVEKIT_API_KEY": "devkey",
     "LIVEKIT_URL": "wss://invalid.local",
