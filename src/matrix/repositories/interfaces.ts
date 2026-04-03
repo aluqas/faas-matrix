@@ -11,6 +11,7 @@ import type {
 export interface MembershipRecord {
   membership: Membership;
   eventId: string;
+  streamOrdering?: number;
 }
 
 export type ReceiptEvent = EphemeralEvent;

@@ -4,7 +4,13 @@ import { Errors } from "../../utils/errors";
 import { requireAuth } from "../../middleware/auth";
 import { invalidateRoomCache } from "../../services/room-cache";
 import { getEvent, getMembership, updateMembership } from "../../services/database";
-import { isRecord, toRouteErrorResponse, validateCanonicalAliasContent } from "./shared";
+import {
+  isRecord,
+  MAX_ROOM_EVENT_CONTENT_BYTES,
+  parseRequiredJsonObjectBody,
+  toRouteErrorResponse,
+  validateCanonicalAliasContent,
+} from "./shared";
 
 const app = new Hono<AppEnv>();
 
@@ -29,21 +35,18 @@ async function putRoomStateEvent(
     return Errors.forbidden("Not a member of this room").toResponse();
   }
 
-  let content: unknown;
   try {
-    content = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
-  }
+    const content = await parseRequiredJsonObjectBody(c, {
+      maxBytes: MAX_ROOM_EVENT_CONTENT_BYTES,
+    });
 
-  if (eventType === "m.room.canonical_alias" && stateKey === "") {
-    const validationError = await validateCanonicalAliasContent(c.env.DB, roomId, content);
-    if (validationError) {
-      return validationError.toResponse();
+    if (eventType === "m.room.canonical_alias" && stateKey === "") {
+      const validationError = await validateCanonicalAliasContent(c.env.DB, roomId, content);
+      if (validationError) {
+        return validationError.toResponse();
+      }
     }
-  }
 
-  try {
     const txnId = await c.get("appContext").capabilities.id.generateOpaqueId();
     const response = await c.get("appContext").services.rooms.sendEvent({
       userId,
@@ -51,18 +54,14 @@ async function putRoomStateEvent(
       eventType,
       stateKey,
       txnId,
-      content: isRecord(content) ? content : {},
+      content,
     });
 
     if (CACHED_STATE_TYPES.includes(eventType)) {
       invalidateRoomCache(c.env.CACHE, roomId).catch(() => {});
     }
 
-    if (
-      eventType === "m.room.member" &&
-      isRecord(content) &&
-      typeof content.membership === "string"
-    ) {
+    if (eventType === "m.room.member" && typeof content.membership === "string") {
       await updateMembership(
         c.env.DB,
         roomId,

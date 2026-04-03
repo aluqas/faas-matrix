@@ -30,6 +30,7 @@ import spaces from "./api/spaces";
 import account from "./api/account";
 import serverNotices from "./api/server-notices";
 import report from "./api/report";
+import { validateFilterDefinition } from "./api/filter-validation";
 // import qrLogin from './api/qr-login'; // QR feature commented out - requires MSC4108/OIDC for Element X
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { requireAuth } from "./middleware/auth";
@@ -280,8 +281,11 @@ app.post("/_matrix/client/v3/user/:userId/filter", requireAuth(), async (c) => {
 
   let filter: Record<string, unknown>;
   try {
-    filter = await c.req.json();
-  } catch {
+    filter = validateFilterDefinition(await c.req.json());
+  } catch (error) {
+    if (error instanceof Error && "toResponse" in error) {
+      return (error as { toResponse(): Response }).toResponse();
+    }
     return c.json({ errcode: "M_BAD_JSON", error: "Invalid JSON" }, 400);
   }
 

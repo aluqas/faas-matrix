@@ -17,8 +17,8 @@ export function createCloudflareSyncQueryPort(env: Env): SyncQueryPort {
   return createEffectSyncQueryPort(new CloudflareSyncRepository(env));
 }
 
-export function createCloudflarePartialStatePort(cache: KVNamespace | undefined): PartialStatePort {
-  return createEffectPartialStatePort(cache);
+export function createCloudflarePartialStatePort(env: Env): PartialStatePort {
+  return createEffectPartialStatePort(env.DB, env.CACHE);
 }
 
 export function createCloudflareSlidingSyncStatePort(

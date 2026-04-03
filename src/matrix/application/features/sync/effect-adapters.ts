@@ -1,7 +1,13 @@
 import { Effect } from "effect";
 import type { SyncRepository } from "../../../repositories/interfaces";
 import {
+  getPersistedPartialStateCompletionStatus,
+  getPersistedPartialStateStatus,
+  takePersistedPartialStateCompletionStatus,
+} from "../partial-state/shared-servers";
+import {
   consumePartialStateCompletionStatus,
+  getPartialStateCompletionStatus,
   getPartialStateStatus,
 } from "../partial-state/tracker";
 import type { PartialStatePort, SyncQueryPort } from "./effect-ports";
@@ -108,16 +114,30 @@ export function createEffectSyncQueryPort(repository: SyncRepository): SyncQuery
   };
 }
 
-export function createEffectPartialStatePort(cache: KVNamespace | undefined): PartialStatePort {
+export function createEffectPartialStatePort(
+  db: D1Database,
+  cache: KVNamespace | undefined,
+): PartialStatePort {
   return {
     getPartialStateStatus: (userId, roomId) =>
       Effect.tryPromise({
-        try: () => getPartialStateStatus(cache, userId, roomId),
+        try: async () =>
+          (await getPartialStateStatus(cache, userId, roomId)) ??
+          getPersistedPartialStateStatus(db, userId, roomId),
         catch: (cause) => toInfraError("Failed to load partial-state status", cause),
+      }),
+    getPartialStateCompletionStatus: (userId, roomId) =>
+      Effect.tryPromise({
+        try: async () =>
+          (await getPartialStateCompletionStatus(cache, userId, roomId)) ??
+          getPersistedPartialStateCompletionStatus(db, userId, roomId),
+        catch: (cause) => toInfraError("Failed to load partial-state completion status", cause),
       }),
     takePartialStateCompletionStatus: (userId, roomId) =>
       Effect.tryPromise({
-        try: () => consumePartialStateCompletionStatus(cache, userId, roomId),
+        try: async () =>
+          (await consumePartialStateCompletionStatus(cache, userId, roomId)) ??
+          takePersistedPartialStateCompletionStatus(db, userId, roomId),
         catch: (cause) => toInfraError("Failed to consume partial-state completion status", cause),
       }),
   };

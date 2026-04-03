@@ -801,20 +801,22 @@ export async function getMembership(
   db: D1Database,
   roomId: string,
   userId: string,
-): Promise<{ membership: Membership; eventId: string } | null> {
+): Promise<{ membership: Membership; eventId: string; streamOrdering?: number } | null> {
   const result = await db
     .prepare(
       `
       WITH membership_sources AS (
-        SELECT membership, event_id, 1 AS precedence
-        FROM room_memberships
-        WHERE room_id = ? AND user_id = ?
+        SELECT rm.membership, rm.event_id, e.stream_ordering, 1 AS precedence
+        FROM room_memberships rm
+        LEFT JOIN events e ON e.event_id = rm.event_id
+        WHERE rm.room_id = ? AND rm.user_id = ?
 
         UNION ALL
 
         SELECT
           json_extract(e.content, '$.membership') AS membership,
           rs.event_id AS event_id,
+          e.stream_ordering AS stream_ordering,
           2 AS precedence
         FROM room_state rs
         JOIN events e ON rs.event_id = e.event_id
@@ -828,7 +830,7 @@ export async function getMembership(
               AND rm.user_id = rs.state_key
           )
       )
-      SELECT membership, event_id
+      SELECT membership, event_id, stream_ordering
       FROM membership_sources
       WHERE membership IN ('join', 'invite', 'leave', 'ban', 'knock')
       ORDER BY precedence
@@ -836,13 +838,14 @@ export async function getMembership(
     `,
     )
     .bind(roomId, userId, roomId, userId)
-    .first<{ membership: Membership; event_id: string }>();
+    .first<{ membership: Membership; event_id: string; stream_ordering: number | null }>();
 
   if (!result) return null;
 
   return {
     membership: result.membership,
     eventId: result.event_id,
+    ...(result.stream_ordering !== null ? { streamOrdering: result.stream_ordering } : {}),
   };
 }
 
@@ -916,8 +919,59 @@ export async function getRoomMembers(
 ): Promise<
   Array<{ userId: string; membership: Membership; displayName?: string; avatarUrl?: string }>
 > {
-  let query = `SELECT user_id, membership, display_name, avatar_url FROM room_memberships WHERE room_id = ?`;
-  const params: string[] = [roomId];
+  let query = `
+    WITH latest_membership_events AS (
+      SELECT
+        e.room_id,
+        e.state_key AS user_id,
+        json_extract(e.content, '$.membership') AS membership,
+        json_extract(e.content, '$.displayname') AS display_name,
+        json_extract(e.content, '$.avatar_url') AS avatar_url
+      FROM events e
+      WHERE e.room_id = ?
+        AND e.event_type = 'm.room.member'
+        AND e.state_key IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM room_memberships rm
+          WHERE rm.room_id = e.room_id
+            AND rm.user_id = e.state_key
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM events newer
+          WHERE newer.room_id = e.room_id
+            AND newer.event_type = 'm.room.member'
+            AND newer.state_key = e.state_key
+            AND (
+              newer.depth > e.depth
+              OR (
+                newer.depth = e.depth
+                AND newer.origin_server_ts > e.origin_server_ts
+              )
+              OR (
+                newer.depth = e.depth
+                AND newer.origin_server_ts = e.origin_server_ts
+                AND newer.event_id > e.event_id
+              )
+            )
+        )
+    ),
+    current_memberships AS (
+      SELECT room_id, user_id, membership, display_name, avatar_url
+      FROM room_memberships
+      WHERE room_id = ?
+
+      UNION
+
+      SELECT room_id, user_id, membership, display_name, avatar_url
+      FROM latest_membership_events
+    )
+    SELECT user_id, membership, display_name, avatar_url
+    FROM current_memberships
+    WHERE room_id = ?
+  `;
+  const params: string[] = [roomId, roomId, roomId];
 
   if (membership) {
     query += ` AND membership = ?`;
@@ -1133,6 +1187,20 @@ export async function getStateAtEvent(db: D1Database, eventId: string): Promise<
 
 // Get servers that share rooms with a user
 export async function getServersInRoomsWithUser(db: D1Database, userId: string): Promise<string[]> {
+  return getServersInRoomsWithUserExcludingRooms(db, userId, []);
+}
+
+async function getServersInRoomsWithUserScope(
+  db: D1Database,
+  userId: string,
+  excludedRoomIds: string[],
+  options?: { encryptedOnly?: boolean },
+): Promise<string[]> {
+  const exclusionClause =
+    excludedRoomIds.length > 0
+      ? ` AND room_id NOT IN (${excludedRoomIds.map(() => "?").join(", ")})`
+      : "";
+  const roomScope = options?.encryptedOnly ? "encrypted_joined_rooms" : "joined_rooms";
   const result = await db
     .prepare(`
     WITH current_memberships AS (
@@ -1160,6 +1228,17 @@ export async function getServersInRoomsWithUser(db: D1Database, userId: string):
       SELECT room_id
       FROM current_memberships
       WHERE user_id = ? AND membership = 'join'
+      ${exclusionClause}
+    ),
+    encrypted_joined_rooms AS (
+      SELECT jr.room_id
+      FROM joined_rooms jr
+      WHERE EXISTS (
+        SELECT 1
+        FROM room_state rs
+        WHERE rs.room_id = jr.room_id
+          AND rs.event_type = 'm.room.encryption'
+      )
     ),
     joined_members AS (
       SELECT room_id, user_id
@@ -1171,14 +1250,37 @@ export async function getServersInRoomsWithUser(db: D1Database, userId: string):
         WHEN INSTR(jm.user_id, ':') > 0 THEN SUBSTR(jm.user_id, INSTR(jm.user_id, ':') + 1)
         ELSE NULL
       END AS server_name
-    FROM joined_rooms jr
+    FROM ${roomScope} jr
     JOIN joined_members jm ON jr.room_id = jm.room_id
     WHERE jm.user_id != ?
   `)
-    .bind(userId, userId)
+    .bind(userId, ...excludedRoomIds, userId)
     .all<{ server_name: string | null }>();
 
   return result.results.map((r) => r.server_name).filter((s): s is string => s !== null);
+}
+
+export async function getServersInRoomsWithUserExcludingRooms(
+  db: D1Database,
+  userId: string,
+  excludedRoomIds: string[],
+): Promise<string[]> {
+  return getServersInRoomsWithUserScope(db, userId, excludedRoomIds);
+}
+
+export async function getServersInEncryptedRoomsWithUser(
+  db: D1Database,
+  userId: string,
+): Promise<string[]> {
+  return getServersInRoomsWithUserScope(db, userId, [], { encryptedOnly: true });
+}
+
+export async function getServersInEncryptedRoomsWithUserExcludingRooms(
+  db: D1Database,
+  userId: string,
+  excludedRoomIds: string[],
+): Promise<string[]> {
+  return getServersInRoomsWithUserScope(db, userId, excludedRoomIds, { encryptedOnly: true });
 }
 
 // Notify all room members' SyncDurableObjects when a new event is stored

@@ -16,11 +16,10 @@ import {
   createFederationFanoutPorts,
   fanoutEventToRemoteServersWithPorts,
 } from "../../services/federation-fanout";
-import { getServersInRoomsWithUser, getUserDevices } from "../../services/database";
+import { getServersInEncryptedRoomsWithUser, getUserDevices } from "../../services/database";
 import { calculateContentHash, signJson } from "../../utils/crypto";
 import { parseUserId } from "../../utils/ids";
 import { parseDeviceKeysPayload } from "../../api/keys-contracts";
-import { getSharedServersInRoomsWithUserIncludingPartialState } from "./features/partial-state/shared-servers";
 import {
   authorizeBan,
   authorizeKick,
@@ -43,6 +42,7 @@ import {
   validateModerationRequest,
 } from "./room-validation";
 import { publishDeviceListUpdatesForNewlySharedServers } from "./features/device-lists/command";
+import { getSharedServersInEncryptedRoomsWithUserIncludingPartialState } from "./features/partial-state/shared-servers";
 import {
   decideInvitePermission,
   loadInvitePermissionConfig,
@@ -425,7 +425,9 @@ export class MatrixRoomService {
       : undefined;
     const cache = this.appContext.capabilities.kv.cache as KVNamespace;
     const deviceKeysKv = this.appContext.capabilities.kv.deviceKeys as KVNamespace | undefined;
-    const preJoinSharedServers = db ? await getServersInRoomsWithUser(db, input.userId) : [];
+    const preJoinSharedServers = db
+      ? await getServersInEncryptedRoomsWithUser(db, input.userId)
+      : [];
     const validated = await runClientEffect(
       validateJoinRoomRequest({
         roomId: input.roomId,
@@ -625,7 +627,7 @@ export class MatrixRoomService {
                 localServerName: this.appContext.capabilities.config.serverName,
                 now: () => this.appContext.capabilities.clock.now(),
                 getSharedRemoteServers: (userId) =>
-                  getSharedServersInRoomsWithUserIncludingPartialState(db, cache, userId),
+                  getSharedServersInEncryptedRoomsWithUserIncludingPartialState(db, cache, userId),
                 getUserDevices: (userId) => getUserDevices(db, userId),
                 getStoredDeviceKeys: (userId, deviceId) =>
                   getStoredDeviceKeysFromKv(deviceKeysKv, userId, deviceId),

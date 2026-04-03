@@ -1,29 +1,19 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../../types";
-import { Errors } from "../../utils/errors";
 import { requireAuth } from "../../middleware/auth";
+import {
+  MAX_ROOM_EVENT_CONTENT_BYTES,
+  parseRequiredJsonObjectBody,
+  toRouteErrorResponse,
+} from "./shared";
 
 const app = new Hono<AppEnv>();
 
-function toRouteErrorResponse(error: unknown): Response | null {
-  if (error instanceof SyntaxError) {
-    return Errors.badJson().toResponse();
-  }
-
-  if (error instanceof Error && "toResponse" in error) {
-    return (error as { toResponse(): Response }).toResponse();
-  }
-
-  return null;
-}
-
-async function parseJsonBody(c: import("hono").Context<AppEnv>): Promise<Record<string, unknown>> {
-  return (await c.req.json()) as Record<string, unknown>;
-}
-
 app.put("/_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId", requireAuth(), async (c) => {
   try {
-    const content = await parseJsonBody(c);
+    const content = await parseRequiredJsonObjectBody(c, {
+      maxBytes: MAX_ROOM_EVENT_CONTENT_BYTES,
+    });
     const response = await c.get("appContext").services.rooms.sendEvent({
       userId: c.get("userId"),
       roomId: c.req.param("roomId"),
@@ -44,7 +34,7 @@ app.put("/_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId", requireAuth()
 
 app.post("/_matrix/client/v3/rooms/:roomId/invite", requireAuth(), async (c) => {
   try {
-    const body = await parseJsonBody(c);
+    const body = await parseRequiredJsonObjectBody(c);
     await c.get("appContext").services.rooms.inviteRoom({
       userId: c.get("userId"),
       roomId: c.req.param("roomId"),
@@ -62,7 +52,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/invite", requireAuth(), async (c) => 
 
 app.post("/_matrix/client/v3/rooms/:roomId/kick", requireAuth(), async (c) => {
   try {
-    const body = await parseJsonBody(c);
+    const body = await parseRequiredJsonObjectBody(c);
     await c.get("appContext").services.rooms.kickUser({
       userId: c.get("userId"),
       roomId: c.req.param("roomId"),
@@ -81,7 +71,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/kick", requireAuth(), async (c) => {
 
 app.post("/_matrix/client/v3/rooms/:roomId/ban", requireAuth(), async (c) => {
   try {
-    const body = await parseJsonBody(c);
+    const body = await parseRequiredJsonObjectBody(c);
     await c.get("appContext").services.rooms.banUser({
       userId: c.get("userId"),
       roomId: c.req.param("roomId"),
@@ -100,7 +90,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/ban", requireAuth(), async (c) => {
 
 app.post("/_matrix/client/v3/rooms/:roomId/unban", requireAuth(), async (c) => {
   try {
-    const body = await parseJsonBody(c);
+    const body = await parseRequiredJsonObjectBody(c);
     await c.get("appContext").services.rooms.unbanUser({
       userId: c.get("userId"),
       roomId: c.req.param("roomId"),

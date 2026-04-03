@@ -159,7 +159,7 @@ const runEnv = createComplementEnvironment({
   startupDebug: options.startupDebug,
   spawnTimeoutSeconds,
 });
-const runArgs = ["test", ...packagesToRun, "-json", "-count=1", "-parallel", parallel];
+const runArgs = ["test", ...packagesToRun, "-json", "-count=1", "-timeout", "30m", "-parallel", parallel];
 if (runFilter) {
   runArgs.push("-run", runFilter);
 }

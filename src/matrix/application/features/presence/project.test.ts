@@ -72,4 +72,23 @@ describe("presence project", () => {
       }),
     ]);
   });
+
+  it("defaults visible users without stored presence to offline", async () => {
+    const db = new FakePresenceDatabase(["@carol:remote"], []);
+
+    const projection = await projectPresenceEvents(db as unknown as D1Database, undefined, {
+      userId: "@alice:test",
+      roomIds: ["!room:hs1"],
+    });
+
+    expect(projection.events).toEqual([
+      expect.objectContaining({
+        sender: "@carol:remote",
+        content: expect.objectContaining({
+          presence: "offline",
+          currently_active: false,
+        }),
+      }),
+    ]);
+  });
 });

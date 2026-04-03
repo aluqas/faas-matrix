@@ -29,6 +29,7 @@ import {
   roomVersionRequiresIntegerJsonNumbers,
 } from "../../pdu-validator";
 import { markPartialStateDeferredMembershipEvent } from "./partial-state-membership";
+import { markPartialStateDeferredAuthEvent } from "./partial-state-membership";
 import {
   extractRawFederationPduFields,
   toRawFederationPdu,
@@ -450,6 +451,7 @@ async function storeAcceptedPdu(
   ports: PduIngestPorts,
   pdu: PDU,
   options?: {
+    deferredPartialStateAuthReason?: string | null;
     deferredPartialStateMembershipAuthReason?: string | null;
   },
 ): Promise<void> {
@@ -483,7 +485,9 @@ async function storeAcceptedPdu(
           reason: options.deferredPartialStateMembershipAuthReason,
           previousEvent: currentMemberEvent,
         })
-      : pdu;
+      : options?.deferredPartialStateAuthReason
+        ? markPartialStateDeferredAuthEvent(pdu, options.deferredPartialStateAuthReason)
+        : pdu;
     await ports.repository.storeIncomingEvent(storedPdu);
     const result = membershipTransitions.evaluate({
       event: storedPdu,
@@ -511,7 +515,11 @@ async function storeAcceptedPdu(
       );
     }
   } else {
-    await ports.repository.storeIncomingEvent(pdu);
+    await ports.repository.storeIncomingEvent(
+      options?.deferredPartialStateAuthReason
+        ? markPartialStateDeferredAuthEvent(pdu, options.deferredPartialStateAuthReason)
+        : pdu,
+    );
   }
 
   await ports.repository.notifyUsersOfEvent(pdu.room_id, pdu.event_id, pdu.type);
@@ -631,6 +639,7 @@ export async function ingestFederationPdu(
     event_id: normalizedEventId,
   } as PDU;
   let snapshotIncomplete = false;
+  let deferredPartialStateAuthReason: string | null = null;
   let deferredPartialStateMembershipAuthReason: string | null = null;
 
   if (room) {
@@ -904,6 +913,9 @@ export async function ingestFederationPdu(
             normalizedPdu.type !== "m.room.member") ||
             shouldDeferPartialStateMembershipAuthFailure(normalizedPdu, authResult.error))
         ) {
+          if (authResult.error) {
+            deferredPartialStateAuthReason = authResult.error;
+          }
           if (normalizedPdu.type === "m.room.member" && authResult.error) {
             deferredPartialStateMembershipAuthReason = authResult.error;
           }
@@ -952,13 +964,14 @@ export async function ingestFederationPdu(
     await ports.repository.storeIncomingEvent(normalizedPdu);
   } else {
     await storeAcceptedPdu(ports, normalizedPdu, {
+      deferredPartialStateAuthReason,
       deferredPartialStateMembershipAuthReason,
     });
     const db = isD1Database(ports.appContext.capabilities.sql.connection)
       ? ports.appContext.capabilities.sql.connection
       : undefined;
     const queuePdu = ports.appContext.capabilities.federation?.queuePdu;
-    if (db && queuePdu && !deferredPartialStateMembershipAuthReason) {
+    if (db && queuePdu && !deferredPartialStateAuthReason) {
       await fanoutEventToRemoteServers(
         {
           enqueuePdu: ({ destination, roomId: targetRoomId, pdu }) =>

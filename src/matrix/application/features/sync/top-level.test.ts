@@ -182,9 +182,12 @@ describe("sync top-level contracts", () => {
       left: ["@left:test"],
     });
     expect(initial.toDeviceEvents).toHaveLength(1);
-    expect(initial.accountData).toEqual([
-      { type: "m.direct", content: { "@alice:test": ["!room:test"] } },
-    ]);
+    expect(initial.accountData).toEqual(
+      expect.arrayContaining([
+        { type: "m.direct", content: { "@alice:test": ["!room:test"] } },
+        expect.objectContaining({ type: "m.push_rules" }),
+      ]),
+    );
     expect(incremental.currentToDevicePos).toBe(9);
   });
 });

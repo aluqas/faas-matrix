@@ -11,7 +11,11 @@ import {
 class FakeSyncRepository implements SyncRepository {
   memberships = new Map<
     string,
-    { membership: "invite" | "join" | "leave" | "ban" | "knock"; eventId: string }
+    {
+      membership: "invite" | "join" | "leave" | "ban" | "knock";
+      eventId: string;
+      streamOrdering?: number;
+    }
   >();
   roomStates = new Map<string, PDU[]>();
   inviteStates = new Map<
@@ -37,6 +41,7 @@ class FakeSyncRepository implements SyncRepository {
   typingUsersByRoom = new Map<string, string[]>();
   globalAccountData: any[] = [];
   deviceListChanges = { changed: [] as string[], left: [] as string[] };
+  lastGlobalAccountDataSince?: number;
 
   async loadFilter() {
     return null;
@@ -59,7 +64,8 @@ class FakeSyncRepository implements SyncRepository {
   async getDeviceListChanges() {
     return this.deviceListChanges;
   }
-  async getGlobalAccountData() {
+  async getGlobalAccountData(_userId: string, since?: number) {
+    this.lastGlobalAccountDataSince = since;
     return this.globalAccountData;
   }
   async getRoomAccountData(_userId: string, roomId: string) {
@@ -587,7 +593,7 @@ describe("sync-projection", () => {
       },
     });
 
-    expect(projection.ephemeral?.events).toEqual([{ type: "m.typing", content: { user_ids: [] } }]);
+    expect(projection.ephemeral?.events).toEqual([]);
   });
 
   it("adds sender membership state for lazy-loaded incremental syncs", async () => {
@@ -641,6 +647,161 @@ describe("sync-projection", () => {
         state_key: "@derek:remote",
       }),
     ]);
+    expect(projection.state_after?.events).toEqual([
+      expect.objectContaining({
+        event_id: "$member",
+        type: "m.room.member",
+        state_key: "@derek:remote",
+      }),
+    ]);
+  });
+
+  it("marks timeline as limited when the timeline filter truncates events", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.eventsSince.set(roomId, [
+      {
+        event_id: "$one",
+        room_id: roomId,
+        sender: "@alice:test",
+        type: "m.room.message",
+        content: { body: "one", msgtype: "m.text" },
+        origin_server_ts: 10,
+        depth: 1,
+        auth_events: [],
+        prev_events: [],
+      },
+      {
+        event_id: "$two",
+        room_id: roomId,
+        sender: "@alice:test",
+        type: "m.room.message",
+        content: { body: "two", msgtype: "m.text" },
+        origin_server_ts: 11,
+        depth: 2,
+        auth_events: [],
+        prev_events: ["$one"],
+      },
+    ]);
+
+    const projection = await projectJoinedRoom(repo, {
+      userId: "@alice:test",
+      roomId,
+      sincePosition: 1,
+      roomFilter: {
+        timeline: { limit: 1 },
+      },
+    });
+
+    expect(projection.timeline?.events).toHaveLength(1);
+    expect(projection.timeline?.limited).toBe(true);
+    expect(projection.timeline?.events[0]).toEqual(expect.objectContaining({ event_id: "$two" }));
+  });
+
+  it("marks timeline as limited for newly joined rooms in incremental syncs", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.memberships.set(`${roomId}:@alice:test`, {
+      membership: "join",
+      eventId: "$join",
+      streamOrdering: 9,
+    });
+    repo.eventsSince.set(roomId, [
+      {
+        event_id: "$message",
+        room_id: roomId,
+        sender: "@bob:test",
+        type: "m.room.message",
+        content: { body: "after join", msgtype: "m.text" },
+        origin_server_ts: 12,
+        depth: 3,
+        auth_events: [],
+        prev_events: ["$before-join"],
+      },
+    ]);
+    repo.eventsById.set("$before-join", {
+      event_id: "$before-join",
+      room_id: roomId,
+      sender: "@bob:test",
+      type: "m.room.message",
+      content: { body: "before join", msgtype: "m.text" },
+      origin_server_ts: 11,
+      depth: 2,
+      auth_events: [],
+      prev_events: [],
+    });
+
+    const projection = await projectJoinedRoom(repo, {
+      userId: "@alice:test",
+      roomId,
+      sincePosition: 5,
+    });
+
+    expect(projection.timeline?.limited).toBe(true);
+  });
+
+  it("marks timeline as limited when the first visible event has missing predecessors", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.eventsSince.set(roomId, [
+      {
+        event_id: "$gap",
+        room_id: roomId,
+        sender: "@remote:test",
+        type: "m.room.message",
+        content: { body: "gap", msgtype: "m.text" },
+        origin_server_ts: 10,
+        depth: 10,
+        auth_events: [],
+        prev_events: ["$missing"],
+      },
+    ]);
+
+    const projection = await projectJoinedRoom(repo, {
+      userId: "@alice:test",
+      roomId,
+      sincePosition: 5,
+    });
+
+    expect(projection.timeline?.limited).toBe(true);
+  });
+
+  it("drops events before an internal timeline gap once the batch becomes limited", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.eventsSince.set(roomId, [
+      {
+        event_id: "$alice",
+        room_id: roomId,
+        sender: "@alice:test",
+        type: "m.room.message",
+        content: { body: "alice", msgtype: "m.text" },
+        origin_server_ts: 10,
+        depth: 1,
+        auth_events: [],
+        prev_events: [],
+      },
+      {
+        event_id: "$remote",
+        room_id: roomId,
+        sender: "@remote:test",
+        type: "m.room.message",
+        content: { body: "remote", msgtype: "m.text" },
+        origin_server_ts: 11,
+        depth: 2,
+        auth_events: [],
+        prev_events: ["$missing"],
+      },
+    ]);
+
+    const projection = await projectJoinedRoom(repo, {
+      userId: "@alice:test",
+      roomId,
+      sincePosition: 5,
+    });
+
+    expect(projection.timeline?.limited).toBe(true);
+    expect(projection.timeline?.events).toEqual([expect.objectContaining({ event_id: "$remote" })]);
   });
 
   it("projects global account data with filters applied", async () => {
@@ -655,6 +816,18 @@ describe("sync-projection", () => {
     });
 
     expect(projection).toEqual([{ type: "m.push_rules", content: {} }]);
+  });
+
+  it("treats since=0 as incremental when a sync token is present", async () => {
+    const repo = new FakeSyncRepository();
+    repo.globalAccountData = [{ type: "m.push_rules", content: {} }];
+
+    const projection = await projectGlobalAccountData(repo, "@alice:test", 0, undefined, {
+      isIncremental: true,
+    });
+
+    expect(projection).toEqual([{ type: "m.push_rules", content: {} }]);
+    expect(repo.lastGlobalAccountDataSince).toBe(0);
   });
 
   it("bootstraps device_lists on initial sync and omits empty incremental changes", async () => {

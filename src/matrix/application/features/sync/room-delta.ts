@@ -15,6 +15,15 @@ export interface ProjectRoomDeltaInput {
   roomFilter?: JoinedRoomProjectionQuery["roomFilter"];
 }
 
+export function hasJoinedRoomDelta(room: JoinedRoom): boolean {
+  return (
+    (room.timeline?.events.length ?? 0) > 0 ||
+    (room.state?.events.length ?? 0) > 0 ||
+    (room.ephemeral?.events.length ?? 0) > 0 ||
+    (room.account_data?.events.length ?? 0) > 0
+  );
+}
+
 export async function projectRoomDeltas(
   ports: RoomDeltaProjectionPorts,
   input: ProjectRoomDeltaInput,

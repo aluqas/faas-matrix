@@ -7,7 +7,7 @@ import type { SyncRepository } from "../../../repositories/interfaces";
 import type { PartialStatePort, SyncQueryPort } from "./effect-ports";
 import { buildSyncToken, parseSyncToken, type SyncAssemblerInput } from "./contracts";
 import { projectMembershipRoomBuckets } from "./membership-rooms";
-import { projectRoomDeltas } from "./room-delta";
+import { hasJoinedRoomDelta, projectRoomDeltas } from "./room-delta";
 import { projectTopLevelSync } from "./top-level";
 
 export interface SyncAssemblerPorts {
@@ -60,25 +60,29 @@ export function assembleSyncResponseEffect(
 
     const roomIdsForDelta: string[] = [];
     const forceFullStateRooms = new Set<string>();
+    const hiddenPartialStateRooms = new Set<string>();
+    const visiblePartialStateRooms = new Set<string>();
     for (const roomId of visibleJoinedRoomIds) {
       const partialStateStatus = yield* ports.partialState.getPartialStateStatus(
         input.userId,
         roomId,
       );
-      if (
-        partialStateStatus &&
-        partialStateStatus.phase !== "complete" &&
-        !shouldExposePartialStateRoom()
-      ) {
-        continue;
-      }
-
       const partialStateCompletion = yield* ports.partialState.takePartialStateCompletionStatus(
         input.userId,
         roomId,
       );
       if (partialStateCompletion) {
         forceFullStateRooms.add(roomId);
+      }
+      if (
+        partialStateStatus &&
+        partialStateStatus.phase !== "complete" &&
+        !shouldExposePartialStateRoom()
+      ) {
+        hiddenPartialStateRooms.add(roomId);
+      }
+      if (partialStateStatus && partialStateStatus.phase !== "complete") {
+        visiblePartialStateRooms.add(roomId);
       }
       roomIdsForDelta.push(roomId);
     }
@@ -98,7 +102,25 @@ export function assembleSyncResponseEffect(
           ),
         catch: (cause) => toAssemblerError("Failed to project joined room delta", cause),
       });
-      Object.assign(response.rooms!.join!, joinedRooms);
+      const projectedRoom = joinedRooms[roomId];
+      if (!projectedRoom) {
+        continue;
+      }
+
+      const roomHasDelta = hasJoinedRoomDelta(projectedRoom);
+      if (hiddenPartialStateRooms.has(roomId) && !forceFullStateRooms.has(roomId)) {
+        continue;
+      }
+
+      if (
+        cursor.events === 0 ||
+        input.fullState ||
+        forceFullStateRooms.has(roomId) ||
+        visiblePartialStateRooms.has(roomId) ||
+        roomHasDelta
+      ) {
+        response.rooms!.join![roomId] = projectedRoom;
+      }
     }
 
     const membershipProjection = yield* Effect.tryPromise({
@@ -109,7 +131,7 @@ export function assembleSyncResponseEffect(
             userId: input.userId,
             sincePosition: cursor.events,
             roomFilter: filter?.room,
-            includeLeave: (filter?.room?.include_leave ?? false) || (cursor.events > 0 && !filter),
+            includeLeave: filter?.room?.include_leave ?? cursor.events > 0,
           },
         ),
       catch: (cause) => toAssemblerError("Failed to project membership room buckets", cause),
@@ -139,12 +161,12 @@ export function assembleSyncResponseEffect(
           {
             userId: input.userId,
             deviceId: input.deviceId,
-            roomIds: joinedRoomIds,
             sincePosition: cursor.events,
             sinceToDevice: cursor.toDevice,
             sinceDeviceKeys: cursor.deviceKeys,
             ...(input.since ? { sinceToken: input.since } : {}),
             ...(filter ? { filter } : {}),
+            roomIds: Object.keys(response.rooms?.join ?? {}),
           },
         ),
       catch: (cause) => toAssemblerError("Failed to project top-level sync payload", cause),
@@ -163,13 +185,7 @@ export function assembleSyncResponseEffect(
     const inviteRooms = response.rooms?.invite ?? {};
     const leaveRooms = response.rooms?.leave ?? {};
     const knockRooms = response.rooms?.knock ?? {};
-    const hasRoomChanges = Object.values(joinedRooms).some(
-      (room) =>
-        (room.timeline?.events.length || 0) > 0 ||
-        (room.state?.events.length || 0) > 0 ||
-        (room.ephemeral?.events.length || 0) > 0 ||
-        (room.account_data?.events.length || 0) > 0,
-    );
+    const hasRoomChanges = Object.values(joinedRooms).some((room) => hasJoinedRoomDelta(room));
     const hasChanges =
       hasRoomChanges ||
       Object.keys(inviteRooms).length > 0 ||
@@ -182,7 +198,7 @@ export function assembleSyncResponseEffect(
       (topLevel.deviceLists?.left?.length ?? 0) > 0;
 
     const timeout = Math.min(input.timeout || 0, 30000);
-    if (!hasChanges && timeout > 0 && cursor.events > 0) {
+    if (!hasChanges && timeout > 0 && input.since) {
       yield* ports.query.waitForUserEvents(input.userId, Math.min(timeout, 25000));
       return yield* assembleSyncResponseEffect(ports, {
         ...input,

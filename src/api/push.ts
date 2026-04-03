@@ -17,6 +17,7 @@ import { hashToken } from "../utils/crypto";
 import { runClientEffect } from "../matrix/application/effect-runtime";
 import { withLogContext } from "../matrix/application/logging";
 import { getAccessTokenRecordByHash } from "../services/database";
+import { notifySyncUser } from "../services/sync-notify";
 import {
   type JsonObject,
   type PusherData,
@@ -278,6 +279,7 @@ const DEFAULT_PUSH_RULE_IDS = new Set(
     (rule) => rule.rule_id,
   ),
 );
+const PUSH_RULES_ACCOUNT_DATA_TYPE = "m.push_rules";
 
 // ============================================
 // Helper Functions
@@ -329,7 +331,7 @@ function getDefaultRulesForUser(userId: string): {
   };
 }
 
-async function getUserPushRules(
+export async function getUserPushRules(
   db: D1Database,
   userId: string,
 ): Promise<{
@@ -387,6 +389,47 @@ async function getUserPushRules(
   }
 
   return { global: rules };
+}
+
+async function recordPushRulesAccountDataChange(db: D1Database, userId: string): Promise<void> {
+  const pos = await db
+    .prepare(`
+      SELECT MAX(pos) as next_pos FROM (
+        SELECT COALESCE(MAX(stream_ordering), 0) as pos FROM events
+        UNION ALL
+        SELECT COALESCE(MAX(stream_position), 0) as pos FROM account_data_changes
+      )
+    `)
+    .first<{ next_pos: number | null }>();
+  const streamPosition = (pos?.next_pos ?? 0) + 1;
+
+  await db
+    .prepare(`
+      INSERT INTO account_data_changes (user_id, room_id, event_type, stream_position)
+      VALUES (?, '', ?, ?)
+    `)
+    .bind(userId, PUSH_RULES_ACCOUNT_DATA_TYPE, streamPosition)
+    .run();
+}
+
+async function syncPushRulesAccountData(
+  env: Pick<AppEnv["Bindings"], "SYNC">,
+  db: D1Database,
+  userId: string,
+): Promise<void> {
+  const pushRules = await getUserPushRules(db, userId);
+  await db
+    .prepare(`
+      INSERT INTO account_data (user_id, room_id, event_type, content, deleted)
+      VALUES (?, '', ?, ?, 0)
+      ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET
+        content = excluded.content,
+        deleted = 0
+    `)
+    .bind(userId, PUSH_RULES_ACCOUNT_DATA_TYPE, JSON.stringify(pushRules))
+    .run();
+  await recordPushRulesAccountDataChange(db, userId);
+  await notifySyncUser(env, userId, { type: PUSH_RULES_ACCOUNT_DATA_TYPE });
 }
 
 // ============================================
@@ -545,6 +588,7 @@ app.post("/_matrix/client/v3/pushers/set", requireAuth(), async (c) => {
       JSON.stringify(data),
     )
     .run();
+  await syncPushRulesAccountData(c.env, db, userId);
 
   await runClientEffect(
     logger.info("push.command.success", {
@@ -729,6 +773,7 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId", requireAuth(), asyn
       priority,
     )
     .run();
+  await syncPushRulesAccountData(c.env, db, userId);
 
   await runClientEffect(
     logger.info("push.command.success", {
@@ -787,6 +832,8 @@ app.delete("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId", requireAuth(), a
       404,
     );
   }
+
+  await syncPushRulesAccountData(c.env, db, userId);
 
   return c.json({});
 });
@@ -856,6 +903,8 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId/enabled", requireAuth
       .bind(parsed.enabled ? 1 : 0, userId, kind, ruleId)
       .run();
   }
+
+  await syncPushRulesAccountData(c.env, db, userId);
 
   await runClientEffect(
     logger.info("push.command.success", {
@@ -945,6 +994,7 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId/actions", requireAuth
       JSON.stringify(ruleActions),
     )
     .run();
+  await syncPushRulesAccountData(c.env, db, userId);
 
   await runClientEffect(
     logger.info("push.command.success", {

@@ -7,7 +7,7 @@ export async function projectTypingEphemeral(
 ): Promise<Array<{ type: "m.typing"; content: { user_ids: string[] } }>> {
   const typingUsers = await repository.getTypingUsers(query.roomId);
   return applyEventFilter(
-    typingUsers.length > 0 || query.includeEmpty
+    typingUsers.length > 0
       ? [
           {
             type: "m.typing" as const,

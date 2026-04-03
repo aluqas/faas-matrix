@@ -52,6 +52,8 @@ export interface JoinedRoomProjectionQuery {
   roomFilter?: FilterDefinition["room"];
 }
 
+const DEFAULT_SYNC_TIMELINE_EVENT_LIMIT = 100;
+
 type EventLike = {
   type: string;
   sender?: string;
@@ -156,6 +158,18 @@ export function applyEventFilter<T extends EventLike>(events: T[], filter?: Sync
   return filtered;
 }
 
+function applyEventFilterWithoutLimit<T extends EventLike>(
+  events: T[],
+  filter?: SyncEventFilter,
+): T[] {
+  if (!filter) {
+    return events;
+  }
+
+  const { limit: _limit, ...rest } = filter;
+  return applyEventFilter(events, rest);
+}
+
 export function shouldIncludeRoom(roomId: string, filter?: FilterDefinition["room"]): boolean {
   if (!filter) return true;
   if (filter.rooms && filter.rooms.length > 0 && !filter.rooms.includes(roomId)) return false;
@@ -170,11 +184,54 @@ export async function projectGlobalAccountData(
   userId: string,
   sincePosition: number,
   filter?: SyncEventFilter,
+  options?: { isIncremental?: boolean },
 ): Promise<AccountDataEvent[]> {
   return applyEventFilter(
-    await repository.getGlobalAccountData(userId, sincePosition > 0 ? sincePosition : undefined),
+    await repository.getGlobalAccountData(
+      userId,
+      options?.isIncremental || sincePosition > 0 ? sincePosition : undefined,
+    ),
     filter,
   );
+}
+
+async function detectTimelineGap(
+  repository: SyncRepository,
+  timelineEvents: PDU[],
+): Promise<{ limited: boolean; trimIndex: number }> {
+  if (timelineEvents.length === 0) {
+    return { limited: false, trimIndex: 0 };
+  }
+
+  const seenTimelineEventIds = new Set<string>();
+
+  for (const [index, event] of timelineEvents.entries()) {
+    const previousEventIds = Array.isArray(event.prev_events) ? event.prev_events : [];
+
+    if (
+      index > 0 &&
+      (previousEventIds.length === 0 ||
+        !previousEventIds.some((previousEventId) => seenTimelineEventIds.has(previousEventId)))
+    ) {
+      return { limited: true, trimIndex: index };
+    }
+
+    seenTimelineEventIds.add(event.event_id);
+  }
+
+  const firstEvent = timelineEvents[0];
+  if (!Array.isArray(firstEvent.prev_events) || firstEvent.prev_events.length === 0) {
+    return { limited: false, trimIndex: 0 };
+  }
+
+  const previousEvents = await Promise.all(
+    firstEvent.prev_events.map((prevEventId) => repository.getEvent(prevEventId)),
+  );
+  if (previousEvents.some((previousEvent) => previousEvent === null)) {
+    return { limited: true, trimIndex: 0 };
+  }
+
+  return { limited: false, trimIndex: 0 };
 }
 
 export async function projectDeviceLists(
@@ -209,6 +266,8 @@ export async function projectJoinedRoom(
   };
 
   const events = await repository.getEventsSince(query.roomId, query.sincePosition);
+  const currentMembership =
+    query.sincePosition > 0 ? await repository.getMembership(query.roomId, query.userId) : null;
   const lazyLoadMembers =
     query.roomFilter?.timeline?.lazy_load_members === true ||
     query.roomFilter?.state?.lazy_load_members === true;
@@ -218,16 +277,20 @@ export async function projectJoinedRoom(
       : [];
   let stateEvents: MatrixEvent[] = [];
   let timelineEvents: MatrixEvent[] = [];
+  let timelineSourceEvents: PDU[] = [];
+  let timelineLimited = false;
 
   for (const event of events) {
     const clientEvent = toClientEvent(event);
-    const timelineIncluded = applyEventFilter([clientEvent], query.roomFilter?.timeline).length > 0;
+    const timelineIncluded =
+      applyEventFilterWithoutLimit([clientEvent], query.roomFilter?.timeline).length > 0;
 
     if (event.state_key !== undefined && timelineIncluded) {
       stateEvents.push(clientEvent);
     }
     if (timelineIncluded) {
       timelineEvents.push(clientEvent);
+      timelineSourceEvents.push(event);
     }
   }
 
@@ -268,9 +331,47 @@ export async function projectJoinedRoom(
     }
   }
 
+  const filteredTimelineEvents = applyEventFilterWithoutLimit(
+    timelineEvents,
+    query.roomFilter?.timeline,
+  );
+  let effectiveTimelineEvents = filteredTimelineEvents;
+  const gap = await detectTimelineGap(repository, timelineSourceEvents);
+  if (gap.limited) {
+    timelineLimited = true;
+    if (gap.trimIndex > 0) {
+      effectiveTimelineEvents = effectiveTimelineEvents.slice(gap.trimIndex);
+    }
+  }
+  const timelineLimit = query.roomFilter?.timeline?.limit;
+  if (typeof timelineLimit === "number" && timelineLimit > 0) {
+    timelineLimited = timelineLimited || effectiveTimelineEvents.length > timelineLimit;
+    timelineEvents = effectiveTimelineEvents.slice(-timelineLimit);
+  } else {
+    timelineEvents = effectiveTimelineEvents;
+  }
+  if (!timelineLimited && events.length >= DEFAULT_SYNC_TIMELINE_EVENT_LIMIT) {
+    timelineLimited = true;
+  }
+  if (
+    !timelineLimited &&
+    query.sincePosition > 0 &&
+    currentMembership?.membership === "join" &&
+    typeof currentMembership.streamOrdering === "number" &&
+    currentMembership.streamOrdering > query.sincePosition &&
+    timelineEvents.length > 0
+  ) {
+    timelineLimited = true;
+  }
   joinedRoom.state!.events = applyEventFilter(stateEvents, query.roomFilter?.state);
   joinedRoom.timeline!.events = timelineEvents;
+  joinedRoom.timeline!.limited = timelineLimited;
   joinedRoom.timeline!.prev_batch = query.sincePosition.toString();
+  if (lazyLoadMembers) {
+    joinedRoom.state_after = {
+      events: [...joinedRoom.state!.events],
+    };
+  }
 
   joinedRoom.account_data!.events = applyEventFilter(
     await repository.getRoomAccountData(

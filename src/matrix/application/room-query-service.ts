@@ -15,6 +15,7 @@ import {
   getPartialStateStatus,
   type PartialStateStatus,
 } from "./features/partial-state/tracker";
+import { getPartialStateDeferredAuthReason } from "./features/federation/partial-state-membership";
 
 type MembershipRecord = {
   membership: Membership;
@@ -387,6 +388,7 @@ export class MatrixRoomQueryService {
     input: GetVisibleRoomEventInput,
   ): Effect.Effect<ClientRoomEvent, DomainError | InfraError> {
     const db = this.getDb();
+    const cache = this.getCache();
     const loadVisibleEvent = this.fromPromise.bind(this);
     const dependencies = this.dependencies;
 
@@ -396,6 +398,18 @@ export class MatrixRoomQueryService {
       );
 
       if (!event) {
+        return yield* Effect.fail(notFoundDomainError("Event not found"));
+      }
+
+      const partialStateStatus = yield* loadVisibleEvent(
+        "Failed to load partial-state status",
+        () => dependencies.getPartialStateJoin(cache, input.userId, input.roomId),
+      );
+      if (
+        partialStateStatus &&
+        partialStateStatus.phase !== "complete" &&
+        getPartialStateDeferredAuthReason(event)
+      ) {
         return yield* Effect.fail(notFoundDomainError("Event not found"));
       }
 

@@ -110,6 +110,9 @@ function createTestAppContext(): AppContext {
       return {
         bind() {
           return {
+            async first() {
+              return null;
+            },
             async all() {
               return { results: [] };
             },
@@ -194,6 +197,60 @@ function createCacheBackedAppContext(entries?: Record<string, unknown>): AppCont
   return context;
 }
 
+function createPersistedPartialStateAppContext(entries?: Record<string, unknown>): AppContext {
+  const context = createCacheBackedAppContext();
+  const persisted = new Map(
+    Object.entries(entries ?? {}).map(([key, value]) => [key, JSON.stringify(value)]),
+  );
+
+  context.capabilities.sql = {
+    connection: {
+      prepare(query: string) {
+        return {
+          bind(userId: string, roomId?: string, eventType?: string) {
+            return {
+              async first() {
+                if (
+                  query.includes("FROM account_data") &&
+                  typeof roomId === "string" &&
+                  typeof eventType === "string"
+                ) {
+                  const content = persisted.get(`${userId}:${roomId}:${eventType}`);
+                  if (!content) {
+                    return null;
+                  }
+
+                  return {
+                    content,
+                    deleted: 0,
+                  };
+                }
+
+                return null;
+              },
+              async all() {
+                return { results: [] };
+              },
+              async run() {
+                if (
+                  query.includes("INSERT INTO account_data") &&
+                  typeof roomId === "string" &&
+                  typeof eventType === "string"
+                ) {
+                  persisted.delete(`${userId}:${roomId}:${eventType}`);
+                }
+                return { success: true };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as D1Database,
+  };
+
+  return context;
+}
+
 describe("MatrixSyncService", () => {
   it("preserves composite sync tokens and waits when idle", async () => {
     const repo = new FakeSyncRepository();
@@ -210,6 +267,22 @@ describe("MatrixSyncService", () => {
 
     expect(repo.waitCalls).toBe(1);
     expect(response.next_batch).toBe("s5_td0_dk7");
+  });
+
+  it("waits on incremental syncs even when the event stream position is zero", async () => {
+    const repo = new FakeSyncRepository();
+    const service = new MatrixSyncService(createTestAppContext(), repo);
+
+    await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s0_td0_dk0",
+        timeout: 2000,
+      }),
+    );
+
+    expect(repo.waitCalls).toBe(1);
   });
 
   it("projects invite rooms with a current leave state into rooms.leave", async () => {
@@ -286,6 +359,81 @@ describe("MatrixSyncService", () => {
     });
   });
 
+  it("includes leave rooms on incremental syncs even when a room filter is present", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.loadedFilter = {
+      room: {
+        timeline: {
+          limit: 1,
+        },
+      },
+    };
+    repo.memberships.set(`${roomId}:@alice:test`, { membership: "leave", eventId: "$leave" });
+    repo.eventsById.set("$leave", {
+      event_id: "$leave",
+      room_id: roomId,
+      sender: "@alice:test",
+      type: "m.room.member",
+      state_key: "@alice:test",
+      content: { membership: "leave" },
+      origin_server_ts: 10,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+
+    const service = new MatrixSyncService(createTestAppContext(), repo);
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s1_td0_dk0",
+        filterParam: "filter-id",
+      }),
+    );
+
+    expect(response.rooms?.leave?.[roomId]?.timeline?.events[0]).toMatchObject({
+      event_id: "$leave",
+      content: { membership: "leave" },
+    });
+  });
+
+  it("honors include_leave=false on incremental syncs with filters", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.loadedFilter = {
+      room: {
+        include_leave: false,
+      },
+    };
+    repo.memberships.set(`${roomId}:@alice:test`, { membership: "leave", eventId: "$leave" });
+    repo.eventsById.set("$leave", {
+      event_id: "$leave",
+      room_id: roomId,
+      sender: "@alice:test",
+      type: "m.room.member",
+      state_key: "@alice:test",
+      content: { membership: "leave" },
+      origin_server_ts: 10,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+
+    const service = new MatrixSyncService(createTestAppContext(), repo);
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s1_td0_dk0",
+        filterParam: "filter-id",
+      }),
+    );
+
+    expect(response.rooms?.leave?.[roomId]).toBeUndefined();
+  });
+
   it("omits empty invite maps without crashing sync response projection", async () => {
     const repo = new FakeSyncRepository();
     const service = new MatrixSyncService(createTestAppContext(), repo);
@@ -302,6 +450,23 @@ describe("MatrixSyncService", () => {
     expect(response.rooms?.invite).toBeUndefined();
     expect(response.rooms?.leave).toBeUndefined();
     expect(response.rooms?.knock).toBeUndefined();
+  });
+
+  it("omits unchanged joined rooms from incremental sync responses", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.joinedRooms = [roomId];
+
+    const service = new MatrixSyncService(createTestAppContext(), repo);
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s1_td0_dk0",
+      }),
+    );
+
+    expect(response.rooms?.join?.[roomId]).toBeUndefined();
   });
 
   it("prefers leave membership events over earlier invite events in incremental leave syncs", async () => {
@@ -445,6 +610,47 @@ describe("MatrixSyncService", () => {
     expect(lazy.rooms?.join?.[roomId]).toBeDefined();
   });
 
+  it("keeps hidden partial-state rooms out of eager incremental sync until completion", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.joinedRooms = [roomId];
+    repo.eventsSince.set(roomId, [
+      {
+        event_id: "$message",
+        room_id: roomId,
+        sender: "@charlie:remote",
+        type: "m.room.message",
+        content: { body: "hi", msgtype: "m.text" },
+        origin_server_ts: 10,
+        depth: 1,
+        auth_events: [],
+        prev_events: [],
+      },
+    ]);
+
+    const service = new MatrixSyncService(
+      createCacheBackedAppContext({
+        "partial_state_join:@alice:test:!room:hs1": {
+          roomId,
+          userId: "@alice:test",
+          eventId: "$prev",
+          startedAt: 1,
+        },
+      }),
+      repo,
+    );
+
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s1_td0_dk0",
+      }),
+    );
+
+    expect(response.rooms?.join?.[roomId]).toBeUndefined();
+  });
+
   it("returns full room state on the first sync after partial-state completion", async () => {
     const repo = new FakeSyncRepository();
     const roomId = "!room:hs1";
@@ -497,6 +703,55 @@ describe("MatrixSyncService", () => {
         event_id: "$charlie",
         type: "m.room.member",
         state_key: "@charlie:remote",
+      }),
+    ]);
+  });
+
+  it("falls back to persisted completion metadata when cache completion markers are gone", async () => {
+    const repo = new FakeSyncRepository();
+    const roomId = "!room:hs1";
+    repo.joinedRooms = [roomId];
+    repo.roomStates.set(roomId, [
+      {
+        event_id: "$charlie",
+        room_id: roomId,
+        sender: "@charlie:remote",
+        type: "m.room.member",
+        state_key: "@charlie:remote",
+        content: { membership: "join" },
+        origin_server_ts: 10,
+        depth: 1,
+        auth_events: [],
+        prev_events: [],
+      },
+    ]);
+
+    const service = new MatrixSyncService(
+      createPersistedPartialStateAppContext({
+        "@alice:test:!room:hs1:io.tuwunel.partial_state_join": {
+          roomId,
+          userId: "@alice:test",
+          eventId: "$prev",
+          startedAt: 1,
+          phase: "complete",
+          completedAt: 2,
+        },
+      }),
+      repo,
+    );
+
+    const response = await runClientEffect(
+      service.syncUser({
+        userId: "@alice:test",
+        deviceId: null,
+        since: "s5_td0_dk0",
+      }),
+    );
+
+    expect(response.rooms?.join?.[roomId]?.state?.events).toEqual([
+      expect.objectContaining({
+        event_id: "$charlie",
+        type: "m.room.member",
       }),
     ]);
   });

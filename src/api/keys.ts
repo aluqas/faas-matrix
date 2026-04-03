@@ -852,43 +852,319 @@ app.get("/_matrix/client/v3/keys/changes", requireAuth(), async (c) => {
     return Errors.missingParam("from and to required").toResponse();
   }
 
-  const fromPosition = parseSyncToken(from).deviceKeys;
-  const toPosition = to ? parseSyncToken(to).deviceKeys : Number.MAX_SAFE_INTEGER;
+  const fromToken = parseSyncToken(from);
+  const toToken = parseSyncToken(to);
+  const fromEventPosition = fromToken.events;
+  const toEventPosition = toToken.events;
+  const fromDeviceKeyPosition = fromToken.deviceKeys;
+  const toDeviceKeyPosition = toToken.deviceKeys;
 
-  // Get users whose keys changed in this range
-  // Only return users that share rooms with the requesting user
-  const changes = await db
-    .prepare(`
-    SELECT DISTINCT dkc.user_id, dkc.change_type
-    FROM device_key_changes dkc
-    WHERE dkc.stream_position > ? AND dkc.stream_position <= ?
-      AND dkc.user_id IN (
-        SELECT DISTINCT rm2.user_id
-        FROM room_memberships rm1
-        JOIN room_memberships rm2 ON rm1.room_id = rm2.room_id
-        WHERE rm1.user_id = ? AND rm1.membership = 'join' AND rm2.membership = 'join'
-      )
-  `)
-    .bind(fromPosition, toPosition, userId)
-    .all<{
-      user_id: string;
-      change_type: string;
-    }>();
+  const [localChanged, remoteChanged, newlyShared, currentMembersInJoinedRooms, noLongerShared] =
+    await Promise.all([
+      db
+        .prepare(`
+        WITH current_memberships AS (
+          SELECT room_id, user_id, membership
+          FROM room_memberships
 
-  const changed: string[] = [];
-  const left: string[] = [];
+          UNION
 
-  for (const change of changes.results) {
+          SELECT
+            rs.room_id,
+            rs.state_key AS user_id,
+            json_extract(e.content, '$.membership') AS membership
+          FROM room_state rs
+          JOIN events e ON rs.event_id = e.event_id
+          WHERE rs.event_type = 'm.room.member'
+            AND rs.state_key IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM room_memberships rm
+              WHERE rm.room_id = rs.room_id
+                AND rm.user_id = rs.state_key
+            )
+        ),
+        joined_members AS (
+          SELECT room_id, user_id
+          FROM current_memberships
+          WHERE membership = 'join'
+        )
+        SELECT DISTINCT dkc.user_id, dkc.change_type
+        FROM device_key_changes dkc
+        WHERE dkc.stream_position > ?
+          AND dkc.stream_position <= ?
+          AND (
+            dkc.user_id = ?
+            OR EXISTS (
+              SELECT 1
+              FROM joined_members requester
+              JOIN joined_members target ON requester.room_id = target.room_id
+              WHERE requester.user_id = ?
+                AND target.user_id = dkc.user_id
+            )
+          )
+      `)
+        .bind(fromDeviceKeyPosition, toDeviceKeyPosition, userId, userId)
+        .all<{
+          user_id: string;
+          change_type: string;
+        }>(),
+      db
+        .prepare(`
+        WITH current_memberships AS (
+          SELECT room_id, user_id, membership
+          FROM room_memberships
+
+          UNION
+
+          SELECT
+            rs.room_id,
+            rs.state_key AS user_id,
+            json_extract(e.content, '$.membership') AS membership
+          FROM room_state rs
+          JOIN events e ON rs.event_id = e.event_id
+          WHERE rs.event_type = 'm.room.member'
+            AND rs.state_key IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM room_memberships rm
+              WHERE rm.room_id = rs.room_id
+                AND rm.user_id = rs.state_key
+            )
+        ),
+        joined_members AS (
+          SELECT room_id, user_id
+          FROM current_memberships
+          WHERE membership = 'join'
+        )
+        SELECT DISTINCT rdls.user_id
+        FROM remote_device_list_streams rdls
+        WHERE rdls.stream_id > ?
+          AND rdls.stream_id <= ?
+          AND EXISTS (
+            SELECT 1
+            FROM joined_members requester
+            JOIN joined_members target ON requester.room_id = target.room_id
+            WHERE requester.user_id = ?
+              AND target.user_id = rdls.user_id
+          )
+      `)
+        .bind(fromDeviceKeyPosition, toDeviceKeyPosition, userId)
+        .all<{ user_id: string }>(),
+      db
+        .prepare(`
+        WITH current_memberships AS (
+          SELECT room_id, user_id, membership
+          FROM room_memberships
+
+          UNION
+
+          SELECT
+            rs.room_id,
+            rs.state_key AS user_id,
+            json_extract(e.content, '$.membership') AS membership
+          FROM room_state rs
+          JOIN events e ON rs.event_id = e.event_id
+          WHERE rs.event_type = 'm.room.member'
+            AND rs.state_key IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM room_memberships rm
+              WHERE rm.room_id = rs.room_id
+                AND rm.user_id = rs.state_key
+            )
+        ),
+        joined_members AS (
+          SELECT room_id, user_id
+          FROM current_memberships
+          WHERE membership = 'join'
+        )
+        SELECT DISTINCT e.state_key AS user_id
+        FROM events e
+        JOIN joined_members requester_joined
+          ON requester_joined.room_id = e.room_id
+         AND requester_joined.user_id = ?
+        JOIN joined_members target_joined
+          ON target_joined.room_id = e.room_id
+         AND target_joined.user_id = e.state_key
+        WHERE e.event_type = 'm.room.member'
+          AND e.stream_ordering > ?
+          AND e.stream_ordering <= ?
+          AND e.state_key IS NOT NULL
+          AND e.state_key != ?
+          AND json_extract(e.content, '$.membership') = 'join'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM joined_members shared_requester
+            JOIN joined_members shared_target
+              ON shared_requester.room_id = shared_target.room_id
+            WHERE shared_requester.user_id = ?
+              AND shared_target.user_id = e.state_key
+              AND shared_requester.room_id != e.room_id
+          )
+      `)
+        .bind(userId, fromEventPosition, toEventPosition, userId, userId)
+        .all<{ user_id: string }>(),
+      db
+        .prepare(`
+        WITH current_memberships AS (
+          SELECT room_id, user_id, membership
+          FROM room_memberships
+
+          UNION
+
+          SELECT
+            rs.room_id,
+            rs.state_key AS user_id,
+            json_extract(e.content, '$.membership') AS membership
+          FROM room_state rs
+          JOIN events e ON rs.event_id = e.event_id
+          WHERE rs.event_type = 'm.room.member'
+            AND rs.state_key IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM room_memberships rm
+              WHERE rm.room_id = rs.room_id
+                AND rm.user_id = rs.state_key
+            )
+        ),
+        joined_members AS (
+          SELECT room_id, user_id
+          FROM current_memberships
+          WHERE membership = 'join'
+        )
+        SELECT DISTINCT joined_members.user_id
+        FROM events requester_join_event
+        JOIN joined_members
+          ON joined_members.room_id = requester_join_event.room_id
+        WHERE requester_join_event.event_type = 'm.room.member'
+          AND requester_join_event.stream_ordering > ?
+          AND requester_join_event.stream_ordering <= ?
+          AND requester_join_event.state_key = ?
+          AND json_extract(requester_join_event.content, '$.membership') = 'join'
+      `)
+        .bind(fromEventPosition, toEventPosition, userId)
+        .all<{ user_id: string }>(),
+      db
+        .prepare(`
+        WITH current_memberships AS (
+          SELECT room_id, user_id, membership
+          FROM room_memberships
+
+          UNION
+
+          SELECT
+            rs.room_id,
+            rs.state_key AS user_id,
+            json_extract(e.content, '$.membership') AS membership
+          FROM room_state rs
+          JOIN events e ON rs.event_id = e.event_id
+          WHERE rs.event_type = 'm.room.member'
+            AND rs.state_key IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM room_memberships rm
+              WHERE rm.room_id = rs.room_id
+                AND rm.user_id = rs.state_key
+            )
+        ),
+        joined_members AS (
+          SELECT room_id, user_id
+          FROM current_memberships
+          WHERE membership = 'join'
+        )
+        SELECT DISTINCT left_user_id AS user_id
+        FROM (
+          SELECT e.state_key AS left_user_id
+          FROM events e
+          JOIN joined_members requester_joined
+            ON requester_joined.room_id = e.room_id
+           AND requester_joined.user_id = ?
+          WHERE e.event_type = 'm.room.member'
+            AND e.stream_ordering > ?
+            AND e.stream_ordering <= ?
+            AND e.state_key IS NOT NULL
+            AND e.state_key != ?
+            AND json_extract(e.content, '$.membership') IN ('leave', 'ban')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM joined_members shared_requester
+              JOIN joined_members shared_target
+                ON shared_requester.room_id = shared_target.room_id
+              WHERE shared_requester.user_id = ?
+                AND shared_target.user_id = e.state_key
+            )
+
+          UNION
+
+          SELECT other_membership.user_id AS left_user_id
+          FROM events e
+          JOIN current_memberships requester_membership
+            ON requester_membership.room_id = e.room_id
+           AND requester_membership.user_id = ?
+           AND requester_membership.membership IN ('leave', 'ban')
+          JOIN joined_members other_membership
+            ON other_membership.room_id = e.room_id
+          WHERE e.event_type = 'm.room.member'
+            AND e.stream_ordering > ?
+            AND e.stream_ordering <= ?
+            AND e.state_key = ?
+            AND other_membership.user_id != ?
+            AND json_extract(e.content, '$.membership') IN ('leave', 'ban')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM joined_members shared_requester
+              JOIN joined_members shared_target
+                ON shared_requester.room_id = shared_target.room_id
+              WHERE shared_requester.user_id = ?
+                AND shared_target.user_id = other_membership.user_id
+            )
+        )
+      `)
+        .bind(
+          userId,
+          fromEventPosition,
+          toEventPosition,
+          userId,
+          userId,
+          userId,
+          fromEventPosition,
+          toEventPosition,
+          userId,
+          userId,
+          userId,
+        )
+        .all<{ user_id: string }>(),
+    ]);
+
+  const changed = new Set<string>();
+  const left = new Set<string>();
+
+  for (const change of localChanged.results) {
     if (change.change_type === "delete") {
-      left.push(change.user_id);
+      left.add(change.user_id);
     } else {
-      changed.push(change.user_id);
+      changed.add(change.user_id);
+    }
+  }
+  for (const row of remoteChanged.results) {
+    changed.add(row.user_id);
+  }
+  for (const row of newlyShared.results) {
+    changed.add(row.user_id);
+  }
+  for (const row of currentMembersInJoinedRooms.results) {
+    changed.add(row.user_id);
+  }
+  for (const row of noLongerShared.results) {
+    if (!changed.has(row.user_id)) {
+      left.add(row.user_id);
     }
   }
 
   return c.json({
-    changed: [...new Set(changed)],
-    left: [...new Set(left)],
+    changed: [...changed],
+    left: [...left],
   });
 });
 

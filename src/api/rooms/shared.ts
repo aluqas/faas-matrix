@@ -18,20 +18,73 @@ export function toRouteErrorResponse(error: unknown): Response | null {
   return null;
 }
 
+export const MAX_ROOM_EVENT_CONTENT_BYTES = 64 * 1024;
+
+function assertFiniteJsonNumbers(value: unknown): void {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw Errors.badJson("JSON numbers must be finite");
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      assertFiniteJsonNumbers(entry);
+    }
+    return;
+  }
+
+  if (value && typeof value === "object") {
+    for (const entry of Object.values(value as Record<string, unknown>)) {
+      assertFiniteJsonNumbers(entry);
+    }
+  }
+}
+
+function parseStrictJsonBody(bodyText: string): unknown {
+  const parsed = JSON.parse(bodyText) as unknown;
+  assertFiniteJsonNumbers(parsed);
+  return parsed;
+}
+
 export async function parseOptionalJsonObjectBody(
   c: Context<AppEnv>,
+  options: {
+    maxBytes?: number;
+  } = {},
 ): Promise<Record<string, unknown> | undefined> {
   const bodyText = await c.req.text();
   if (bodyText.trim().length === 0) {
     return undefined;
   }
 
-  const parsed = JSON.parse(bodyText) as unknown;
+  if (options.maxBytes !== undefined) {
+    const size = new TextEncoder().encode(bodyText).length;
+    if (size > options.maxBytes) {
+      throw Errors.tooLarge("Event content exceeds the maximum allowed size");
+    }
+  }
+
+  const parsed = parseStrictJsonBody(bodyText);
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw Errors.badJson();
   }
 
   return parsed as Record<string, unknown>;
+}
+
+export async function parseRequiredJsonObjectBody(
+  c: Context<AppEnv>,
+  options: {
+    maxBytes?: number;
+  } = {},
+): Promise<Record<string, unknown>> {
+  const parsed = await parseOptionalJsonObjectBody(c, options);
+  if (!parsed) {
+    throw Errors.badJson();
+  }
+  return parsed;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

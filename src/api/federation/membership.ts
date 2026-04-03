@@ -18,6 +18,7 @@ import {
   decideInvitePermission,
   loadInvitePermissionConfig,
 } from "../../matrix/application/features/invite-permissions/policy";
+import { getPartialStateJoinForRoom } from "../../matrix/application/features/partial-state/tracker";
 import {
   ensureFederatedRoomStub,
   loadFederationStateBundle,
@@ -39,6 +40,15 @@ import {
 } from "./shared";
 
 const app = new Hono<AppEnv>();
+
+async function ensureRoomNotPartiallyJoined(c: import("hono").Context<AppEnv>, roomId: string) {
+  const partialStateJoin = await getPartialStateJoinForRoom(c.env.CACHE, roomId);
+  if (partialStateJoin) {
+    return Errors.notFound("Room not found").toResponse();
+  }
+
+  return null;
+}
 
 function buildPartialSendJoinResponse(stateBundle: {
   state: PDU[];
@@ -70,6 +80,10 @@ function buildPartialSendJoinResponse(stateBundle: {
 app.get("/_matrix/federation/v1/make_join/:roomId/:userId", async (c) => {
   const roomId = c.req.param("roomId");
   const userId = c.req.param("userId");
+  const partialStateResponse = await ensureRoomNotPartiallyJoined(c, roomId);
+  if (partialStateResponse) {
+    return partialStateResponse;
+  }
 
   const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
     .bind(roomId)
@@ -188,6 +202,10 @@ async function handleSendJoin(c: any, version: "v1" | "v2"): Promise<Response> {
   const eventId = c.req.param("eventId");
   const omitMembers = c.req.query("omit_members") === "true";
   const origin = c.get("federationOrigin" as any) as string | undefined;
+  const partialStateResponse = await ensureRoomNotPartiallyJoined(c, roomId);
+  if (partialStateResponse) {
+    return partialStateResponse;
+  }
 
   let body: unknown;
   try {
@@ -607,6 +625,10 @@ app.get("/_matrix/federation/v1/make_knock/:roomId/:userId", async (c) => {
   const roomId = c.req.param("roomId");
   const userId = c.req.param("userId");
   const db = c.env.DB;
+  const partialStateResponse = await ensureRoomNotPartiallyJoined(c, roomId);
+  if (partialStateResponse) {
+    return partialStateResponse;
+  }
 
   const room = await db
     .prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
@@ -702,6 +724,10 @@ app.put("/_matrix/federation/v1/send_knock/:roomId/:eventId", async (c) => {
   const eventId = c.req.param("eventId");
   const origin = c.get("federationOrigin" as any) as string | undefined;
   const db = c.env.DB;
+  const partialStateResponse = await ensureRoomNotPartiallyJoined(c, roomId);
+  if (partialStateResponse) {
+    return partialStateResponse;
+  }
 
   let body: unknown;
   try {

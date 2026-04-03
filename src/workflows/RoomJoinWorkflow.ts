@@ -18,7 +18,7 @@ import {
   getStateEvent,
   getRoomEvents,
   getMembership,
-  getServersInRoomsWithUser,
+  getServersInEncryptedRoomsWithUser,
   getUserDevices,
 } from "../services/database";
 import {
@@ -50,7 +50,7 @@ import {
   markPartialStateJoin,
 } from "../matrix/application/features/partial-state/tracker";
 import {
-  clearPartialStateJoinMetadata,
+  getSharedServersInEncryptedRoomsWithUserIncludingPartialState,
   upsertPartialStateJoinMetadata,
 } from "../matrix/application/features/partial-state/shared-servers";
 
@@ -75,6 +75,16 @@ function withDefined<K extends string, V>(key: K, value: V | undefined): { [P in
 
 function parseWorkflowJson<T>(payload: string): T {
   return JSON.parse(payload) as T;
+}
+
+function hasEncryptionStateEvent(events: JsonObject[] | undefined): boolean {
+  return (events ?? []).some(
+    (event) =>
+      event &&
+      typeof event === "object" &&
+      !Array.isArray(event) &&
+      event["type"] === "m.room.encryption",
+  );
 }
 
 type RemoteStateIdsResponse = {
@@ -171,7 +181,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       avatarUrl,
       reason,
     } = event.payload;
-    const preJoinSharedServers = await getServersInRoomsWithUser(this.env.DB, userId);
+    const preJoinSharedServers = await getServersInEncryptedRoomsWithUser(this.env.DB, userId);
     const logger = withLogContext({
       component: "room-join-workflow",
       operation: "join",
@@ -339,6 +349,9 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
         }
         const sendJoinResponse = sendJoinResult.value;
         remoteSendJoinResponse = sendJoinResponse;
+        const partialStateRoomIsEncrypted =
+          hasEncryptionStateEvent(sendJoinResponse.state) ||
+          hasEncryptionStateEvent(sendJoinResponse.auth_chain);
 
         // Process the room state received from the remote server
         await step.do("process-remote-state", async () => {
@@ -364,6 +377,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
               userId,
               eventId: partialStateEventId!,
               startedAt: Date.now(),
+              encrypted: partialStateRoomIsEncrypted,
               ...withDefined("remoteServer", successfulRemoteServer),
               ...withDefined("serversInRoom", sendJoinResponse.servers_in_room),
             };
@@ -424,7 +438,11 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
               localServerName: this.env.SERVER_NAME,
               now: () => Date.now(),
               getSharedRemoteServers: (sharedUserId) =>
-                getServersInRoomsWithUser(this.env.DB, sharedUserId),
+                getSharedServersInEncryptedRoomsWithUserIncludingPartialState(
+                  this.env.DB,
+                  this.env.CACHE,
+                  sharedUserId,
+                ),
               getUserDevices: (deviceUserId) => getUserDevices(this.env.DB, deviceUserId),
               getStoredDeviceKeys: (deviceUserId, deviceId) =>
                 getStoredDeviceKeysFromKv(this.env.DEVICE_KEYS, deviceUserId, deviceId),
@@ -458,6 +476,9 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
             startedAt: Date.now(),
             phase: "catchup_published" as const,
             catchupPublishedAt: Date.now(),
+            encrypted:
+              hasEncryptionStateEvent(remoteSendJoinResponse?.state) ||
+              hasEncryptionStateEvent(remoteSendJoinResponse?.auth_chain),
             ...withDefined("remoteServer", successfulRemoteServer),
             ...withDefined("serversInRoom", remoteSendJoinResponse?.servers_in_room),
           };
@@ -466,16 +487,32 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
         });
 
         await step.do("finalize-partial-state", async () => {
+          const completedStatus = {
+            roomId,
+            userId,
+            eventId: partialStateEventId!,
+            startedAt: Date.now(),
+            phase: "complete" as const,
+            completedAt: Date.now(),
+            encrypted:
+              hasEncryptionStateEvent(remoteSendJoinResponse?.state) ||
+              hasEncryptionStateEvent(remoteSendJoinResponse?.auth_chain),
+            ...withDefined("remoteServer", successfulRemoteServer),
+            ...withDefined("serversInRoom", remoteSendJoinResponse?.servers_in_room),
+          };
+          await upsertPartialStateJoinMetadata(this.env.DB, completedStatus);
           await markPartialStateJoinCompleted(this.env.CACHE, {
             roomId,
             userId,
             eventId: partialStateEventId!,
             startedAt: Date.now(),
+            encrypted:
+              hasEncryptionStateEvent(remoteSendJoinResponse?.state) ||
+              hasEncryptionStateEvent(remoteSendJoinResponse?.auth_chain),
             ...withDefined("remoteServer", successfulRemoteServer),
             ...withDefined("serversInRoom", remoteSendJoinResponse?.servers_in_room),
           });
           await clearPartialStateJoin(this.env.CACHE, userId, roomId);
-          await clearPartialStateJoinMetadata(this.env.DB, userId, roomId);
           await this.notifyMemberBatch([{ userId }], joinEventData);
         });
       }

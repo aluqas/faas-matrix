@@ -15,6 +15,7 @@ export interface SyncUserInput {
   fullState?: boolean;
   filterParam?: string;
   timeout?: number;
+  setPresence?: "online" | "offline" | "unavailable";
 }
 
 export interface SyncTokenPosition {

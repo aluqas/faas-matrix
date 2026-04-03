@@ -17,6 +17,7 @@ import { Hono } from "hono";
 import type { AppEnv, Env } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
+import { notifySyncUser } from "../services/sync-notify";
 
 const app = new Hono<AppEnv>();
 
@@ -303,6 +304,7 @@ app.put("/_matrix/client/v3/user/:userId/account_data/:type", requireAuth(), asy
       await c.env.ACCOUNT_DATA.delete(`global:${targetUserId}:${eventType}`);
     }
     await deleteAccountData(db, targetUserId, "", eventType);
+    await notifySyncUser(c.env, targetUserId, { type: eventType });
     return c.json({});
   }
 
@@ -340,6 +342,7 @@ app.put("/_matrix/client/v3/user/:userId/account_data/:type", requireAuth(), asy
 
   // Record change for sync
   await recordAccountDataChange(db, targetUserId, "", eventType);
+  await notifySyncUser(c.env, targetUserId, { type: eventType });
 
   return c.json({});
 });
@@ -365,6 +368,7 @@ app.delete(
       await c.env.ACCOUNT_DATA.delete(`global:${targetUserId}:${eventType}`);
     }
     await deleteAccountData(db, targetUserId, "", eventType);
+    await notifySyncUser(c.env, targetUserId, { type: eventType });
     return c.json({});
   },
 );
@@ -491,6 +495,7 @@ app.put(
     // MSC3391: PUT with empty {} is equivalent to deleting the room account data
     if (typeof content === "object" && content !== null && Object.keys(content).length === 0) {
       await deleteAccountData(db, targetUserId, roomId, eventType);
+      await notifySyncUser(c.env, targetUserId, { roomId, type: eventType });
       return c.json({});
     }
 
@@ -507,6 +512,7 @@ app.put(
 
     // Record change for sync
     await recordAccountDataChange(db, targetUserId, roomId, eventType);
+    await notifySyncUser(c.env, targetUserId, { roomId, type: eventType });
 
     return c.json({});
   },
@@ -531,6 +537,7 @@ app.delete(
     }
 
     await deleteAccountData(db, targetUserId, roomId, eventType);
+    await notifySyncUser(c.env, targetUserId, { roomId, type: eventType });
     return c.json({});
   },
 );

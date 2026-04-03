@@ -262,6 +262,9 @@ export interface JoinedRoom {
   state?: {
     events: MatrixEvent[];
   };
+  state_after?: {
+    events: MatrixEvent[];
+  };
   timeline?: {
     events: MatrixEvent[];
     limited?: boolean;

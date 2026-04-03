@@ -2,9 +2,14 @@ import { Hono } from "hono";
 import type { AppEnv } from "../../types";
 import { Errors } from "../../utils/errors";
 import { requireAuth } from "../../middleware/auth";
-import { getEvent, getMembership, getRoomState } from "../../services/database";
+import { getEvent, getMembership, getRoomMembers, getRoomState } from "../../services/database";
+import {
+  getPartialStateCompletionStatus,
+  getPartialStateStatus,
+} from "../../matrix/application/features/partial-state/tracker";
 
 const app = new Hono<AppEnv>();
+const PARTIAL_STATE_WAIT_TIMEOUT_MS = 2000;
 
 type StoredContextEvent = {
   event_id: string;
@@ -26,6 +31,30 @@ function formatContextEvent(event: StoredContextEvent) {
     event_id: event.event_id,
     room_id: event.room_id,
   };
+}
+
+async function waitForPartialStateJoinCompletion(
+  cache: KVNamespace | undefined,
+  userId: string,
+  roomId: string,
+  timeoutMs = PARTIAL_STATE_WAIT_TIMEOUT_MS,
+): Promise<void> {
+  if (!cache) {
+    return;
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const [marker, completion] = await Promise.all([
+      getPartialStateStatus(cache, userId, roomId),
+      getPartialStateCompletionStatus(cache, userId, roomId),
+    ]);
+    if (!marker || marker.phase === "complete") {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, completion ? 25 : 100));
+  }
 }
 
 app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), async (c) => {
@@ -124,28 +153,18 @@ async function getJoinedMembers(c: import("hono").Context<AppEnv>): Promise<Resp
   const userId = c.get("userId");
   const roomId = c.req.param("roomId");
 
+  await waitForPartialStateJoinCompletion(c.env.CACHE, userId, roomId);
+
   const membership = await getMembership(c.env.DB, roomId, userId);
   if (!membership || membership.membership !== "join") {
     return Errors.forbidden("Not a member of this room").toResponse();
   }
 
-  const members = await c.env.DB.prepare(
-    `SELECT user_id, display_name, avatar_url
-     FROM room_memberships
-     WHERE room_id = ? AND membership = 'join'`,
-  )
-    .bind(roomId)
-    .all<{
-      user_id: string;
-      display_name: string | null;
-      avatar_url: string | null;
-    }>();
-
   const joined: Record<string, { display_name: string | null; avatar_url: string | null }> = {};
-  for (const member of members.results) {
-    joined[member.user_id] = {
-      display_name: member.display_name ?? null,
-      avatar_url: member.avatar_url ?? null,
+  for (const member of await getRoomMembers(c.env.DB, roomId, "join")) {
+    joined[member.userId] = {
+      display_name: member.displayName ?? null,
+      avatar_url: member.avatarUrl ?? null,
     };
   }
 

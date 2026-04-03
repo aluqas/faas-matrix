@@ -24,6 +24,7 @@ type EventRow = {
   event_type: string;
   state_key: string | null;
   content: string;
+  unsigned: string | null;
   origin_server_ts: number;
   depth: number;
   auth_events: string;
@@ -93,6 +94,7 @@ function toPdu(row: EventRow): PDU {
     type: row.event_type,
     state_key: row.state_key ?? undefined,
     content: safeJsonParse<Record<string, unknown>>(row.content) ?? {},
+    unsigned: safeJsonParse<Record<string, unknown>>(row.unsigned ?? undefined) ?? undefined,
     origin_server_ts: row.origin_server_ts,
     depth: row.depth,
     auth_events: safeJsonParse<string[]>(row.auth_events) ?? [],
@@ -418,9 +420,24 @@ export class EventQueryService {
     eventId: string,
     userId: string,
   ): Promise<PDU | null> {
+    const processedPdu = await db
+      .prepare(
+        `
+        SELECT accepted
+        FROM processed_pdus
+        WHERE event_id = ?
+      `,
+      )
+      .bind(eventId)
+      .first<{ accepted: number | boolean }>();
+
+    if (processedPdu && (processedPdu.accepted === 0 || processedPdu.accepted === false)) {
+      return null;
+    }
+
     const eventRow = await db
       .prepare(`
-        SELECT event_id, room_id, sender, event_type, state_key, content,
+        SELECT event_id, room_id, sender, event_type, state_key, content, unsigned,
                origin_server_ts, depth, auth_events, prev_events, hashes, signatures
         FROM events
         WHERE event_id = ? AND room_id = ?
@@ -493,7 +510,7 @@ export class EventQueryService {
 
       const row = await db
         .prepare(`
-        SELECT event_id, room_id, sender, event_type, state_key, content,
+        SELECT event_id, room_id, sender, event_type, state_key, content, unsigned,
                origin_server_ts, depth, auth_events, prev_events, hashes, signatures
         FROM events
         WHERE event_id = ? AND room_id = ? AND depth >= ?

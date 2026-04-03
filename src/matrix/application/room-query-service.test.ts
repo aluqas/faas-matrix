@@ -270,4 +270,45 @@ describe("MatrixRoomQueryService", () => {
       status: 404,
     });
   });
+
+  it("hides deferred partial-state auth events until completion", async () => {
+    const service = new MatrixRoomQueryService(
+      createTestAppContext(),
+      createDependencies({
+        async getVisibleEventForUser() {
+          return {
+            event_id: "$deferred:test",
+            room_id: "!room:test",
+            sender: "@elsie:remote.test",
+            type: "m.room.test",
+            state_key: "",
+            content: { body: "deferred" },
+            origin_server_ts: 123,
+            depth: 2,
+            auth_events: [],
+            prev_events: [],
+            unsigned: {
+              "io.tuwunel.partial_state_auth_deferred": "Sender is not joined to the room",
+            },
+          } as PDU;
+        },
+        async getPartialStateJoin() {
+          return { roomId: "!room:test", phase: "partial" } as never;
+        },
+      }),
+    );
+
+    await expect(
+      runClientEffect(
+        service.getVisibleEvent({
+          userId: "@alice:test",
+          roomId: "!room:test",
+          eventId: "$deferred:test",
+        }),
+      ),
+    ).rejects.toMatchObject({
+      errcode: "M_NOT_FOUND",
+      status: 404,
+    });
+  });
 });

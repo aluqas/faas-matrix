@@ -93,6 +93,10 @@ export interface PartialStatePort {
     userId: string,
     roomId: string,
   ): Effect.Effect<PartialStateStatus | null, InfraError>;
+  getPartialStateCompletionStatus(
+    userId: string,
+    roomId: string,
+  ): Effect.Effect<PartialStateStatus | null, InfraError>;
   takePartialStateCompletionStatus(
     userId: string,
     roomId: string,

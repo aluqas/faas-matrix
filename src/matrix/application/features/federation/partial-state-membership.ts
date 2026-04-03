@@ -7,6 +7,7 @@ export const PARTIAL_STATE_AUTH_DEFERRED_PREVIOUS_MEMBERSHIP_UNSIGNED_KEY =
   "io.tuwunel.partial_state_auth_deferred_previous_membership";
 
 type MembershipEventLike = Pick<PDU, "event_id" | "type" | "content" | "unsigned">;
+type DeferredAuthEventLike = Pick<PDU, "unsigned">;
 
 export function getMembershipEventMembership(
   event: MembershipEventLike | null | undefined,
@@ -20,7 +21,7 @@ export function getMembershipEventMembership(
 }
 
 export function getPartialStateDeferredAuthReason(
-  event: MembershipEventLike | null | undefined,
+  event: DeferredAuthEventLike | null | undefined,
 ): string | null {
   if (!event?.unsigned || typeof event.unsigned !== "object") {
     return null;
@@ -30,6 +31,16 @@ export function getPartialStateDeferredAuthReason(
     PARTIAL_STATE_AUTH_DEFERRED_UNSIGNED_KEY
   ];
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+export function markPartialStateDeferredAuthEvent<T extends PDU>(event: T, reason: string): T {
+  return {
+    ...event,
+    unsigned: {
+      ...(event.unsigned ?? {}),
+      [PARTIAL_STATE_AUTH_DEFERRED_UNSIGNED_KEY]: reason,
+    },
+  };
 }
 
 export function isPartialStateDeferredMembershipEvent(
@@ -74,11 +85,11 @@ export function markPartialStateDeferredMembershipEvent<T extends PDU>(
   },
 ): T {
   const previousMembership = getMembershipEventMembership(input.previousEvent);
+  const markedEvent = markPartialStateDeferredAuthEvent(event, input.reason);
   return {
-    ...event,
+    ...markedEvent,
     unsigned: {
-      ...(event.unsigned ?? {}),
-      [PARTIAL_STATE_AUTH_DEFERRED_UNSIGNED_KEY]: input.reason,
+      ...(markedEvent.unsigned ?? {}),
       ...(input.previousEvent
         ? {
             [PARTIAL_STATE_AUTH_DEFERRED_PREVIOUS_EVENT_ID_UNSIGNED_KEY]:

@@ -119,6 +119,17 @@ export async function getPresenceForUsers(
     }
   }
 
+  for (const userId of userIds) {
+    if (byUser[userId]) {
+      continue;
+    }
+
+    byUser[userId] = {
+      presence: "offline",
+      currently_active: false,
+    };
+  }
+
   return byUser;
 }
 

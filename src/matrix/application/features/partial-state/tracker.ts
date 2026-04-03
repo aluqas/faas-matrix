@@ -4,6 +4,7 @@ export interface PartialStateJoinMarker {
   eventId: string;
   remoteServer?: string;
   serversInRoom?: string[];
+  encrypted?: boolean;
   startedAt: number;
 }
 
@@ -43,6 +44,7 @@ function toJoinMarker(status: PartialStateStatus): PartialStateJoinMarker {
     startedAt: status.startedAt,
     ...(status.remoteServer ? { remoteServer: status.remoteServer } : {}),
     ...(status.serversInRoom ? { serversInRoom: status.serversInRoom } : {}),
+    ...(status.encrypted === true ? { encrypted: true } : {}),
   };
 }
 
@@ -85,6 +87,7 @@ function parsePartialStateStatus(
           ),
         }
       : {}),
+    ...(raw["encrypted"] === true ? { encrypted: true } : {}),
     ...(typeof raw["catchupPublishedAt"] === "number"
       ? { catchupPublishedAt: raw["catchupPublishedAt"] }
       : {}),

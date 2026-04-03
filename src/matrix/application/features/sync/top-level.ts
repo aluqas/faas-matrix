@@ -1,7 +1,12 @@
 import type { AppContext } from "../../../../foundation/app-context";
 import type { SyncResponse } from "../../../../types";
+import { getUserPushRules } from "../../../../api/push";
 import type { SyncRepository } from "../../../repositories/interfaces";
-import { projectDeviceLists, projectGlobalAccountData } from "../../sync-projection";
+import {
+  applyEventFilter,
+  projectDeviceLists,
+  projectGlobalAccountData,
+} from "../../sync-projection";
 import { projectPresenceEvents } from "../presence/project";
 import type { TopLevelSyncResult } from "./contracts";
 
@@ -65,7 +70,24 @@ export async function projectTopLevelSync(
     input.userId,
     input.sincePosition,
     input.filter?.account_data as never,
+    { isIncremental: !isInitialSync },
   );
+  if (isInitialSync && !accountData.some((event) => event.type === "m.push_rules")) {
+    accountData.push(
+      ...applyEventFilter(
+        [
+          {
+            type: "m.push_rules",
+            content: await getUserPushRules(
+              ports.appContext.capabilities.sql.connection as D1Database,
+              input.userId,
+            ),
+          },
+        ],
+        input.filter?.account_data as never,
+      ),
+    );
+  }
 
   const presence = await projectPresenceEvents(
     ports.appContext.capabilities.sql.connection as D1Database,

@@ -491,16 +491,9 @@ function checkNonStateEventPower(event: PDU, state: RoomStateMap): AuthResult {
 
   // Special check for m.room.redaction
   if (event.type === "m.room.redaction") {
-    const redactPower = powerLevels.redact ?? 50;
-    if (senderPower < redactPower) {
-      // Check if sender is redacting their own event (always allowed)
-      // The actual check for own-event redaction requires looking up the target event,
-      // which is done by the caller
-      return {
-        allowed: false,
-        error: `Insufficient power level to redact (have ${senderPower}, need ${redactPower})`,
-      };
-    }
+    // Redaction auth depends on the target event. Callers that know the target event
+    // are responsible for enforcing the own-event vs redact-power distinction.
+    return { allowed: true };
   }
 
   return { allowed: true };

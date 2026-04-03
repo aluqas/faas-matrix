@@ -35,6 +35,7 @@ function createMissingEventsDb(options: {
   roomVersion?: string;
   historyRows?: Array<Record<string, unknown>>;
   membershipRows?: Array<Record<string, unknown>>;
+  processedPdus?: Map<string, { accepted: number | boolean }>;
 }): D1Database {
   const db = {
     prepare(query: string) {
@@ -43,6 +44,13 @@ function createMissingEventsDb(options: {
       return {
         bind: (...args: unknown[]) => ({
           first: async <T>() => {
+            if (
+              normalizedQuery.includes("SELECT accepted FROM processed_pdus WHERE event_id = ?")
+            ) {
+              const eventId = args[0] as string;
+              return (options.processedPdus?.get(eventId) ?? null) as T | null;
+            }
+
             if (normalizedQuery.includes("SELECT room_version FROM rooms WHERE room_id = ?")) {
               return { room_version: options.roomVersion ?? "10" } as T;
             }
@@ -689,5 +697,48 @@ describe("EventQueryService.getVisibleEventForUser", () => {
       "@charlie:test",
     );
     expect(event?.event_id).toBe("$message");
+  });
+
+  it("hides rejected events even if they were persisted", async () => {
+    const service = new EventQueryService();
+    const db = createMissingEventsDb({
+      events: new Map<string, Record<string, unknown>>([
+        [
+          "$message",
+          {
+            event_id: "$message",
+            room_id: "!room:test",
+            sender: "@alice:test",
+            event_type: "m.room.message",
+            state_key: null,
+            content: JSON.stringify({ body: "hidden", msgtype: "m.text" }),
+            origin_server_ts: 2,
+            depth: 2,
+            auth_events: JSON.stringify([]),
+            prev_events: JSON.stringify(["$create"]),
+            hashes: null,
+            signatures: null,
+          },
+        ],
+      ]),
+      historyRows: [
+        {
+          event_id: "$hist",
+          origin_server_ts: 1,
+          depth: 1,
+          content: JSON.stringify({ history_visibility: "world_readable" }),
+        },
+      ],
+      membershipRows: [],
+      processedPdus: new Map([["$message", { accepted: 0 }]]),
+    });
+
+    const event = await service.getVisibleEventForUser(
+      db,
+      "!room:test",
+      "$message",
+      "@charlie:test",
+    );
+    expect(event).toBeNull();
   });
 });

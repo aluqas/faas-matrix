@@ -1,4 +1,9 @@
-import { getServersInRoomsWithUser } from "../../../../services/database";
+import {
+  getServersInEncryptedRoomsWithUser,
+  getServersInEncryptedRoomsWithUserExcludingRooms,
+  getServersInRoomsWithUser,
+  getServersInRoomsWithUserExcludingRooms,
+} from "../../../../services/database";
 import type { PartialStateJoinMarker, PartialStateStatus } from "./tracker";
 import {
   listPartialStateCompletionStatusesForUser,
@@ -45,6 +50,7 @@ function parseMarkerContent(
             ),
           }
         : {}),
+      ...(record["encrypted"] === true ? { encrypted: true } : {}),
       ...(typeof record["catchupPublishedAt"] === "number"
         ? { catchupPublishedAt: record["catchupPublishedAt"] }
         : {}),
@@ -79,6 +85,59 @@ async function listPersistedPartialStateJoins(
     );
 }
 
+async function getPersistedPartialStateMarker(
+  db: D1Database,
+  userId: string,
+  roomId: string,
+): Promise<PartialStateStatus | null> {
+  const row = await db
+    .prepare(
+      `
+      SELECT content, deleted
+      FROM account_data
+      WHERE user_id = ? AND room_id = ? AND event_type = ?
+      LIMIT 1
+    `,
+    )
+    .bind(userId, roomId, PARTIAL_STATE_JOIN_METADATA_EVENT_TYPE)
+    .first<{ content: string; deleted: number | null }>();
+
+  if (!row || row.deleted === 1) {
+    return null;
+  }
+
+  return parseMarkerContent(userId, roomId, row.content);
+}
+
+async function filterMarkersToJoinedMembership(
+  db: D1Database,
+  userId: string,
+  markers: PartialStateStatus[],
+): Promise<PartialStateStatus[]> {
+  if (markers.length === 0) {
+    return markers;
+  }
+
+  const roomIds = [...new Set(markers.map((marker) => marker.roomId))];
+  const placeholders = roomIds.map(() => "?").join(", ");
+  const result = await db
+    .prepare(
+      `
+      SELECT room_id, membership
+      FROM room_memberships
+      WHERE user_id = ? AND room_id IN (${placeholders})
+    `,
+    )
+    .bind(userId, ...roomIds)
+    .all<{ room_id: string; membership: string }>();
+
+  const joinedRoomIds = new Set(
+    result.results.filter((row) => row.membership === "join").map((row) => row.room_id),
+  );
+
+  return markers.filter((marker) => joinedRoomIds.has(marker.roomId));
+}
+
 function mergeServersInRoom(
   left: string[] | undefined,
   right: string[] | undefined,
@@ -108,18 +167,18 @@ function mergePartialStateJoinMarker(
       next.startedAt >= current.startedAt
         ? (next.remoteServer ?? current.remoteServer)
         : (current.remoteServer ?? next.remoteServer),
+    encrypted: current.encrypted === true || next.encrypted === true,
     ...(mergeServersInRoom(current.serversInRoom, next.serversInRoom)
       ? { serversInRoom: mergeServersInRoom(current.serversInRoom, next.serversInRoom) }
       : {}),
   };
 }
 
-export function resolveSharedServersWithPartialState(input: {
-  sharedServers: string[];
+function collectActivePartialStateMarkers(input: {
   persistedJoins: PartialStateStatus[];
   kvJoins: PartialStateStatus[];
   completedJoins: PartialStateStatus[];
-}): string[] {
+}): Map<string, PartialStateStatus> {
   const completedRoomIds = new Set(input.completedJoins.map((marker) => marker.roomId));
   const activeRoomIds = new Set(input.kvJoins.map((marker) => marker.roomId));
   const partialStateMarkersByRoom = new Map<string, PartialStateStatus>();
@@ -142,12 +201,49 @@ export function resolveSharedServersWithPartialState(input: {
     );
   }
 
+  return partialStateMarkersByRoom;
+}
+
+export function resolveActivePartialStateRoomIds(input: {
+  persistedJoins: PartialStateStatus[];
+  kvJoins: PartialStateStatus[];
+  completedJoins: PartialStateStatus[];
+}): string[] {
+  return Array.from(collectActivePartialStateMarkers(input).keys());
+}
+
+export function resolveSharedServersWithPartialState(input: {
+  sharedServers: string[];
+  persistedJoins: PartialStateStatus[];
+  kvJoins: PartialStateStatus[];
+  completedJoins: PartialStateStatus[];
+}): string[] {
+  const partialStateMarkersByRoom = collectActivePartialStateMarkers(input);
+
   return [
     ...new Set([
       ...input.sharedServers,
       ...Array.from(partialStateMarkersByRoom.values()).flatMap(
         (marker) => marker.serversInRoom ?? [],
       ),
+    ]),
+  ];
+}
+
+export function resolveEncryptedSharedServersWithPartialState(input: {
+  sharedServers: string[];
+  persistedJoins: PartialStateStatus[];
+  kvJoins: PartialStateStatus[];
+  completedJoins: PartialStateStatus[];
+}): string[] {
+  const partialStateMarkersByRoom = collectActivePartialStateMarkers(input);
+
+  return [
+    ...new Set([
+      ...input.sharedServers,
+      ...Array.from(partialStateMarkersByRoom.values())
+        .filter((marker) => marker.encrypted === true)
+        .flatMap((marker) => marker.serversInRoom ?? []),
     ]),
   ];
 }
@@ -205,11 +301,117 @@ export async function getSharedServersInRoomsWithUserIncludingPartialState(
     listPartialStateStatusesForUser(cache, userId),
     listPartialStateCompletionStatusesForUser(cache, userId),
   ]);
+  const [joinedPersistedJoins, joinedKvJoins] = await Promise.all([
+    filterMarkersToJoinedMembership(db, userId, persistedJoins),
+    filterMarkersToJoinedMembership(db, userId, kvJoins),
+  ]);
 
   return resolveSharedServersWithPartialState({
     sharedServers,
-    persistedJoins,
-    kvJoins,
+    persistedJoins: joinedPersistedJoins,
+    kvJoins: joinedKvJoins,
     completedJoins,
   });
+}
+
+export async function getSharedServersInRoomsWithUserExcludingPartialState(
+  db: D1Database,
+  cache: KVNamespace | undefined,
+  userId: string,
+): Promise<string[]> {
+  const [persistedJoins, kvJoins, completedJoins] = await Promise.all([
+    listPersistedPartialStateJoins(db, userId),
+    listPartialStateStatusesForUser(cache, userId),
+    listPartialStateCompletionStatusesForUser(cache, userId),
+  ]);
+  const [joinedPersistedJoins, joinedKvJoins] = await Promise.all([
+    filterMarkersToJoinedMembership(db, userId, persistedJoins),
+    filterMarkersToJoinedMembership(db, userId, kvJoins),
+  ]);
+  const activePartialStateRoomIds = resolveActivePartialStateRoomIds({
+    persistedJoins: joinedPersistedJoins,
+    kvJoins: joinedKvJoins,
+    completedJoins,
+  });
+
+  return getServersInRoomsWithUserExcludingRooms(db, userId, activePartialStateRoomIds);
+}
+
+export async function getSharedServersInEncryptedRoomsWithUserExcludingPartialState(
+  db: D1Database,
+  cache: KVNamespace | undefined,
+  userId: string,
+): Promise<string[]> {
+  const [persistedJoins, kvJoins, completedJoins] = await Promise.all([
+    listPersistedPartialStateJoins(db, userId),
+    listPartialStateStatusesForUser(cache, userId),
+    listPartialStateCompletionStatusesForUser(cache, userId),
+  ]);
+  const [joinedPersistedJoins, joinedKvJoins] = await Promise.all([
+    filterMarkersToJoinedMembership(db, userId, persistedJoins),
+    filterMarkersToJoinedMembership(db, userId, kvJoins),
+  ]);
+  const activePartialStateRoomIds = resolveActivePartialStateRoomIds({
+    persistedJoins: joinedPersistedJoins,
+    kvJoins: joinedKvJoins,
+    completedJoins,
+  });
+
+  return getServersInEncryptedRoomsWithUserExcludingRooms(db, userId, activePartialStateRoomIds);
+}
+
+export async function getSharedServersInEncryptedRoomsWithUserIncludingPartialState(
+  db: D1Database,
+  cache: KVNamespace | undefined,
+  userId: string,
+): Promise<string[]> {
+  const [sharedServers, persistedJoins, kvJoins, completedJoins] = await Promise.all([
+    getServersInEncryptedRoomsWithUser(db, userId),
+    listPersistedPartialStateJoins(db, userId),
+    listPartialStateStatusesForUser(cache, userId),
+    listPartialStateCompletionStatusesForUser(cache, userId),
+  ]);
+  const [joinedPersistedJoins, joinedKvJoins] = await Promise.all([
+    filterMarkersToJoinedMembership(db, userId, persistedJoins),
+    filterMarkersToJoinedMembership(db, userId, kvJoins),
+  ]);
+
+  return resolveEncryptedSharedServersWithPartialState({
+    sharedServers,
+    persistedJoins: joinedPersistedJoins,
+    kvJoins: joinedKvJoins,
+    completedJoins,
+  });
+}
+
+export async function getPersistedPartialStateStatus(
+  db: D1Database,
+  userId: string,
+  roomId: string,
+): Promise<PartialStateStatus | null> {
+  const marker = await getPersistedPartialStateMarker(db, userId, roomId);
+  return marker && marker.phase !== "complete" ? marker : null;
+}
+
+export async function getPersistedPartialStateCompletionStatus(
+  db: D1Database,
+  userId: string,
+  roomId: string,
+): Promise<PartialStateStatus | null> {
+  const marker = await getPersistedPartialStateMarker(db, userId, roomId);
+  return marker?.phase === "complete" ? marker : null;
+}
+
+export async function takePersistedPartialStateCompletionStatus(
+  db: D1Database,
+  userId: string,
+  roomId: string,
+): Promise<PartialStateStatus | null> {
+  const marker = await getPersistedPartialStateCompletionStatus(db, userId, roomId);
+  if (!marker) {
+    return null;
+  }
+
+  await clearPartialStateJoinMetadata(db, userId, roomId);
+  return marker;
 }
