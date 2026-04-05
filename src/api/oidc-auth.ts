@@ -3,6 +3,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { IdPProvider, IdPUserLink, OAuthState } from "../types/client";
 import {
   fetchOIDCDiscovery,
   fetchJWKS,
@@ -20,36 +21,6 @@ import { requireAuth } from "../middleware/auth";
 import { generateOpaqueId } from "../utils/ids";
 
 const app = new Hono<AppEnv>();
-
-interface IdPProvider {
-  id: string;
-  name: string;
-  issuer_url: string;
-  client_id: string;
-  client_secret_encrypted: string;
-  scopes: string;
-  enabled: number;
-  auto_create_users: number;
-  username_claim: string;
-  display_order: number;
-  icon_url: string | null;
-}
-
-interface IdPUserLink {
-  id: number;
-  provider_id: string;
-  external_id: string;
-  user_id: string;
-  external_email: string | null;
-  external_name: string | null;
-}
-
-interface OAuthState {
-  providerId: string;
-  nonce: string;
-  redirectUri: string;
-  returnTo?: string;
-}
 
 // Version byte for encrypted secrets
 // 0x01 = legacy (SERVER_NAME-based key) - INSECURE, kept for migration

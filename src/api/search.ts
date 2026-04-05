@@ -5,62 +5,11 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { SearchRequest, SearchResult } from "../types/client";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 
 const app = new Hono<AppEnv>();
-
-// ============================================
-// Types
-// ============================================
-
-interface SearchRequest {
-  search_categories: {
-    room_events?: {
-      search_term: string;
-      keys?: string[];
-      filter?: {
-        limit?: number;
-        rooms?: string[];
-        not_rooms?: string[];
-        senders?: string[];
-        not_senders?: string[];
-        types?: string[];
-        not_types?: string[];
-      };
-      order_by?: "recent" | "rank";
-      event_context?: {
-        before_limit?: number;
-        after_limit?: number;
-        include_profile?: boolean;
-      };
-      include_state?: boolean;
-      groupings?: {
-        group_by: Array<{ key: string }>;
-      };
-    };
-  };
-}
-
-interface SearchResult {
-  event_id: string;
-  rank: number;
-  result: {
-    event_id: string;
-    type: string;
-    room_id: string;
-    sender: string;
-    origin_server_ts: number;
-    content: Record<string, any>;
-  };
-  context?: {
-    events_before: any[];
-    events_after: any[];
-    profile_info?: Record<string, { displayname?: string; avatar_url?: string }>;
-    start?: string;
-    end?: string;
-  };
-}
 
 function parseEventContent(value: string): Record<string, unknown> {
   try {

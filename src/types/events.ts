@@ -15,6 +15,11 @@ export interface EventRelationshipsResult {
 
 export type TimestampDirection = "f" | "b";
 
+export type RelationCursor = {
+  value: number;
+  column: "origin_server_ts" | "stream_ordering";
+};
+
 export interface MissingEventsQuery {
   roomId: string;
   earliestEvents: string[];
@@ -24,3 +29,13 @@ export interface MissingEventsQuery {
   requestingServer?: string;
   roomVersion?: string;
 }
+
+export type StoredContextEvent = {
+  event_id: string;
+  room_id: string;
+  sender: string;
+  event_type: string;
+  state_key: string | null;
+  content: string;
+  origin_server_ts: number;
+};

@@ -2,6 +2,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { JsonBodyParseResult } from "../types/common";
 import { Errors } from "../utils/errors";
 import { hashPassword, verifyPassword, hashToken } from "../utils/crypto";
 import {
@@ -30,8 +31,6 @@ import {
 import { requireAuth, extractAccessToken } from "../middleware/auth";
 
 const app = new Hono<AppEnv>();
-
-type ParsedJsonBody = { ok: true; value: unknown } | { ok: false; reason: "not_json" | "bad_json" };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -67,7 +66,7 @@ function resolveLoginUserId(identifierUser: string, localServerName: string): st
   return formatUserId(identifierUser.toLowerCase(), localServerName);
 }
 
-async function parseJsonBody(request: Request): Promise<ParsedJsonBody> {
+async function parseJsonBody(request: Request): Promise<JsonBodyParseResult> {
   const body = await request.arrayBuffer();
 
   let decoded: string;

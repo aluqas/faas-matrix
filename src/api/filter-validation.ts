@@ -1,7 +1,6 @@
 import { parseRoomId, parseUserId } from "../utils/ids";
+import type { JsonObject } from "../types/common";
 import { Errors, type MatrixApiError } from "../utils/errors";
-
-type JsonRecord = Record<string, unknown>;
 
 const ROOM_FILTER_KEYS = new Set([
   "rooms",
@@ -31,15 +30,15 @@ const TOP_LEVEL_FILTER_KEYS = new Set([
   "event_fields",
 ]);
 
-function asRecord(value: unknown, path: string): JsonRecord {
+function asRecord(value: unknown, path: string): JsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw Errors.invalidParam(path, `${path} must be an object`);
   }
 
-  return value as JsonRecord;
+  return value as JsonObject;
 }
 
-function assertKnownKeys(record: JsonRecord, allowedKeys: Set<string>, path: string): void {
+function assertKnownKeys(record: JsonObject, allowedKeys: Set<string>, path: string): void {
   for (const key of Object.keys(record)) {
     if (!allowedKeys.has(key)) {
       throw Errors.invalidParam(path, `Unsupported filter field: ${path}.${key}`);
@@ -161,7 +160,7 @@ function assertRoomFilter(value: unknown, path: string): void {
   }
 }
 
-export function validateFilterDefinition(filter: unknown): JsonRecord {
+export function validateFilterDefinition(filter: unknown): JsonObject {
   const record = asRecord(filter, "filter");
   assertKnownKeys(record, TOP_LEVEL_FILTER_KEYS, "filter");
 

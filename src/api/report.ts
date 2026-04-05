@@ -5,28 +5,11 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { ContentReport } from "../types/client";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 
 const app = new Hono<AppEnv>();
-
-// ============================================
-// Types
-// ============================================
-
-interface ContentReport {
-  id: number;
-  reporter_user_id: string;
-  room_id: string;
-  event_id: string;
-  reason: string;
-  score: number;
-  created_at: number;
-  resolved: boolean;
-  resolved_by?: string;
-  resolved_at?: number;
-  resolution_note?: string;
-}
 
 // ============================================
 // Endpoints

@@ -4,6 +4,12 @@
 import { Effect } from "effect";
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../types";
+import type {
+  RoomResult,
+  SlidingRoomFilter,
+  SlidingSyncRequest,
+  SlidingSyncResponse,
+} from "../types/sync";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { runClientEffect } from "../matrix/application/effect-runtime";
@@ -31,142 +37,6 @@ import {
 const app = new Hono<AppEnv>();
 
 // Types for sliding sync
-
-interface SlidingSyncRequest {
-  // Connection tracking
-  conn_id?: string;
-  pos?: string;
-  txn_id?: string;
-  timeout?: number;
-
-  // MSC3575 style
-  delta_token?: string;
-
-  // Room lists
-  lists?: Record<string, SyncListConfig>;
-
-  // Direct room subscriptions
-  room_subscriptions?: Record<string, RoomSubscription>;
-  unsubscribe_rooms?: string[];
-
-  // Extensions
-  extensions?: SlidingSyncExtensionConfig;
-}
-
-interface SyncListConfig {
-  ranges?: [number, number][]; // MSC3575
-  range?: [number, number]; // MSC4186
-  sort?: string[];
-  required_state?: [string, string][];
-  timeline_limit?: number;
-  filters?: SlidingRoomFilter;
-  bump_event_types?: string[];
-}
-
-interface RoomSubscription {
-  required_state?: [string, string][];
-  timeline_limit?: number;
-  include_old_rooms?: {
-    timeline_limit?: number;
-    required_state?: [string, string][];
-  };
-}
-
-interface SlidingRoomFilter {
-  is_dm?: boolean;
-  spaces?: string[];
-  is_encrypted?: boolean;
-  is_invite?: boolean;
-  is_tombstoned?: boolean;
-  room_types?: string[];
-  not_room_types?: string[];
-  room_name_like?: string;
-  tags?: string[];
-  not_tags?: string[];
-}
-
-interface SlidingSyncResponse {
-  pos: string;
-  txn_id?: string;
-  lists: Record<string, SyncListResult>;
-  rooms: Record<string, RoomResult>;
-  extensions: ExtensionsResponse;
-  delta_token?: string;
-}
-
-interface SyncListResult {
-  count: number;
-  ops?: RoomListOperation[];
-}
-
-interface RoomListOperation {
-  op: "SYNC" | "DELETE" | "INSERT" | "INVALIDATE";
-  range?: [number, number];
-  index?: number;
-  room_ids?: string[];
-  room_id?: string;
-}
-
-interface RoomResult {
-  name?: string;
-  avatar?: string;
-  topic?: string;
-  canonical_alias?: string;
-  heroes?: StrippedHero[];
-  initial?: boolean;
-  required_state?: any[];
-  timeline?: any[];
-  prev_batch?: string;
-  limited?: boolean;
-  joined_count?: number;
-  invited_count?: number;
-  notification_count?: number;
-  highlight_count?: number;
-  num_live?: number;
-  timestamp?: number;
-  bump_stamp?: number;
-  is_dm?: boolean;
-  invite_state?: any[];
-  knock_state?: any[];
-  membership?: string; // MSC4186: explicit membership status ('join', 'invite', 'knock', 'leave', 'ban')
-}
-
-interface StrippedHero {
-  user_id: string;
-  displayname?: string;
-  avatar_url?: string;
-}
-
-interface ExtensionsResponse {
-  to_device?: {
-    next_batch: string;
-    events: any[];
-  };
-  e2ee?: {
-    device_lists?: {
-      changed: string[];
-      left: string[];
-    };
-    device_one_time_keys_count?: Record<string, number>;
-    device_unused_fallback_key_types?: string[];
-  };
-  account_data?: {
-    global?: any[];
-    rooms?: Record<string, any[]>;
-  };
-  typing?: {
-    rooms?: Record<string, { type: string; content: { user_ids: string[] } }>;
-  };
-  receipts?: {
-    rooms?: Record<string, any>;
-  };
-  presence?: {
-    events?: any[];
-  };
-  "io.element.msc4308.thread_subscriptions"?: {
-    subscribed?: Record<string, Record<string, { bump_stamp: number; automatic: boolean }>>;
-  };
-}
 
 async function loadSlidingSyncVisibilityContext(
   db: D1Database,

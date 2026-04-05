@@ -7,6 +7,14 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type {
+  BackupAlgorithmData,
+  BackupVersionResponse,
+  CreateBackupRequest,
+  KeyBackupData,
+  KeysBackupRequest,
+  RoomKeyBackup,
+} from "../types/client";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 
@@ -16,39 +24,7 @@ const app = new Hono<AppEnv>();
 // Types
 // ============================================
 
-interface BackupAlgorithmData {
-  public_key: string;
-  signatures?: Record<string, Record<string, string>>;
-}
-
-interface CreateBackupRequest {
-  algorithm: string;
-  auth_data: BackupAlgorithmData;
-}
-
-// BackupVersionResponse matches the spec response format (used by endpoint response)
-export type BackupVersionResponse = {
-  algorithm: string;
-  auth_data: BackupAlgorithmData;
-  count: number;
-  etag: string;
-  version: string;
-};
-
-interface KeyBackupData {
-  first_message_index: number;
-  forwarded_count: number;
-  is_verified: boolean;
-  session_data: Record<string, any>;
-}
-
-interface RoomKeyBackup {
-  sessions: Record<string, KeyBackupData>;
-}
-
-interface KeysBackupRequest {
-  rooms: Record<string, RoomKeyBackup>;
-}
+export type { BackupVersionResponse };
 
 // ============================================
 // Helper Functions

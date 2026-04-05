@@ -3,6 +3,7 @@
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { AppEnv } from "../types";
+import type { AdminIdPProvider } from "../types/client";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { getUserById } from "../services/database";
@@ -1511,22 +1512,6 @@ app.post("/admin/api/users/:userId/login-token", requireAuth(), requireAdmin, as
 // Identity Provider (IdP) Management Endpoints
 // ============================================
 
-interface IdPProvider {
-  id: string;
-  name: string;
-  issuer_url: string;
-  client_id: string;
-  client_secret_encrypted: string;
-  scopes: string;
-  enabled: number;
-  auto_create_users: number;
-  username_claim: string;
-  display_order: number;
-  icon_url: string | null;
-  created_at: number;
-  updated_at: number;
-}
-
 // GET /admin/api/idp/providers - List all IdP providers
 app.get("/admin/api/idp/providers", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
@@ -1538,7 +1523,7 @@ app.get("/admin/api/idp/providers", requireAuth(), requireAdmin, async (c) => {
     FROM idp_providers
     ORDER BY display_order ASC, name ASC
   `)
-    .all<Omit<IdPProvider, "client_secret_encrypted">>();
+    .all<Omit<AdminIdPProvider, "client_secret_encrypted">>();
 
   // Get user counts for each provider
   const providers = await Promise.all(
@@ -1653,7 +1638,7 @@ app.get("/admin/api/idp/providers/:id", requireAuth(), requireAdmin, async (c) =
     FROM idp_providers WHERE id = ?
   `)
     .bind(id)
-    .first<Omit<IdPProvider, "client_secret_encrypted">>();
+    .first<Omit<AdminIdPProvider, "client_secret_encrypted">>();
 
   if (!provider) {
     return Errors.notFound("Identity provider not found").toResponse();

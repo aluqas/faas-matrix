@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../../types";
+import type { StoredContextEvent } from "../../types/events";
 import { Errors } from "../../utils/errors";
 import { requireAuth } from "../../middleware/auth";
 import { getEvent, getMembership, getRoomMembers, getRoomState } from "../../services/database";
@@ -10,16 +11,6 @@ import {
 
 const app = new Hono<AppEnv>();
 const PARTIAL_STATE_WAIT_TIMEOUT_MS = 2000;
-
-type StoredContextEvent = {
-  event_id: string;
-  room_id: string;
-  sender: string;
-  event_type: string;
-  state_key: string | null;
-  content: string;
-  origin_server_ts: number;
-};
 
 function formatContextEvent(event: StoredContextEvent) {
   return {

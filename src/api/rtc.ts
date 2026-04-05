@@ -4,6 +4,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { GetTokenRequest, GetTokenResponse, OpenIDToken } from "../types/client";
 import { generateLiveKitToken, getLiveKitConfig } from "../services/livekit";
 
 const app = new Hono<AppEnv>();
@@ -31,39 +32,6 @@ app.get("/_matrix/client/unstable/org.matrix.msc4143/rtc/transports", (c) => {
     transports: [],
   });
 });
-
-// OpenID token structure from Matrix client
-interface OpenIDToken {
-  access_token: string;
-  token_type: string;
-  matrix_server_name: string;
-  expires_in: number;
-}
-
-// Member info from request
-interface MemberInfo {
-  id: string;
-  claimed_user_id: string;
-  claimed_device_id: string;
-}
-
-// Request body for /get_token
-// Note: Element X sends 'room' not 'room_id', and 'device_id' not 'member'
-interface GetTokenRequest {
-  room_id?: string; // Old format
-  room?: string; // Element X format
-  slot_id?: string;
-  openid_token: OpenIDToken;
-  member?: MemberInfo; // Old format
-  device_id?: string; // Element X format - device ID string
-  delayed_event_id?: string;
-}
-
-// Response for /get_token
-interface GetTokenResponse {
-  url: string;
-  jwt: string;
-}
 
 // Verify OpenID token with the homeserver
 async function verifyOpenIDToken(

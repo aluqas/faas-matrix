@@ -10,6 +10,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { ToDeviceRequest } from "../types/client";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { dispatchToDeviceMessages } from "../matrix/application/features/to-device/command";
@@ -21,16 +22,6 @@ import type {
 } from "../matrix/application/features/to-device/contracts";
 
 const app = new Hono<AppEnv>();
-
-// ============================================
-// Types
-// ============================================
-
-interface ToDeviceRequest {
-  messages: Record<string, Record<string, Record<string, unknown>>>;
-  // messages[user_id][device_id] = content
-  // device_id can be "*" to send to all devices
-}
 
 // ============================================
 // Helper Functions

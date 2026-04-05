@@ -5,6 +5,8 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { RelationEvent, ThreadSubscriptionState } from "../types/client";
+import type { RelationCursor } from "../types/events";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { buildSyncToken, parseSyncToken } from "../matrix/application/features/sync/contracts";
@@ -18,13 +20,6 @@ import {
 
 const app = new Hono<AppEnv>();
 const THREAD_SUBSCRIPTIONS_EVENT_TYPE = "io.element.msc4306.thread_subscriptions";
-
-interface ThreadSubscriptionState {
-  automatic: boolean;
-  subscribed: boolean;
-  unsubscribed_after?: number;
-  automatic_event_id?: string;
-}
 
 function parseThreadSubscriptionState(value: unknown): ThreadSubscriptionState | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -104,19 +99,7 @@ async function putThreadSubscriptionContent(
 // Types
 // ============================================
 
-// RelationEvent structure for event relations
-export interface RelationEvent {
-  event_id: string;
-  type: string;
-  sender: string;
-  origin_server_ts: number;
-  content: Record<string, unknown>;
-}
-
-type RelationCursor = {
-  value: number;
-  column: "origin_server_ts" | "stream_ordering";
-};
+export type { RelationEvent };
 
 function parseRelationCursor(token: string | undefined): RelationCursor | null {
   if (!token) {

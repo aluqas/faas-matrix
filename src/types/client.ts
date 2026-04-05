@@ -167,3 +167,281 @@ export interface PushRuleEnabledRequest {
 export interface PushRuleActionsRequest {
   actions: PushAction[];
 }
+
+export interface BackupAlgorithmData {
+  public_key: string;
+  signatures?: Record<string, Record<string, string>>;
+}
+
+export interface CreateBackupRequest {
+  algorithm: string;
+  auth_data: BackupAlgorithmData;
+}
+
+export type BackupVersionResponse = {
+  algorithm: string;
+  auth_data: BackupAlgorithmData;
+  count: number;
+  etag: string;
+  version: string;
+};
+
+export interface KeyBackupData {
+  first_message_index: number;
+  forwarded_count: number;
+  is_verified: boolean;
+  session_data: Record<string, any>;
+}
+
+export interface RoomKeyBackup {
+  sessions: Record<string, KeyBackupData>;
+}
+
+export interface KeysBackupRequest {
+  rooms: Record<string, RoomKeyBackup>;
+}
+
+export interface OpenIDToken {
+  access_token: string;
+  token_type: string;
+  matrix_server_name: string;
+  expires_in: number;
+}
+
+export interface MemberInfo {
+  id: string;
+  claimed_user_id: string;
+  claimed_device_id: string;
+}
+
+export interface GetTokenRequest {
+  room_id?: string;
+  room?: string;
+  slot_id?: string;
+  openid_token: OpenIDToken;
+  member?: MemberInfo;
+  device_id?: string;
+  delayed_event_id?: string;
+}
+
+export interface GetTokenResponse {
+  url: string;
+  jwt: string;
+}
+
+export interface SearchRequest {
+  search_categories: {
+    room_events?: {
+      search_term: string;
+      keys?: string[];
+      filter?: {
+        limit?: number;
+        rooms?: string[];
+        not_rooms?: string[];
+        senders?: string[];
+        not_senders?: string[];
+        types?: string[];
+        not_types?: string[];
+      };
+      order_by?: "recent" | "rank";
+      event_context?: {
+        before_limit?: number;
+        after_limit?: number;
+        include_profile?: boolean;
+      };
+      include_state?: boolean;
+      groupings?: {
+        group_by: Array<{ key: string }>;
+      };
+    };
+  };
+}
+
+export interface SearchResult {
+  event_id: string;
+  rank: number;
+  result: {
+    event_id: string;
+    type: string;
+    room_id: string;
+    sender: string;
+    origin_server_ts: number;
+    content: Record<string, any>;
+  };
+  context?: {
+    events_before: any[];
+    events_after: any[];
+    profile_info?: Record<string, { displayname?: string; avatar_url?: string }>;
+    start?: string;
+    end?: string;
+  };
+}
+
+export interface ContentReport {
+  id: number;
+  reporter_user_id: string;
+  room_id: string;
+  event_id: string;
+  reason: string;
+  score: number;
+  created_at: number;
+  resolved: boolean;
+  resolved_by?: string;
+  resolved_at?: number;
+  resolution_note?: string;
+}
+
+export interface ToDeviceRequest {
+  messages: Record<string, Record<string, Record<string, unknown>>>;
+}
+
+export interface IdPProvider {
+  id: string;
+  name: string;
+  issuer_url: string;
+  client_id: string;
+  client_secret_encrypted: string;
+  scopes: string;
+  enabled: number;
+  auto_create_users: number;
+  username_claim: string;
+  display_order: number;
+  icon_url: string | null;
+}
+
+export interface AdminIdPProvider extends IdPProvider {
+  created_at: number;
+  updated_at: number;
+}
+
+export interface IdPUserLink {
+  id: number;
+  provider_id: string;
+  external_id: string;
+  user_id: string;
+  external_email: string | null;
+  external_name: string | null;
+}
+
+export interface OAuthState {
+  providerId: string;
+  nonce: string;
+  redirectUri: string;
+  returnTo?: string;
+}
+
+export interface OAuthClient {
+  client_id: string;
+  client_secret_hash: string | null;
+  client_name: string;
+  redirect_uris: string[];
+  grant_types: string[];
+  response_types: string[];
+  token_endpoint_auth_method: string;
+  created_at: number;
+}
+
+export interface AuthorizationCode {
+  code: string;
+  client_id: string;
+  user_id: string;
+  redirect_uri: string;
+  scope: string;
+  code_challenge?: string;
+  code_challenge_method?: string;
+  nonce?: string;
+  created_at: number;
+  expires_at: number;
+}
+
+export interface OAuthToken {
+  token_id: string;
+  access_token_hash: string;
+  refresh_token_hash?: string;
+  client_id: string;
+  user_id: string;
+  device_id: string;
+  scope: string;
+  created_at: number;
+  expires_at: number;
+}
+
+export interface SpaceChildStateEvent {
+  type: "m.space.child";
+  state_key: string;
+  content: Record<string, unknown>;
+  sender: string;
+  origin_server_ts: number;
+}
+
+export interface SpaceChild {
+  room_id: string;
+  room_type?: string;
+  name?: string;
+  topic?: string;
+  canonical_alias?: string;
+  num_joined_members: number;
+  avatar_url?: string;
+  join_rule?: string;
+  world_readable: boolean;
+  guest_can_join: boolean;
+  children_state: SpaceChildStateEvent[];
+}
+
+export interface FederationHierarchyRoom {
+  room_id: string;
+  room_type?: string;
+  name?: string;
+  topic?: string;
+  canonical_alias?: string;
+  num_joined_members: number;
+  avatar_url?: string;
+  join_rule?: string;
+  world_readable: boolean;
+  guest_can_join: boolean;
+  children_state?: Array<{
+    type?: unknown;
+    state_key?: unknown;
+    content?: unknown;
+    sender?: unknown;
+    origin_server_ts?: unknown;
+  }>;
+}
+
+export interface FederationHierarchyResponse {
+  room?: FederationHierarchyRoom | null;
+}
+
+export interface SpaceHierarchySnapshot {
+  room: SpaceChild;
+  childEdges: Array<{ roomId: string; content: Record<string, unknown> }>;
+}
+
+export interface ThreadSubscriptionState {
+  automatic: boolean;
+  subscribed: boolean;
+  unsubscribed_after?: number;
+  automatic_event_id?: string;
+}
+
+export interface RelationEvent {
+  event_id: string;
+  type: string;
+  sender: string;
+  origin_server_ts: number;
+  content: Record<string, unknown>;
+}
+
+export interface SlidingSyncExtensionConfig {
+  to_device?: { enabled?: boolean; since?: string; limit?: number };
+  e2ee?: { enabled?: boolean };
+  account_data?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
+  typing?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
+  receipts?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
+  presence?: { enabled?: boolean };
+  "io.element.msc4308.thread_subscriptions"?: {
+    enabled?: boolean;
+    limit?: number;
+    rooms?: string[];
+  };
+}

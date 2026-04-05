@@ -6,8 +6,8 @@
  * This module owns the shared logic so the two handlers don't drift apart.
  */
 
-import type { Env } from "../types/env";
-import type { RoomVisibilityContext } from "../matrix/application/features/sync/contracts";
+import type { SlidingSyncExtensionContext, SlidingSyncExtensionOutput } from "../types/sync";
+import type { SlidingSyncExtensionConfig } from "../types/client";
 import { projectPresenceEvents } from "../matrix/application/features/presence/project";
 import { projectDeviceLists } from "../matrix/application/sync-projection";
 import { CloudflareSyncRepository } from "../runtime/cloudflare/matrix-repositories";
@@ -21,42 +21,7 @@ const THREAD_SUBSCRIPTIONS_EVENT_TYPE = "io.element.msc4306.thread_subscriptions
 // Public interfaces
 // ---------------------------------------------------------------------------
 
-/** Extension configuration extracted from the request body. */
-export interface SlidingSyncExtensionConfig {
-  to_device?: { enabled?: boolean; since?: string; limit?: number };
-  e2ee?: { enabled?: boolean };
-  account_data?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
-  typing?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
-  receipts?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
-  presence?: { enabled?: boolean };
-  "io.element.msc4308.thread_subscriptions"?: {
-    enabled?: boolean;
-    limit?: number;
-    rooms?: string[];
-  };
-}
-
-/** Infrastructure context passed to each extension builder. */
-export interface SlidingSyncExtensionContext {
-  userId: string;
-  deviceId: string | null;
-  db: D1Database;
-  env: Env;
-  sincePos: number;
-  isInitialSync: boolean;
-  /** Rooms currently in the response window (list items + subscriptions). */
-  responseRoomIds: string[];
-  /** Rooms explicitly subscribed to by the client. */
-  subscribedRoomIds: string[];
-  /**
-   * Canonical visibility boundary: effective joined rooms (partial-state aware).
-   * Drives presence, thread subscription fallback, and account_data room list.
-   */
-  visibilityContext: RoomVisibilityContext;
-}
-
-/** Shape of the extensions object written into the response. */
-export type SlidingSyncExtensionOutput = Record<string, unknown>;
+export type { SlidingSyncExtensionConfig, SlidingSyncExtensionContext, SlidingSyncExtensionOutput };
 
 // ---------------------------------------------------------------------------
 // Main builder

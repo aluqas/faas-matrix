@@ -6,6 +6,13 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import type { AppEnv } from "../types";
+import type {
+  FederationHierarchyResponse,
+  FederationHierarchyRoom,
+  SpaceChild,
+  SpaceChildStateEvent,
+  SpaceHierarchySnapshot,
+} from "../types/client";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import {
@@ -19,57 +26,6 @@ import { federationGet } from "../services/federation-keys";
 const app = new Hono<AppEnv>();
 const queries = new EventQueryService();
 type AppContext = Context<AppEnv>;
-
-interface SpaceChildStateEvent {
-  type: "m.space.child";
-  state_key: string;
-  content: Record<string, unknown>;
-  sender: string;
-  origin_server_ts: number;
-}
-
-interface SpaceChild {
-  room_id: string;
-  room_type?: string;
-  name?: string;
-  topic?: string;
-  canonical_alias?: string;
-  num_joined_members: number;
-  avatar_url?: string;
-  join_rule?: string;
-  world_readable: boolean;
-  guest_can_join: boolean;
-  children_state: SpaceChildStateEvent[];
-}
-
-interface FederationHierarchyRoom {
-  room_id: string;
-  room_type?: string;
-  name?: string;
-  topic?: string;
-  canonical_alias?: string;
-  num_joined_members: number;
-  avatar_url?: string;
-  join_rule?: string;
-  world_readable: boolean;
-  guest_can_join: boolean;
-  children_state?: Array<{
-    type?: unknown;
-    state_key?: unknown;
-    content?: unknown;
-    sender?: unknown;
-    origin_server_ts?: unknown;
-  }>;
-}
-
-interface FederationHierarchyResponse {
-  room?: FederationHierarchyRoom | null;
-}
-
-interface SpaceHierarchySnapshot {
-  room: SpaceChild;
-  childEdges: SpaceChildEdge[];
-}
 
 function filterHierarchyEdges(edges: SpaceChildEdge[], suggestedOnly: boolean): SpaceChildEdge[] {
   return selectSpaceChildren(edges, {

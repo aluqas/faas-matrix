@@ -4,6 +4,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { AuthorizationCode, OAuthClient, OAuthToken } from "../types/client";
 import { requireAuth } from "../middleware/auth";
 import { hashToken, verifyPassword } from "../utils/crypto";
 import {
@@ -15,46 +16,6 @@ import {
 import { createDevice, createAccessToken, getUserById } from "../services/database";
 
 const app = new Hono<AppEnv>();
-
-// ============================================
-// Types
-// ============================================
-
-interface OAuthClient {
-  client_id: string;
-  client_secret_hash: string | null;
-  client_name: string;
-  redirect_uris: string[];
-  grant_types: string[];
-  response_types: string[];
-  token_endpoint_auth_method: string;
-  created_at: number;
-}
-
-interface AuthorizationCode {
-  code: string;
-  client_id: string;
-  user_id: string;
-  redirect_uri: string;
-  scope: string;
-  code_challenge?: string;
-  code_challenge_method?: string;
-  nonce?: string;
-  created_at: number;
-  expires_at: number;
-}
-
-interface OAuthToken {
-  token_id: string;
-  access_token_hash: string;
-  refresh_token_hash?: string;
-  client_id: string;
-  user_id: string;
-  device_id: string;
-  scope: string;
-  created_at: number;
-  expires_at: number;
-}
 
 // ============================================
 // Helper Functions
