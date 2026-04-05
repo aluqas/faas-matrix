@@ -872,6 +872,16 @@ export async function getInviteStrippedState(
   }));
 }
 
+/**
+ * Returns room IDs for the given user, optionally filtered by membership.
+ *
+ * Uses the "effective membership" UNION pattern (room_memberships UNION room_state)
+ * so that partial-state rooms — where the denormalized `room_memberships` row has
+ * not yet been written — are still included.
+ *
+ * This is the same pattern as `getJoinedRoomIdsIncludingPartialState` in
+ * `src/matrix/repositories/membership-repository.ts`.
+ */
 export async function getUserRooms(
   db: D1Database,
   userId: string,

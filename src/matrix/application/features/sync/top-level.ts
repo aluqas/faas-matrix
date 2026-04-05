@@ -94,7 +94,7 @@ export async function projectTopLevelSync(
     ports.appContext.capabilities.kv.cache as KVNamespace | undefined,
     {
       userId: input.userId,
-      roomIds: input.roomIds,
+      visibleRoomIds: input.roomIds,
       filter: input.filter?.presence as never,
       debugEnabled: ports.appContext.profile.name === "complement",
     },

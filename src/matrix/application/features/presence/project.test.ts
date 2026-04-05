@@ -58,7 +58,7 @@ describe("presence project", () => {
 
     const projection = await projectPresenceEvents(db as unknown as D1Database, undefined, {
       userId: "@alice:test",
-      roomIds: ["!room:hs1"],
+      visibleRoomIds: ["!room:hs1"],
     });
 
     expect(projection.events).toEqual([
@@ -78,7 +78,7 @@ describe("presence project", () => {
 
     const projection = await projectPresenceEvents(db as unknown as D1Database, undefined, {
       userId: "@alice:test",
-      roomIds: ["!room:hs1"],
+      visibleRoomIds: ["!room:hs1"],
     });
 
     expect(projection.events).toEqual([

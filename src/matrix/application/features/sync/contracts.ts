@@ -2,6 +2,36 @@ import type { SyncResponse } from "../../../../types";
 import type { SyncProjectionResult } from "../../sync-projection";
 import type { PresenceSyncProjection } from "../presence/contracts";
 
+/**
+ * Canonical visibility boundary for a single sync response.
+ *
+ * Computed once per request and shared by all projection functions
+ * (room-delta, presence, device-list, thread-subscriptions, etc.) so that
+ * every feature sees exactly the same set of "visible rooms".
+ */
+export interface RoomVisibilityContext {
+  /** All joined rooms visible to the user (room filter applied). */
+  visibleJoinedRoomIds: string[];
+  /** Rooms in partial-state that are hidden from this response (full-state only). */
+  hiddenPartialStateRooms: ReadonlySet<string>;
+  /** Rooms in partial-state that ARE exposed in this response (lazy-load mode). */
+  visiblePartialStateRooms: ReadonlySet<string>;
+  /** Rooms that must deliver a full-state snapshot this response (just-completed partial join). */
+  forceFullStateRooms: ReadonlySet<string>;
+}
+
+/** Minimal visibility context for sliding-sync, which has no partial-state concept yet. */
+export function buildSlidingSyncVisibilityContext(
+  allJoinedRoomIds: string[],
+): RoomVisibilityContext {
+  return {
+    visibleJoinedRoomIds: allJoinedRoomIds,
+    hiddenPartialStateRooms: new Set(),
+    visiblePartialStateRooms: new Set(),
+    forceFullStateRooms: new Set(),
+  };
+}
+
 export interface SyncCursor {
   events: number;
   toDevice: number;

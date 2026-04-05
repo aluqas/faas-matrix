@@ -56,7 +56,7 @@ export async function projectPresenceEvents(
   cache: KVNamespace | undefined,
   query: PresenceProjectionQuery,
 ): Promise<PresenceSyncProjection> {
-  const visibleUsers = await dbListVisibleUsers(db, query.userId, query.roomIds);
+  const visibleUsers = await dbListVisibleUsers(db, query.userId, query.visibleRoomIds);
   const presenceByUser = await getPresenceForUsers(db, visibleUsers, cache);
 
   return {

@@ -34,7 +34,14 @@ export interface PresenceSyncProjection {
 
 export interface PresenceProjectionQuery {
   userId: string;
-  roomIds: string[];
+  /**
+   * Canonical visibility scope: all rooms the requesting user is currently joined to.
+   * Presence events are projected for every user who shares at least one of these rooms.
+   *
+   * Must be ALL joined rooms (not just the sliding-sync window) so that users sharing
+   * rooms outside the current response window still appear in presence output.
+   */
+  visibleRoomIds: string[];
   filter?: SyncEventFilter | undefined;
   debugEnabled?: boolean | undefined;
 }

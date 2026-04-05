@@ -10,8 +10,6 @@ import { runClientEffect } from "../matrix/application/effect-runtime";
 import { getTypingForRooms } from "./typing";
 import { getReceiptsForRooms } from "./receipts";
 import { countNotificationsWithRules } from "../services/push-rule-evaluator";
-import { projectDeviceLists } from "../matrix/application/sync-projection";
-import { CloudflareSyncRepository } from "../runtime/cloudflare/matrix-repositories";
 import type { ConnectionState } from "../matrix/application/features/sync/effect-ports";
 import {
   didSlidingSyncListChange,
@@ -20,8 +18,7 @@ import {
   shouldIncludeSlidingSyncRoom,
   trackSlidingSyncRoomReadState,
 } from "../matrix/application/features/sync/sliding-sync-shared";
-import { getThreadSubscriptionsExtension } from "../matrix/application/features/sync/thread-subscriptions";
-import { projectPresenceEvents } from "../matrix/application/features/presence/project";
+import { buildSlidingSyncExtensions } from "./sliding-sync-extensions";
 // Room cache helper available for future optimizations
 // import { getRoomMetadata, invalidateRoomCache, type RoomMetadata } from '../services/room-cache';
 
@@ -198,8 +195,6 @@ interface ExtensionsResponse {
     subscribed?: Record<string, Record<string, { bump_stamp: number; automatic: boolean }>>;
   };
 }
-
-const THREAD_SUBSCRIPTIONS_EVENT_TYPE = "io.element.msc4306.thread_subscriptions";
 
 // Helper to get the current maximum stream ordering from the database
 async function getCurrentStreamPosition(db: D1Database): Promise<number> {
@@ -1128,181 +1123,34 @@ async function buildMsc3575SlidingSyncResponse(
     }
   }
 
-  // Process extensions
+  // Process extensions via shared builder (MSC3575 + MSC4186 unified logic)
   if (body.extensions) {
     const extensionKeys = Object.keys(body.extensions);
     console.log("[sliding-sync] Extensions requested:", extensionKeys, "by user:", userId);
-    const syncRepository = new CloudflareSyncRepository(c.env);
 
-    // To-device messages
-    // to_device: enabled if key exists (MSC4186) or enabled=true (MSC3575)
-    if (body.extensions.to_device) {
-      const limit = body.extensions.to_device.limit || 100;
-      const deviceId = c.get("deviceId");
+    const allJoinedRoomsResult = await db
+      .prepare(`SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'`)
+      .bind(userId)
+      .all<{ room_id: string }>();
+    const allJoinedRoomIds = allJoinedRoomsResult.results.map((r) => r.room_id);
 
-      // Get to-device messages from D1 database (properly stored per-device)
-      const { getToDeviceMessages } = await import("./to-device");
-      const { events, nextBatch } = await getToDeviceMessages(
+    const extensions = await buildSlidingSyncExtensions(
+      {
+        userId,
+        deviceId: c.get("deviceId") ?? null,
         db,
-        userId,
-        deviceId || "",
-        body.extensions.to_device.since,
-        limit,
-      );
-
-      response.extensions.to_device = {
-        next_batch: nextBatch,
-        events,
-      };
-    }
-
-    // E2EE extension
-    // e2ee: enabled if key exists (MSC4186) or enabled=true (MSC3575)
-    if (body.extensions.e2ee) {
-      const deviceId = c.get("deviceId");
-      const sincePos = body.pos ? parseInt(body.pos) : 0;
-      const keyCounts = deviceId ? await syncRepository.getOneTimeKeyCounts(userId, deviceId) : {};
-      const unusedFallbackTypes = deviceId
-        ? await syncRepository.getUnusedFallbackKeyTypes(userId, deviceId)
-        : [];
-      const deviceLists = await projectDeviceLists(syncRepository, {
-        userId,
-        isInitialSync: !body.pos,
-        sinceEventPosition: sincePos,
-        sinceDeviceKeyPosition: sincePos,
-      });
-
-      response.extensions.e2ee = {
-        device_lists: deviceLists ?? { changed: [], left: [] },
-        device_one_time_keys_count: keyCounts,
-        device_unused_fallback_key_types: unusedFallbackTypes,
-      };
-    }
-
-    // Account data extension
-    // account_data: enabled if key exists (MSC4186) or enabled=true (MSC3575)
-    if (body.extensions.account_data) {
-      // Get global account data from D1
-      const globalData = await db
-        .prepare(`
-        SELECT event_type, content FROM account_data
-        WHERE user_id = ? AND room_id = ''
-      `)
-        .bind(userId)
-        .all();
-
-      // Build map of D1 account data
-      const globalAccountData: Record<string, any> = {};
-      for (const d of globalData.results as any[]) {
-        try {
-          globalAccountData[d.event_type] = JSON.parse(d.content);
-        } catch {
-          // Malformed JSON in account_data - use empty object
-          globalAccountData[d.event_type] = {};
-          console.warn("[sliding-sync MSC3575] Failed to parse account data:", d.event_type);
-        }
-      }
-
-      // CRITICAL: Get E2EE account data from Durable Object (strongly consistent)
-      // This ensures SSSS data is immediately visible after being written
-      const { getE2EEAccountDataFromDO } = await import("./account-data");
-      try {
-        const e2eeData = await getE2EEAccountDataFromDO(c.env, userId);
-        // Merge E2EE data (Durable Object takes precedence for consistency)
-        for (const [eventType, content] of Object.entries(e2eeData || {})) {
-          globalAccountData[eventType] = content;
-        }
-      } catch (error) {
-        console.error("[sliding-sync MSC3575] Failed to get E2EE account data from DO:", error);
-        // Continue with D1 data only - DO unavailable
-      }
-
-      response.extensions.account_data = {
-        global: Object.entries(globalAccountData).map(([type, content]) => ({
-          type,
-          content,
-        })),
-        rooms: {},
-      };
-
-      // Get room account data for specified rooms
-      const roomsToCheck = body.extensions.account_data.rooms || Object.keys(response.rooms);
-      for (const roomId of roomsToCheck) {
-        const roomData = await db
-          .prepare(`
-          SELECT event_type, content FROM account_data
-          WHERE user_id = ? AND room_id = ?
-        `)
-          .bind(userId, roomId)
-          .all();
-
-        if (roomData.results.length > 0) {
-          response.extensions.account_data.rooms![roomId] = (roomData.results as any[]).map((d) => {
-            try {
-              return { type: d.event_type, content: JSON.parse(d.content) };
-            } catch {
-              return { type: d.event_type, content: {} };
-            }
-          });
-        }
-      }
-    }
-
-    // Typing extension - uses Room Durable Objects
-    // typing: enabled if key exists (MSC4186) or enabled=true (MSC3575)
-    if (body.extensions.typing) {
-      const responseRoomIds = Object.keys(response.rooms);
-      const subscribedRoomIds = body.room_subscriptions ? Object.keys(body.room_subscriptions) : [];
-      const allRoomIds = [...new Set([...responseRoomIds, ...subscribedRoomIds])];
-
-      if (allRoomIds.length > 0) {
-        const typingByRoom = await getTypingForRooms(c.env, allRoomIds);
-
-        // Always include typing for all rooms so clients know when typing stops
-        response.extensions.typing = { rooms: {} };
-        for (const roomId of allRoomIds) {
-          const userIds = typingByRoom[roomId] || [];
-          response.extensions.typing.rooms![roomId] = {
-            type: "m.typing",
-            content: { user_ids: userIds },
-          };
-        }
-      }
-    }
-
-    // Receipts extension - uses Room Durable Objects
-    // receipts: enabled if key exists (MSC4186) or enabled=true (MSC3575)
-    if (body.extensions.receipts) {
-      // Collect room IDs from response AND room subscriptions
-      // (room_subscriptions may include rooms not in response.rooms)
-      let roomIdsToFetch = [
-        ...Object.keys(response.rooms),
-        ...(body.room_subscriptions ? Object.keys(body.room_subscriptions) : []),
-      ];
-      roomIdsToFetch = [...new Set(roomIdsToFetch)]; // dedupe
-
-      // Pass userId to filter m.read.private receipts
-      const receiptsByRoom = await getReceiptsForRooms(c.env, roomIdsToFetch, userId);
-
-      response.extensions.receipts = { rooms: {} };
-      for (const [roomId, content] of Object.entries(receiptsByRoom)) {
-        response.extensions.receipts.rooms![roomId] = {
-          type: "m.receipt",
-          content,
-        };
-      }
-    }
-
-    // Presence extension
-    // presence: enabled if key exists (MSC4186) or enabled=true (MSC3575)
-    if (body.extensions.presence) {
-      const presenceRoomIds = Object.keys(response.rooms);
-      const presenceProjection =
-        presenceRoomIds.length > 0
-          ? await projectPresenceEvents(db, cache, { userId, roomIds: presenceRoomIds })
-          : { events: [] };
-      response.extensions.presence = { events: presenceProjection.events };
-    }
+        env: c.env,
+        sincePos,
+        isInitialSync: !posToken,
+        scope: {
+          responseRoomIds: Object.keys(response.rooms),
+          subscribedRoomIds: body.room_subscriptions ? Object.keys(body.room_subscriptions) : [],
+          allJoinedRoomIds,
+        },
+      },
+      body.extensions,
+    );
+    Object.assign(response.extensions, extensions);
   }
 
   // ALWAYS save connection state - using DO now (not KV), no rate limit concerns
@@ -1760,254 +1608,51 @@ async function buildSimplifiedSlidingSyncResponse(
     }
   }
 
-  // Handle extensions
-  // Note: Extensions are considered enabled if the key exists OR if enabled=true
-  // Element X sends extensions without explicit enabled:true
+  // Handle extensions via shared builder (MSC3575 + MSC4186 unified logic)
+  // Note: Extensions are considered enabled if the key exists OR if enabled=true.
+  // Element X sends extensions without explicit enabled:true.
   if (body.extensions) {
-    // Log what extensions are requested (consider present = enabled for MSC4186 compatibility)
     const enabledExtensions = Object.keys(body.extensions).filter((k) => {
-      const ext = (body.extensions as any)[k];
+      const ext = (body.extensions as Record<string, unknown>)[k];
       return ext !== undefined && ext !== null;
     });
     console.log("[sliding-sync] Extensions requested:", enabledExtensions);
-    const syncRepository = new CloudflareSyncRepository(c.env);
 
-    // to_device: enabled if key exists (MSC4186) or enabled=true (MSC3575)
-    if (body.extensions.to_device) {
-      const deviceId = c.get("deviceId");
-      const limit = body.extensions.to_device.limit || 100;
+    const allJoinedRoomsResult = await db
+      .prepare(`SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'`)
+      .bind(userId)
+      .all<{ room_id: string }>();
+    const allJoinedRoomIds = allJoinedRoomsResult.results.map((r) => r.room_id);
 
-      // Get to-device messages from D1 database (properly stored per-device)
-      const { getToDeviceMessages } = await import("./to-device");
-      const { events, nextBatch } = await getToDeviceMessages(
+    const currentResponseRoomIds = Object.keys(response.rooms);
+    const subscribedRoomIds = body.room_subscriptions ? Object.keys(body.room_subscriptions) : [];
+
+    // MSC4186 compatibility: typing is included even when not explicitly requested
+    // if rooms are in the response (Element X relies on this behaviour).
+    const effectiveExtensions = {
+      ...body.extensions,
+      typing:
+        body.extensions.typing ??
+        (currentResponseRoomIds.length > 0 ? ({} as ExtensionsRequest["typing"]) : undefined),
+    };
+
+    const extensions = await buildSlidingSyncExtensions(
+      {
+        userId,
+        deviceId: c.get("deviceId") ?? null,
         db,
-        userId,
-        deviceId || "",
-        body.extensions.to_device.since,
-        limit,
-      );
-
-      response.extensions.to_device = {
-        next_batch: nextBatch,
-        events,
-      };
-    }
-
-    // e2ee: enabled if key exists (MSC4186) or enabled=true (MSC3575)
-    if (body.extensions.e2ee) {
-      const deviceId = c.get("deviceId");
-      const sincePos = body.pos ? parseInt(body.pos) : 0;
-      const keyCounts = deviceId ? await syncRepository.getOneTimeKeyCounts(userId, deviceId) : {};
-      const unusedFallbackTypes = deviceId
-        ? await syncRepository.getUnusedFallbackKeyTypes(userId, deviceId)
-        : [];
-      const deviceLists = await projectDeviceLists(syncRepository, {
-        userId,
+        env: c.env,
+        sincePos,
         isInitialSync: !body.pos,
-        sinceEventPosition: sincePos,
-        sinceDeviceKeyPosition: sincePos,
-      });
-
-      response.extensions.e2ee = {
-        device_lists: deviceLists ?? { changed: [], left: [] },
-        device_one_time_keys_count: keyCounts,
-        device_unused_fallback_key_types: unusedFallbackTypes,
-      };
-    }
-
-    // account_data: enabled if key exists (MSC4186) or enabled=true (MSC3575)
-    if (body.extensions.account_data) {
-      // Get global account data from D1
-      const globalData = await db
-        .prepare(`
-        SELECT event_type, content FROM account_data
-        WHERE user_id = ? AND room_id = ''
-      `)
-        .bind(userId)
-        .all();
-
-      // Build map of D1 account data
-      const globalAccountData: Record<string, any> = {};
-      for (const d of globalData.results as any[]) {
-        try {
-          globalAccountData[d.event_type] = JSON.parse(d.content);
-        } catch {
-          globalAccountData[d.event_type] = {};
-        }
-      }
-
-      // CRITICAL: Get E2EE account data from Durable Object (strongly consistent)
-      // This ensures SSSS data is immediately visible after being written
-      const { getE2EEAccountDataFromDO } = await import("./account-data");
-      try {
-        const e2eeData = await getE2EEAccountDataFromDO(c.env, userId);
-        // Merge E2EE data (Durable Object takes precedence for consistency)
-        for (const [eventType, content] of Object.entries(e2eeData || {})) {
-          globalAccountData[eventType] = content;
-        }
-      } catch (error) {
-        console.error("[sliding-sync MSC4186] Failed to get E2EE account data from DO:", error);
-        // Continue with D1 data only - DO unavailable
-      }
-
-      response.extensions.account_data = {
-        global: Object.entries(globalAccountData).map(([type, content]) => ({
-          type,
-          content,
-        })),
-        rooms: {},
-      };
-
-      // Get room account data (including m.fully_read for unread counts)
-      const userRooms = await db
-        .prepare(`
-        SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'
-      `)
-        .bind(userId)
-        .all();
-      const userRoomIds = (userRooms.results as { room_id: string }[]).map((r) => r.room_id);
-
-      for (const roomId of userRoomIds) {
-        const roomAccountData = await db
-          .prepare(`
-          SELECT event_type, content FROM account_data
-          WHERE user_id = ? AND room_id = ?
-        `)
-          .bind(userId, roomId)
-          .all();
-
-        if (roomAccountData.results.length > 0) {
-          response.extensions.account_data.rooms![roomId] = (roomAccountData.results as any[]).map(
-            (d) => {
-              try {
-                return { type: d.event_type, content: JSON.parse(d.content) };
-              } catch {
-                return { type: d.event_type, content: {} };
-              }
-            },
-          );
-        }
-      }
-    }
-
-    // Handle typing extension - uses Room Durable Objects
-    // Element X doesn't always request typing explicitly, so include it for rooms in response
-    // typing: enabled if key exists (MSC4186 compatibility)
-    const typingRequested = !!body.extensions.typing;
-    const roomsInResponse = Object.keys(response.rooms);
-
-    if (typingRequested || roomsInResponse.length > 0) {
-      // Get room IDs from request - could be from rooms in response OR from explicit room subscriptions
-      let responseRoomIds = roomsInResponse;
-      const subscribedRoomIds = body.room_subscriptions ? Object.keys(body.room_subscriptions) : [];
-
-      // Element X uses a separate sync connection for extensions with NO rooms
-      if (typingRequested && responseRoomIds.length === 0 && subscribedRoomIds.length === 0) {
-        const userRooms = await db
-          .prepare(`
-          SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'
-        `)
-          .bind(userId)
-          .all();
-        responseRoomIds = (userRooms.results as { room_id: string }[]).map((r) => r.room_id);
-      }
-
-      const allRoomIds = [...new Set([...responseRoomIds, ...subscribedRoomIds])];
-
-      if (allRoomIds.length > 0) {
-        const typingByRoom = await getTypingForRooms(c.env, allRoomIds);
-
-        // Always include typing extension with all rooms so clients know when typing stops
-        response.extensions.typing = { rooms: {} };
-        for (const roomId of allRoomIds) {
-          const userIds = typingByRoom[roomId] || [];
-          response.extensions.typing.rooms![roomId] = {
-            type: "m.typing",
-            content: { user_ids: userIds },
-          };
-        }
-
-        // Debug: log typing data being returned
-        const typingRoomsWithUsers = Object.entries(response.extensions.typing.rooms!).filter(
-          ([_, data]) => (data as any).content.user_ids.length > 0,
-        );
-        if (typingRoomsWithUsers.length > 0) {
-          console.log(
-            "[sliding-sync] Returning typing data:",
-            JSON.stringify(typingRoomsWithUsers),
-          );
-        }
-      }
-    }
-
-    // receipts: enabled if key exists (MSC4186) or enabled=true (MSC3575)
-    if (body.extensions.receipts) {
-      // Fetch receipts for rooms in response, subscriptions, or all user's rooms as fallback
-      // This matches the typing extension pattern for Element X compatibility
-      let roomIdsToFetch = Object.keys(response.rooms);
-      const subscribedRoomIds = body.room_subscriptions ? Object.keys(body.room_subscriptions) : [];
-
-      // If no rooms in response and no subscriptions, fetch for all user's joined rooms
-      // Element X uses separate sync connections for extensions with no room context
-      if (roomIdsToFetch.length === 0 && subscribedRoomIds.length === 0) {
-        const userRooms = await db
-          .prepare(`
-          SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'
-        `)
-          .bind(userId)
-          .all();
-        roomIdsToFetch = (userRooms.results as { room_id: string }[]).map((r) => r.room_id);
-      } else {
-        roomIdsToFetch = [...new Set([...roomIdsToFetch, ...subscribedRoomIds])];
-      }
-
-      if (roomIdsToFetch.length > 0) {
-        // Pass userId to filter m.read.private receipts
-        const receiptsByRoom = await getReceiptsForRooms(c.env, roomIdsToFetch, userId);
-
-        response.extensions.receipts = { rooms: {} };
-        for (const [roomId, content] of Object.entries(receiptsByRoom)) {
-          response.extensions.receipts.rooms![roomId] = {
-            type: "m.receipt",
-            content,
-          };
-        }
-
-        // Debug: log receipts data being returned
-        const roomsWithReceipts = Object.keys(receiptsByRoom).length;
-        if (roomsWithReceipts > 0) {
-          console.log("[sliding-sync] Returning receipts for", roomsWithReceipts, "rooms");
-        }
-      } else {
-        response.extensions.receipts = { rooms: {} };
-      }
-    }
-
-    // presence: enabled if key exists (MSC4186) or enabled=true (MSC3575)
-    if (body.extensions.presence) {
-      const presenceRoomIds4186 = Object.keys(response.rooms);
-      const presenceProjection4186 =
-        presenceRoomIds4186.length > 0
-          ? await projectPresenceEvents(db, c.env.CACHE, {
-              userId,
-              roomIds: presenceRoomIds4186,
-            })
-          : { events: [] };
-      response.extensions.presence = { events: presenceProjection4186.events };
-    }
-
-    if (body.extensions["io.element.msc4308.thread_subscriptions"]) {
-      const requestedRooms = body.extensions["io.element.msc4308.thread_subscriptions"].rooms;
-      const subscribed = await getThreadSubscriptionsExtension(
-        db,
-        userId,
-        THREAD_SUBSCRIPTIONS_EVENT_TYPE,
-        requestedRooms,
-      );
-      if (subscribed) {
-        response.extensions["io.element.msc4308.thread_subscriptions"] = { subscribed };
-      }
-    }
+        scope: {
+          responseRoomIds: currentResponseRoomIds,
+          subscribedRoomIds,
+          allJoinedRoomIds,
+        },
+      },
+      effectiveExtensions,
+    );
+    Object.assign(response.extensions, extensions);
   }
 
   // Include ephemeral data on INITIAL sync only if extensions weren't requested
