@@ -7,10 +7,10 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { AppEnv } from "../types";
 import type {
-  FederationHierarchyResponse,
-  FederationHierarchyRoom,
-  SpaceChild,
-  SpaceChildStateEvent,
+  FederationSpaceHierarchyResponse,
+  FederationSpaceHierarchyRoom,
+  SpaceHierarchyChildStateEvent,
+  SpaceHierarchyRoom,
   SpaceHierarchySnapshot,
 } from "../types/client";
 import { Errors } from "../utils/errors";
@@ -18,7 +18,7 @@ import { requireAuth } from "../middleware/auth";
 import {
   EventQueryService,
   selectSpaceChildren,
-  type PublicRoomInfo,
+  type PublicRoomSummary,
   type SpaceChildEdge,
 } from "../matrix/application/event-query-service";
 import { federationGet } from "../services/federation-keys";
@@ -35,7 +35,7 @@ function filterHierarchyEdges(edges: SpaceChildEdge[], suggestedOnly: boolean): 
   }).children;
 }
 
-function toChildrenState(edges: SpaceChildEdge[]): SpaceChildStateEvent[] {
+function toChildrenState(edges: SpaceChildEdge[]): SpaceHierarchyChildStateEvent[] {
   return edges.map((edge) => ({
     type: "m.space.child",
     state_key: edge.roomId,
@@ -45,7 +45,7 @@ function toChildrenState(edges: SpaceChildEdge[]): SpaceChildStateEvent[] {
   }));
 }
 
-function toSpaceChild(room: PublicRoomInfo, childEdges: SpaceChildEdge[]): SpaceChild {
+function toSpaceChild(room: PublicRoomSummary, childEdges: SpaceChildEdge[]): SpaceHierarchyRoom {
   return {
     ...room,
     children_state: toChildrenState(childEdges),
@@ -65,7 +65,9 @@ function parseViaServers(content: Record<string, unknown>): string[] {
   return via.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
 }
 
-function parseFederationRoom(room: FederationHierarchyRoom | null | undefined): SpaceChild | null {
+function parseFederationRoom(
+  room: FederationSpaceHierarchyRoom | null | undefined,
+): SpaceHierarchyRoom | null {
   if (!room || typeof room.room_id !== "string") {
     return null;
   }
@@ -158,7 +160,7 @@ async function fetchRemoteSnapshot(
         continue;
       }
 
-      const body = (await response.json()) as FederationHierarchyResponse;
+      const body = (await response.json()) as FederationSpaceHierarchyResponse;
       const room = parseFederationRoom(body.room);
       if (!room) {
         continue;
@@ -217,7 +219,7 @@ app.get("/_matrix/client/v1/rooms/:roomId/hierarchy", requireAuth(), async (c) =
   const maxDepth = Math.max(0, parseInt(c.req.query("max_depth") || "100", 10));
   const suggestedOnly = c.req.query("suggested_only") === "true";
 
-  const rooms: SpaceChild[] = [];
+  const rooms: SpaceHierarchyRoom[] = [];
   const visited = new Set<string>();
 
   const visit = async (

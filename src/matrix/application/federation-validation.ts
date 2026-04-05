@@ -11,13 +11,13 @@ import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
 import { DomainError } from "./domain-error";
 import { requireRoomVersionPolicy } from "./room-version-policy";
 
-export interface FederationValidationResult {
+export interface FederationEventValidationResult {
   roomId: string;
   eventId: string;
   event: PDU;
 }
 
-export interface FederationInviteValidationResult extends FederationValidationResult {
+export interface FederationInviteValidationResult extends FederationEventValidationResult {
   roomVersion: string;
   inviteRoomState: unknown[];
   invitedUserId: string;
@@ -126,7 +126,7 @@ function validateMembershipEventRequest(input: {
   expectedMembership: "join" | "leave" | "knock";
   context: string;
   mismatchMessage: string;
-}): Effect.Effect<FederationValidationResult, DomainError> {
+}): Effect.Effect<FederationEventValidationResult, DomainError> {
   return decodeSchema(FederationPduEnvelopeSchema, input.body, input.context).pipe(
     Effect.map((envelope) => toPdu(envelope, input.roomId, input.eventId)),
     Effect.flatMap((event) =>
@@ -152,7 +152,7 @@ export function validateSendJoinRequest(input: {
   body: unknown;
   roomId: string;
   eventId: string;
-}): Effect.Effect<FederationValidationResult, DomainError> {
+}): Effect.Effect<FederationEventValidationResult, DomainError> {
   return validateMembershipEventRequest({
     ...input,
     expectedMembership: "join",
@@ -165,7 +165,7 @@ export function validateSendLeaveRequest(input: {
   body: unknown;
   roomId: string;
   eventId: string;
-}): Effect.Effect<FederationValidationResult, DomainError> {
+}): Effect.Effect<FederationEventValidationResult, DomainError> {
   return validateMembershipEventRequest({
     ...input,
     expectedMembership: "leave",
@@ -178,7 +178,7 @@ export function validateSendKnockRequest(input: {
   body: unknown;
   roomId: string;
   eventId: string;
-}): Effect.Effect<FederationValidationResult, DomainError> {
+}): Effect.Effect<FederationEventValidationResult, DomainError> {
   return validateMembershipEventRequest({
     ...input,
     expectedMembership: "knock",

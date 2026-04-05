@@ -28,7 +28,7 @@ export interface PresenceCommandPorts {
   debugEnabled?: boolean | undefined;
 }
 
-export interface PresenceSyncProjection {
+export interface PresenceProjectionResult {
   events: PresenceEvent[];
 }
 
@@ -40,7 +40,7 @@ export interface PresenceProjectionQuery {
 }
 
 export interface PresenceProjectionPort {
-  projectEvents(query: PresenceProjectionQuery): Promise<PresenceSyncProjection>;
+  projectEvents(query: PresenceProjectionQuery): Promise<PresenceProjectionResult>;
 }
 
 export interface PresenceWritePort {

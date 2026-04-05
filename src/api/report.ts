@@ -5,7 +5,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
-import type { ContentReport } from "../types/client";
+import type { ContentReportRecord } from "../types/client";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 
@@ -258,7 +258,7 @@ app.get("/_matrix/client/v3/admin/reports", requireAuth(), async (c) => {
     .prepare(query)
     .bind(...params)
     .all<
-      ContentReport & {
+      ContentReportRecord & {
         reported_user_id: string;
         event_type: string;
         content: string;
@@ -321,7 +321,7 @@ app.get("/_matrix/client/v3/admin/reports/:reportId", requireAuth(), async (c) =
   `)
     .bind(parseInt(reportId))
     .first<
-      ContentReport & {
+      ContentReportRecord & {
         reported_user_id: string;
         event_type: string;
         content: string;

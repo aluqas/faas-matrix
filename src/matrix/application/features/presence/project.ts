@@ -4,7 +4,7 @@ import { applyEventFilter } from "../../sync-projection";
 import type {
   PresenceProjectionPort,
   PresenceProjectionQuery,
-  PresenceSyncProjection,
+  PresenceProjectionResult,
 } from "./contracts";
 import {
   findPresenceByUserIds,
@@ -55,7 +55,7 @@ export async function projectPresenceEvents(
   db: D1Database,
   cache: KVNamespace | undefined,
   query: PresenceProjectionQuery,
-): Promise<PresenceSyncProjection> {
+): Promise<PresenceProjectionResult> {
   const visibleUsers = await dbListVisibleUsers(db, query.userId, query.visibleRoomIds);
   const presenceByUser = await getPresenceForUsers(db, visibleUsers, cache);
 

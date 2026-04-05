@@ -257,7 +257,7 @@ export interface SearchRequest {
   };
 }
 
-export interface SearchResult {
+export interface SearchResultEntry {
   event_id: string;
   rank: number;
   result: {
@@ -277,7 +277,7 @@ export interface SearchResult {
   };
 }
 
-export interface ContentReport {
+export interface ContentReportRecord {
   id: number;
   reporter_user_id: string;
   room_id: string;
@@ -366,7 +366,7 @@ export interface OAuthToken {
   expires_at: number;
 }
 
-export interface SpaceChildStateEvent {
+export interface SpaceHierarchyChildStateEvent {
   type: "m.space.child";
   state_key: string;
   content: Record<string, unknown>;
@@ -374,7 +374,7 @@ export interface SpaceChildStateEvent {
   origin_server_ts: number;
 }
 
-export interface SpaceChild {
+export interface SpaceHierarchyRoom {
   room_id: string;
   room_type?: string;
   name?: string;
@@ -385,10 +385,10 @@ export interface SpaceChild {
   join_rule?: string;
   world_readable: boolean;
   guest_can_join: boolean;
-  children_state: SpaceChildStateEvent[];
+  children_state: SpaceHierarchyChildStateEvent[];
 }
 
-export interface FederationHierarchyRoom {
+export interface FederationSpaceHierarchyRoom {
   room_id: string;
   room_type?: string;
   name?: string;
@@ -408,12 +408,12 @@ export interface FederationHierarchyRoom {
   }>;
 }
 
-export interface FederationHierarchyResponse {
-  room?: FederationHierarchyRoom | null;
+export interface FederationSpaceHierarchyResponse {
+  room?: FederationSpaceHierarchyRoom | null;
 }
 
 export interface SpaceHierarchySnapshot {
-  room: SpaceChild;
+  room: SpaceHierarchyRoom;
   childEdges: Array<{ roomId: string; content: Record<string, unknown> }>;
 }
 

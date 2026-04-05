@@ -10,6 +10,31 @@ Tuwunel is a Matrix homeserver (spec v1.17) running entirely on Cloudflare Worke
   - コードベース全体のBigbangは行わず、TDD時にredを起点にリアーキテクチャしている。
 - 今後書くSQLクエリはすべてkyselyを使用してください。
 
+- リアーキテクチャ・リファクタリング方針
+  - `api/*`はendpointの所在を示し、`app.get`や`app.post`はendpointごとに残す。
+    - そのほうがendpointの所在を構造的に決定的に示せ、かつ参照点が明確になるため。
+    - であるため、これについては今後いかなるリアーキテクチャ、リファクタリングを進めるとしても死守する。
+  - そのためやるべきことは以下の点
+    - 内部ロジックの抽象化をとにかく洗練、積み上げること
+      - Effect use-case
+      - validation
+      - schema
+      - DTO / type
+      - error
+      - sharedなprojector, encoder
+    - 残すのは
+      - `app.get`や`app.post`の存在そのもの（もちろん）
+      - path, query, body, headerの読み取り
+      - decode呼び出し
+      - use-case呼び出し
+      - response変換
+
+- 基本方針
+  - 命名のスタイルを統一し
+  - 統廃合を行い
+  - 拡張性・応用の観点からの抽象化の細分化を行い、境界を明確化し
+  - まとめたspecに合わせた型設計を行う（specに従ってなければ自然と型エラー吐くように）
+
 ## Development Commands
 
 ```bash

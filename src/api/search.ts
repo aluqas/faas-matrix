@@ -5,7 +5,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
-import type { SearchRequest, SearchResult } from "../types/client";
+import type { SearchRequest, SearchResultEntry } from "../types/client";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 
@@ -223,10 +223,10 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
   const totalCount = countResult?.total || 0;
 
   // Build response
-  const formattedResults: SearchResult[] = [];
+  const formattedResults: SearchResultEntry[] = [];
 
   for (const event of searchResults) {
-    const result: SearchResult = {
+    const result: SearchResultEntry = {
       event_id: event.event_id,
       rank: Math.abs(event.rank || 0),
       result: {

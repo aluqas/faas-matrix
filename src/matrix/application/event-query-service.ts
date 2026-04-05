@@ -43,7 +43,7 @@ type MembershipRow = {
   content: string;
 };
 
-export interface PublicRoomInfo {
+export interface PublicRoomSummary {
   room_id: string;
   room_type?: string;
   name?: string;
@@ -653,7 +653,7 @@ export class EventQueryService {
     });
   }
 
-  async getRoomPublicInfo(db: D1Database, roomId: string): Promise<PublicRoomInfo | null> {
+  async getRoomPublicInfo(db: D1Database, roomId: string): Promise<PublicRoomSummary | null> {
     const room = await db
       .prepare(`
       SELECT room_id

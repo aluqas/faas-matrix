@@ -5,6 +5,6 @@ export type {
   PresenceEduUpdate,
   PresenceProjectionPort,
   PresenceProjectionQuery,
-  PresenceSyncProjection,
+  PresenceProjectionResult,
   PresenceWritePort,
 } from "../../../../types/presence";

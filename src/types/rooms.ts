@@ -2,7 +2,7 @@ import type { Membership, PDU, UnsignedData } from "./matrix";
 import type { PartialStateStatus } from "./partial-state";
 import type { TimestampDirection } from "./events";
 
-export type ClientRoomEvent = {
+export type RoomEventResponse = {
   type: string;
   state_key?: string;
   content: Record<string, unknown>;

@@ -2,12 +2,12 @@ import { Effect } from "effect";
 import type { AppContext } from "../../foundation/app-context";
 import { ErrorCodes, type Membership, type PDU } from "../../types";
 import type {
-  ClientRoomEvent,
   GetRoomMembersInput,
   GetRoomMessagesInput,
   GetRoomStateEventInput,
   GetRoomStateInput,
   GetVisibleRoomEventInput,
+  RoomEventResponse,
   RoomMessagesRelationFilter,
   RoomQueryDependencies,
   TimestampToEventInput,
@@ -33,12 +33,12 @@ type MembershipRecord = {
 };
 
 export type {
-  ClientRoomEvent,
   GetRoomMembersInput,
   GetRoomMessagesInput,
   GetRoomStateEventInput,
   GetRoomStateInput,
   GetVisibleRoomEventInput,
+  RoomEventResponse,
   RoomMessagesRelationFilter,
   RoomQueryDependencies,
   TimestampToEventInput,
@@ -88,7 +88,7 @@ function notFoundDomainError(message: string): DomainError {
   });
 }
 
-function toClientRoomEvent(event: PDU): ClientRoomEvent {
+function toRoomEventResponse(event: PDU): RoomEventResponse {
   return {
     type: event.type,
     state_key: event.state_key,
@@ -196,7 +196,7 @@ export class MatrixRoomQueryService {
 
   getCurrentState(
     input: GetRoomStateInput,
-  ): Effect.Effect<ClientRoomEvent[], DomainError | InfraError> {
+  ): Effect.Effect<RoomEventResponse[], DomainError | InfraError> {
     const db = this.getDb();
     const loadRoomState = this.fromPromise.bind(this);
     const requireMembership = this.requireMembershipEffect.bind(this);
@@ -207,13 +207,13 @@ export class MatrixRoomQueryService {
       const state = yield* loadRoomState("Failed to load room state", () =>
         dependencies.getRoomState(db, input.roomId),
       );
-      return state.map(toClientRoomEvent);
+      return state.map(toRoomEventResponse);
     });
   }
 
   getStateEvent(
     input: GetRoomStateEventInput,
-  ): Effect.Effect<Record<string, unknown> | ClientRoomEvent, DomainError | InfraError> {
+  ): Effect.Effect<Record<string, unknown> | RoomEventResponse, DomainError | InfraError> {
     const db = this.getDb();
     const requireMembership = this.requireMembershipEffect.bind(this);
     const loadStateEvent = this.fromPromise.bind(this);
@@ -229,13 +229,13 @@ export class MatrixRoomQueryService {
         return yield* Effect.fail(notFoundDomainError("State event not found"));
       }
 
-      return input.formatEvent ? toClientRoomEvent(event) : event.content;
+      return input.formatEvent ? toRoomEventResponse(event) : event.content;
     });
   }
 
   getMembers(
     input: GetRoomMembersInput,
-  ): Effect.Effect<{ chunk: ClientRoomEvent[] }, DomainError | InfraError> {
+  ): Effect.Effect<{ chunk: RoomEventResponse[] }, DomainError | InfraError> {
     const db = this.getDb();
     const waitForPartialState = this.waitForPartialStateJoinCompletionEffect.bind(this);
     const requireMembership = this.requireMembershipEffect.bind(this);
@@ -261,7 +261,7 @@ export class MatrixRoomQueryService {
       return {
         chunk: events
           .filter((event): event is PDU => event !== null && event !== undefined)
-          .map(toClientRoomEvent),
+          .map(toRoomEventResponse),
       };
     });
   }
@@ -269,7 +269,7 @@ export class MatrixRoomQueryService {
   getMessages(
     input: GetRoomMessagesInput,
   ): Effect.Effect<
-    { start: string; end?: string; chunk: ClientRoomEvent[] },
+    { start: string; end?: string; chunk: RoomEventResponse[] },
     DomainError | InfraError
   > {
     const db = this.getDb();
@@ -295,14 +295,14 @@ export class MatrixRoomQueryService {
       return {
         start: input.from ?? "s0",
         ...(events.length > 0 ? { end: `s${end}` } : {}),
-        chunk: events.map(toClientRoomEvent),
+        chunk: events.map(toRoomEventResponse),
       };
     });
   }
 
   getVisibleEvent(
     input: GetVisibleRoomEventInput,
-  ): Effect.Effect<ClientRoomEvent, DomainError | InfraError> {
+  ): Effect.Effect<RoomEventResponse, DomainError | InfraError> {
     const db = this.getDb();
     const loadVisibleEvent = this.fromPromise.bind(this);
     const dependencies = this.dependencies;
@@ -320,7 +320,7 @@ export class MatrixRoomQueryService {
         return yield* Effect.fail(notFoundDomainError("Event not found"));
       }
 
-      return toClientRoomEvent(event);
+      return toRoomEventResponse(event);
     });
   }
 

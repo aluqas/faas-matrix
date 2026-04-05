@@ -1,5 +1,5 @@
 import type { SyncResponse } from "./matrix";
-import type { PresenceSyncProjection } from "./presence";
+import type { PresenceProjectionResult } from "./presence";
 import type { FilterDefinition } from "../matrix/repositories/interfaces";
 import type { InvitedRoom, KnockedRoom, LeftRoom } from "./matrix";
 import type { SlidingSyncExtensionConfig } from "./client";
@@ -46,7 +46,7 @@ export interface TopLevelSyncResult {
   accountData: NonNullable<SyncResponse["account_data"]>["events"];
   toDeviceEvents: NonNullable<SyncResponse["to_device"]>["events"];
   deviceLists?: SyncResponse["device_lists"];
-  presence: PresenceSyncProjection;
+  presence: PresenceProjectionResult;
   deviceOneTimeKeysCount: NonNullable<SyncResponse["device_one_time_keys_count"]>;
   deviceUnusedFallbackKeyTypes: NonNullable<SyncResponse["device_unused_fallback_key_types"]>;
   currentToDevicePos: number;
