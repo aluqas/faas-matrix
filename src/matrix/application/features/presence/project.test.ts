@@ -28,7 +28,7 @@ class FakePresenceDatabase {
           };
         }
 
-        if (query.includes("FROM presence")) {
+        if (/from\s+"?presence"?/i.test(query)) {
           const requested = new Set(boundArgs as string[]);
           return {
             results: this.presenceRows.filter((row) => requested.has(row.user_id)),

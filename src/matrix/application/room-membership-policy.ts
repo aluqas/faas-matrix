@@ -240,15 +240,30 @@ export function authorizeLocalKnock(input: {
   );
 }
 
+export interface RestrictedJoinAllowEntry {
+  type: string;
+  room_id?: string;
+}
+
+export interface JoinRulesContent {
+  join_rule?: string;
+  allow?: RestrictedJoinAllowEntry[];
+}
+
 export function authorizeLocalJoin(input: {
   roomVersion: string;
-  joinRule: unknown;
+  joinRulesContent: JoinRulesContent | null | undefined;
   currentMembership: Membership | null | undefined;
-  joinAuthorisedViaUsersServer?: string | null;
+  /**
+   * Port for checking whether the user is joined to a given room.
+   * Required when the join_rule is "restricted" or "knock_restricted".
+   * If absent, restricted joins are denied unconditionally.
+   */
+  checkAllowedRoomMembership?: (roomId: string) => Effect.Effect<boolean>;
 }): Effect.Effect<JoinAuthorizationResult, DomainError> {
   return resolveJoinRuleContext({
     roomVersion: input.roomVersion,
-    joinRule: input.joinRule,
+    joinRule: input.joinRulesContent?.join_rule,
   }).pipe(
     Effect.flatMap(({ joinRule, policy }) => {
       if (input.currentMembership === "ban") {
@@ -267,19 +282,13 @@ export function authorizeLocalJoin(input: {
         });
       }
 
-      if (
-        (joinRule === "restricted" || joinRule === "knock_restricted") &&
-        input.joinAuthorisedViaUsersServer
-      ) {
-        return Effect.succeed<JoinAuthorizationResult>({
-          alreadyJoined: false,
+      if (joinRule === "restricted" || joinRule === "knock_restricted") {
+        return authorizeRestrictedJoin(
+          input.joinRulesContent?.allow ?? [],
+          input.checkAllowedRoomMembership,
           joinRule,
           policy,
-        });
-      }
-
-      if (joinRule === "restricted" || joinRule === "knock_restricted") {
-        return Effect.fail(forbidden("Cannot join restricted room without authorization"));
+        );
       }
 
       return Effect.fail(forbidden("Cannot join room"));
@@ -287,8 +296,39 @@ export function authorizeLocalJoin(input: {
   );
 }
 
+function authorizeRestrictedJoin(
+  allowList: RestrictedJoinAllowEntry[],
+  checkPort: ((roomId: string) => Effect.Effect<boolean>) | undefined,
+  joinRule: JoinRule,
+  policy: RoomVersionPolicy,
+): Effect.Effect<JoinAuthorizationResult, DomainError> {
+  const allowedRoomIds = allowList
+    .filter((entry) => entry.type === "m.room_membership" && typeof entry.room_id === "string")
+    .map((entry) => entry.room_id as string);
+
+  if (allowedRoomIds.length === 0) {
+    return Effect.fail(forbidden("Restricted room has no allowed rooms configured"));
+  }
+
+  if (!checkPort) {
+    return Effect.fail(forbidden("Cannot join restricted room: membership check unavailable"));
+  }
+
+  return Effect.gen(function* () {
+    for (const allowedRoomId of allowedRoomIds) {
+      const isMember = yield* checkPort(allowedRoomId);
+      if (isMember) {
+        return { alreadyJoined: false, joinRule, policy } satisfies JoinAuthorizationResult;
+      }
+    }
+    return yield* Effect.fail(
+      forbidden("Not a member of any allowed room for this restricted room"),
+    );
+  });
+}
+
 export function getJoinRuleFromContent(
-  content: { join_rule?: string } | Pick<RoomJoinRulesContent, "join_rule"> | null | undefined,
+  content: JoinRulesContent | Pick<RoomJoinRulesContent, "join_rule"> | null | undefined,
 ): JoinRule | "invite" {
   const joinRule = content?.join_rule;
   if (typeof joinRule !== "string") {

@@ -6,6 +6,7 @@ import { requireLogContext, withLogContext } from "../../logging";
 import type { SyncRepository } from "../../../repositories/interfaces";
 import { executePresenceCommand } from "../presence/command";
 import { getSharedServersInRoomsWithUserIncludingPartialState } from "../partial-state/shared-servers";
+import { upsertPresence, writePresenceToCache } from "../../../repositories/presence-repository";
 import { assembleSyncResponseEffect } from "./assembler";
 import { summarizeSyncResponse, type SyncUserInput } from "./contracts";
 import { createEffectPartialStatePort, createEffectSyncQueryPort } from "./effect-adapters";
@@ -49,33 +50,21 @@ export function projectSyncResponseEffect(
               localServerName: appContext.capabilities.config.serverName,
               persistPresence: async (presenceInput) => {
                 const db = appContext.capabilities.sql.connection as D1Database;
-                await db
-                  .prepare(`
-                    INSERT INTO presence (user_id, presence, status_msg, last_active_ts)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT (user_id) DO UPDATE SET
-                      presence = excluded.presence,
-                      status_msg = excluded.status_msg,
-                      last_active_ts = excluded.last_active_ts
-                  `)
-                  .bind(
+                await upsertPresence(
+                  db,
+                  presenceInput.userId,
+                  presenceInput.presence,
+                  presenceInput.statusMessage || null,
+                  presenceInput.now,
+                );
+                const cache = appContext.capabilities.kv.cache as KVNamespace | undefined;
+                if (cache) {
+                  await writePresenceToCache(
+                    cache,
                     presenceInput.userId,
                     presenceInput.presence,
                     presenceInput.statusMessage || null,
                     presenceInput.now,
-                  )
-                  .run();
-
-                const cache = appContext.capabilities.kv.cache as KVNamespace | undefined;
-                if (cache) {
-                  await cache.put(
-                    `presence:${presenceInput.userId}`,
-                    JSON.stringify({
-                      presence: presenceInput.presence,
-                      status_msg: presenceInput.statusMessage || null,
-                      last_active_ts: presenceInput.now,
-                    }),
-                    { expirationTtl: 5 * 60 },
                   );
                 }
               },

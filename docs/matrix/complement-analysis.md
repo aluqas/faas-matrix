@@ -4,6 +4,7 @@ Current-state Complement status for this repository.
 Last updated: 2026-04-05.
 
 This document is intentionally current-state only. Historical progression and old run-to-run comparisons are out of scope here.
+For active repair planning and sampled failure signatures from the latest broad rerun, see [`docs/matrix/complement-remediation-plan.md`](./complement-remediation-plan.md).
 
 ## Evidence Model
 
@@ -75,6 +76,30 @@ What it proved:
 - the lower reach in the stable run was materially affected by package timeout
 - there is substantially more exercised surface behind the current stable baseline
 - some remaining failures are only visible once packages are allowed to run much longer
+
+## Latest Broad Mixed Rerun
+
+Artifacts:
+
+- raw log: [`2026-04-05_07-56-40-49151.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-05_07-56-40-49151.log)
+- summary: [`2026-04-05_07-56-40-49151.summary.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-05_07-56-40-49151.summary.json)
+- classified: [`2026-04-05_07-56-40-49151.classified.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-05_07-56-40-49151.classified.json)
+
+Result:
+
+- top-level summary: `207 total / 129 pass / 76 fail / 2 skip`
+- overall classification: `mixed`
+
+Interpretation:
+
+- this rerun improved broad reach outcomes versus the earlier deep diagnostic run
+- it still cannot replace the stable baseline because classification remains `mixed`
+- it is useful as triage evidence for concrete repair work, especially where previously targeted-green buckets re-failed in a broad run
+
+Current working read:
+
+- sampled concrete failures and the remediation plan now live in [`docs/matrix/complement-remediation-plan.md`](./complement-remediation-plan.md)
+- broad rerun regressions do not automatically invalidate targeted green evidence, but they do mean those areas are not yet aggregate-stable
 
 ## Current Green Evidence
 

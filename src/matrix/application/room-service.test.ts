@@ -515,7 +515,7 @@ describe("MatrixRoomService", () => {
     ).rejects.toThrow("Cannot join room without an invite");
   });
 
-  it("rejects restricted joins without explicit authorization", async () => {
+  it("rejects restricted joins when no allowed rooms are configured", async () => {
     const repo = new MemoryRoomRepository();
     const { appContext } = createTestAppContext();
     await repo.createRoom("!room1:test", "10", "@creator:test", false);
@@ -565,7 +565,64 @@ describe("MatrixRoomService", () => {
 
     await expect(
       service.joinRoom({ userId: "@alice:test", roomId: "!room1:test" }),
-    ).rejects.toThrow("Cannot join restricted room without authorization");
+    ).rejects.toThrow("Restricted room has no allowed rooms configured");
+  });
+
+  it("rejects restricted joins when user is not in any allowed room", async () => {
+    const repo = new MemoryRoomRepository();
+    const { appContext } = createTestAppContext();
+    await repo.createRoom("!room1:test", "10", "@creator:test", false);
+    await repo.storeEvent({
+      event_id: "$create",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.create",
+      state_key: "",
+      content: { creator: "@creator:test", room_version: "10" },
+      origin_server_ts: 1,
+      depth: 1,
+      auth_events: [],
+      prev_events: [],
+    });
+    await repo.storeEvent({
+      event_id: "$joinrules",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.join_rules",
+      state_key: "",
+      content: {
+        join_rule: "restricted",
+        allow: [{ type: "m.room_membership", room_id: "!prereq:test" }],
+      },
+      origin_server_ts: 2,
+      depth: 2,
+      auth_events: [],
+      prev_events: ["$create"],
+    });
+    await repo.storeEvent({
+      event_id: "$power",
+      room_id: "!room1:test",
+      sender: "@creator:test",
+      type: "m.room.power_levels",
+      state_key: "",
+      content: {},
+      origin_server_ts: 3,
+      depth: 3,
+      auth_events: [],
+      prev_events: ["$joinrules"],
+    });
+
+    const service = new MatrixRoomService(
+      appContext,
+      repo,
+      new DefaultEventPipeline(),
+      new MemoryIdempotencyStore(),
+    );
+
+    // alice is NOT in !prereq:test, so join should be denied
+    await expect(
+      service.joinRoom({ userId: "@alice:test", roomId: "!room1:test" }),
+    ).rejects.toThrow("Not a member of any allowed room for this restricted room");
   });
 
   it("leaves a joined room through the membership persistence boundary", async () => {

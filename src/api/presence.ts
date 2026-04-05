@@ -13,15 +13,19 @@ import { queueFederationEdu } from "../matrix/application/features/shared/federa
 import { getSharedServersInRoomsWithUserIncludingPartialState } from "../matrix/application/features/partial-state/shared-servers";
 import { executePresenceCommand } from "../matrix/application/features/presence/command";
 import type { PresenceEduContent } from "../matrix/application/features/presence/contracts";
-import { getPresenceForUsers as loadPresenceForUsers } from "../matrix/application/features/presence/project";
+import {
+  findPresenceByUserId,
+  findPresenceByUserIds,
+  touchLastActive as dbTouchLastActive,
+  upsertPresence,
+  writePresenceToCache,
+} from "../matrix/repositories/presence-repository";
 
 const app = new Hono<AppEnv>();
 
 // ============================================
 // Constants
 // ============================================
-
-const PRESENCE_TIMEOUT = 5 * 60 * 1000; // 5 minutes - consider offline after this
 
 // ============================================
 // Endpoints
@@ -70,26 +74,19 @@ app.put("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
       {
         localServerName: c.env.SERVER_NAME,
         async persistPresence(input) {
-          await db
-            .prepare(`
-              INSERT INTO presence (user_id, presence, status_msg, last_active_ts)
-              VALUES (?, ?, ?, ?)
-              ON CONFLICT (user_id) DO UPDATE SET
-                presence = excluded.presence,
-                status_msg = excluded.status_msg,
-                last_active_ts = excluded.last_active_ts
-            `)
-            .bind(input.userId, input.presence, input.statusMessage || null, input.now)
-            .run();
-
-          await c.env.CACHE.put(
-            `presence:${input.userId}`,
-            JSON.stringify({
-              presence: input.presence,
-              status_msg: input.statusMessage || null,
-              last_active_ts: input.now,
-            }),
-            { expirationTtl: 5 * 60 },
+          await upsertPresence(
+            db,
+            input.userId,
+            input.presence,
+            input.statusMessage || null,
+            input.now,
+          );
+          await writePresenceToCache(
+            c.env.CACHE,
+            input.userId,
+            input.presence,
+            input.statusMessage || null,
+            input.now,
           );
         },
         async resolveInterestedServers(userId: string) {
@@ -125,57 +122,19 @@ app.get("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
     return Errors.notFound("User not found").toResponse();
   }
 
-  // Try KV cache first for faster reads
-  const cached = (await c.env.CACHE.get(`presence:${targetUserId}`, "json")) as {
-    presence: string;
-    status_msg: string | null;
-    last_active_ts: number;
-  } | null;
-
-  let presence: {
-    presence: string;
-    status_msg: string | null;
-    last_active_ts: number;
-  } | null = cached;
-
-  // Fall back to D1 if not in cache
-  if (!presence) {
-    presence = await db
-      .prepare(`
-      SELECT presence, status_msg, last_active_ts
-      FROM presence
-      WHERE user_id = ?
-    `)
-      .bind(targetUserId)
-      .first<{
-        presence: string;
-        status_msg: string | null;
-        last_active_ts: number;
-      }>();
-  }
-
-  if (!presence) {
-    // Default to offline if no presence set
+  const presenceRecord = await findPresenceByUserId(db, targetUserId, c.env.CACHE);
+  if (!presenceRecord) {
     return c.json({
       presence: "offline",
       currently_active: false,
     });
   }
 
-  const now = Date.now();
-  const isActive = now - presence.last_active_ts < PRESENCE_TIMEOUT;
-
-  // If presence was set to online but they've been inactive, report as unavailable
-  let effectivePresence = presence.presence;
-  if (presence.presence === "online" && !isActive) {
-    effectivePresence = "unavailable";
-  }
-
   return c.json({
-    presence: effectivePresence,
-    status_msg: presence.status_msg || undefined,
-    last_active_ago: now - presence.last_active_ts,
-    currently_active: isActive && presence.presence === "online",
+    presence: presenceRecord.presence,
+    ...(presenceRecord.statusMsg !== undefined ? { status_msg: presenceRecord.statusMsg } : {}),
+    last_active_ago: presenceRecord.lastActiveAgo,
+    currently_active: presenceRecord.currentlyActive,
   });
 });
 
@@ -184,21 +143,13 @@ app.get("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
 // ============================================
 
 // Get presence for multiple users (for sync)
-// This function requires KVNamespace to be passed for caching
 export async function getPresenceForUsers(db: D1Database, userIds: string[], cache?: KVNamespace) {
-  return loadPresenceForUsers(db, userIds, cache);
+  return findPresenceByUserIds(db, userIds, cache);
 }
 
 // Update last active timestamp (call this on API activity)
 export async function updateLastActive(db: D1Database, userId: string): Promise<void> {
-  const now = Date.now();
-
-  await db
-    .prepare(`
-    UPDATE presence SET last_active_ts = ? WHERE user_id = ?
-  `)
-    .bind(now, userId)
-    .run();
+  await dbTouchLastActive(db, userId);
 }
 
 export default app;

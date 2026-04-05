@@ -38,3 +38,19 @@ export interface PresenceProjectionQuery {
   filter?: SyncEventFilter | undefined;
   debugEnabled?: boolean | undefined;
 }
+
+/**
+ * Port for reading and projecting presence data.
+ * Allows sync/sliding-sync paths to share the same visible-user definition.
+ */
+export interface PresenceProjectionPort {
+  projectEvents(query: PresenceProjectionQuery): Promise<PresenceSyncProjection>;
+}
+
+/**
+ * Port for persisting presence state.
+ * Abstracts D1 + KV upsert behind a single call.
+ */
+export interface PresenceWritePort {
+  persistPresence(input: PresenceCommandInput): Promise<void>;
+}

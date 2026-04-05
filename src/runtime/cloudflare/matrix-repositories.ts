@@ -1,4 +1,5 @@
 import { discoverServer } from "../../services/server-discovery";
+import { upsertPresence as dbUpsertPresence } from "../../matrix/repositories/presence-repository";
 import {
   createRoom,
   createRoomAlias,
@@ -680,17 +681,14 @@ export class CloudflareFederationRepository implements FederationRepository {
     currentlyActive: boolean,
   ): Promise<void> {
     await ensureUserStub(this.env.DB, userId);
-    await this.env.DB.prepare(`
-      INSERT INTO presence (user_id, presence, status_msg, last_active_ts, currently_active)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT (user_id) DO UPDATE SET
-        presence = excluded.presence,
-        status_msg = excluded.status_msg,
-        last_active_ts = excluded.last_active_ts,
-        currently_active = excluded.currently_active
-    `)
-      .bind(userId, presence, statusMessage, lastActiveTs, currentlyActive ? 1 : 0)
-      .run();
+    await dbUpsertPresence(
+      this.env.DB,
+      userId,
+      presence,
+      statusMessage,
+      lastActiveTs,
+      currentlyActive,
+    );
   }
 
   async upsertRemoteDeviceList(

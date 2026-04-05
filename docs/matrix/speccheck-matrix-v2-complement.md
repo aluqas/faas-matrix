@@ -3,8 +3,10 @@
 ## Complement Evidence Summary
 
 > Detailed analysis: [`docs/matrix/complement-analysis.md`](./complement-analysis.md)
+> Active repair plan: [`docs/matrix/complement-remediation-plan.md`](./complement-remediation-plan.md)
 > Stable full-run baseline: [`2026-04-02_04-32-47-8585.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-02_04-32-47-8585.log) with 248 reached, 203 passing (82%), 38 failing, and 7 skipped at analyzer depth 7. Top-level `complement-run.ts` summary for the same run is 50 total, 37 pass, 11 fail, 2 skip.
 > Deep diagnostic run: [`2026-04-02_05-29-07-70996.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-02_05-29-07-70996.log) with 795 reached, 526 passing, 249 failing, and 20 skipped at analyzer depth 7. This run is useful for backlog discovery, but not as the stable baseline because its classification is `mixed`.
+> Latest broad rerun: [`2026-04-05_07-56-40-49151.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-05_07-56-40-49151.log) improved the broad run to 207 total, 129 pass, 76 fail, 2 skip, but it is still `mixed` and therefore remains triage evidence rather than baseline evidence.
 > Evidence policy: clean targeted green is positive evidence. Stable full-run red is implementation evidence when the run stays clean. Mixed-run red is treated as backlog signal until reproduced cleanly.
 
 This section maps Complement results to the spec areas tracked above.

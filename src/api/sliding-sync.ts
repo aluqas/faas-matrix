@@ -21,6 +21,7 @@ import {
   trackSlidingSyncRoomReadState,
 } from "../matrix/application/features/sync/sliding-sync-shared";
 import { getThreadSubscriptionsExtension } from "../matrix/application/features/sync/thread-subscriptions";
+import { projectPresenceEvents } from "../matrix/application/features/presence/project";
 // Room cache helper available for future optimizations
 // import { getRoomMetadata, invalidateRoomCache, type RoomMetadata } from '../services/room-cache';
 
@@ -1295,34 +1296,12 @@ async function buildMsc3575SlidingSyncResponse(
     // Presence extension
     // presence: enabled if key exists (MSC4186) or enabled=true (MSC3575)
     if (body.extensions.presence) {
-      response.extensions.presence = { events: [] };
-
-      // Get presence for users in the rooms
-      const userIds = new Set<string>();
-      for (const roomId of Object.keys(response.rooms)) {
-        const members = await db
-          .prepare(`
-          SELECT user_id FROM room_memberships WHERE room_id = ? AND membership = 'join'
-        `)
-          .bind(roomId)
-          .all();
-        for (const member of members.results as any[]) {
-          userIds.add(member.user_id);
-        }
-      }
-
-      for (const uid of userIds) {
-        if (uid === userId) continue;
-        const presenceKey = `presence:${uid}`;
-        const presence = (await cache.get(presenceKey, "json")) as any;
-        if (presence) {
-          response.extensions.presence.events!.push({
-            type: "m.presence",
-            sender: uid,
-            content: presence,
-          });
-        }
-      }
+      const presenceRoomIds = Object.keys(response.rooms);
+      const presenceProjection =
+        presenceRoomIds.length > 0
+          ? await projectPresenceEvents(db, cache, { userId, roomIds: presenceRoomIds })
+          : { events: [] };
+      response.extensions.presence = { events: presenceProjection.events };
     }
   }
 
@@ -2006,7 +1985,15 @@ async function buildSimplifiedSlidingSyncResponse(
 
     // presence: enabled if key exists (MSC4186) or enabled=true (MSC3575)
     if (body.extensions.presence) {
-      response.extensions.presence = { events: [] };
+      const presenceRoomIds4186 = Object.keys(response.rooms);
+      const presenceProjection4186 =
+        presenceRoomIds4186.length > 0
+          ? await projectPresenceEvents(db, c.env.CACHE, {
+              userId,
+              roomIds: presenceRoomIds4186,
+            })
+          : { events: [] };
+      response.extensions.presence = { events: presenceProjection4186.events };
     }
 
     if (body.extensions["io.element.msc4308.thread_subscriptions"]) {

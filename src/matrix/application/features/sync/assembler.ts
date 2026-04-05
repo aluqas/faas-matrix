@@ -166,7 +166,9 @@ export function assembleSyncResponseEffect(
             sinceDeviceKeys: cursor.deviceKeys,
             ...(input.since ? { sinceToken: input.since } : {}),
             ...(filter ? { filter } : {}),
-            roomIds: Object.keys(response.rooms?.join ?? {}),
+            // Use all joined rooms (not just delta rooms) so presence is projected
+            // for all shared-room users regardless of whether the room has new events.
+            roomIds: visibleJoinedRoomIds,
           },
         ),
       catch: (cause) => toAssemblerError("Failed to project top-level sync payload", cause),

@@ -6,6 +6,10 @@ This file provides guidance to coding agents when working with code in this repo
 
 Tuwunel is a Matrix homeserver (spec v1.17) running entirely on Cloudflare Workers edge infrastructure. It uses D1 (SQLite), KV, R2, Durable Objects, and Workflows. The live instance runs at `m.easydemo.org`.
 
+- Effect: 複雑なValidationやエラー、依存注入など、Effect + Honoを中心にコードベースを破壊的にリファクタリング中
+  - コードベース全体のBigbangは行わず、TDD時にredを起点にリアーキテクチャしている。
+- 今後書くSQLクエリはすべてkyselyを使用してください。
+
 ## Development Commands
 
 ```bash

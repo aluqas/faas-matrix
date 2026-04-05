@@ -15,7 +15,7 @@ describe("room-membership-policy", () => {
   it("allows public joins without an invite", async () => {
     const effect = authorizeLocalJoin({
       roomVersion: "10",
-      joinRule: "public",
+      joinRulesContent: { join_rule: "public" },
       currentMembership: null,
     });
 
@@ -25,30 +25,65 @@ describe("room-membership-policy", () => {
     });
   });
 
-  it("rejects restricted joins without an authorising server", async () => {
+  it("rejects restricted joins when no allowed rooms are configured", async () => {
     const effect = authorizeLocalJoin({
       roomVersion: "10",
-      joinRule: "restricted",
+      joinRulesContent: { join_rule: "restricted", allow: [] },
+      currentMembership: null,
+      checkAllowedRoomMembership: () => Effect.succeed(true),
+    });
+
+    await expect(Effect.runPromise(effect)).rejects.toThrow(
+      "Restricted room has no allowed rooms configured",
+    );
+  });
+
+  it("rejects restricted joins when membership check port is absent", async () => {
+    const effect = authorizeLocalJoin({
+      roomVersion: "10",
+      joinRulesContent: {
+        join_rule: "restricted",
+        allow: [{ type: "m.room_membership", room_id: "!allowed:test" }],
+      },
       currentMembership: null,
     });
 
     await expect(Effect.runPromise(effect)).rejects.toThrow(
-      "Cannot join restricted room without authorization",
+      "Cannot join restricted room: membership check unavailable",
     );
   });
 
-  it("allows restricted joins when authorization metadata is present", async () => {
+  it("allows restricted joins when user is a member of an allowed room", async () => {
     const effect = authorizeLocalJoin({
       roomVersion: "10",
-      joinRule: "restricted",
+      joinRulesContent: {
+        join_rule: "restricted",
+        allow: [{ type: "m.room_membership", room_id: "!allowed:test" }],
+      },
       currentMembership: null,
-      joinAuthorisedViaUsersServer: "@authoriser:test",
+      checkAllowedRoomMembership: (roomId) => Effect.succeed(roomId === "!allowed:test"),
     });
 
     await expect(Effect.runPromise(effect)).resolves.toMatchObject({
       alreadyJoined: false,
       joinRule: "restricted",
     });
+  });
+
+  it("rejects restricted joins when user is not in any allowed room", async () => {
+    const effect = authorizeLocalJoin({
+      roomVersion: "10",
+      joinRulesContent: {
+        join_rule: "restricted",
+        allow: [{ type: "m.room_membership", room_id: "!allowed:test" }],
+      },
+      currentMembership: null,
+      checkAllowedRoomMembership: () => Effect.succeed(false),
+    });
+
+    await expect(Effect.runPromise(effect)).rejects.toThrow(
+      "Not a member of any allowed room for this restricted room",
+    );
   });
 
   it("rejects knock rules that the room version does not support", async () => {

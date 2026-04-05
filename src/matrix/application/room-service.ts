@@ -26,11 +26,12 @@ import {
   authorizeLocalInvite,
   authorizeLocalJoin,
   authorizeLocalKnock,
-  getJoinRuleFromContent,
   authorizeUnban,
   validateKnockPreconditions,
   validateLeavePreconditions,
+  type JoinRulesContent,
 } from "./room-membership-policy";
+import { Effect } from "effect";
 import { runClientEffect } from "./effect-runtime";
 import { emitEffectWarning } from "./effect-debug";
 import { withLogContext, type LogContext } from "./logging";
@@ -58,6 +59,11 @@ import {
   buildRoomEvent,
   hasEquivalentStateEvent,
 } from "./features/rooms/send-event";
+import {
+  assertCreateEventNotReplaceable,
+  deriveV12RoomId,
+  usesHashBasedRoomId,
+} from "./features/rooms/room-version-semantics";
 import {
   ensureFederatedRoomStub,
   persistFederationMembershipEvent,
@@ -326,16 +332,28 @@ export class MatrixRoomService {
     }
 
     const version = room_version || getDefaultRoomVersion();
+    const serverName = this.appContext.capabilities.config.serverName;
 
-    const roomId = await this.appContext.capabilities.id.generateRoomId(
-      this.appContext.capabilities.config.serverName,
-    );
+    // For v12+ rooms (MSC4291), the room ID is derived from the hash of the
+    // create event content rather than being randomly generated.
+    let roomId: string;
+    if (usesHashBasedRoomId(version)) {
+      const createContent: Record<string, unknown> = {
+        ...creation_content,
+        creator: input.userId,
+        room_version: version,
+      };
+      roomId = await deriveV12RoomId(createContent, serverName);
+    } else {
+      roomId = await this.appContext.capabilities.id.generateRoomId(serverName);
+    }
+
     const isPublic = visibility === "public";
     await this.repository.createRoom(roomId, version, input.userId, isPublic);
 
     const createEventId = await createInitialRoomEvents(
       this.repository,
-      this.appContext.capabilities.config.serverName,
+      serverName,
       roomId,
       version,
       input.userId,
@@ -515,13 +533,20 @@ export class MatrixRoomService {
           validated.roomId,
           "m.room.join_rules",
         );
+        const joinRulesContent = (joinRulesEvent?.content ?? null) as JoinRulesContent | null;
+        const repository = this.repository;
         await runClientEffect(
           authorizeLocalJoin({
             roomVersion: auth.roomVersion,
-            joinRule: getJoinRuleFromContent(
-              joinRulesEvent?.content as { join_rule?: string } | undefined,
-            ),
+            joinRulesContent,
             currentMembership: currentMembership?.membership,
+            checkAllowedRoomMembership: (allowedRoomId) =>
+              Effect.promise(() =>
+                repository
+                  .getMembership(allowedRoomId, auth.userId)
+                  .then((m) => m?.membership === "join")
+                  .catch(() => false),
+              ),
           }),
         );
       },
@@ -1256,6 +1281,9 @@ export class MatrixRoomService {
               };
             },
             authorize: async (_pipelineInput, auth) => {
+              // Reject any attempt to replace the create event from a client.
+              await runClientEffect(assertCreateEventNotReplaceable(input.eventType));
+
               const membership = await this.repository.getMembership(input.roomId, auth.userId);
               if (!membership || membership.membership !== "join") {
                 throw Errors.forbidden("Not a member of this room");

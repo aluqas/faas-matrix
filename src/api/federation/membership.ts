@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import type { AppEnv, PDU } from "../../types";
+import { Effect } from "effect";
+import type { AppEnv, Membership, PDU } from "../../types";
 import { Errors } from "../../utils/errors";
 import {
   calculateReferenceHashEventId,
@@ -25,6 +26,7 @@ import {
   persistFederationMembershipEvent,
   persistInviteStrippedState,
 } from "../../matrix/application/federation-handler-service";
+import { requiresFullCreateEventInStrippedState } from "../../matrix/application/features/rooms/room-version-semantics";
 import {
   type FederationThirdPartyInviteValidationResult,
   validateInviteRequest,
@@ -33,6 +35,12 @@ import {
   validateSendLeaveRequest,
   validateThirdPartyInviteExchangeRequest,
 } from "../../matrix/application/federation-validation";
+import {
+  authorizeLocalJoin,
+  authorizeLocalKnock,
+  type JoinRulesContent,
+} from "../../matrix/application/room-membership-policy";
+import { runFederationEffect } from "../../matrix/application/effect-runtime";
 import {
   logFederationRouteWarning,
   runDomainValidation,
@@ -100,12 +108,12 @@ app.get("/_matrix/federation/v1/make_join/:roomId/:userId", async (c) => {
     .bind(roomId)
     .first<{ event_id: string }>();
   const joinRulesEvent = await c.env.DB.prepare(
-    `SELECT e.event_id FROM room_state rs
+    `SELECT e.event_id, e.content FROM room_state rs
      JOIN events e ON rs.event_id = e.event_id
      WHERE rs.room_id = ? AND rs.event_type = 'm.room.join_rules'`,
   )
     .bind(roomId)
-    .first<{ event_id: string }>();
+    .first<{ event_id: string; content: string }>();
   const powerLevelsEvent = await c.env.DB.prepare(
     `SELECT e.event_id FROM room_state rs
      JOIN events e ON rs.event_id = e.event_id
@@ -127,29 +135,32 @@ app.get("/_matrix/federation/v1/make_join/:roomId/:userId", async (c) => {
     .bind(roomId, userId)
     .first<{ event_id: string; membership: string | null }>();
 
-  if (currentMembership?.membership === "ban") {
-    return c.json({ errcode: "M_FORBIDDEN", error: "User is banned from this room" }, 403);
-  }
+  const joinRulesContent = joinRulesEvent
+    ? (JSON.parse(joinRulesEvent.content) as JoinRulesContent)
+    : null;
 
-  if (joinRulesEvent) {
-    const joinRulesRow = await c.env.DB.prepare(
-      `SELECT e.content FROM room_state rs
-       JOIN events e ON rs.event_id = e.event_id
-       WHERE rs.room_id = ? AND rs.event_type = 'm.room.join_rules'`,
-    )
-      .bind(roomId)
-      .first<{ content: string }>();
-    const joinRule = joinRulesRow
-      ? (JSON.parse(joinRulesRow.content) as { join_rule?: string }).join_rule || "invite"
-      : "invite";
-
-    if (
-      (joinRule === "knock" || joinRule === "knock_restricted") &&
-      currentMembership?.membership !== "invite" &&
-      currentMembership?.membership !== "join"
-    ) {
-      return c.json({ errcode: "M_FORBIDDEN", error: "Cannot join room without an invite" }, 403);
-    }
+  try {
+    const makeJoinDb = c.env.DB;
+    await runFederationEffect(
+      authorizeLocalJoin({
+        roomVersion: room.room_version,
+        joinRulesContent,
+        currentMembership: currentMembership?.membership as Membership | undefined,
+        checkAllowedRoomMembership: (allowedRoomId) =>
+          Effect.promise(() =>
+            makeJoinDb
+              .prepare(`SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?`)
+              .bind(allowedRoomId, userId)
+              .first<{ membership: string }>()
+              .then((m) => m?.membership === "join")
+              .catch(() => false),
+          ),
+      }),
+    );
+  } catch (error) {
+    const response = toFederationErrorResponse(error);
+    if (response) return response;
+    throw error;
   }
 
   const authEvents: string[] = [];
@@ -638,32 +649,33 @@ app.get("/_matrix/federation/v1/make_knock/:roomId/:userId", async (c) => {
     return Errors.notFound("Room not found").toResponse();
   }
 
-  const joinRulesEvent = await db
+  const joinRulesRow = await db
     .prepare(
-      `SELECT e.content FROM room_state rs
+      `SELECT e.event_id, e.content FROM room_state rs
        JOIN events e ON rs.event_id = e.event_id
        WHERE rs.room_id = ? AND rs.event_type = 'm.room.join_rules'`,
     )
     .bind(roomId)
-    .first<{ content: string }>();
-  if (joinRulesEvent) {
-    const joinRules = JSON.parse(joinRulesEvent.content);
-    if (joinRules.join_rule !== "knock" && joinRules.join_rule !== "knock_restricted") {
-      return c.json({ errcode: "M_FORBIDDEN", error: "Room does not allow knocking" }, 403);
-    }
-  } else {
-    return c.json({ errcode: "M_FORBIDDEN", error: "Room does not allow knocking" }, 403);
-  }
-
+    .first<{ event_id: string; content: string }>();
   const membership = await db
     .prepare(`SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?`)
     .bind(roomId, userId)
     .first<{ membership: string }>();
-  if (membership?.membership === "ban") {
-    return c.json({ errcode: "M_FORBIDDEN", error: "User is banned from this room" }, 403);
-  }
-  if (membership?.membership === "join") {
-    return c.json({ errcode: "M_FORBIDDEN", error: "User is already a member of this room" }, 403);
+
+  try {
+    await runFederationEffect(
+      authorizeLocalKnock({
+        roomVersion: room.room_version,
+        joinRule: joinRulesRow
+          ? (JSON.parse(joinRulesRow.content) as JoinRulesContent).join_rule
+          : undefined,
+        currentMembership: membership?.membership as Membership | undefined,
+      }),
+    );
+  } catch (error) {
+    const response = toFederationErrorResponse(error);
+    if (response) return response;
+    throw error;
   }
 
   const createEvent = await db
@@ -671,14 +683,6 @@ app.get("/_matrix/federation/v1/make_knock/:roomId/:userId", async (c) => {
       `SELECT e.event_id FROM room_state rs
        JOIN events e ON rs.event_id = e.event_id
        WHERE rs.room_id = ? AND rs.event_type = 'm.room.create'`,
-    )
-    .bind(roomId)
-    .first<{ event_id: string }>();
-  const joinRulesEventId = await db
-    .prepare(
-      `SELECT e.event_id FROM room_state rs
-       JOIN events e ON rs.event_id = e.event_id
-       WHERE rs.room_id = ? AND rs.event_type = 'm.room.join_rules'`,
     )
     .bind(roomId)
     .first<{ event_id: string }>();
@@ -693,7 +697,7 @@ app.get("/_matrix/federation/v1/make_knock/:roomId/:userId", async (c) => {
 
   const authEvents: string[] = [];
   if (createEvent) authEvents.push(createEvent.event_id);
-  if (joinRulesEventId) authEvents.push(joinRulesEventId.event_id);
+  if (joinRulesRow) authEvents.push(joinRulesRow.event_id);
   if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
 
   const latestEvent = await db
@@ -755,7 +759,8 @@ app.put("/_matrix/federation/v1/send_knock/:roomId/:eventId", async (c) => {
     return Errors.notFound("Room not found").toResponse();
   }
 
-  const joinRulesEvent = await db
+  const userId = validatedKnock.event.state_key;
+  const sendKnockJoinRulesEvent = await db
     .prepare(
       `SELECT e.content FROM room_state rs
        JOIN events e ON rs.event_id = e.event_id
@@ -763,25 +768,25 @@ app.put("/_matrix/federation/v1/send_knock/:roomId/:eventId", async (c) => {
     )
     .bind(roomId)
     .first<{ content: string }>();
-  if (joinRulesEvent) {
-    const joinRules = JSON.parse(joinRulesEvent.content);
-    if (joinRules.join_rule !== "knock" && joinRules.join_rule !== "knock_restricted") {
-      return c.json({ errcode: "M_FORBIDDEN", error: "Room does not allow knocking" }, 403);
-    }
-  } else {
-    return c.json({ errcode: "M_FORBIDDEN", error: "Room does not allow knocking" }, 403);
-  }
-
-  const userId = validatedKnock.event.state_key;
-  const membership = await db
+  const sendKnockMembership = await db
     .prepare(`SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?`)
     .bind(roomId, userId)
     .first<{ membership: string }>();
-  if (membership?.membership === "ban") {
-    return c.json({ errcode: "M_FORBIDDEN", error: "User is banned from this room" }, 403);
-  }
-  if (membership?.membership === "join") {
-    return c.json({ errcode: "M_FORBIDDEN", error: "User is already a member of this room" }, 403);
+
+  try {
+    await runFederationEffect(
+      authorizeLocalKnock({
+        roomVersion: room.room_version,
+        joinRule: sendKnockJoinRulesEvent
+          ? (JSON.parse(sendKnockJoinRulesEvent.content) as JoinRulesContent).join_rule
+          : undefined,
+        currentMembership: sendKnockMembership?.membership as Membership | undefined,
+      }),
+    );
+  } catch (error) {
+    const response = toFederationErrorResponse(error);
+    if (response) return response;
+    throw error;
   }
 
   const knockPdu = validatedKnock.event;
@@ -801,12 +806,7 @@ app.put("/_matrix/federation/v1/send_knock/:roomId/:eventId", async (c) => {
     console.error(`Failed to store knock event ${eventId}:`, error);
   }
 
-  const strippedState: Array<{
-    type: string;
-    state_key: string;
-    content: Record<string, unknown>;
-    sender: string;
-  }> = [];
+  const strippedState: Array<Record<string, unknown>> = [];
   const strippedStateTypes = [
     "m.room.create",
     "m.room.name",
@@ -814,7 +814,53 @@ app.put("/_matrix/federation/v1/send_knock/:roomId/:eventId", async (c) => {
     "m.room.join_rules",
     "m.room.canonical_alias",
   ] as const;
+  const useFullCreateEvent = requiresFullCreateEventInStrippedState(room.room_version);
   for (const eventType of strippedStateTypes) {
+    // MSC4311: For v12+ rooms, include the full create event (not stripped).
+    if (eventType === "m.room.create" && useFullCreateEvent) {
+      const fullEvent = await db
+        .prepare(
+          `SELECT e.event_id, e.room_id, e.event_type, e.state_key, e.content,
+                  e.sender, e.origin_server_ts, e.depth, e.auth_events, e.prev_events,
+                  e.hashes, e.signatures
+           FROM room_state rs
+           JOIN events e ON rs.event_id = e.event_id
+           WHERE rs.room_id = ? AND rs.event_type = 'm.room.create'`,
+        )
+        .bind(roomId)
+        .first<{
+          event_id: string;
+          room_id: string;
+          event_type: string;
+          state_key: string;
+          content: string;
+          sender: string;
+          origin_server_ts: number;
+          depth: number;
+          auth_events: string;
+          prev_events: string;
+          hashes: string | null;
+          signatures: string | null;
+        }>();
+      if (fullEvent) {
+        strippedState.push({
+          event_id: fullEvent.event_id,
+          room_id: fullEvent.room_id,
+          type: fullEvent.event_type,
+          state_key: fullEvent.state_key,
+          content: JSON.parse(fullEvent.content),
+          sender: fullEvent.sender,
+          origin_server_ts: fullEvent.origin_server_ts,
+          depth: fullEvent.depth,
+          auth_events: JSON.parse(fullEvent.auth_events || "[]"),
+          prev_events: JSON.parse(fullEvent.prev_events || "[]"),
+          ...(fullEvent.hashes ? { hashes: JSON.parse(fullEvent.hashes) } : {}),
+          ...(fullEvent.signatures ? { signatures: JSON.parse(fullEvent.signatures) } : {}),
+        });
+      }
+      continue;
+    }
+
     const event = await db
       .prepare(
         `SELECT e.event_type, e.state_key, e.content, e.sender

@@ -115,7 +115,8 @@ describe("CloudflareFederationRepository", () => {
     expect(db.statements[0]?.query).toContain("INSERT OR IGNORE INTO users");
     expect(db.statements[0]?.args[0]).toBe("@alice:hs1");
     expect(db.statements[0]?.args[1]).toBe("@alice:hs1");
-    expect(db.statements[1]?.query).toContain("INSERT INTO presence");
+    expect(db.statements[1]?.query.toLowerCase()).toContain("insert into");
+    expect(db.statements[1]?.query.toLowerCase()).toContain("presence");
     expect(db.statements[1]?.args[0]).toBe("@alice:hs1");
   });
 });
