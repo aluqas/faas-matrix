@@ -1,21 +1,31 @@
 import type { JsonObject } from "./common";
+import type { MatrixSignatures } from "./matrix";
 
 export type { JsonObject };
+
+export type StringMap = Record<string, string>;
+export type JsonObjectMap = Record<string, JsonObject>;
+export type DeviceKeyRequestMap = Record<string, string[]>;
+export type OneTimeKeyClaimMap = Record<string, StringMap>;
+export type UserDeviceKeysMap = Record<string, Record<string, DeviceKeysPayload>>;
+export type UserCrossSigningKeyMap = Record<string, CrossSigningKeyPayload>;
+export type DeviceOneTimeKeysMap = Record<string, JsonObjectMap>;
+export type UserOneTimeKeysMap = Record<string, DeviceOneTimeKeysMap>;
 
 export interface DeviceKeysPayload extends JsonObject {
   user_id?: string;
   device_id?: string;
   unsigned?: JsonObject;
   algorithms?: string[];
-  keys?: Record<string, string>;
-  signatures?: Record<string, Record<string, string>>;
+  keys?: StringMap;
+  signatures?: MatrixSignatures;
 }
 
 export interface CrossSigningKeyPayload extends JsonObject {
   user_id?: string;
   usage?: string[];
-  keys?: Record<string, string>;
-  signatures?: Record<string, Record<string, string>>;
+  keys?: StringMap;
+  signatures?: MatrixSignatures;
 }
 
 export interface UIAAuthDict extends JsonObject {
@@ -26,23 +36,23 @@ export interface UIAAuthDict extends JsonObject {
 
 export interface KeysUploadRequest {
   device_keys?: DeviceKeysPayload;
-  one_time_keys?: Record<string, JsonObject>;
-  fallback_keys?: Record<string, JsonObject>;
+  one_time_keys?: JsonObjectMap;
+  fallback_keys?: JsonObjectMap;
 }
 
 export interface KeysQueryRequest {
-  device_keys?: Record<string, string[]>;
+  device_keys?: DeviceKeyRequestMap;
 }
 
 export interface KeysQueryResponse {
-  device_keys: Record<string, Record<string, DeviceKeysPayload>>;
-  master_keys?: Record<string, CrossSigningKeyPayload>;
-  self_signing_keys?: Record<string, CrossSigningKeyPayload>;
-  user_signing_keys?: Record<string, CrossSigningKeyPayload>;
+  device_keys: UserDeviceKeysMap;
+  master_keys?: UserCrossSigningKeyMap;
+  self_signing_keys?: UserCrossSigningKeyMap;
+  user_signing_keys?: UserCrossSigningKeyMap;
 }
 
 export interface KeysClaimRequest {
-  one_time_keys?: Record<string, Record<string, string>>;
+  one_time_keys?: OneTimeKeyClaimMap;
 }
 
 export interface CrossSigningUploadRequest {
@@ -60,7 +70,7 @@ export interface CrossSigningKeysStore {
 
 export interface SignedKeyPayload extends JsonObject {
   device_id?: string;
-  signatures?: Record<string, Record<string, string>>;
+  signatures?: MatrixSignatures;
 }
 
 export type SignaturesUploadRequest = Record<string, Record<string, SignedKeyPayload>>;
@@ -170,7 +180,7 @@ export interface PushRuleActionsRequest {
 
 export interface BackupAlgorithmData {
   public_key: string;
-  signatures?: Record<string, Record<string, string>>;
+  signatures?: MatrixSignatures;
 }
 
 export interface CreateBackupRequest {
@@ -178,13 +188,13 @@ export interface CreateBackupRequest {
   auth_data: BackupAlgorithmData;
 }
 
-export type BackupVersionResponse = {
+export interface BackupVersionResponse {
   algorithm: string;
   auth_data: BackupAlgorithmData;
   count: number;
   etag: string;
   version: string;
-};
+}
 
 export interface KeyBackupData {
   first_message_index: number;
@@ -193,12 +203,16 @@ export interface KeyBackupData {
   session_data: Record<string, any>;
 }
 
+export type RoomKeyBackupSessions = Record<string, KeyBackupData>;
+
 export interface RoomKeyBackup {
-  sessions: Record<string, KeyBackupData>;
+  sessions: RoomKeyBackupSessions;
 }
 
+export type KeysBackupRooms = Record<string, RoomKeyBackup>;
+
 export interface KeysBackupRequest {
-  rooms: Record<string, RoomKeyBackup>;
+  rooms: KeysBackupRooms;
 }
 
 export interface OpenIDToken {
@@ -257,24 +271,33 @@ export interface SearchRequest {
   };
 }
 
+export interface SearchResultEvent {
+  event_id: string;
+  type: string;
+  room_id: string;
+  sender: string;
+  origin_server_ts: number;
+  content: Record<string, any>;
+}
+
+export interface SearchProfileInfo {
+  displayname?: string;
+  avatar_url?: string;
+}
+
+export interface SearchResultContext {
+  events_before: SearchResultEvent[];
+  events_after: SearchResultEvent[];
+  profile_info?: Record<string, SearchProfileInfo>;
+  start?: string;
+  end?: string;
+}
+
 export interface SearchResultEntry {
   event_id: string;
   rank: number;
-  result: {
-    event_id: string;
-    type: string;
-    room_id: string;
-    sender: string;
-    origin_server_ts: number;
-    content: Record<string, any>;
-  };
-  context?: {
-    events_before: any[];
-    events_after: any[];
-    profile_info?: Record<string, { displayname?: string; avatar_url?: string }>;
-    start?: string;
-    end?: string;
-  };
+  result: SearchResultEvent;
+  context?: SearchResultContext;
 }
 
 export interface ContentReportRecord {
@@ -374,7 +397,7 @@ export interface SpaceHierarchyChildStateEvent {
   origin_server_ts: number;
 }
 
-export interface SpaceHierarchyRoom {
+export interface SpaceHierarchyRoomSummary {
   room_id: string;
   room_type?: string;
   name?: string;
@@ -385,20 +408,15 @@ export interface SpaceHierarchyRoom {
   join_rule?: string;
   world_readable: boolean;
   guest_can_join: boolean;
+}
+
+export type PublicRoomSummary = SpaceHierarchyRoomSummary;
+
+export interface SpaceHierarchyRoom extends SpaceHierarchyRoomSummary {
   children_state: SpaceHierarchyChildStateEvent[];
 }
 
-export interface FederationSpaceHierarchyRoom {
-  room_id: string;
-  room_type?: string;
-  name?: string;
-  topic?: string;
-  canonical_alias?: string;
-  num_joined_members: number;
-  avatar_url?: string;
-  join_rule?: string;
-  world_readable: boolean;
-  guest_can_join: boolean;
+export interface FederationSpaceHierarchyRoom extends SpaceHierarchyRoomSummary {
   children_state?: Array<{
     type?: unknown;
     state_key?: unknown;
@@ -422,14 +440,6 @@ export interface ThreadSubscriptionState {
   subscribed: boolean;
   unsubscribed_after?: number;
   automatic_event_id?: string;
-}
-
-export interface RelationEvent {
-  event_id: string;
-  type: string;
-  sender: string;
-  origin_server_ts: number;
-  content: Record<string, unknown>;
 }
 
 export interface SlidingSyncExtensionConfig {

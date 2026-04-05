@@ -28,14 +28,19 @@ import { getSharedServersInRoomsWithUserIncludingPartialState } from "../matrix/
 import { parseSyncToken } from "../matrix/application/features/sync/contracts";
 import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
 import {
-  type CrossSigningKeyPayload,
   type CrossSigningKeysStore,
+  type DeviceKeyRequestMap,
   type DeviceKeysPayload,
   type JsonObject,
+  type JsonObjectMap,
   type KeysQueryResponse,
   type SignaturesUploadRequest,
+  type StringMap,
   type TokenSubmitRequest,
   type UiaSessionData,
+  type UserCrossSigningKeyMap,
+  type UserDeviceKeysMap,
+  type UserOneTimeKeysMap,
   isIdempotentCrossSigningUpload,
   parseCrossSigningKeysStore,
   parseCrossSigningUploadRequest,
@@ -549,11 +554,11 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
     }),
   );
 
-  const deviceKeys: Record<string, Record<string, JsonObject>> = {};
-  const masterKeys: Record<string, CrossSigningKeyPayload> = {};
-  const selfSigningKeys: Record<string, CrossSigningKeyPayload> = {};
-  const userSigningKeys: Record<string, CrossSigningKeyPayload> = {};
-  const failures: Record<string, JsonObject> = {};
+  const deviceKeys: UserDeviceKeysMap = {};
+  const masterKeys: UserCrossSigningKeyMap = {};
+  const selfSigningKeys: UserCrossSigningKeyMap = {};
+  const userSigningKeys: UserCrossSigningKeyMap = {};
+  const failures: JsonObjectMap = {};
 
   // Helper function to merge signatures from DB into device keys
   async function mergeSignaturesForDevice(
@@ -576,14 +581,14 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
       }>();
 
     if (dbSignatures.results.length > 0) {
-      const signatures: Record<string, Record<string, string>> = deviceKey.signatures
+      const mergedSignatures: Record<string, StringMap> = deviceKey.signatures
         ? { ...deviceKey.signatures }
         : {};
       for (const sig of dbSignatures.results) {
-        signatures[sig.signer_user_id] = signatures[sig.signer_user_id] || {};
-        signatures[sig.signer_user_id]![sig.signer_key_id] = sig.signature;
+        mergedSignatures[sig.signer_user_id] = mergedSignatures[sig.signer_user_id] || {};
+        mergedSignatures[sig.signer_user_id]![sig.signer_key_id] = sig.signature;
       }
-      deviceKey.signatures = signatures;
+      deviceKey.signatures = mergedSignatures;
     }
 
     return deviceKey;
@@ -591,7 +596,7 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
 
   if (requestedKeys) {
     const localServerName = c.env.SERVER_NAME;
-    const remoteRequestsByServer: Record<string, Record<string, string[]>> = {};
+    const remoteRequestsByServer: Record<string, DeviceKeyRequestMap> = {};
 
     for (const [userId, devices] of Object.entries(requestedKeys)) {
       deviceKeys[userId] = {};
@@ -712,8 +717,8 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
     }),
   );
 
-  const oneTimeKeys: Record<string, Record<string, Record<string, JsonObject>>> = {};
-  const failures: Record<string, JsonObject> = {};
+  const oneTimeKeys: UserOneTimeKeysMap = {};
+  const failures: JsonObjectMap = {};
 
   if (requestedKeys) {
     for (const [userId, devices] of Object.entries(requestedKeys)) {

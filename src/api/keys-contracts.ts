@@ -2,18 +2,26 @@ import type {
   CrossSigningKeysStore,
   CrossSigningKeyPayload,
   DeviceKeysPayload,
+  DeviceKeyRequestMap,
+  DeviceOneTimeKeysMap,
   JsonObject,
+  JsonObjectMap,
   KeysClaimRequest,
   KeysQueryRequest,
   KeysQueryResponse,
   KeysUploadRequest,
+  OneTimeKeyClaimMap,
   SignaturesUploadRequest,
   SignedKeyPayload,
+  StringMap,
   StoredOneTimeKey,
   StoredOneTimeKeyBuckets,
   TokenSubmitRequest,
   UIAAuthDict,
   UiaSessionData,
+  UserCrossSigningKeyMap,
+  UserDeviceKeysMap,
+  UserOneTimeKeysMap,
   CrossSigningUploadRequest,
 } from "../types/client";
 
@@ -21,18 +29,25 @@ export type {
   CrossSigningKeysStore,
   CrossSigningKeyPayload,
   DeviceKeysPayload,
+  DeviceKeyRequestMap,
+  DeviceOneTimeKeysMap,
   JsonObject,
+  JsonObjectMap,
   KeysClaimRequest,
   KeysQueryRequest,
   KeysQueryResponse,
   KeysUploadRequest,
   SignaturesUploadRequest,
   SignedKeyPayload,
+  StringMap,
   StoredOneTimeKey,
   StoredOneTimeKeyBuckets,
   TokenSubmitRequest,
   UIAAuthDict,
   UiaSessionData,
+  UserCrossSigningKeyMap,
+  UserDeviceKeysMap,
+  UserOneTimeKeysMap,
   CrossSigningUploadRequest,
 };
 
@@ -57,10 +72,10 @@ function toRecordOfStrings(value: unknown): Record<string, string> | null {
     return null;
   }
 
-  return Object.fromEntries(entries as Array<readonly [string, string]>) as Record<string, string>;
+  return Object.fromEntries(entries as Array<readonly [string, string]>) as StringMap;
 }
 
-function toRecordOfStringRecords(value: unknown): Record<string, Record<string, string>> | null {
+function toRecordOfStringRecords(value: unknown): Record<string, StringMap> | null {
   if (!isPlainObject(value)) {
     return null;
   }
@@ -74,9 +89,9 @@ function toRecordOfStringRecords(value: unknown): Record<string, Record<string, 
     return null;
   }
 
-  return Object.fromEntries(entries as Array<readonly [string, Record<string, string>]>) as Record<
+  return Object.fromEntries(entries as Array<readonly [string, StringMap]>) as Record<
     string,
-    Record<string, string>
+    StringMap
   >;
 }
 
@@ -86,7 +101,7 @@ function toStringArray(value: unknown): string[] | null {
     : null;
 }
 
-function toRecordOfJsonObjects(value: unknown): Record<string, JsonObject> | null {
+function toRecordOfJsonObjects(value: unknown): JsonObjectMap | null {
   if (!isPlainObject(value)) {
     return null;
   }
@@ -100,10 +115,10 @@ function toRecordOfJsonObjects(value: unknown): Record<string, JsonObject> | nul
     return null;
   }
 
-  return Object.fromEntries(entries as Array<[string, JsonObject]>);
+  return Object.fromEntries(entries as Array<[string, JsonObject]>) as JsonObjectMap;
 }
 
-function toDeviceKeysRequestMap(value: unknown): Record<string, string[]> | null {
+function toDeviceKeysRequestMap(value: unknown): DeviceKeyRequestMap | null {
   if (!isPlainObject(value)) {
     return null;
   }
@@ -117,7 +132,7 @@ function toDeviceKeysRequestMap(value: unknown): Record<string, string[]> | null
     return null;
   }
 
-  return Object.fromEntries(entries as Array<[string, string[]]>);
+  return Object.fromEntries(entries as Array<[string, string[]]>) as DeviceKeyRequestMap;
 }
 
 function toCrossSigningKeyPayload(value: unknown): CrossSigningKeyPayload | null {
@@ -199,7 +214,7 @@ export function isIdempotentCrossSigningUpload(
   return hasRequestedKey;
 }
 
-function toCrossSigningKeyMap(value: unknown): Record<string, CrossSigningKeyPayload> | null {
+function toCrossSigningKeyMap(value: unknown): UserCrossSigningKeyMap | null {
   if (!isPlainObject(value)) {
     return null;
   }
@@ -213,15 +228,12 @@ function toCrossSigningKeyMap(value: unknown): Record<string, CrossSigningKeyPay
     return null;
   }
 
-  return Object.fromEntries(entries as Array<readonly [string, CrossSigningKeyPayload]>) as Record<
-    string,
-    CrossSigningKeyPayload
-  >;
+  return Object.fromEntries(
+    entries as Array<readonly [string, CrossSigningKeyPayload]>,
+  ) as UserCrossSigningKeyMap;
 }
 
-function toUserDeviceKeysMap(
-  value: unknown,
-): Record<string, Record<string, DeviceKeysPayload>> | null {
+function toUserDeviceKeysMap(value: unknown): UserDeviceKeysMap | null {
   if (!isPlainObject(value)) {
     return null;
   }
@@ -237,10 +249,10 @@ function toUserDeviceKeysMap(
 
   return Object.fromEntries(
     entries as Array<readonly [string, Record<string, DeviceKeysPayload>]>,
-  ) as Record<string, Record<string, DeviceKeysPayload>>;
+  ) as UserDeviceKeysMap;
 }
 
-function toOneTimeClaims(value: unknown): Record<string, Record<string, string>> | null {
+function toOneTimeClaims(value: unknown): OneTimeKeyClaimMap | null {
   if (!isPlainObject(value)) {
     return null;
   }
@@ -266,8 +278,8 @@ function toOneTimeClaims(value: unknown): Record<string, Record<string, string>>
   }
 
   return Object.fromEntries(
-    userEntries as Array<readonly [string, Record<string, string>]>,
-  ) as Record<string, Record<string, string>>;
+    userEntries as Array<readonly [string, StringMap]>,
+  ) as OneTimeKeyClaimMap;
 }
 
 export function parseKeysUploadRequest(value: unknown): KeysUploadRequest | null {

@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { AppEnv, PDU } from "../../types";
+import type { AppEnv, MatrixSignatures, PDU } from "../../types";
 import type { FederationEventRow } from "../../types/federation";
 import { MatrixApiError } from "../../utils/errors";
 import { DomainError, toMatrixApiError } from "../../matrix/application/domain-error";
@@ -102,10 +102,7 @@ export function toFederationPduFromRow(row: FederationEventRow): PDU {
       : {}),
     ...(row.signatures
       ? {
-          signatures: parseJsonWithFallback<Record<string, Record<string, string>>>(
-            row.signatures,
-            {},
-          ),
+          signatures: parseJsonWithFallback<MatrixSignatures>(row.signatures, {}),
         }
       : {}),
   };

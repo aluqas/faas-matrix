@@ -5,8 +5,8 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
-import type { RelationEvent, ThreadSubscriptionState } from "../types/client";
-import type { RelationCursor } from "../types/events";
+import type { ThreadSubscriptionState } from "../types/client";
+import type { RelationCursor, RelationEvent } from "../types/events";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { buildSyncToken, parseSyncToken } from "../matrix/application/features/sync/contracts";

@@ -24,6 +24,9 @@ export type Membership = "join" | "invite" | "leave" | "ban" | "knock";
 // Presence states
 export type PresenceState = "online" | "offline" | "unavailable";
 
+// Matrix signatures keyed by server then key id.
+export type MatrixSignatures = Record<ServerName, Record<string, string>>;
+
 // Base event structure
 export interface MatrixEvent {
   event_id: EventId;
@@ -56,7 +59,7 @@ export interface PDU extends MatrixEvent {
   hashes?: {
     sha256: string;
   };
-  signatures?: Record<ServerName, Record<string, string>>;
+  signatures?: MatrixSignatures;
   redacts?: EventId; // For m.room.redaction events
 }
 
@@ -84,7 +87,7 @@ export interface RoomMemberContent {
     signed: {
       mxid: UserId;
       token: string;
-      signatures: Record<ServerName, Record<string, string>>;
+      signatures: MatrixSignatures;
     };
   };
   // Index signature to allow assignment to Record<string, unknown>
@@ -257,6 +260,15 @@ export interface SyncResponse {
   device_unused_fallback_key_types?: string[];
 }
 
+export type SyncPresenceResponse = NonNullable<SyncResponse["presence"]>;
+export type SyncAccountDataResponse = NonNullable<SyncResponse["account_data"]>;
+export type SyncToDeviceResponse = NonNullable<SyncResponse["to_device"]>;
+export type SyncDeviceListsResponse = NonNullable<SyncResponse["device_lists"]>;
+export type SyncDeviceOneTimeKeyCounts = NonNullable<SyncResponse["device_one_time_keys_count"]>;
+export type SyncDeviceUnusedFallbackKeyTypes = NonNullable<
+  SyncResponse["device_unused_fallback_key_types"]
+>;
+
 export interface JoinedRoom {
   summary?: RoomSummary;
   state?: {
@@ -288,6 +300,9 @@ export interface JoinedRoom {
     }
   >;
 }
+
+export type UnreadNotificationCounts = NonNullable<JoinedRoom["unread_notifications"]>;
+export type ThreadUnreadNotificationCounts = NonNullable<JoinedRoom["unread_thread_notifications"]>;
 
 export interface InvitedRoom {
   invite_state?: {

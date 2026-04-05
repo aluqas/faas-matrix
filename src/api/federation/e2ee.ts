@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../../types";
+import type { DeviceKeyRequestMap, OneTimeKeyClaimMap } from "../../types/client";
 import { Errors } from "../../utils/errors";
 import { getCrossSigningKeysFromDO, getDeviceKeysFromDO } from "./shared";
 
@@ -10,7 +11,7 @@ app.post("/_matrix/federation/v1/user/keys/query", async (c) => {
   const db = c.env.DB;
 
   let body: {
-    device_keys?: Record<string, string[]>;
+    device_keys?: DeviceKeyRequestMap;
   };
 
   try {
@@ -110,7 +111,7 @@ app.post("/_matrix/federation/v1/user/keys/claim", async (c) => {
   const db = c.env.DB;
 
   let body: {
-    one_time_keys?: Record<string, Record<string, string>>;
+    one_time_keys?: OneTimeKeyClaimMap;
   };
 
   try {

@@ -432,6 +432,7 @@ async function getRoomData(
             sender: event.sender,
             origin_server_ts: event.origin_server_ts,
             event_id: event.event_id,
+            room_id: roomId,
             unsigned: event.unsigned ? JSON.parse(event.unsigned) : undefined,
           });
         } catch {
@@ -494,6 +495,7 @@ async function getRoomData(
         return {
           type: event.event_type,
           event_id: event.event_id,
+          room_id: roomId,
           sender: event.sender,
           origin_server_ts: event.origin_server_ts,
           content: JSON.parse(event.content),
@@ -504,6 +506,7 @@ async function getRoomData(
         return {
           type: event.event_type,
           event_id: event.event_id,
+          room_id: roomId,
           sender: event.sender,
           origin_server_ts: event.origin_server_ts,
           content: {},
@@ -520,7 +523,7 @@ async function getRoomData(
 
     // Set num_live for incremental syncs (tells client how many new events)
     if (isIncremental) {
-      result.num_live = result.timeline.length;
+      result.num_live = eventsToProcess.length;
     }
 
     // Get prev_batch for pagination (only useful for initial sync really)

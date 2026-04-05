@@ -8,6 +8,8 @@
 
 import type { SlidingSyncExtensionContext, SlidingSyncExtensionOutput } from "../types/sync";
 import type { SlidingSyncExtensionConfig } from "../types/client";
+import type { AccountDataEvent } from "../types";
+
 import { projectPresenceEvents } from "../matrix/application/features/presence/project";
 import { projectDeviceLists } from "../matrix/application/sync-projection";
 import { CloudflareSyncRepository } from "../runtime/cloudflare/matrix-repositories";
@@ -22,6 +24,12 @@ const THREAD_SUBSCRIPTIONS_EVENT_TYPE = "io.element.msc4306.thread_subscriptions
 // ---------------------------------------------------------------------------
 
 export type { SlidingSyncExtensionConfig, SlidingSyncExtensionContext, SlidingSyncExtensionOutput };
+
+function ensureRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
 
 // ---------------------------------------------------------------------------
 // Main builder
@@ -84,10 +92,10 @@ export async function buildSlidingSyncExtensions(
       .bind(userId)
       .all();
 
-    const globalAccountData: Record<string, unknown> = {};
+    const globalAccountData: Record<string, Record<string, unknown>> = {};
     for (const d of globalData.results as { event_type: string; content: string }[]) {
       try {
-        globalAccountData[d.event_type] = JSON.parse(d.content) as unknown;
+        globalAccountData[d.event_type] = ensureRecord(JSON.parse(d.content) as unknown);
       } catch {
         globalAccountData[d.event_type] = {};
       }
@@ -98,13 +106,13 @@ export async function buildSlidingSyncExtensions(
     try {
       const e2eeData = await getE2EEAccountDataFromDO(env, userId);
       for (const [eventType, content] of Object.entries(e2eeData ?? {})) {
-        globalAccountData[eventType] = content;
+        globalAccountData[eventType] = ensureRecord(content);
       }
     } catch (err) {
       console.error("[sliding-sync-extensions] Failed to get E2EE account data from DO:", err);
     }
 
-    const accountDataRooms: Record<string, { type: string; content: unknown }[]> = {};
+    const accountDataRooms: Record<string, AccountDataEvent[]> = {};
     // Client-specified rooms take precedence; fall back to all joined rooms for completeness.
     const roomsForAccountData = config.account_data.rooms ?? allJoinedRoomIds;
     for (const roomId of roomsForAccountData) {
@@ -115,7 +123,7 @@ export async function buildSlidingSyncExtensions(
       if (roomData.results.length > 0) {
         accountDataRooms[roomId] = roomData.results.map((d) => {
           try {
-            return { type: d.event_type, content: JSON.parse(d.content) as unknown };
+            return { type: d.event_type, content: ensureRecord(JSON.parse(d.content) as unknown) };
           } catch {
             return { type: d.event_type, content: {} };
           }

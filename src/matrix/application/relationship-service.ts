@@ -1,7 +1,7 @@
 import { getDefaultRoomVersion } from "../../services/room-versions";
 import { getAuthChain, getEvent, storeEvent } from "../../services/database";
 import { federationPost } from "../../services/federation-keys";
-import type { PDU } from "../../types";
+import type { MatrixSignatures, PDU } from "../../types";
 import type { EventRelationshipsRequest } from "../../types/events";
 import { encodeUnpaddedBase64 } from "../../utils/crypto";
 import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
@@ -163,9 +163,7 @@ async function loadChildEvents(
         ...(row.event_membership ? { membership: row.event_membership as PDU["membership"] } : {}),
         ...(row.prev_state ? { prev_state: JSON.parse(row.prev_state) as string[] } : {}),
         ...(row.hashes ? { hashes: JSON.parse(row.hashes) as { sha256: string } } : {}),
-        ...(row.signatures
-          ? { signatures: JSON.parse(row.signatures) as Record<string, Record<string, string>> }
-          : {}),
+        ...(row.signatures ? { signatures: JSON.parse(row.signatures) as MatrixSignatures } : {}),
       }),
     ),
   );

@@ -1,14 +1,9 @@
 import type { Membership, PDU, UnsignedData } from "./matrix";
 import type { PartialStateStatus } from "./partial-state";
-import type { TimestampDirection } from "./events";
+import type { EventWithIdResponse, TimestampDirection } from "./events";
 
-export type RoomEventResponse = {
-  type: string;
+export type RoomEventResponse = EventWithIdResponse & {
   state_key?: string;
-  content: Record<string, unknown>;
-  sender: string;
-  origin_server_ts: number;
-  event_id: string;
   room_id: string;
   unsigned?: UnsignedData;
 };

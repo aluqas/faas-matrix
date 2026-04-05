@@ -1,4 +1,5 @@
-import type { PDU } from "../../types";
+import type { MatrixSignatures, PDU } from "../../types";
+import type { PublicRoomSummary } from "../../types/client";
 import type { MissingEventsQuery, TimestampDirection } from "../../types/events";
 import {
   getDefaultRoomVersion,
@@ -43,19 +44,6 @@ type MembershipRow = {
   content: string;
 };
 
-export interface PublicRoomSummary {
-  room_id: string;
-  room_type?: string;
-  name?: string;
-  topic?: string;
-  canonical_alias?: string;
-  num_joined_members: number;
-  avatar_url?: string;
-  join_rule?: string;
-  world_readable: boolean;
-  guest_can_join: boolean;
-}
-
 export interface SpaceChildEdge {
   roomId: string;
   content: Record<string, unknown>;
@@ -91,9 +79,7 @@ function toPdu(row: EventRow): PDU {
     auth_events: safeJsonParse<string[]>(row.auth_events) ?? [],
     prev_events: safeJsonParse<string[]>(row.prev_events) ?? [],
     hashes: safeJsonParse<{ sha256: string }>(row.hashes ?? undefined) ?? undefined,
-    signatures:
-      safeJsonParse<Record<string, Record<string, string>>>(row.signatures ?? undefined) ??
-      undefined,
+    signatures: safeJsonParse<MatrixSignatures>(row.signatures ?? undefined) ?? undefined,
   };
 }
 

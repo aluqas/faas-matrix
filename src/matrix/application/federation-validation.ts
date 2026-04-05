@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import type { PDU } from "../../types";
+import type { MatrixSignatures, PDU } from "../../types";
 import { ErrorCodes } from "../../types";
 import {
   FederationInviteEnvelopeSchema,
@@ -31,7 +31,7 @@ export interface FederationThirdPartyInviteValidationResult {
   signed: {
     mxid: string;
     token: string;
-    signatures: Record<string, Record<string, string>>;
+    signatures: MatrixSignatures;
   };
   displayName?: string;
 }

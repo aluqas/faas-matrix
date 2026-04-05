@@ -11,7 +11,7 @@ import {
   updateMembership,
 } from "../../services/database";
 import { checkEventAuth } from "../../services/event-auth";
-import type { Membership, PDU } from "../../types";
+import type { MatrixSignatures, Membership, PDU } from "../../types";
 import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
 import type { FederationRepository } from "../repositories/interfaces";
 import type { RealtimeCapability } from "../../foundation/runtime-capabilities";
@@ -85,10 +85,7 @@ function rowToPdu(row: StoredEventRow): PDU {
     prev_events: parseJson<string[]>(row.prev_events, []),
     unsigned: parseJson<Record<string, unknown> | undefined>(row.unsigned, undefined),
     hashes: parseJson<{ sha256: string } | undefined>(row.hashes, undefined),
-    signatures: parseJson<Record<string, Record<string, string>> | undefined>(
-      row.signatures,
-      undefined,
-    ),
+    signatures: parseJson<MatrixSignatures | undefined>(row.signatures, undefined),
   };
 }
 

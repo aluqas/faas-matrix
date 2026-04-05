@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { Effect } from "effect";
-import type { AppEnv, Membership, PDU } from "../../types";
+import type { AppEnv, MatrixSignatures, Membership, PDU } from "../../types";
 import { Errors } from "../../utils/errors";
 import {
   calculateReferenceHashEventId,
@@ -605,7 +605,7 @@ async function handleFederationInvite(c: any, version: "v1" | "v2"): Promise<Res
       prev_events: signedEvent.prev_events || validated.event.prev_events,
       unsigned: signedEvent.unsigned || validated.event.unsigned,
       hashes: signedEvent.hashes as { sha256: string } | undefined,
-      signatures: signedEvent.signatures as Record<string, Record<string, string>> | undefined,
+      signatures: signedEvent.signatures as MatrixSignatures | undefined,
     };
 
     await persistFederationMembershipEvent(c.env.DB, {

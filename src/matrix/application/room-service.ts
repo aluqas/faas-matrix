@@ -2,7 +2,12 @@ import type { AppContext } from "../../foundation/app-context";
 import { withIdempotency, type IdempotencyStore } from "../../foundation/idempotency";
 import { Errors, MatrixApiError } from "../../utils/errors";
 import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
-import { ErrorCodes, type PDU, type RoomJoinWorkflowStatus } from "../../types";
+import {
+  ErrorCodes,
+  type MatrixSignatures,
+  type PDU,
+  type RoomJoinWorkflowStatus,
+} from "../../types";
 import type {
   CreateRoomInput,
   InviteRoomInput,
@@ -186,7 +191,7 @@ async function attachFederationMetadata(
     signingKey.privateKeyJwk,
   );
 
-  const signatures = signed["signatures"] as Record<string, Record<string, string>> | undefined;
+  const signatures = signed["signatures"] as MatrixSignatures | undefined;
 
   return {
     ...event,

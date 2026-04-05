@@ -1,3 +1,16 @@
+export interface EventResponseBase {
+  type: string;
+  sender: string;
+  origin_server_ts: number;
+  content: Record<string, unknown>;
+}
+
+export interface EventWithIdResponse extends EventResponseBase {
+  event_id: string;
+}
+
+export interface RelationEvent extends EventWithIdResponse {}
+
 export interface EventRelationshipsRequest {
   eventId: string;
   roomId?: string;

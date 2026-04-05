@@ -1,4 +1,18 @@
-import type { SyncResponse } from "./matrix";
+import type {
+  AccountDataEvent,
+  EphemeralEvent,
+  MatrixEvent,
+  StrippedStateEvent,
+  SyncAccountDataResponse,
+  SyncDeviceListsResponse,
+  SyncDeviceOneTimeKeyCounts,
+  SyncDeviceUnusedFallbackKeyTypes,
+  SyncPresenceResponse,
+  SyncResponse,
+  SyncToDeviceResponse,
+  ToDeviceEvent,
+  UnreadNotificationCounts,
+} from "./matrix";
 import type { PresenceProjectionResult } from "./presence";
 import type { FilterDefinition } from "../matrix/repositories/interfaces";
 import type { InvitedRoom, KnockedRoom, LeftRoom } from "./matrix";
@@ -28,11 +42,7 @@ export interface SyncUserInput {
   setPresence?: "online" | "offline" | "unavailable";
 }
 
-export interface SyncTokenPosition {
-  events: number;
-  toDevice: number;
-  deviceKeys: number;
-}
+export type SyncTokenPosition = SyncCursor;
 
 export interface SyncAssemblerInput extends SyncUserInput {}
 
@@ -43,12 +53,12 @@ export interface RoomDeltaResult {
 export interface MembershipRoomsResult extends SyncProjectionResult {}
 
 export interface TopLevelSyncResult {
-  accountData: NonNullable<SyncResponse["account_data"]>["events"];
-  toDeviceEvents: NonNullable<SyncResponse["to_device"]>["events"];
-  deviceLists?: SyncResponse["device_lists"];
+  accountData: SyncAccountDataResponse["events"];
+  toDeviceEvents: SyncToDeviceResponse["events"];
+  deviceLists?: SyncDeviceListsResponse;
   presence: PresenceProjectionResult;
-  deviceOneTimeKeysCount: NonNullable<SyncResponse["device_one_time_keys_count"]>;
-  deviceUnusedFallbackKeyTypes: NonNullable<SyncResponse["device_unused_fallback_key_types"]>;
+  deviceOneTimeKeysCount: SyncDeviceOneTimeKeyCounts;
+  deviceUnusedFallbackKeyTypes: SyncDeviceUnusedFallbackKeyTypes;
   currentToDevicePos: number;
 }
 
@@ -197,20 +207,20 @@ export interface RoomResult {
   canonical_alias?: string;
   heroes?: StrippedHero[];
   initial?: boolean;
-  required_state?: any[];
-  timeline?: any[];
+  required_state?: MatrixEvent[];
+  timeline?: MatrixEvent[];
   prev_batch?: string;
   limited?: boolean;
   joined_count?: number;
   invited_count?: number;
-  notification_count?: number;
-  highlight_count?: number;
+  notification_count?: UnreadNotificationCounts["notification_count"];
+  highlight_count?: UnreadNotificationCounts["highlight_count"];
   num_live?: number;
   timestamp?: number;
   bump_stamp?: number;
   is_dm?: boolean;
-  invite_state?: any[];
-  knock_state?: any[];
+  invite_state?: StrippedStateEvent[];
+  knock_state?: StrippedStateEvent[];
   membership?: string;
 }
 
@@ -220,35 +230,54 @@ export interface StrippedHero {
   avatar_url?: string;
 }
 
+export interface SlidingSyncToDeviceExtension {
+  next_batch: string;
+  events: ToDeviceEvent[];
+}
+
+export interface SlidingSyncE2eeExtension {
+  device_lists?: {
+    changed: NonNullable<SyncDeviceListsResponse["changed"]>;
+    left: NonNullable<SyncDeviceListsResponse["left"]>;
+  };
+  device_one_time_keys_count?: SyncDeviceOneTimeKeyCounts;
+  device_unused_fallback_key_types?: SyncDeviceUnusedFallbackKeyTypes;
+}
+
+export interface SlidingSyncAccountDataExtension {
+  global?: AccountDataEvent[];
+  rooms?: Record<string, AccountDataEvent[]>;
+}
+
+export interface SlidingSyncTypingExtension {
+  rooms?: Record<string, EphemeralEvent>;
+}
+
+export interface SlidingSyncReceiptsExtension {
+  rooms?: Record<string, EphemeralEvent>;
+}
+
+export interface SlidingSyncPresenceExtension {
+  events?: SyncPresenceResponse["events"];
+}
+
+export interface SlidingSyncThreadSubscriptionEntry {
+  bump_stamp: number;
+  automatic: boolean;
+}
+
+export interface SlidingSyncThreadSubscriptionsExtension {
+  subscribed?: Record<string, Record<string, SlidingSyncThreadSubscriptionEntry>>;
+}
+
 export interface ExtensionsResponse {
-  to_device?: {
-    next_batch: string;
-    events: any[];
-  };
-  e2ee?: {
-    device_lists?: {
-      changed: string[];
-      left: string[];
-    };
-    device_one_time_keys_count?: Record<string, number>;
-    device_unused_fallback_key_types?: string[];
-  };
-  account_data?: {
-    global?: any[];
-    rooms?: Record<string, any[]>;
-  };
-  typing?: {
-    rooms?: Record<string, { type: string; content: { user_ids: string[] } }>;
-  };
-  receipts?: {
-    rooms?: Record<string, any>;
-  };
-  presence?: {
-    events?: any[];
-  };
-  "io.element.msc4308.thread_subscriptions"?: {
-    subscribed?: Record<string, Record<string, { bump_stamp: number; automatic: boolean }>>;
-  };
+  to_device?: SlidingSyncToDeviceExtension;
+  e2ee?: SlidingSyncE2eeExtension;
+  account_data?: SlidingSyncAccountDataExtension;
+  typing?: SlidingSyncTypingExtension;
+  receipts?: SlidingSyncReceiptsExtension;
+  presence?: SlidingSyncPresenceExtension;
+  "io.element.msc4308.thread_subscriptions"?: SlidingSyncThreadSubscriptionsExtension;
 }
 
 export interface SlidingSyncExtensionContext {
@@ -263,4 +292,4 @@ export interface SlidingSyncExtensionContext {
   visibilityContext: RoomVisibilityContext;
 }
 
-export type SlidingSyncExtensionOutput = Record<string, unknown>;
+export type SlidingSyncExtensionOutput = Partial<ExtensionsResponse>;

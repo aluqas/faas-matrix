@@ -8,6 +8,7 @@ import type { Context } from "hono";
 import type { AppEnv } from "../types";
 import type {
   FederationSpaceHierarchyResponse,
+  PublicRoomSummary,
   FederationSpaceHierarchyRoom,
   SpaceHierarchyChildStateEvent,
   SpaceHierarchyRoom,
@@ -18,7 +19,6 @@ import { requireAuth } from "../middleware/auth";
 import {
   EventQueryService,
   selectSpaceChildren,
-  type PublicRoomSummary,
   type SpaceChildEdge,
 } from "../matrix/application/event-query-service";
 import { federationGet } from "../services/federation-keys";
