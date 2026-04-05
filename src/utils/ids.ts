@@ -1,6 +1,17 @@
 // Matrix ID generation utilities
 
-import type { UserId, RoomId, EventId, RoomAlias, DeviceId } from "../types";
+import type {
+  AccessToken,
+  DeviceId,
+  EventId,
+  LoginToken,
+  RefreshToken,
+  RoomAlias,
+  RoomId,
+  ServerName,
+  TransactionId,
+  UserId,
+} from "../types";
 import { getRoomVersion, type EventIdFormat } from "../services/room-versions";
 
 // Generate a random opaque ID using Web Crypto API
@@ -25,47 +36,50 @@ export function base64UrlDecode(str: string): Uint8Array {
 }
 
 // Generate a user ID
-export function formatUserId(localpart: string, serverName: string): UserId {
-  return `@${localpart}:${serverName}`;
+export function formatUserId(localpart: string, serverName: ServerName | string): UserId {
+  return `@${localpart}:${serverName}` as UserId;
 }
 
 // Parse a user ID into components
-export function parseUserId(userId: UserId): { localpart: string; serverName: string } | null {
+export function parseUserId(userId: UserId): { localpart: string; serverName: ServerName } | null {
   const match = userId.match(/^@([^:]+):(.+)$/);
   if (!match) return null;
-  return { localpart: match[1], serverName: match[2] };
+  return { localpart: match[1], serverName: match[2] as ServerName };
 }
 
 // Generate a room ID
-export async function generateRoomId(serverName: string): Promise<RoomId> {
+export async function generateRoomId(serverName: ServerName | string): Promise<RoomId> {
   const opaque = await generateOpaqueId(18);
-  return `!${opaque}:${serverName}`;
+  return `!${opaque}:${serverName}` as RoomId;
 }
 
 // Parse a room ID
-export function parseRoomId(roomId: RoomId): { opaque: string; serverName: string } | null {
+export function parseRoomId(roomId: RoomId): { opaque: string; serverName: ServerName } | null {
   const match = roomId.match(/^!([^:]+):(.+)$/);
   if (!match) return null;
-  return { opaque: match[1], serverName: match[2] };
+  return { opaque: match[1], serverName: match[2] as ServerName };
 }
 
 // Generate an event ID appropriate for the given room version
-export async function generateEventId(serverName: string, roomVersion?: string): Promise<EventId> {
+export async function generateEventId(
+  serverName: ServerName | string,
+  roomVersion?: string,
+): Promise<EventId> {
   const format = getEventIdFormat(roomVersion);
   if (format === "v1") {
     // Room versions 1-2: $opaque:domain
     const opaque = await generateOpaqueId(18);
-    return `$${opaque}:${serverName}`;
+    return `$${opaque}:${serverName}` as EventId;
   }
   // Room versions 3+: $base64url (no domain)
   const opaque = await generateOpaqueId(32);
-  return `$${opaque}`;
+  return `$${opaque}` as EventId;
 }
 
 // Generate a legacy event ID (room version 1-2)
-export async function generateLegacyEventId(serverName: string): Promise<EventId> {
+export async function generateLegacyEventId(serverName: ServerName | string): Promise<EventId> {
   const opaque = await generateOpaqueId(18);
-  return `$${opaque}:${serverName}`;
+  return `$${opaque}:${serverName}` as EventId;
 }
 
 // Get the event ID format for a room version
@@ -76,49 +90,51 @@ function getEventIdFormat(roomVersion?: string): EventIdFormat {
 }
 
 // Format a room alias
-export function formatRoomAlias(localpart: string, serverName: string): RoomAlias {
-  return `#${localpart}:${serverName}`;
+export function formatRoomAlias(localpart: string, serverName: ServerName | string): RoomAlias {
+  return `#${localpart}:${serverName}` as RoomAlias;
 }
 
 // Parse a room alias
-export function parseRoomAlias(alias: RoomAlias): { localpart: string; serverName: string } | null {
+export function parseRoomAlias(
+  alias: RoomAlias,
+): { localpart: string; serverName: ServerName } | null {
   const match = alias.match(/^#([^:]+):(.+)$/);
   if (!match) return null;
-  return { localpart: match[1], serverName: match[2] };
+  return { localpart: match[1], serverName: match[2] as ServerName };
 }
 
 // Generate a device ID
 export async function generateDeviceId(): Promise<DeviceId> {
   const opaque = await generateOpaqueId(10);
-  return opaque.toUpperCase();
+  return opaque.toUpperCase() as DeviceId;
 }
 
 // Generate an access token
-export async function generateAccessToken(): Promise<string> {
+export async function generateAccessToken(): Promise<AccessToken> {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return `syt_${base64UrlEncode(bytes)}`;
+  return `syt_${base64UrlEncode(bytes)}` as AccessToken;
 }
 
 // Generate a transaction ID
-export async function generateTransactionId(): Promise<string> {
+export async function generateTransactionId(): Promise<TransactionId> {
   const timestamp = Date.now().toString(36);
   const random = await generateOpaqueId(8);
-  return `${timestamp}_${random}`;
+  return `${timestamp}_${random}` as TransactionId;
 }
 
 // Generate a login token (for QR code authentication)
-export async function generateLoginToken(): Promise<string> {
+export async function generateLoginToken(): Promise<LoginToken> {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return `mlt_${base64UrlEncode(bytes)}`;
+  return `mlt_${base64UrlEncode(bytes)}` as LoginToken;
 }
 
 // Generate a refresh token (for token refresh flow)
-export async function generateRefreshToken(): Promise<string> {
+export async function generateRefreshToken(): Promise<RefreshToken> {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return `syr_${base64UrlEncode(bytes)}`;
+  return `syr_${base64UrlEncode(bytes)}` as RefreshToken;
 }
 
 // Validate localpart (username)
@@ -130,7 +146,7 @@ export function isValidLocalpart(localpart: string): boolean {
 }
 
 // Validate server name
-export function isValidServerName(serverName: string): boolean {
+export function isValidServerName(serverName: string): serverName is ServerName {
   // Can be domain or domain:port or IPv4 or [IPv6]:port
   if (!serverName || serverName.length > 255) return false;
 
@@ -148,12 +164,12 @@ export function isValidServerName(serverName: string): boolean {
 }
 
 // Check if server name is local
-export function isLocalServerName(serverName: string, localServer: string): boolean {
+export function isLocalServerName(serverName: string, localServer: ServerName | string): boolean {
   return serverName.toLowerCase() === localServer.toLowerCase();
 }
 
 // Extract server name from Matrix ID
-export function getServerName(id: string): string | null {
+export function getServerName(id: string): ServerName | null {
   const match = id.match(/:([^:]+)$/);
-  return match ? match[1] : null;
+  return match ? (match[1] as ServerName) : null;
 }

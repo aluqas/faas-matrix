@@ -1,15 +1,15 @@
-import type { PresenceEvent, PresenceState } from "./matrix";
+import type { PresenceEvent, PresenceState, ServerName, UserId } from "./matrix";
 import type { SyncEventFilter } from "./sync";
 
 export interface PresenceCommandInput {
-  userId: string;
+  userId: UserId;
   presence: PresenceState;
   statusMessage?: string | null;
   now: number;
 }
 
 export interface PresenceEduUpdate {
-  user_id: string;
+  user_id: UserId;
   presence: PresenceState;
   status_msg?: string | undefined;
   last_active_ago?: number | undefined;
@@ -22,9 +22,9 @@ export interface PresenceEduContent {
 
 export interface PresenceCommandPorts {
   persistPresence(input: PresenceCommandInput): Promise<void>;
-  resolveInterestedServers(userId: string): Promise<string[]>;
-  queueEdu(destination: string, content: PresenceEduContent): Promise<void>;
-  localServerName: string;
+  resolveInterestedServers(userId: UserId): Promise<ServerName[]>;
+  queueEdu(destination: ServerName, content: PresenceEduContent): Promise<void>;
+  localServerName: ServerName;
   debugEnabled?: boolean | undefined;
 }
 
@@ -33,8 +33,8 @@ export interface PresenceProjectionResult {
 }
 
 export interface PresenceProjectionQuery {
-  userId: string;
-  visibleRoomIds: string[];
+  userId: UserId;
+  visibleRoomIds: import("./matrix").RoomId[];
   filter?: SyncEventFilter | undefined;
   debugEnabled?: boolean | undefined;
 }

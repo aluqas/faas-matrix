@@ -2,6 +2,7 @@
 
 import type { AppContext } from "../foundation/app-context";
 import type { MatrixServiceRegistry } from "../matrix/services";
+import type { AccessToken, DeviceId, UserId } from "./matrix";
 
 export interface Env {
   // D1 Database
@@ -92,14 +93,14 @@ export interface Env {
 
 // Variables set by middleware and available via c.get()
 export type Variables = {
-  userId: string;
-  deviceId: string | null;
-  accessToken: string;
+  userId: UserId;
+  deviceId: DeviceId | null;
+  accessToken: AccessToken;
   appContext: AppContext<MatrixServiceRegistry>;
   auth: {
-    userId: string;
-    deviceId: string | null;
-    accessToken: string;
+    userId: UserId;
+    deviceId: DeviceId | null;
+    accessToken: AccessToken;
   };
 };
 

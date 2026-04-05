@@ -1,7 +1,12 @@
 import type {
   AccountDataEvent,
+  DeviceId,
+  EventId,
+  EventType,
   EphemeralEvent,
   MatrixEvent,
+  RoomId,
+  RoomVersionId,
   StrippedStateEvent,
   SyncAccountDataResponse,
   SyncDeviceListsResponse,
@@ -12,6 +17,7 @@ import type {
   SyncToDeviceResponse,
   ToDeviceEvent,
   UnreadNotificationCounts,
+  UserId,
 } from "./matrix";
 import type { PresenceProjectionResult } from "./presence";
 import type { FilterDefinition } from "../matrix/repositories/interfaces";
@@ -19,11 +25,21 @@ import type { InvitedRoom, KnockedRoom, LeftRoom } from "./matrix";
 import type { SlidingSyncExtensionConfig } from "./client";
 import type { Env } from "./env";
 
+export interface ConnectionRoomState {
+  lastStreamOrdering: number;
+  sentState: boolean;
+}
+
+export interface ConnectionListState {
+  roomIds: RoomId[];
+  count: number;
+}
+
 export interface RoomVisibilityContext {
-  visibleJoinedRoomIds: string[];
-  hiddenPartialStateRooms: ReadonlySet<string>;
-  visiblePartialStateRooms: ReadonlySet<string>;
-  forceFullStateRooms: ReadonlySet<string>;
+  visibleJoinedRoomIds: RoomId[];
+  hiddenPartialStateRooms: ReadonlySet<RoomId>;
+  visiblePartialStateRooms: ReadonlySet<RoomId>;
+  forceFullStateRooms: ReadonlySet<RoomId>;
 }
 
 export interface SyncCursor {
@@ -33,8 +49,8 @@ export interface SyncCursor {
 }
 
 export interface SyncUserInput {
-  userId: string;
-  deviceId: string | null;
+  userId: UserId;
+  deviceId: DeviceId | null;
   since?: string;
   fullState?: boolean;
   filterParam?: string;
@@ -75,27 +91,15 @@ export interface SyncProjectionSummary {
 }
 
 export interface ConnectionState {
-  userId: string;
+  userId: UserId;
   pos: number;
   lastAccess: number;
-  roomStates: Record<
-    string,
-    {
-      lastStreamOrdering: number;
-      sentState: boolean;
-    }
-  >;
-  listStates: Record<
-    string,
-    {
-      roomIds: string[];
-      count: number;
-    }
-  >;
-  roomNotificationCounts?: Record<string, number>;
-  roomFullyReadMarkers?: Record<string, string>;
+  roomStates: Record<RoomId, ConnectionRoomState>;
+  listStates: Record<string, ConnectionListState>;
+  roomNotificationCounts?: Record<RoomId, number>;
+  roomFullyReadMarkers?: Record<RoomId, EventId>;
   initialSyncComplete?: boolean;
-  roomSentAsRead?: Record<string, boolean>;
+  roomSentAsRead?: Record<RoomId, boolean>;
 }
 
 export interface SyncEventFilter {
@@ -107,28 +111,28 @@ export interface SyncEventFilter {
 }
 
 export interface SyncProjectionQuery {
-  userId: string;
+  userId: UserId;
   sincePosition: number;
   roomFilter?: FilterDefinition["room"];
   includeLeave: boolean;
 }
 
 export interface DeviceListProjectionQuery {
-  userId: string;
+  userId: UserId;
   isInitialSync: boolean;
   sinceEventPosition: number;
   sinceDeviceKeyPosition: number;
 }
 
 export interface SyncProjectionResult {
-  inviteRooms: Record<string, InvitedRoom>;
-  knockRooms: Record<string, KnockedRoom>;
-  leaveRooms: Record<string, LeftRoom>;
+  inviteRooms: Record<RoomId, InvitedRoom>;
+  knockRooms: Record<RoomId, KnockedRoom>;
+  leaveRooms: Record<RoomId, LeftRoom>;
 }
 
 export interface JoinedRoomProjectionQuery {
-  userId: string;
-  roomId: string;
+  userId: UserId;
+  roomId: RoomId;
   sincePosition: number;
   fullState?: boolean;
   roomFilter?: FilterDefinition["room"];
@@ -141,8 +145,8 @@ export interface SlidingSyncRequest {
   timeout?: number;
   delta_token?: string;
   lists?: Record<string, SyncListConfig>;
-  room_subscriptions?: Record<string, RoomSubscription>;
-  unsubscribe_rooms?: string[];
+  room_subscriptions?: Record<RoomId, RoomSubscription>;
+  unsubscribe_rooms?: RoomId[];
   extensions?: SlidingSyncExtensionConfig;
 }
 
@@ -159,20 +163,22 @@ export interface SyncListConfig {
 export interface RoomSubscription {
   required_state?: [string, string][];
   timeline_limit?: number;
-  include_old_rooms?: {
-    timeline_limit?: number;
-    required_state?: [string, string][];
-  };
+  include_old_rooms?: HistoricalRoomSubscription;
+}
+
+export interface HistoricalRoomSubscription {
+  timeline_limit?: number;
+  required_state?: [string, string][];
 }
 
 export interface SlidingRoomFilter {
   is_dm?: boolean;
-  spaces?: string[];
+  spaces?: RoomId[];
   is_encrypted?: boolean;
   is_invite?: boolean;
   is_tombstoned?: boolean;
-  room_types?: string[];
-  not_room_types?: string[];
+  room_types?: RoomVersionId[];
+  not_room_types?: RoomVersionId[];
   room_name_like?: string;
   tags?: string[];
   not_tags?: string[];
@@ -182,7 +188,7 @@ export interface SlidingSyncResponse {
   pos: string;
   txn_id?: string;
   lists: Record<string, SyncListResult>;
-  rooms: Record<string, RoomResult>;
+  rooms: Record<RoomId, RoomResult>;
   extensions: ExtensionsResponse;
   delta_token?: string;
 }
@@ -196,8 +202,8 @@ export interface RoomListOperation {
   op: "SYNC" | "DELETE" | "INSERT" | "INVALIDATE";
   range?: [number, number];
   index?: number;
-  room_ids?: string[];
-  room_id?: string;
+  room_ids?: RoomId[];
+  room_id?: RoomId;
 }
 
 export interface RoomResult {
@@ -225,7 +231,7 @@ export interface RoomResult {
 }
 
 export interface StrippedHero {
-  user_id: string;
+  user_id: UserId;
   displayname?: string;
   avatar_url?: string;
 }
@@ -246,15 +252,15 @@ export interface SlidingSyncE2eeExtension {
 
 export interface SlidingSyncAccountDataExtension {
   global?: AccountDataEvent[];
-  rooms?: Record<string, AccountDataEvent[]>;
+  rooms?: Record<RoomId, AccountDataEvent[]>;
 }
 
 export interface SlidingSyncTypingExtension {
-  rooms?: Record<string, EphemeralEvent>;
+  rooms?: Record<RoomId, EphemeralEvent>;
 }
 
 export interface SlidingSyncReceiptsExtension {
-  rooms?: Record<string, EphemeralEvent>;
+  rooms?: Record<RoomId, EphemeralEvent>;
 }
 
 export interface SlidingSyncPresenceExtension {
@@ -267,7 +273,7 @@ export interface SlidingSyncThreadSubscriptionEntry {
 }
 
 export interface SlidingSyncThreadSubscriptionsExtension {
-  subscribed?: Record<string, Record<string, SlidingSyncThreadSubscriptionEntry>>;
+  subscribed?: Record<RoomId, Record<EventId, SlidingSyncThreadSubscriptionEntry>>;
 }
 
 export interface ExtensionsResponse {
@@ -281,14 +287,14 @@ export interface ExtensionsResponse {
 }
 
 export interface SlidingSyncExtensionContext {
-  userId: string;
-  deviceId: string | null;
+  userId: UserId;
+  deviceId: DeviceId | null;
   db: D1Database;
   env: Env;
   sincePos: number;
   isInitialSync: boolean;
-  responseRoomIds: string[];
-  subscribedRoomIds: string[];
+  responseRoomIds: RoomId[];
+  subscribedRoomIds: RoomId[];
   visibilityContext: RoomVisibilityContext;
 }
 

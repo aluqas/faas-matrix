@@ -1,9 +1,11 @@
+import type { EventId, RoomId, ServerName, UserId } from "./matrix";
+
 export interface PartialStateJoinMarker {
-  roomId: string;
-  userId: string;
-  eventId: string;
-  remoteServer?: string;
-  serversInRoom?: string[];
+  roomId: RoomId;
+  userId: UserId;
+  eventId: EventId;
+  remoteServer?: ServerName;
+  serversInRoom?: ServerName[];
   encrypted?: boolean;
   startedAt: number;
 }

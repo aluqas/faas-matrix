@@ -1,10 +1,20 @@
-import type { Membership, PDU, UnsignedData } from "./matrix";
+import type {
+  EventId,
+  EventType,
+  Membership,
+  PDU,
+  RoomId,
+  ServerName,
+  StateKey,
+  UnsignedData,
+  UserId,
+} from "./matrix";
 import type { PartialStateStatus } from "./partial-state";
 import type { EventWithIdResponse, TimestampDirection } from "./events";
 
 export type RoomEventResponse = EventWithIdResponse & {
-  state_key?: string;
-  room_id: string;
+  state_key?: StateKey;
+  room_id: RoomId;
   unsigned?: UnsignedData;
 };
 
@@ -14,26 +24,26 @@ export interface RoomMessagesRelationFilter {
 }
 
 export interface GetRoomStateInput {
-  userId: string;
-  roomId: string;
+  userId: UserId;
+  roomId: RoomId;
 }
 
 export interface GetRoomStateEventInput {
-  userId: string;
-  roomId: string;
-  eventType: string;
-  stateKey: string;
+  userId: UserId;
+  roomId: RoomId;
+  eventType: EventType;
+  stateKey: StateKey;
   formatEvent?: boolean;
 }
 
 export interface GetRoomMembersInput {
-  userId: string;
-  roomId: string;
+  userId: UserId;
+  roomId: RoomId;
 }
 
 export interface GetRoomMessagesInput {
-  userId: string;
-  roomId: string;
+  userId: UserId;
+  roomId: RoomId;
   from?: string;
   dir: "f" | "b";
   limit: number;
@@ -41,14 +51,14 @@ export interface GetRoomMessagesInput {
 }
 
 export interface GetVisibleRoomEventInput {
-  userId: string;
-  roomId: string;
-  eventId: string;
+  userId: UserId;
+  roomId: RoomId;
+  eventId: EventId;
 }
 
 export interface TimestampToEventInput {
-  userId: string;
-  roomId: string;
+  userId: UserId;
+  roomId: RoomId;
   ts: number;
   dir: TimestampDirection;
 }
@@ -56,22 +66,22 @@ export interface TimestampToEventInput {
 export interface RoomQueryDependencies {
   getMembership(
     db: D1Database,
-    roomId: string,
-    userId: string,
-  ): Promise<{ membership: Membership; eventId: string } | null>;
-  getRoomState(db: D1Database, roomId: string): Promise<PDU[]>;
+    roomId: RoomId,
+    userId: UserId,
+  ): Promise<{ membership: Membership; eventId: EventId } | null>;
+  getRoomState(db: D1Database, roomId: RoomId): Promise<PDU[]>;
   getStateEvent(
     db: D1Database,
-    roomId: string,
-    eventType: string,
-    stateKey: string,
+    roomId: RoomId,
+    eventType: EventType,
+    stateKey: StateKey,
   ): Promise<PDU | null>;
   getRoomMembers(
     db: D1Database,
-    roomId: string,
+    roomId: RoomId,
   ): Promise<
     Array<{
-      userId: string;
+      userId: UserId;
       membership: Membership;
       displayName?: string;
       avatarUrl?: string;
@@ -79,7 +89,7 @@ export interface RoomQueryDependencies {
   >;
   getRoomEvents(
     db: D1Database,
-    roomId: string,
+    roomId: RoomId,
     fromToken: number | undefined,
     limit: number,
     direction: "f" | "b",
@@ -87,72 +97,72 @@ export interface RoomQueryDependencies {
   ): Promise<{ events: PDU[]; end: number }>;
   getVisibleEventForUser(
     db: D1Database,
-    roomId: string,
-    eventId: string,
-    userId: string,
+    roomId: RoomId,
+    eventId: EventId,
+    userId: UserId,
   ): Promise<PDU | null>;
   findClosestEventByTimestamp(
     db: D1Database,
-    roomId: string,
+    roomId: RoomId,
     ts: number,
     dir: TimestampDirection,
-  ): Promise<{ event_id: string; origin_server_ts: number } | null>;
+  ): Promise<{ event_id: EventId; origin_server_ts: number } | null>;
   getPartialStateJoin(
     cache: KVNamespace | undefined,
-    userId: string,
-    roomId: string,
+    userId: UserId,
+    roomId: RoomId,
   ): Promise<PartialStateStatus | null>;
   getPartialStateJoinCompletion(
     cache: KVNamespace | undefined,
-    userId: string,
-    roomId: string,
+    userId: UserId,
+    roomId: RoomId,
   ): Promise<PartialStateStatus | null>;
   sleep(ms: number): Promise<void>;
 }
 
 export interface CreateRoomInput {
-  userId: string;
+  userId: UserId;
   body: unknown;
 }
 
 export interface JoinRoomInput {
-  userId: string;
-  roomId: string;
-  remoteServers?: string[];
+  userId: UserId;
+  roomId: RoomId;
+  remoteServers?: ServerName[];
   body?: unknown;
 }
 
 export interface SendEventInput {
-  userId: string;
-  roomId: string;
-  eventType: string;
-  stateKey?: string;
+  userId: UserId;
+  roomId: RoomId;
+  eventType: EventType;
+  stateKey?: StateKey;
   txnId: string;
   content: Record<string, unknown>;
-  redacts?: string;
+  redacts?: EventId;
 }
 
 export interface LeaveRoomInput {
-  userId: string;
-  roomId: string;
+  userId: UserId;
+  roomId: RoomId;
 }
 
 export interface InviteRoomInput {
-  userId: string;
-  roomId: string;
-  targetUserId: string;
+  userId: UserId;
+  roomId: RoomId;
+  targetUserId: UserId;
 }
 
 export interface ModerateRoomInput {
-  userId: string;
-  roomId: string;
-  targetUserId: string;
+  userId: UserId;
+  roomId: RoomId;
+  targetUserId: UserId;
   reason?: string;
 }
 
 export interface KnockRoomInput {
-  userId: string;
-  roomId: string;
+  userId: UserId;
+  roomId: RoomId;
   reason?: string;
-  serverNames?: string[];
+  serverNames?: ServerName[];
 }

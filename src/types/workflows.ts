@@ -1,22 +1,22 @@
-import type { ErrorCode } from "./matrix";
+import type { ErrorCode, EventId, RoomId, ServerName, UserId } from "./matrix";
+import type { JsonObject, JsonValue } from "./common";
 
-export type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
-export type JsonObject = { [key: string]: JsonValue };
+export type { JsonObject, JsonValue };
 
 export interface RoomJoinWorkflowParams {
-  roomId: string;
-  userId: string;
+  roomId: RoomId;
+  userId: UserId;
   displayName?: string;
   avatarUrl?: string;
   isRemote: boolean;
-  remoteServer?: string;
-  remoteServers?: string[];
+  remoteServer?: ServerName;
+  remoteServers?: ServerName[];
   reason?: string;
 }
 
 export interface RoomJoinWorkflowResult {
-  eventId: string;
-  roomId: string;
+  eventId: EventId;
+  roomId: RoomId;
   success: boolean;
   error?: string;
   errorStatus?: number;
@@ -43,7 +43,7 @@ export interface RemoteSendJoinResponse {
   state: JsonObject[];
   auth_chain: JsonObject[];
   members_omitted?: boolean;
-  servers_in_room?: string[];
+  servers_in_room?: ServerName[];
   event?: JsonObject;
 }
 

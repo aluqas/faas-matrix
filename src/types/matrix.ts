@@ -1,16 +1,30 @@
 // Matrix Protocol Types
 
+declare const brandSymbol: unique symbol;
+
+export type Brand<T, Name extends string> = T & { readonly [brandSymbol]: Name };
+
+export type TransactionId = Brand<string, "TransactionId">;
+export type SessionId = Brand<string, "SessionId">;
+export type AccessToken = Brand<string, "AccessToken">;
+export type RefreshToken = Brand<string, "RefreshToken">;
+export type LoginToken = Brand<string, "LoginToken">;
+export type KeyId = Brand<string, "KeyId">;
+export type RoomVersionId = string;
+export type EventType = string;
+export type StateKey = string;
+
 // User ID format: @localpart:domain
-export type UserId = string;
+export type UserId = `@${string}:${string}`;
 
 // Room ID format: !opaque_id:domain
-export type RoomId = string;
+export type RoomId = `!${string}:${string}`;
 
 // Event ID format: $base64:domain
-export type EventId = string;
+export type EventId = `$${string}`;
 
 // Room alias format: #alias:domain
-export type RoomAlias = string;
+export type RoomAlias = `#${string}:${string}`;
 
 // Server name format: domain or domain:port
 export type ServerName = string;
@@ -32,8 +46,8 @@ export interface MatrixEvent {
   event_id: EventId;
   room_id: RoomId;
   sender: UserId;
-  type: string;
-  state_key?: string;
+  type: EventType;
+  state_key?: StateKey;
   content: Record<string, unknown>;
   origin_server_ts: number;
   unsigned?: UnsignedData;
@@ -66,13 +80,22 @@ export interface PDU extends MatrixEvent {
 // Room state event types
 export interface RoomCreateContent {
   creator?: UserId;
-  room_version?: string;
+  room_version?: RoomVersionId;
   "m.federate"?: boolean;
   type?: string;
   predecessor?: {
     room_id: RoomId;
     event_id: EventId;
   };
+}
+
+export interface RoomPowerLevelNotifications {
+  room?: number;
+}
+
+export interface RoomJoinRuleAllowEntry {
+  type: string;
+  room_id?: RoomId;
 }
 
 export interface RoomMemberContent {
@@ -100,9 +123,7 @@ export interface RoomPowerLevelsContent {
   events_default?: number;
   invite?: number;
   kick?: number;
-  notifications?: {
-    room?: number;
-  };
+  notifications?: RoomPowerLevelNotifications;
   redact?: number;
   state_default?: number;
   users?: Record<UserId, number>;
@@ -140,10 +161,7 @@ export interface ThumbnailInfo {
 
 export interface RoomJoinRulesContent {
   join_rule: "public" | "knock" | "invite" | "private" | "restricted" | "knock_restricted";
-  allow?: Array<{
-    type: string;
-    room_id?: RoomId;
-  }>;
+  allow?: RoomJoinRuleAllowEntry[];
 }
 
 export interface RoomHistoryVisibilityContent {
@@ -269,6 +287,16 @@ export type SyncDeviceUnusedFallbackKeyTypes = NonNullable<
   SyncResponse["device_unused_fallback_key_types"]
 >;
 
+export interface RoomUnreadNotifications {
+  highlight_count?: number;
+  notification_count?: number;
+}
+
+export interface ThreadUnreadNotificationEntry {
+  highlight_count?: number;
+  notification_count?: number;
+}
+
 export interface JoinedRoom {
   summary?: RoomSummary;
   state?: {
@@ -288,17 +316,8 @@ export interface JoinedRoom {
   account_data?: {
     events: AccountDataEvent[];
   };
-  unread_notifications?: {
-    highlight_count?: number;
-    notification_count?: number;
-  };
-  unread_thread_notifications?: Record<
-    EventId,
-    {
-      highlight_count?: number;
-      notification_count?: number;
-    }
-  >;
+  unread_notifications?: RoomUnreadNotifications;
+  unread_thread_notifications?: Record<EventId, ThreadUnreadNotificationEntry>;
 }
 
 export type UnreadNotificationCounts = NonNullable<JoinedRoom["unread_notifications"]>;
@@ -338,18 +357,18 @@ export interface RoomSummary {
 
 export interface StrippedStateEvent {
   content: Record<string, unknown>;
-  state_key: string;
-  type: string;
+  state_key: StateKey;
+  type: EventType;
   sender: UserId;
 }
 
 export interface EphemeralEvent {
-  type: string;
+  type: EventType;
   content: Record<string, unknown>;
 }
 
 export interface AccountDataEvent {
-  type: string;
+  type: EventType;
   content: Record<string, unknown>;
 }
 
@@ -366,7 +385,7 @@ export interface PresenceEvent {
 
 export interface ToDeviceEvent {
   sender: UserId;
-  type: string;
+  type: EventType;
   content: Record<string, unknown>;
 }
 

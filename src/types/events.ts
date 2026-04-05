@@ -1,19 +1,29 @@
+import type {
+  EventId,
+  EventType,
+  RoomId,
+  RoomVersionId,
+  ServerName,
+  StateKey,
+  UserId,
+} from "./matrix";
+
 export interface EventResponseBase {
-  type: string;
-  sender: string;
+  type: EventType;
+  sender: UserId;
   origin_server_ts: number;
   content: Record<string, unknown>;
 }
 
 export interface EventWithIdResponse extends EventResponseBase {
-  event_id: string;
+  event_id: EventId;
 }
 
 export interface RelationEvent extends EventWithIdResponse {}
 
 export interface EventRelationshipsRequest {
-  eventId: string;
-  roomId?: string;
+  eventId: EventId;
+  roomId?: RoomId;
   direction: "up" | "down";
   includeParent?: boolean;
   recentFirst?: boolean;
@@ -34,21 +44,21 @@ export type RelationCursor = {
 };
 
 export interface MissingEventsQuery {
-  roomId: string;
-  earliestEvents: string[];
-  latestEvents: string[];
+  roomId: RoomId;
+  earliestEvents: EventId[];
+  latestEvents: EventId[];
   limit: number;
   minDepth: number;
-  requestingServer?: string;
-  roomVersion?: string;
+  requestingServer?: ServerName;
+  roomVersion?: RoomVersionId;
 }
 
 export type StoredContextEvent = {
-  event_id: string;
-  room_id: string;
-  sender: string;
-  event_type: string;
-  state_key: string | null;
+  event_id: EventId;
+  room_id: RoomId;
+  sender: UserId;
+  event_type: EventType;
+  state_key: StateKey | null;
   content: string;
   origin_server_ts: number;
 };

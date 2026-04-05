@@ -1,38 +1,51 @@
-import type { JsonObject } from "./common";
-import type { MatrixSignatures } from "./matrix";
+import type { JsonObject, JsonValue } from "./common";
+import type {
+  DeviceId,
+  EventId,
+  EventType,
+  MatrixSignatures,
+  RoomId,
+  ServerName,
+  UserId,
+} from "./matrix";
 
 export type { JsonObject };
 
 export type StringMap = Record<string, string>;
 export type JsonObjectMap = Record<string, JsonObject>;
-export type DeviceKeyRequestMap = Record<string, string[]>;
-export type OneTimeKeyClaimMap = Record<string, StringMap>;
-export type UserDeviceKeysMap = Record<string, Record<string, DeviceKeysPayload>>;
-export type UserCrossSigningKeyMap = Record<string, CrossSigningKeyPayload>;
-export type DeviceOneTimeKeysMap = Record<string, JsonObjectMap>;
-export type UserOneTimeKeysMap = Record<string, DeviceOneTimeKeysMap>;
+export type DeviceListRequest = Array<DeviceId | string>;
+export type DeviceKeyRequestMap = Record<UserId | string, DeviceListRequest>;
+export type OneTimeKeyClaimDeviceMap = Record<DeviceId | string, string>;
+export type OneTimeKeyClaimMap = Record<UserId | string, OneTimeKeyClaimDeviceMap>;
+export type UserDeviceKeysMap = Record<
+  UserId | string,
+  Record<DeviceId | string, DeviceKeysPayload>
+>;
+export type UserCrossSigningKeyMap = Record<UserId | string, CrossSigningKeyPayload>;
+export type DeviceOneTimeKeysMap = Record<DeviceId | string, JsonObjectMap>;
+export type UserOneTimeKeysMap = Record<UserId | string, DeviceOneTimeKeysMap>;
 
-export interface DeviceKeysPayload extends JsonObject {
-  user_id?: string;
-  device_id?: string;
+export type DeviceKeysPayload = JsonObject & {
+  user_id?: UserId;
+  device_id?: DeviceId;
   unsigned?: JsonObject;
   algorithms?: string[];
   keys?: StringMap;
   signatures?: MatrixSignatures;
-}
+};
 
-export interface CrossSigningKeyPayload extends JsonObject {
-  user_id?: string;
+export type CrossSigningKeyPayload = JsonObject & {
+  user_id?: UserId;
   usage?: string[];
   keys?: StringMap;
   signatures?: MatrixSignatures;
-}
+};
 
-export interface UIAAuthDict extends JsonObject {
+export type UIAAuthDict = JsonObject & {
   type?: string;
   session?: string;
   password?: string;
-}
+};
 
 export interface KeysUploadRequest {
   device_keys?: DeviceKeysPayload;
@@ -68,19 +81,19 @@ export interface CrossSigningKeysStore {
   user_signing?: CrossSigningKeyPayload;
 }
 
-export interface SignedKeyPayload extends JsonObject {
-  device_id?: string;
+export type SignedKeyPayload = JsonObject & {
+  device_id?: DeviceId;
   signatures?: MatrixSignatures;
-}
+};
 
-export type SignaturesUploadRequest = Record<string, Record<string, SignedKeyPayload>>;
+export type SignaturesUploadRequest = Record<UserId | string, Record<string, SignedKeyPayload>>;
 
 export interface TokenSubmitRequest {
   session?: string;
 }
 
-export interface UiaSessionData extends JsonObject {
-  user_id: string;
+export type UiaSessionData = JsonObject & {
+  user_id: UserId;
   created_at: number;
   type: string;
   completed_stages: string[];
@@ -89,7 +102,7 @@ export interface UiaSessionData extends JsonObject {
   redirect_url?: string;
   sso_completed_at?: number;
   token_completed_at?: number;
-}
+};
 
 export interface StoredOneTimeKey {
   keyId: string;
@@ -99,20 +112,20 @@ export interface StoredOneTimeKey {
 
 export type StoredOneTimeKeyBuckets = Record<string, StoredOneTimeKey[]>;
 
-export interface PushActionObject extends JsonObject {
+export type PushActionObject = JsonObject & {
   set_tweak: string;
   value?: unknown;
-}
+};
 
 export type PushAction = string | PushActionObject;
 
-export interface PushCondition extends JsonObject {
+export type PushCondition = JsonObject & {
   kind: string;
   key?: string;
   pattern?: string;
   is?: string;
   value?: unknown;
-}
+};
 
 export interface PushRule {
   rule_id: string;
@@ -124,10 +137,10 @@ export interface PushRule {
 }
 
 export interface PushEvent {
-  event_id: string;
-  room_id: string;
-  type: string;
-  sender: string;
+  event_id: EventId;
+  room_id: RoomId;
+  type: EventType;
+  sender: UserId;
   content: JsonObject;
   origin_server_ts?: number;
   state_key?: string;
@@ -146,11 +159,11 @@ export interface PushEvaluationResult {
   highlight: boolean;
 }
 
-export interface PusherData extends JsonObject {
+export type PusherData = JsonObject & {
   url?: string;
   format?: string;
   default_payload?: JsonObject;
-}
+};
 
 export interface PusherRequestBody {
   pushkey?: string;
@@ -200,7 +213,7 @@ export interface KeyBackupData {
   first_message_index: number;
   forwarded_count: number;
   is_verified: boolean;
-  session_data: Record<string, any>;
+  session_data: JsonObject | JsonValue;
 }
 
 export type RoomKeyBackupSessions = Record<string, KeyBackupData>;
@@ -218,24 +231,24 @@ export interface KeysBackupRequest {
 export interface OpenIDToken {
   access_token: string;
   token_type: string;
-  matrix_server_name: string;
+  matrix_server_name: ServerName;
   expires_in: number;
 }
 
 export interface MemberInfo {
   id: string;
-  claimed_user_id: string;
-  claimed_device_id: string;
+  claimed_user_id: UserId;
+  claimed_device_id: DeviceId;
 }
 
 export interface GetTokenRequest {
-  room_id?: string;
-  room?: string;
+  room_id?: RoomId;
+  room?: RoomId;
   slot_id?: string;
   openid_token: OpenIDToken;
   member?: MemberInfo;
-  device_id?: string;
-  delayed_event_id?: string;
+  device_id?: DeviceId;
+  delayed_event_id?: EventId;
 }
 
 export interface GetTokenResponse {
@@ -243,41 +256,53 @@ export interface GetTokenResponse {
   jwt: string;
 }
 
+export interface SearchRoomEventsFilter {
+  limit?: number;
+  rooms?: RoomId[];
+  not_rooms?: RoomId[];
+  senders?: UserId[];
+  not_senders?: UserId[];
+  types?: EventType[];
+  not_types?: EventType[];
+}
+
+export interface SearchEventContextRequest {
+  before_limit?: number;
+  after_limit?: number;
+  include_profile?: boolean;
+}
+
+export interface SearchGroupingKey {
+  key: string;
+}
+
+export interface SearchGroupingsRequest {
+  group_by: SearchGroupingKey[];
+}
+
+export interface SearchRoomEventsRequest {
+  search_term: string;
+  keys?: string[];
+  filter?: SearchRoomEventsFilter;
+  order_by?: "recent" | "rank";
+  event_context?: SearchEventContextRequest;
+  include_state?: boolean;
+  groupings?: SearchGroupingsRequest;
+}
+
 export interface SearchRequest {
   search_categories: {
-    room_events?: {
-      search_term: string;
-      keys?: string[];
-      filter?: {
-        limit?: number;
-        rooms?: string[];
-        not_rooms?: string[];
-        senders?: string[];
-        not_senders?: string[];
-        types?: string[];
-        not_types?: string[];
-      };
-      order_by?: "recent" | "rank";
-      event_context?: {
-        before_limit?: number;
-        after_limit?: number;
-        include_profile?: boolean;
-      };
-      include_state?: boolean;
-      groupings?: {
-        group_by: Array<{ key: string }>;
-      };
-    };
+    room_events?: SearchRoomEventsRequest;
   };
 }
 
 export interface SearchResultEvent {
-  event_id: string;
-  type: string;
-  room_id: string;
-  sender: string;
+  event_id: EventId;
+  type: EventType;
+  room_id: RoomId;
+  sender: UserId;
   origin_server_ts: number;
-  content: Record<string, any>;
+  content: JsonObject;
 }
 
 export interface SearchProfileInfo {
@@ -288,13 +313,13 @@ export interface SearchProfileInfo {
 export interface SearchResultContext {
   events_before: SearchResultEvent[];
   events_after: SearchResultEvent[];
-  profile_info?: Record<string, SearchProfileInfo>;
+  profile_info?: Record<UserId | string, SearchProfileInfo>;
   start?: string;
   end?: string;
 }
 
 export interface SearchResultEntry {
-  event_id: string;
+  event_id: EventId;
   rank: number;
   result: SearchResultEvent;
   context?: SearchResultContext;
@@ -302,20 +327,20 @@ export interface SearchResultEntry {
 
 export interface ContentReportRecord {
   id: number;
-  reporter_user_id: string;
-  room_id: string;
-  event_id: string;
+  reporter_user_id: UserId;
+  room_id: RoomId;
+  event_id: EventId;
   reason: string;
   score: number;
   created_at: number;
   resolved: boolean;
-  resolved_by?: string;
+  resolved_by?: UserId;
   resolved_at?: number;
   resolution_note?: string;
 }
 
 export interface ToDeviceRequest {
-  messages: Record<string, Record<string, Record<string, unknown>>>;
+  messages: Record<UserId | string, Record<DeviceId | string, Record<string, unknown>>>;
 }
 
 export interface IdPProvider {
@@ -341,7 +366,7 @@ export interface IdPUserLink {
   id: number;
   provider_id: string;
   external_id: string;
-  user_id: string;
+  user_id: UserId;
   external_email: string | null;
   external_name: string | null;
 }
@@ -367,7 +392,7 @@ export interface OAuthClient {
 export interface AuthorizationCode {
   code: string;
   client_id: string;
-  user_id: string;
+  user_id: UserId;
   redirect_uri: string;
   scope: string;
   code_challenge?: string;
@@ -382,8 +407,8 @@ export interface OAuthToken {
   access_token_hash: string;
   refresh_token_hash?: string;
   client_id: string;
-  user_id: string;
-  device_id: string;
+  user_id: UserId;
+  device_id: DeviceId;
   scope: string;
   created_at: number;
   expires_at: number;
@@ -391,14 +416,14 @@ export interface OAuthToken {
 
 export interface SpaceHierarchyChildStateEvent {
   type: "m.space.child";
-  state_key: string;
+  state_key: RoomId;
   content: Record<string, unknown>;
-  sender: string;
+  sender: UserId;
   origin_server_ts: number;
 }
 
 export interface SpaceHierarchyRoomSummary {
-  room_id: string;
+  room_id: RoomId;
   room_type?: string;
   name?: string;
   topic?: string;
@@ -432,26 +457,49 @@ export interface FederationSpaceHierarchyResponse {
 
 export interface SpaceHierarchySnapshot {
   room: SpaceHierarchyRoom;
-  childEdges: Array<{ roomId: string; content: Record<string, unknown> }>;
+  childEdges: SpaceHierarchyChildEdge[];
+}
+
+export interface SpaceHierarchyChildEdge {
+  roomId: RoomId;
+  content: Record<string, unknown>;
 }
 
 export interface ThreadSubscriptionState {
   automatic: boolean;
   subscribed: boolean;
   unsubscribed_after?: number;
-  automatic_event_id?: string;
+  automatic_event_id?: EventId;
+}
+
+export interface SlidingSyncToDeviceExtensionConfig {
+  enabled?: boolean;
+  since?: string;
+  limit?: number;
+}
+
+export interface SlidingSyncToggleExtensionConfig {
+  enabled?: boolean;
+}
+
+export interface SlidingSyncRoomScopedExtensionConfig {
+  enabled?: boolean;
+  lists?: string[];
+  rooms?: RoomId[];
+}
+
+export interface SlidingSyncThreadSubscriptionsExtensionConfig {
+  enabled?: boolean;
+  limit?: number;
+  rooms?: RoomId[];
 }
 
 export interface SlidingSyncExtensionConfig {
-  to_device?: { enabled?: boolean; since?: string; limit?: number };
-  e2ee?: { enabled?: boolean };
-  account_data?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
-  typing?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
-  receipts?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
-  presence?: { enabled?: boolean };
-  "io.element.msc4308.thread_subscriptions"?: {
-    enabled?: boolean;
-    limit?: number;
-    rooms?: string[];
-  };
+  to_device?: SlidingSyncToDeviceExtensionConfig;
+  e2ee?: SlidingSyncToggleExtensionConfig;
+  account_data?: SlidingSyncRoomScopedExtensionConfig;
+  typing?: SlidingSyncRoomScopedExtensionConfig;
+  receipts?: SlidingSyncRoomScopedExtensionConfig;
+  presence?: SlidingSyncToggleExtensionConfig;
+  "io.element.msc4308.thread_subscriptions"?: SlidingSyncThreadSubscriptionsExtensionConfig;
 }

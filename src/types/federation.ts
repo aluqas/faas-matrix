@@ -1,9 +1,19 @@
+import type {
+  EventId,
+  EventType,
+  RoomId,
+  RoomVersionId,
+  ServerName,
+  StateKey,
+  UserId,
+} from "./matrix";
+
 export interface RawFederationPdu extends Record<string, unknown> {
-  event_id?: string;
-  room_id?: string;
-  sender?: string;
-  type?: string;
-  state_key?: string;
+  event_id?: EventId;
+  room_id?: RoomId;
+  sender?: UserId;
+  type?: EventType;
+  state_key?: StateKey;
   content?: Record<string, unknown>;
 }
 
@@ -13,16 +23,16 @@ export interface RawFederationEdu extends Record<string, unknown> {
 }
 
 export interface RawFederationPduFields {
-  roomId?: string;
-  sender?: string;
-  eventType?: string;
-  eventId?: string;
-  stateKey?: string;
+  roomId?: RoomId;
+  sender?: UserId;
+  eventType?: EventType;
+  eventId?: EventId;
+  stateKey?: StateKey;
   content?: Record<string, unknown>;
 }
 
 export interface FederationTransactionEnvelope {
-  origin: string;
+  origin: ServerName;
   txnId: string;
   body: {
     pdus?: Array<Record<string, unknown>>;
@@ -37,11 +47,11 @@ export interface FederationTransactionResult {
   acceptedPduCount: number;
   rejectedPduCount: number;
   processedEduCount: number;
-  softFailedEventIds: string[];
+  softFailedEventIds: EventId[];
 }
 
 export interface PduIngestInput {
-  origin: string;
+  origin: ServerName;
   txnId: string;
   rawPdu: Record<string, unknown>;
   disableGapFill?: boolean;
@@ -50,39 +60,39 @@ export interface PduIngestInput {
 
 export interface PduIngestResult {
   kind: "accepted" | "rejected" | "soft_failed" | "ignored";
-  eventId: string;
+  eventId: EventId;
   reason?: string;
   requiresRefanout: boolean;
 }
 
 export interface RoomScopedEduInput {
   eduType: string;
-  roomId: string;
-  origin: string;
-  senderServer?: string;
+  roomId: RoomId;
+  origin: ServerName;
+  senderServer?: ServerName;
   content: Record<string, unknown>;
 }
 
 export interface EduIngestInput {
-  origin: string;
+  origin: ServerName;
   rawEdu: Record<string, unknown>;
 }
 
 export interface EduIngestResult {
   kind: "applied" | "rejected" | "ignored";
   eduType: string;
-  roomIds: string[];
+  roomIds: RoomId[];
   reason?: string;
 }
 
 export interface FederationProfileQueryInput {
-  userId: string;
+  userId: UserId;
   field?: string;
 }
 
 export interface FederationRelationshipsQueryInput {
-  eventId: string;
-  roomId?: string;
+  eventId: EventId;
+  roomId?: RoomId;
   direction: "up" | "down";
   includeParent?: boolean;
   recentFirst?: boolean;
@@ -94,17 +104,17 @@ export type FederationQueryInput =
   | ({ kind: "event_relationships" } & FederationRelationshipsQueryInput);
 
 export type FederationEventRow = {
-  event_id: string;
-  room_id: string;
-  sender: string;
-  event_type: string;
-  state_key: string | null;
+  event_id: EventId;
+  room_id: RoomId;
+  sender: UserId;
+  event_type: EventType;
+  state_key: StateKey | null;
   content: string;
   origin_server_ts: number;
   depth: number;
   auth_events: string;
   prev_events: string;
-  event_origin?: string | null;
+  event_origin?: ServerName | null;
   event_membership?: string | null;
   prev_state?: string | null;
   hashes?: string | null;
