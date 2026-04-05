@@ -1,6 +1,7 @@
 // Matrix error handling utilities
 
 import { ErrorCodes, type ErrorCode, type MatrixError } from "../types";
+import type { MatrixApiErrorShape } from "../types/error";
 
 export class MatrixApiError extends Error {
   public readonly errcode: ErrorCode;
@@ -33,6 +34,8 @@ export class MatrixApiError extends Error {
     });
   }
 }
+
+export type { MatrixApiErrorShape };
 
 // Common error factories
 export const Errors = {

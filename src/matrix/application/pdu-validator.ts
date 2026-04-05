@@ -2,35 +2,11 @@ import { Effect, Schema } from "effect";
 import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
 import type { PDU } from "../../types";
 import { ErrorCodes } from "../../types";
+import { IncomingPduSchema, type IncomingPdu } from "../../types/schema";
 import { calculateReferenceHashEventId } from "../../utils/crypto";
 import { MatrixApiError } from "../../utils/errors";
 import { DomainError, toMatrixApiError } from "./domain-error";
 import { runFederationEffect } from "./effect-runtime";
-
-const UnknownRecordSchema = Schema.Record({ key: Schema.String, value: Schema.Unknown });
-const StringRecordSchema = Schema.Record({ key: Schema.String, value: Schema.String });
-
-const IncomingPduSchema = Schema.Struct({
-  event_id: Schema.optional(Schema.String),
-  room_id: Schema.String,
-  sender: Schema.String,
-  type: Schema.optional(Schema.String),
-  event_type: Schema.optional(Schema.String),
-  origin: Schema.optional(Schema.String),
-  membership: Schema.optional(Schema.Literal("join", "invite", "leave", "ban", "knock")),
-  prev_state: Schema.optional(Schema.Array(Schema.String)),
-  state_key: Schema.optional(Schema.String),
-  content: Schema.optional(UnknownRecordSchema),
-  origin_server_ts: Schema.Number,
-  unsigned: Schema.optional(UnknownRecordSchema),
-  depth: Schema.optional(Schema.Number),
-  auth_events: Schema.optional(Schema.Array(Schema.String)),
-  prev_events: Schema.optional(Schema.Array(Schema.String)),
-  hashes: Schema.optional(Schema.Struct({ sha256: Schema.String })),
-  signatures: Schema.optional(Schema.Record({ key: Schema.String, value: StringRecordSchema })),
-});
-
-type IncomingPdu = Schema.Schema.Type<typeof IncomingPduSchema>;
 
 export function roomVersionRequiresIntegerJsonNumbers(roomVersion?: string): boolean {
   const numericVersion = Number(roomVersion ?? getDefaultRoomVersion());

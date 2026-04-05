@@ -1,27 +1,11 @@
 import { Data } from "effect";
-import type { ErrorCode } from "../../types";
+import type { DomainErrorKind, DomainErrorShape, InfraErrorShape } from "../../types/error";
 import { MatrixApiError } from "../../utils/errors";
+export type { DomainErrorKind };
 
-export type DomainErrorKind =
-  | "spec_violation"
-  | "auth_violation"
-  | "state_invariant"
-  | "unsupported_room_version"
-  | "incompatible_room_version";
+export class DomainError extends Data.TaggedError("DomainError")<DomainErrorShape> {}
 
-export class DomainError extends Data.TaggedError("DomainError")<{
-  readonly kind: DomainErrorKind;
-  readonly errcode: ErrorCode;
-  readonly message: string;
-  readonly status: number;
-}> {}
-
-export class InfraError extends Data.TaggedError("InfraError")<{
-  readonly errcode: ErrorCode;
-  readonly message: string;
-  readonly status: number;
-  readonly cause?: unknown;
-}> {}
+export class InfraError extends Data.TaggedError("InfraError")<InfraErrorShape> {}
 
 export function toMatrixApiError(error: DomainError): MatrixApiError {
   return new MatrixApiError(error.errcode, error.message, error.status);

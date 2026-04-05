@@ -1,70 +1,15 @@
 import { Effect, Schema } from "effect";
 import type { PDU } from "../../types";
 import { ErrorCodes } from "../../types";
+import {
+  FederationInviteEnvelopeSchema,
+  FederationPduEnvelopeSchema,
+  FederationThirdPartyInviteExchangeSchema,
+  type FederationPduEnvelope,
+} from "../../types/schema";
 import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
 import { DomainError } from "./domain-error";
 import { requireRoomVersionPolicy } from "./room-version-policy";
-
-const UnknownRecordSchema = Schema.Record({ key: Schema.String, value: Schema.Unknown });
-const StringRecordSchema = Schema.Record({ key: Schema.String, value: Schema.String });
-
-export const FederationPduEnvelopeSchema = Schema.Struct({
-  event_id: Schema.optional(Schema.String),
-  room_id: Schema.optional(Schema.String),
-  sender: Schema.String,
-  type: Schema.String,
-  origin: Schema.optional(Schema.String),
-  membership: Schema.optional(Schema.Literal("join", "invite", "leave", "ban", "knock")),
-  prev_state: Schema.optional(Schema.Array(Schema.String)),
-  state_key: Schema.optional(Schema.String),
-  content: Schema.optional(UnknownRecordSchema),
-  origin_server_ts: Schema.optional(Schema.Number),
-  unsigned: Schema.optional(UnknownRecordSchema),
-  depth: Schema.optional(Schema.Number),
-  auth_events: Schema.optional(Schema.Array(Schema.String)),
-  prev_events: Schema.optional(Schema.Array(Schema.String)),
-  hashes: Schema.optional(Schema.Struct({ sha256: Schema.String })),
-  signatures: Schema.optional(Schema.Record({ key: Schema.String, value: StringRecordSchema })),
-  redacts: Schema.optional(Schema.String),
-});
-
-export type FederationPduEnvelope = Schema.Schema.Type<typeof FederationPduEnvelopeSchema>;
-
-const FederationInviteEnvelopeSchema = Schema.Struct({
-  room_version: Schema.optional(Schema.String),
-  event: Schema.optional(Schema.Unknown),
-  invite_room_state: Schema.optional(Schema.Array(Schema.Unknown)),
-});
-
-const FederationThirdPartyInviteSignedSchema = Schema.Struct({
-  mxid: Schema.String,
-  token: Schema.String,
-  signatures: Schema.Record({ key: Schema.String, value: StringRecordSchema }),
-});
-
-const FederationThirdPartyInviteContentSchema = Schema.Struct({
-  membership: Schema.String,
-  third_party_invite: Schema.optional(
-    Schema.Struct({
-      display_name: Schema.optional(Schema.String),
-      signed: FederationThirdPartyInviteSignedSchema,
-    }),
-  ),
-});
-
-const FederationThirdPartyInviteExchangeSchema = Schema.Struct({
-  type: Schema.String,
-  room_id: Schema.String,
-  sender: Schema.String,
-  state_key: Schema.String,
-  content: FederationThirdPartyInviteContentSchema,
-  origin_server_ts: Schema.optional(Schema.Number),
-  depth: Schema.optional(Schema.Number),
-  auth_events: Schema.optional(Schema.Array(Schema.String)),
-  prev_events: Schema.optional(Schema.Array(Schema.String)),
-  event_id: Schema.optional(Schema.String),
-  signatures: Schema.optional(Schema.Record({ key: Schema.String, value: StringRecordSchema })),
-});
 
 export interface FederationValidationResult {
   roomId: string;

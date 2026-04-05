@@ -1,57 +1,24 @@
 import { Effect, Schema } from "effect";
 import { ErrorCodes } from "../../types";
+import {
+  CreateRoomRequestSchema,
+  InviteRoomRequestSchema,
+  JoinRoomRequestSchema,
+  ModerationRequestSchema,
+  type ValidatedCreateRoomRequest,
+  type ValidatedInviteRoomRequest,
+  type ValidatedJoinRoomSchemaInput,
+  type ValidatedModerationRequest,
+} from "../../types/schema";
 import { getDefaultRoomVersion } from "../../services/room-versions";
 import { DomainError } from "./domain-error";
 import { requireRoomVersionPolicy } from "./room-version-policy";
 import { validateStateEvent } from "./rooms-support";
-
-const UnknownRecordSchema = Schema.Record({ key: Schema.String, value: Schema.Unknown });
-
-const InitialStateEventSchema = Schema.Struct({
-  type: Schema.String,
-  state_key: Schema.optional(Schema.String),
-  content: UnknownRecordSchema,
-});
-
-const CreateRoomRequestSchema = Schema.Struct({
-  room_alias_local_part: Schema.optional(Schema.String),
-  room_alias_name: Schema.optional(Schema.String),
-  name: Schema.optional(Schema.String),
-  topic: Schema.optional(Schema.String),
-  invite: Schema.optional(Schema.Array(Schema.String)),
-  room_version: Schema.optional(Schema.String),
-  creation_content: Schema.optional(UnknownRecordSchema),
-  initial_state: Schema.optional(Schema.Array(InitialStateEventSchema)),
-  preset: Schema.optional(Schema.String),
-  is_direct: Schema.optional(Schema.Boolean),
-  visibility: Schema.optional(Schema.String),
-});
-
-const JoinRoomRequestSchema = Schema.Struct({
-  roomId: Schema.String,
-  remoteServers: Schema.optional(Schema.Array(Schema.String)),
-  content: Schema.optional(UnknownRecordSchema),
-});
-
-const InviteRoomRequestSchema = Schema.Struct({
-  roomId: Schema.String,
-  targetUserId: Schema.String,
-});
-
-const ModerationRequestSchema = Schema.Struct({
-  roomId: Schema.String,
-  targetUserId: Schema.String,
-  reason: Schema.optional(Schema.String),
-});
-
-export type ValidatedCreateRoomRequest = Schema.Schema.Type<typeof CreateRoomRequestSchema>;
 export type ValidatedJoinRoomRequest = {
   roomId: string;
   remoteServers: string[];
   content?: Record<string, unknown>;
 };
-export type ValidatedInviteRoomRequest = Schema.Schema.Type<typeof InviteRoomRequestSchema>;
-export type ValidatedModerationRequest = Schema.Schema.Type<typeof ModerationRequestSchema>;
 
 const VALID_VISIBILITIES = new Set(["private", "public"]);
 const VALID_PRESETS = new Set(["private_chat", "trusted_private_chat", "public_chat"]);
@@ -173,22 +140,23 @@ export function validateJoinRoomRequest(input: {
   return decodeSchema(JoinRoomRequestSchema, input, "Malformed joinRoom request").pipe(
     Effect.flatMap((request) =>
       Effect.gen(function* () {
-        if (!request.roomId.startsWith("!")) {
+        const validated = request as ValidatedJoinRoomSchemaInput;
+        if (!validated.roomId.startsWith("!")) {
           yield* Effect.fail(invalidParam("roomId must be a room ID"));
         }
 
         const remoteServers = Array.from(
           new Set(
-            (request.remoteServers ?? [])
+            (validated.remoteServers ?? [])
               .map((server) => server.trim())
               .filter((server) => server.length > 0),
           ),
         );
 
         return {
-          roomId: request.roomId,
+          roomId: validated.roomId,
           remoteServers,
-          ...(request.content !== undefined ? { content: request.content } : {}),
+          ...(validated.content !== undefined ? { content: validated.content } : {}),
         };
       }),
     ),
