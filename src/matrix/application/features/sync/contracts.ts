@@ -1,6 +1,29 @@
+import type {
+  RoomVisibilityContext,
+  SyncProjectionSummary,
+  SyncTokenPosition,
+} from "../../../../types/sync";
+import type {
+  MembershipRoomsResult,
+  RoomDeltaResult,
+  SyncAssemblerInput,
+  SyncCursor,
+  SyncUserInput,
+  TopLevelSyncResult,
+} from "../../../../types/sync";
 import type { SyncResponse } from "../../../../types";
-import type { SyncProjectionResult } from "../../sync-projection";
-import type { PresenceSyncProjection } from "../presence/contracts";
+
+export type {
+  MembershipRoomsResult,
+  RoomDeltaResult,
+  RoomVisibilityContext,
+  SyncAssemblerInput,
+  SyncCursor,
+  SyncProjectionSummary,
+  SyncTokenPosition,
+  SyncUserInput,
+  TopLevelSyncResult,
+};
 
 /**
  * Canonical visibility boundary for a single sync response.
@@ -9,17 +32,6 @@ import type { PresenceSyncProjection } from "../presence/contracts";
  * (room-delta, presence, device-list, thread-subscriptions, etc.) so that
  * every feature sees exactly the same set of "visible rooms".
  */
-export interface RoomVisibilityContext {
-  /** All joined rooms visible to the user (room filter applied). */
-  visibleJoinedRoomIds: string[];
-  /** Rooms in partial-state that are hidden from this response (full-state only). */
-  hiddenPartialStateRooms: ReadonlySet<string>;
-  /** Rooms in partial-state that ARE exposed in this response (lazy-load mode). */
-  visiblePartialStateRooms: ReadonlySet<string>;
-  /** Rooms that must deliver a full-state snapshot this response (just-completed partial join). */
-  forceFullStateRooms: ReadonlySet<string>;
-}
-
 /** Minimal visibility context for sliding-sync, which has no partial-state concept yet. */
 export function buildSlidingSyncVisibilityContext(
   allJoinedRoomIds: string[],
@@ -30,58 +42,6 @@ export function buildSlidingSyncVisibilityContext(
     visiblePartialStateRooms: new Set(),
     forceFullStateRooms: new Set(),
   };
-}
-
-export interface SyncCursor {
-  events: number;
-  toDevice: number;
-  deviceKeys: number;
-}
-
-export interface SyncUserInput {
-  userId: string;
-  deviceId: string | null;
-  since?: string;
-  fullState?: boolean;
-  filterParam?: string;
-  timeout?: number;
-  setPresence?: "online" | "offline" | "unavailable";
-}
-
-export interface SyncTokenPosition {
-  events: number;
-  toDevice: number;
-  deviceKeys: number;
-}
-
-export interface SyncAssemblerInput extends SyncUserInput {}
-
-export interface RoomDeltaResult {
-  joinedRooms: NonNullable<SyncResponse["rooms"]>["join"];
-}
-
-export interface MembershipRoomsResult extends SyncProjectionResult {}
-
-export interface TopLevelSyncResult {
-  accountData: NonNullable<SyncResponse["account_data"]>["events"];
-  toDeviceEvents: NonNullable<SyncResponse["to_device"]>["events"];
-  deviceLists?: SyncResponse["device_lists"];
-  presence: PresenceSyncProjection;
-  deviceOneTimeKeysCount: NonNullable<SyncResponse["device_one_time_keys_count"]>;
-  deviceUnusedFallbackKeyTypes: NonNullable<SyncResponse["device_unused_fallback_key_types"]>;
-  currentToDevicePos: number;
-}
-
-export interface SyncProjectionSummary {
-  joinedRoomCount: number;
-  inviteRoomCount: number;
-  leaveRoomCount: number;
-  knockRoomCount: number;
-  toDeviceCount: number;
-  accountDataCount: number;
-  presenceCount: number;
-  deviceListChangedCount: number;
-  deviceListLeftCount: number;
 }
 
 export function parseSyncToken(token: string | undefined): SyncTokenPosition {

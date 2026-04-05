@@ -7,6 +7,7 @@ import type { SyncRepository } from "../../../repositories/interfaces";
 import type { PartialStatePort, SyncQueryPort } from "./effect-ports";
 import { buildSyncToken, parseSyncToken, type SyncAssemblerInput } from "./contracts";
 import { projectMembershipRoomBuckets } from "./membership-rooms";
+import { buildRoomVisibilityContextEffect } from "./room-visibility-context";
 import { hasJoinedRoomDelta, projectRoomDeltas } from "./room-delta";
 import { projectTopLevelSync } from "./top-level";
 
@@ -51,43 +52,16 @@ export function assembleSyncResponseEffect(
       shouldIncludeRoom(roomId, filter?.room),
     );
 
-    function shouldExposePartialStateRoom(): boolean {
-      return (
-        filter?.room?.timeline?.lazy_load_members === true ||
-        filter?.room?.state?.lazy_load_members === true
-      );
-    }
+    const visibilityContext = yield* buildRoomVisibilityContextEffect(ports.partialState, {
+      userId: input.userId,
+      visibleJoinedRoomIds,
+      filter,
+    });
 
-    const roomIdsForDelta: string[] = [];
-    const forceFullStateRooms = new Set<string>();
-    const hiddenPartialStateRooms = new Set<string>();
-    const visiblePartialStateRooms = new Set<string>();
-    for (const roomId of visibleJoinedRoomIds) {
-      const partialStateStatus = yield* ports.partialState.getPartialStateStatus(
-        input.userId,
-        roomId,
-      );
-      const partialStateCompletion = yield* ports.partialState.takePartialStateCompletionStatus(
-        input.userId,
-        roomId,
-      );
-      if (partialStateCompletion) {
-        forceFullStateRooms.add(roomId);
-      }
-      if (
-        partialStateStatus &&
-        partialStateStatus.phase !== "complete" &&
-        !shouldExposePartialStateRoom()
-      ) {
-        hiddenPartialStateRooms.add(roomId);
-      }
-      if (partialStateStatus && partialStateStatus.phase !== "complete") {
-        visiblePartialStateRooms.add(roomId);
-      }
-      roomIdsForDelta.push(roomId);
-    }
+    const { forceFullStateRooms, hiddenPartialStateRooms, visiblePartialStateRooms } =
+      visibilityContext;
 
-    for (const roomId of roomIdsForDelta) {
+    for (const roomId of visibilityContext.visibleJoinedRoomIds) {
       const joinedRooms = yield* Effect.tryPromise({
         try: () =>
           projectRoomDeltas(
@@ -166,9 +140,8 @@ export function assembleSyncResponseEffect(
             sinceDeviceKeys: cursor.deviceKeys,
             ...(input.since ? { sinceToken: input.since } : {}),
             ...(filter ? { filter } : {}),
-            // Use all joined rooms (not just delta rooms) so presence is projected
-            // for all shared-room users regardless of whether the room has new events.
-            roomIds: visibleJoinedRoomIds,
+            visibilityContext,
+            roomIds: visibilityContext.visibleJoinedRoomIds,
           },
         ),
       catch: (cause) => toAssemblerError("Failed to project top-level sync payload", cause),

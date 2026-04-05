@@ -1,13 +1,18 @@
 import type {
   AccountDataEvent,
-  InvitedRoom,
-  JoinedRoom,
-  KnockedRoom,
   LeftRoom,
+  JoinedRoom,
   MatrixEvent,
   PDU,
   StrippedStateEvent,
 } from "../../types";
+import type {
+  DeviceListProjectionQuery,
+  JoinedRoomProjectionQuery,
+  SyncEventFilter,
+  SyncProjectionQuery,
+  SyncProjectionResult,
+} from "../../types/sync";
 import type { FilterDefinition, SyncRepository } from "../repositories/interfaces";
 import { FORGOTTEN_ROOM_ACCOUNT_DATA_TYPE } from "./room-account-data";
 import { projectTypingEphemeral } from "./features/typing/project";
@@ -16,41 +21,13 @@ import {
   shouldSuppressInviteInSync,
 } from "./features/invite-permissions/policy";
 
-export interface SyncEventFilter {
-  types?: string[];
-  not_types?: string[];
-  senders?: string[];
-  not_senders?: string[];
-  limit?: number;
-}
-
-export interface SyncProjectionQuery {
-  userId: string;
-  sincePosition: number;
-  roomFilter?: FilterDefinition["room"];
-  includeLeave: boolean;
-}
-
-export interface DeviceListProjectionQuery {
-  userId: string;
-  isInitialSync: boolean;
-  sinceEventPosition: number;
-  sinceDeviceKeyPosition: number;
-}
-
-export interface SyncProjectionResult {
-  inviteRooms: Record<string, InvitedRoom>;
-  knockRooms: Record<string, KnockedRoom>;
-  leaveRooms: Record<string, LeftRoom>;
-}
-
-export interface JoinedRoomProjectionQuery {
-  userId: string;
-  roomId: string;
-  sincePosition: number;
-  fullState?: boolean;
-  roomFilter?: FilterDefinition["room"];
-}
+export type {
+  DeviceListProjectionQuery,
+  JoinedRoomProjectionQuery,
+  SyncEventFilter,
+  SyncProjectionQuery,
+  SyncProjectionResult,
+};
 
 const DEFAULT_SYNC_TIMELINE_EVENT_LIMIT = 100;
 

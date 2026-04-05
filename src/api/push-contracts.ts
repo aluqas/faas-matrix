@@ -1,83 +1,32 @@
-export type JsonObject = Record<string, unknown>;
+import type {
+  JsonObject,
+  PushAction,
+  PushCondition,
+  PushEvaluationResult,
+  PushEvent,
+  PushNotificationCounts,
+  PusherData,
+  PusherRequestBody,
+  PushRule,
+  PushRuleActionsRequest,
+  PushRuleEnabledRequest,
+  PushRuleUpsertRequest,
+} from "../types/client";
 
-export interface PushActionObject extends JsonObject {
-  set_tweak: string;
-  value?: unknown;
-}
-
-export type PushAction = string | PushActionObject;
-
-export interface PushCondition extends JsonObject {
-  kind: string;
-  key?: string;
-  pattern?: string;
-  is?: string;
-  value?: unknown;
-}
-
-export interface PushRule {
-  rule_id: string;
-  default: boolean;
-  enabled: boolean;
-  conditions?: PushCondition[];
-  actions: PushAction[];
-  pattern?: string;
-}
-
-export interface PushEvent {
-  event_id: string;
-  room_id: string;
-  type: string;
-  sender: string;
-  content: JsonObject;
-  origin_server_ts?: number;
-  state_key?: string;
-  sender_display_name?: string;
-  room_name?: string;
-}
-
-export interface PushNotificationCounts {
-  unread: number;
-  missed_calls?: number;
-}
-
-export interface PushEvaluationResult {
-  notify: boolean;
-  actions: PushAction[];
-  highlight: boolean;
-}
-
-export interface PusherData extends JsonObject {
-  url?: string;
-  format?: string;
-  default_payload?: JsonObject;
-}
-
-export interface PusherRequestBody {
-  pushkey?: string;
-  kind?: string | null;
-  app_id?: string;
-  app_display_name?: string;
-  device_display_name?: string;
-  profile_tag?: string;
-  lang?: string;
-  data?: PusherData;
-  append?: boolean;
-}
-
-export interface PushRuleUpsertRequest {
-  actions: PushAction[];
-  conditions?: PushCondition[];
-  pattern?: string;
-}
-
-export interface PushRuleEnabledRequest {
-  enabled: boolean;
-}
-
-export interface PushRuleActionsRequest {
-  actions: PushAction[];
-}
+export type {
+  JsonObject,
+  PushAction,
+  PushCondition,
+  PushEvaluationResult,
+  PushEvent,
+  PushNotificationCounts,
+  PusherData,
+  PusherRequestBody,
+  PushRule,
+  PushRuleActionsRequest,
+  PushRuleEnabledRequest,
+  PushRuleUpsertRequest,
+};
 
 function isPlainObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);

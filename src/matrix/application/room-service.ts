@@ -3,6 +3,15 @@ import { withIdempotency, type IdempotencyStore } from "../../foundation/idempot
 import { Errors, MatrixApiError } from "../../utils/errors";
 import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
 import { ErrorCodes, type PDU, type RoomJoinWorkflowStatus } from "../../types";
+import type {
+  CreateRoomInput,
+  InviteRoomInput,
+  JoinRoomInput,
+  KnockRoomInput,
+  LeaveRoomInput,
+  ModerateRoomInput,
+  SendEventInput,
+} from "../../types/rooms";
 import type { EventPipeline } from "../domain/event-pipeline";
 import type { RoomRepository } from "../repositories/interfaces";
 import {
@@ -71,52 +80,15 @@ import {
 } from "./federation-handler-service";
 import { checkEventAuth } from "../../services/event-auth";
 
-export interface CreateRoomInput {
-  userId: string;
-  body: unknown;
-}
-
-export interface JoinRoomInput {
-  userId: string;
-  roomId: string;
-  remoteServers?: string[];
-  body?: unknown;
-}
-
-export interface SendEventInput {
-  userId: string;
-  roomId: string;
-  eventType: string;
-  stateKey?: string;
-  txnId: string;
-  content: Record<string, unknown>;
-  redacts?: string;
-}
-
-export interface LeaveRoomInput {
-  userId: string;
-  roomId: string;
-}
-
-export interface InviteRoomInput {
-  userId: string;
-  roomId: string;
-  targetUserId: string;
-}
-
-export interface ModerateRoomInput {
-  userId: string;
-  roomId: string;
-  targetUserId: string;
-  reason?: string;
-}
-
-export interface KnockRoomInput {
-  userId: string;
-  roomId: string;
-  reason?: string;
-  serverNames?: string[];
-}
+export type {
+  CreateRoomInput,
+  InviteRoomInput,
+  JoinRoomInput,
+  KnockRoomInput,
+  LeaveRoomInput,
+  ModerateRoomInput,
+  SendEventInput,
+};
 
 type TransactionResponse = Record<string, unknown>;
 

@@ -1,91 +1,40 @@
-export type JsonObject = Record<string, unknown>;
+import type {
+  CrossSigningKeysStore,
+  CrossSigningKeyPayload,
+  DeviceKeysPayload,
+  JsonObject,
+  KeysClaimRequest,
+  KeysQueryRequest,
+  KeysQueryResponse,
+  KeysUploadRequest,
+  SignaturesUploadRequest,
+  SignedKeyPayload,
+  StoredOneTimeKey,
+  StoredOneTimeKeyBuckets,
+  TokenSubmitRequest,
+  UIAAuthDict,
+  UiaSessionData,
+  CrossSigningUploadRequest,
+} from "../types/client";
 
-export interface DeviceKeysPayload extends JsonObject {
-  user_id?: string;
-  device_id?: string;
-  unsigned?: JsonObject;
-  algorithms?: string[];
-  keys?: Record<string, string>;
-  signatures?: Record<string, Record<string, string>>;
-}
-
-export interface CrossSigningKeyPayload extends JsonObject {
-  user_id?: string;
-  usage?: string[];
-  keys?: Record<string, string>;
-  signatures?: Record<string, Record<string, string>>;
-}
-
-export interface UIAAuthDict extends JsonObject {
-  type?: string;
-  session?: string;
-  password?: string;
-}
-
-export interface KeysUploadRequest {
-  device_keys?: DeviceKeysPayload;
-  one_time_keys?: Record<string, JsonObject>;
-  fallback_keys?: Record<string, JsonObject>;
-}
-
-export interface KeysQueryRequest {
-  device_keys?: Record<string, string[]>;
-}
-
-export interface KeysQueryResponse {
-  device_keys: Record<string, Record<string, DeviceKeysPayload>>;
-  master_keys?: Record<string, CrossSigningKeyPayload>;
-  self_signing_keys?: Record<string, CrossSigningKeyPayload>;
-  user_signing_keys?: Record<string, CrossSigningKeyPayload>;
-}
-
-export interface KeysClaimRequest {
-  one_time_keys?: Record<string, Record<string, string>>;
-}
-
-export interface CrossSigningUploadRequest {
-  master_key?: CrossSigningKeyPayload;
-  self_signing_key?: CrossSigningKeyPayload;
-  user_signing_key?: CrossSigningKeyPayload;
-  auth?: UIAAuthDict;
-}
-
-export interface CrossSigningKeysStore {
-  master?: CrossSigningKeyPayload;
-  self_signing?: CrossSigningKeyPayload;
-  user_signing?: CrossSigningKeyPayload;
-}
-
-export interface SignedKeyPayload extends JsonObject {
-  device_id?: string;
-  signatures?: Record<string, Record<string, string>>;
-}
-
-export type SignaturesUploadRequest = Record<string, Record<string, SignedKeyPayload>>;
-
-export interface TokenSubmitRequest {
-  session?: string;
-}
-
-export interface UiaSessionData extends JsonObject {
-  user_id: string;
-  created_at: number;
-  type: string;
-  completed_stages: string[];
-  is_oidc_user?: boolean;
-  has_password?: boolean;
-  redirect_url?: string;
-  sso_completed_at?: number;
-  token_completed_at?: number;
-}
-
-export interface StoredOneTimeKey {
-  keyId: string;
-  keyData: JsonObject;
-  claimed: boolean;
-}
-
-export type StoredOneTimeKeyBuckets = Record<string, StoredOneTimeKey[]>;
+export type {
+  CrossSigningKeysStore,
+  CrossSigningKeyPayload,
+  DeviceKeysPayload,
+  JsonObject,
+  KeysClaimRequest,
+  KeysQueryRequest,
+  KeysQueryResponse,
+  KeysUploadRequest,
+  SignaturesUploadRequest,
+  SignedKeyPayload,
+  StoredOneTimeKey,
+  StoredOneTimeKeyBuckets,
+  TokenSubmitRequest,
+  UIAAuthDict,
+  UiaSessionData,
+  CrossSigningUploadRequest,
+};
 
 function isPlainObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);

@@ -1,21 +1,12 @@
 import type { PDU } from "../../types";
+import type { MissingEventsQuery, TimestampDirection } from "../../types/events";
 import {
   getDefaultRoomVersion,
   getRedactionAllowedKeys,
   getRoomVersion,
 } from "../../services/room-versions";
 
-export type TimestampDirection = "f" | "b";
-
-export interface MissingEventsQuery {
-  roomId: string;
-  earliestEvents: string[];
-  latestEvents: string[];
-  limit: number;
-  minDepth: number;
-  requestingServer?: string;
-  roomVersion?: string;
-}
+export type { MissingEventsQuery, TimestampDirection };
 
 type EventRow = {
   event_id: string;

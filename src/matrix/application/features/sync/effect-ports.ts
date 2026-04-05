@@ -6,38 +6,17 @@ import type {
   StrippedStateEvent,
   ToDeviceEvent,
 } from "../../../../types";
+import type { ConnectionState } from "../../../../types/sync";
 import type {
   FilterDefinition,
   MembershipRecord,
   ReceiptEvent,
   UnreadNotificationSummary,
 } from "../../../repositories/interfaces";
-import type { PartialStateStatus } from "../partial-state/tracker";
+import type { PartialStateStatus } from "../../../../types/partial-state";
 import { InfraError } from "../../domain-error";
 
-export interface ConnectionState {
-  userId: string;
-  pos: number;
-  lastAccess: number;
-  roomStates: Record<
-    string,
-    {
-      lastStreamOrdering: number;
-      sentState: boolean;
-    }
-  >;
-  listStates: Record<
-    string,
-    {
-      roomIds: string[];
-      count: number;
-    }
-  >;
-  roomNotificationCounts?: Record<string, number>;
-  roomFullyReadMarkers?: Record<string, string>;
-  initialSyncComplete?: boolean;
-  roomSentAsRead?: Record<string, boolean>;
-}
+export type { ConnectionState };
 
 export interface SyncQueryPort {
   loadFilter(

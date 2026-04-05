@@ -1,27 +1,12 @@
 import { Effect } from "effect";
 import type { AppEnv, PDU } from "../../types";
+import type { FederationEventRow } from "../../types/federation";
 import { MatrixApiError } from "../../utils/errors";
 import { DomainError, toMatrixApiError } from "../../matrix/application/domain-error";
 import { runFederationEffect } from "../../matrix/application/effect-runtime";
 import { withLogContext } from "../../matrix/application/logging";
 
-export type FederationEventRow = {
-  event_id: string;
-  room_id: string;
-  sender: string;
-  event_type: string;
-  state_key: string | null;
-  content: string;
-  origin_server_ts: number;
-  depth: number;
-  auth_events: string;
-  prev_events: string;
-  event_origin?: string | null;
-  event_membership?: string | null;
-  prev_state?: string | null;
-  hashes?: string | null;
-  signatures?: string | null;
-};
+export type { FederationEventRow };
 
 export async function runDomainValidation<A>(effect: Effect.Effect<A, DomainError>): Promise<A> {
   return runFederationEffect(effect);

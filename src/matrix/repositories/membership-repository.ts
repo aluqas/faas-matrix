@@ -25,6 +25,87 @@ export interface MembershipRecord {
 
 const qb = createKyselyBuilder<MembershipDatabase>();
 
+/**
+ * Shared CTE chain: denormalized `room_memberships` ∪ supplemental `room_state`
+ * rows not yet reflected in `room_memberships`, then `joined_members` (membership = join).
+ * Embed after `WITH` in SQL (comma-separated CTE names).
+ */
+export const EFFECTIVE_MEMBERSHIPS_AND_JOINED_MEMBERS_CTE = `
+  current_memberships AS (
+    SELECT room_id, user_id, membership
+    FROM room_memberships
+    UNION
+    SELECT
+      rs.room_id,
+      rs.state_key AS user_id,
+      json_extract(e.content, '$.membership') AS membership
+    FROM room_state rs
+    JOIN events e ON rs.event_id = e.event_id
+    WHERE rs.event_type = 'm.room.member'
+      AND rs.state_key IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM room_memberships rm
+        WHERE rm.room_id = rs.room_id
+          AND rm.user_id = rs.state_key
+      )
+  ),
+  joined_members AS (
+    SELECT room_id, user_id
+    FROM current_memberships
+    WHERE membership = 'join'
+  )
+`;
+
+/**
+ * All room IDs where the user has an effective membership row (any of join/invite/leave/ban/knock),
+ * including partial-state rows present only in `room_state`.
+ */
+export async function getUserRoomIdsWithEffectiveMembership(
+  db: D1Database,
+  userId: string,
+  membership?: Membership,
+): Promise<string[]> {
+  let query = `
+    WITH membership_sources AS (
+      SELECT room_id, membership
+      FROM room_memberships
+      WHERE user_id = ?
+
+      UNION
+
+      SELECT
+        rs.room_id,
+        json_extract(e.content, '$.membership') AS membership
+      FROM room_state rs
+      JOIN events e ON rs.event_id = e.event_id
+      WHERE rs.event_type = 'm.room.member'
+        AND rs.state_key = ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM room_memberships rm
+          WHERE rm.room_id = rs.room_id
+            AND rm.user_id = rs.state_key
+        )
+    )
+    SELECT DISTINCT room_id
+    FROM membership_sources
+    WHERE membership IN ('join', 'invite', 'leave', 'ban', 'knock')
+  `;
+  const params: string[] = [userId, userId];
+
+  if (membership) {
+    query += ` AND membership = ?`;
+    params.push(membership);
+  }
+
+  const result = await db
+    .prepare(query)
+    .bind(...params)
+    .all<{ room_id: string }>();
+  return result.results.map((r) => r.room_id);
+}
+
 export async function getMembershipForUser(
   db: D1Database,
   roomId: string,
@@ -92,38 +173,7 @@ export async function getJoinedRoomIdsIncludingPartialState(
   db: D1Database,
   userId: string,
 ): Promise<string[]> {
-  const result = await db
-    .prepare(
-      `
-      WITH effective_memberships AS (
-        SELECT room_id, membership
-        FROM room_memberships
-        WHERE user_id = ?
-
-        UNION
-
-        SELECT
-          rs.room_id,
-          json_extract(e.content, '$.membership') AS membership
-        FROM room_state rs
-        JOIN events e ON rs.event_id = e.event_id
-        WHERE rs.event_type = 'm.room.member'
-          AND rs.state_key = ?
-          AND NOT EXISTS (
-            SELECT 1
-            FROM room_memberships rm
-            WHERE rm.room_id = rs.room_id
-              AND rm.user_id = rs.state_key
-          )
-      )
-      SELECT DISTINCT room_id
-      FROM effective_memberships
-      WHERE membership = 'join'
-      `,
-    )
-    .bind(userId, userId)
-    .all<{ room_id: string }>();
-  return result.results.map((r) => r.room_id);
+  return getUserRoomIdsWithEffectiveMembership(db, userId, "join");
 }
 
 /**

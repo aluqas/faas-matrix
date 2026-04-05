@@ -143,7 +143,7 @@ app.get("/_matrix/federation/v1/make_join/:roomId/:userId", async (c) => {
     const makeJoinDb = c.env.DB;
     await runFederationEffect(
       authorizeLocalJoin({
-        roomVersion: room.room_version,
+        roomVersion: String(room.room_version),
         joinRulesContent,
         currentMembership: currentMembership?.membership as Membership | undefined,
         checkAllowedRoomMembership: (allowedRoomId) =>

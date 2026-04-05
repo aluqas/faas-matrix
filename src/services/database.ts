@@ -1,6 +1,7 @@
 // Database service layer for D1
 
 import type { User, Device, Room, PDU, Membership, Env, StrippedStateEvent } from "../types";
+import { getUserRoomIdsWithEffectiveMembership } from "../matrix/repositories/membership-repository";
 import { fanoutEventToRemoteServers } from "./federation-fanout";
 import { createFederationOutboundPort } from "./federation-outbound";
 
@@ -874,57 +875,14 @@ export async function getInviteStrippedState(
 
 /**
  * Returns room IDs for the given user, optionally filtered by membership.
- *
- * Uses the "effective membership" UNION pattern (room_memberships UNION room_state)
- * so that partial-state rooms — where the denormalized `room_memberships` row has
- * not yet been written — are still included.
- *
- * This is the same pattern as `getJoinedRoomIdsIncludingPartialState` in
- * `src/matrix/repositories/membership-repository.ts`.
+ * Delegates to [`getUserRoomIdsWithEffectiveMembership`](../matrix/repositories/membership-repository.ts).
  */
 export async function getUserRooms(
   db: D1Database,
   userId: string,
   membership?: Membership,
 ): Promise<string[]> {
-  let query = `
-    WITH membership_sources AS (
-      SELECT room_id, membership
-      FROM room_memberships
-      WHERE user_id = ?
-
-      UNION
-
-      SELECT
-        rs.room_id,
-        json_extract(e.content, '$.membership') AS membership
-      FROM room_state rs
-      JOIN events e ON rs.event_id = e.event_id
-      WHERE rs.event_type = 'm.room.member'
-        AND rs.state_key = ?
-        AND NOT EXISTS (
-          SELECT 1
-          FROM room_memberships rm
-          WHERE rm.room_id = rs.room_id
-            AND rm.user_id = rs.state_key
-        )
-    )
-    SELECT DISTINCT room_id
-    FROM membership_sources
-    WHERE membership IN ('join', 'invite', 'leave', 'ban', 'knock')
-  `;
-  const params: string[] = [userId, userId];
-
-  if (membership) {
-    query += ` AND membership = ?`;
-    params.push(membership);
-  }
-
-  const result = await db
-    .prepare(query)
-    .bind(...params)
-    .all<{ room_id: string }>();
-  return result.results.map((r) => r.room_id);
+  return getUserRoomIdsWithEffectiveMembership(db, userId, membership);
 }
 
 export async function getRoomMembers(

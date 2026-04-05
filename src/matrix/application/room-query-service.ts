@@ -1,6 +1,17 @@
 import { Effect } from "effect";
 import type { AppContext } from "../../foundation/app-context";
-import { ErrorCodes, type Membership, type PDU, type UnsignedData } from "../../types";
+import { ErrorCodes, type Membership, type PDU } from "../../types";
+import type {
+  ClientRoomEvent,
+  GetRoomMembersInput,
+  GetRoomMessagesInput,
+  GetRoomStateEventInput,
+  GetRoomStateInput,
+  GetVisibleRoomEventInput,
+  RoomMessagesRelationFilter,
+  RoomQueryDependencies,
+  TimestampToEventInput,
+} from "../../types/rooms";
 import {
   getMembership,
   getRoomEvents,
@@ -8,12 +19,11 @@ import {
   getRoomState,
   getStateEvent,
 } from "../../services/database";
-import { EventQueryService, type TimestampDirection } from "./event-query-service";
+import { EventQueryService } from "./event-query-service";
 import { DomainError, InfraError } from "./domain-error";
 import {
   getPartialStateCompletionStatus,
   getPartialStateStatus,
-  type PartialStateStatus,
 } from "./features/partial-state/tracker";
 import { getPartialStateDeferredAuthReason } from "./features/federation/partial-state-membership";
 
@@ -22,111 +32,17 @@ type MembershipRecord = {
   eventId: string;
 };
 
-type RoomMemberRecord = {
-  userId: string;
-  membership: Membership;
-  displayName?: string;
-  avatarUrl?: string;
+export type {
+  ClientRoomEvent,
+  GetRoomMembersInput,
+  GetRoomMessagesInput,
+  GetRoomStateEventInput,
+  GetRoomStateInput,
+  GetVisibleRoomEventInput,
+  RoomMessagesRelationFilter,
+  RoomQueryDependencies,
+  TimestampToEventInput,
 };
-
-export type ClientRoomEvent = {
-  type: string;
-  state_key?: string;
-  content: Record<string, unknown>;
-  sender: string;
-  origin_server_ts: number;
-  event_id: string;
-  room_id: string;
-  unsigned?: UnsignedData;
-};
-
-export interface RoomMessagesRelationFilter {
-  relTypes?: string[];
-  notRelTypes?: string[];
-}
-
-export interface GetRoomStateInput {
-  userId: string;
-  roomId: string;
-}
-
-export interface GetRoomStateEventInput {
-  userId: string;
-  roomId: string;
-  eventType: string;
-  stateKey: string;
-  formatEvent?: boolean;
-}
-
-export interface GetRoomMembersInput {
-  userId: string;
-  roomId: string;
-}
-
-export interface GetRoomMessagesInput {
-  userId: string;
-  roomId: string;
-  from?: string;
-  dir: "f" | "b";
-  limit: number;
-  relationFilter?: RoomMessagesRelationFilter;
-}
-
-export interface GetVisibleRoomEventInput {
-  userId: string;
-  roomId: string;
-  eventId: string;
-}
-
-export interface TimestampToEventInput {
-  userId: string;
-  roomId: string;
-  ts: number;
-  dir: TimestampDirection;
-}
-
-export interface RoomQueryDependencies {
-  getMembership(db: D1Database, roomId: string, userId: string): Promise<MembershipRecord | null>;
-  getRoomState(db: D1Database, roomId: string): Promise<PDU[]>;
-  getStateEvent(
-    db: D1Database,
-    roomId: string,
-    eventType: string,
-    stateKey: string,
-  ): Promise<PDU | null>;
-  getRoomMembers(db: D1Database, roomId: string): Promise<RoomMemberRecord[]>;
-  getRoomEvents(
-    db: D1Database,
-    roomId: string,
-    fromToken: number | undefined,
-    limit: number,
-    direction: "f" | "b",
-    relationFilter?: RoomMessagesRelationFilter,
-  ): Promise<{ events: PDU[]; end: number }>;
-  getVisibleEventForUser(
-    db: D1Database,
-    roomId: string,
-    eventId: string,
-    userId: string,
-  ): Promise<PDU | null>;
-  findClosestEventByTimestamp(
-    db: D1Database,
-    roomId: string,
-    ts: number,
-    dir: TimestampDirection,
-  ): Promise<{ event_id: string; origin_server_ts: number } | null>;
-  getPartialStateJoin(
-    cache: KVNamespace | undefined,
-    userId: string,
-    roomId: string,
-  ): Promise<PartialStateStatus | null>;
-  getPartialStateJoinCompletion(
-    cache: KVNamespace | undefined,
-    userId: string,
-    roomId: string,
-  ): Promise<PartialStateStatus | null>;
-  sleep(ms: number): Promise<void>;
-}
 
 const eventQueries = new EventQueryService();
 

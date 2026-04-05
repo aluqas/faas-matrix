@@ -7,6 +7,7 @@
  */
 
 import type { Env } from "../types/env";
+import type { RoomVisibilityContext } from "../matrix/application/features/sync/contracts";
 import { projectPresenceEvents } from "../matrix/application/features/presence/project";
 import { projectDeviceLists } from "../matrix/application/sync-projection";
 import { CloudflareSyncRepository } from "../runtime/cloudflare/matrix-repositories";
@@ -24,25 +25,15 @@ const THREAD_SUBSCRIPTIONS_EVENT_TYPE = "io.element.msc4306.thread_subscriptions
 export interface SlidingSyncExtensionConfig {
   to_device?: { enabled?: boolean; since?: string; limit?: number };
   e2ee?: { enabled?: boolean };
-  account_data?: { enabled?: boolean; rooms?: string[] };
-  typing?: { enabled?: boolean };
-  receipts?: { enabled?: boolean };
+  account_data?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
+  typing?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
+  receipts?: { enabled?: boolean; lists?: string[]; rooms?: string[] };
   presence?: { enabled?: boolean };
-  "io.element.msc4308.thread_subscriptions"?: { rooms?: string[] };
-}
-
-/** Room-scope inputs for the extension builder. */
-export interface SlidingSyncExtensionRoomScope {
-  /** Rooms currently in the response window (list items + subscriptions). */
-  responseRoomIds: string[];
-  /** Rooms explicitly subscribed to by the client. */
-  subscribedRoomIds: string[];
-  /**
-   * ALL rooms the user is currently joined to.
-   * Used as the canonical scope for presence and as the ephemeral fallback
-   * when responseRoomIds + subscribedRoomIds is empty.
-   */
-  allJoinedRoomIds: string[];
+  "io.element.msc4308.thread_subscriptions"?: {
+    enabled?: boolean;
+    limit?: number;
+    rooms?: string[];
+  };
 }
 
 /** Infrastructure context passed to each extension builder. */
@@ -53,7 +44,15 @@ export interface SlidingSyncExtensionContext {
   env: Env;
   sincePos: number;
   isInitialSync: boolean;
-  scope: SlidingSyncExtensionRoomScope;
+  /** Rooms currently in the response window (list items + subscriptions). */
+  responseRoomIds: string[];
+  /** Rooms explicitly subscribed to by the client. */
+  subscribedRoomIds: string[];
+  /**
+   * Canonical visibility boundary: effective joined rooms (partial-state aware).
+   * Drives presence, thread subscription fallback, and account_data room list.
+   */
+  visibilityContext: RoomVisibilityContext;
 }
 
 /** Shape of the extensions object written into the response. */
@@ -74,8 +73,9 @@ export async function buildSlidingSyncExtensions(
   ctx: SlidingSyncExtensionContext,
   config: SlidingSyncExtensionConfig,
 ): Promise<SlidingSyncExtensionOutput> {
-  const { userId, deviceId, db, env, sincePos, isInitialSync, scope } = ctx;
-  const { responseRoomIds, subscribedRoomIds, allJoinedRoomIds } = scope;
+  const { userId, deviceId, db, env, sincePos, isInitialSync, responseRoomIds, subscribedRoomIds } =
+    ctx;
+  const allJoinedRoomIds = ctx.visibilityContext.visibleJoinedRoomIds;
   const output: SlidingSyncExtensionOutput = {};
 
   // ── to_device ─────────────────────────────────────────────────────────────
@@ -94,7 +94,7 @@ export async function buildSlidingSyncExtensions(
 
   // ── e2ee ──────────────────────────────────────────────────────────────────
   if (config.e2ee) {
-    const syncRepository = new CloudflareSyncRepository(env as never);
+    const syncRepository = new CloudflareSyncRepository(env);
     const keyCounts = deviceId ? await syncRepository.getOneTimeKeyCounts(userId, deviceId) : {};
     const unusedFallbackTypes = deviceId
       ? await syncRepository.getUnusedFallbackKeyTypes(userId, deviceId)
@@ -131,7 +131,7 @@ export async function buildSlidingSyncExtensions(
     // E2EE account data must come from DO for strong consistency (SSSS / cross-signing keys).
     const { getE2EEAccountDataFromDO } = await import("./account-data");
     try {
-      const e2eeData = await getE2EEAccountDataFromDO(env as never, userId);
+      const e2eeData = await getE2EEAccountDataFromDO(env, userId);
       for (const [eventType, content] of Object.entries(e2eeData ?? {})) {
         globalAccountData[eventType] = content;
       }
@@ -168,7 +168,7 @@ export async function buildSlidingSyncExtensions(
   if (config.typing) {
     const roomIds = resolveEphemeralRoomIds(responseRoomIds, subscribedRoomIds, allJoinedRoomIds);
     if (roomIds.length > 0) {
-      const typingByRoom = await getTypingForRooms(env as never, roomIds);
+      const typingByRoom = await getTypingForRooms(env, roomIds);
       output.typing = {
         rooms: Object.fromEntries(
           roomIds.map((roomId) => [
@@ -184,7 +184,7 @@ export async function buildSlidingSyncExtensions(
   if (config.receipts) {
     const roomIds = resolveEphemeralRoomIds(responseRoomIds, subscribedRoomIds, allJoinedRoomIds);
     if (roomIds.length > 0) {
-      const receiptsByRoom = await getReceiptsForRooms(env as never, roomIds, userId);
+      const receiptsByRoom = await getReceiptsForRooms(env, roomIds, userId);
       output.receipts = {
         rooms: Object.fromEntries(
           Object.entries(receiptsByRoom).map(([roomId, content]) => [

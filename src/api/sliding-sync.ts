@@ -18,9 +18,15 @@ import {
   shouldIncludeSlidingSyncRoom,
   trackSlidingSyncRoomReadState,
 } from "../matrix/application/features/sync/sliding-sync-shared";
-import { buildSlidingSyncExtensions } from "./sliding-sync-extensions";
-// Room cache helper available for future optimizations
-// import { getRoomMetadata, invalidateRoomCache, type RoomMetadata } from '../services/room-cache';
+import { buildSlidingSyncVisibilityContext } from "../matrix/application/features/sync/contracts";
+import {
+  getEffectiveJoinedMemberCount,
+  getJoinedRoomIdsIncludingPartialState,
+} from "../matrix/repositories/membership-repository";
+import {
+  buildSlidingSyncExtensions,
+  type SlidingSyncExtensionConfig,
+} from "./sliding-sync-extensions";
 
 const app = new Hono<AppEnv>();
 
@@ -44,7 +50,7 @@ interface SlidingSyncRequest {
   unsubscribe_rooms?: string[];
 
   // Extensions
-  extensions?: ExtensionsRequest;
+  extensions?: SlidingSyncExtensionConfig;
 }
 
 interface SyncListConfig {
@@ -77,40 +83,6 @@ interface SlidingRoomFilter {
   room_name_like?: string;
   tags?: string[];
   not_tags?: string[];
-}
-
-interface ExtensionsRequest {
-  to_device?: {
-    enabled?: boolean;
-    since?: string;
-    limit?: number;
-  };
-  e2ee?: {
-    enabled?: boolean;
-  };
-  account_data?: {
-    enabled?: boolean;
-    lists?: string[];
-    rooms?: string[];
-  };
-  typing?: {
-    enabled?: boolean;
-    lists?: string[];
-    rooms?: string[];
-  };
-  receipts?: {
-    enabled?: boolean;
-    lists?: string[];
-    rooms?: string[];
-  };
-  presence?: {
-    enabled?: boolean;
-  };
-  "io.element.msc4308.thread_subscriptions"?: {
-    enabled?: boolean;
-    limit?: number;
-    rooms?: string[];
-  };
 }
 
 interface SlidingSyncResponse {
@@ -194,6 +166,14 @@ interface ExtensionsResponse {
   "io.element.msc4308.thread_subscriptions"?: {
     subscribed?: Record<string, Record<string, { bump_stamp: number; automatic: boolean }>>;
   };
+}
+
+async function loadSlidingSyncVisibilityContext(
+  db: D1Database,
+  userId: string,
+): Promise<ReturnType<typeof buildSlidingSyncVisibilityContext>> {
+  const ids = await getJoinedRoomIdsIncludingPartialState(db, userId);
+  return buildSlidingSyncVisibilityContext(ids);
 }
 
 // Helper to get the current maximum stream ordering from the database
@@ -423,7 +403,6 @@ async function getRoomData(
     avatarResult,
     topicResult,
     aliasResult,
-    joinedCountResult,
     invitedCountResult,
     heroesResult,
   ] = await db.batch([
@@ -461,19 +440,13 @@ async function getRoomData(
       WHERE rs.room_id = ? AND rs.event_type = 'm.room.canonical_alias'
     `)
       .bind(roomId),
-    // 6. Joined member count
-    db
-      .prepare(
-        `SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'join'`,
-      )
-      .bind(roomId),
-    // 7. Invited member count
+    // 6. Invited member count
     db
       .prepare(
         `SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'invite'`,
       )
       .bind(roomId),
-    // 8. Heroes (other members for display)
+    // 7. Heroes (other members for display)
     db
       .prepare(`
       SELECT user_id, display_name, avatar_url
@@ -493,8 +466,7 @@ async function getRoomData(
   // Process batched results
   result.initial = config.initial;
 
-  // Member counts
-  const joinedCount = (joinedCountResult.results[0] as { count: number } | undefined)?.count || 0;
+  const joinedCount = await getEffectiveJoinedMemberCount(db, roomId);
   const invitedCount = (invitedCountResult.results[0] as { count: number } | undefined)?.count || 0;
   result.joined_count = joinedCount;
   result.invited_count = invitedCount;
@@ -788,13 +760,7 @@ async function getInviteRoomData(
     result.avatar = avatarEvent.content.url;
   }
 
-  // Get member counts
-  const joinedCount = await db
-    .prepare(`
-    SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'join'
-  `)
-    .bind(roomId)
-    .first<{ count: number }>();
+  const joinedCount = await getEffectiveJoinedMemberCount(db, roomId);
 
   const invitedCount = await db
     .prepare(`
@@ -803,7 +769,7 @@ async function getInviteRoomData(
     .bind(roomId)
     .first<{ count: number }>();
 
-  result.joined_count = joinedCount?.count || 0;
+  result.joined_count = joinedCount;
   result.invited_count = invitedCount?.count || 0;
 
   return result;
@@ -816,7 +782,6 @@ async function buildMsc3575SlidingSyncResponse(
   const userId = c.get("userId");
   const db = c.env.DB;
   const syncDO = c.env.SYNC; // Use Durable Object for connection state (not KV - avoids rate limits)
-  const cache = c.env.CACHE; // KV for presence lookups (read-only, no rate limit issues)
 
   const connId = body.conn_id || "default";
   // Note: timeout is parsed but not used yet (for future long-polling support)
@@ -1128,11 +1093,7 @@ async function buildMsc3575SlidingSyncResponse(
     const extensionKeys = Object.keys(body.extensions);
     console.log("[sliding-sync] Extensions requested:", extensionKeys, "by user:", userId);
 
-    const allJoinedRoomsResult = await db
-      .prepare(`SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'`)
-      .bind(userId)
-      .all<{ room_id: string }>();
-    const allJoinedRoomIds = allJoinedRoomsResult.results.map((r) => r.room_id);
+    const visibilityContext = await loadSlidingSyncVisibilityContext(db, userId);
 
     const extensions = await buildSlidingSyncExtensions(
       {
@@ -1142,11 +1103,9 @@ async function buildMsc3575SlidingSyncResponse(
         env: c.env,
         sincePos,
         isInitialSync: !posToken,
-        scope: {
-          responseRoomIds: Object.keys(response.rooms),
-          subscribedRoomIds: body.room_subscriptions ? Object.keys(body.room_subscriptions) : [],
-          allJoinedRoomIds,
-        },
+        responseRoomIds: Object.keys(response.rooms),
+        subscribedRoomIds: body.room_subscriptions ? Object.keys(body.room_subscriptions) : [],
+        visibilityContext,
       },
       body.extensions,
     );
@@ -1618,11 +1577,7 @@ async function buildSimplifiedSlidingSyncResponse(
     });
     console.log("[sliding-sync] Extensions requested:", enabledExtensions);
 
-    const allJoinedRoomsResult = await db
-      .prepare(`SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'`)
-      .bind(userId)
-      .all<{ room_id: string }>();
-    const allJoinedRoomIds = allJoinedRoomsResult.results.map((r) => r.room_id);
+    const visibilityContext = await loadSlidingSyncVisibilityContext(db, userId);
 
     const currentResponseRoomIds = Object.keys(response.rooms);
     const subscribedRoomIds = body.room_subscriptions ? Object.keys(body.room_subscriptions) : [];
@@ -1633,7 +1588,9 @@ async function buildSimplifiedSlidingSyncResponse(
       ...body.extensions,
       typing:
         body.extensions.typing ??
-        (currentResponseRoomIds.length > 0 ? ({} as ExtensionsRequest["typing"]) : undefined),
+        (currentResponseRoomIds.length > 0
+          ? ({} as SlidingSyncExtensionConfig["typing"])
+          : undefined),
     };
 
     const extensions = await buildSlidingSyncExtensions(
@@ -1644,11 +1601,9 @@ async function buildSimplifiedSlidingSyncResponse(
         env: c.env,
         sincePos,
         isInitialSync: !body.pos,
-        scope: {
-          responseRoomIds: currentResponseRoomIds,
-          subscribedRoomIds,
-          allJoinedRoomIds,
-        },
+        responseRoomIds: currentResponseRoomIds,
+        subscribedRoomIds,
+        visibilityContext,
       },
       effectiveExtensions,
     );
@@ -1665,14 +1620,7 @@ async function buildSimplifiedSlidingSyncResponse(
     (!body.extensions || Object.keys(body.extensions).length === 0);
 
   if (needsEphemeralFallback) {
-    // Get all user's rooms for ephemeral data
-    const userRoomsResult = await db
-      .prepare(`
-      SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'
-    `)
-      .bind(userId)
-      .all();
-    const userRoomIds = (userRoomsResult.results as { room_id: string }[]).map((r) => r.room_id);
+    const userRoomIds = await getJoinedRoomIdsIncludingPartialState(db, userId);
 
     // Fallback: Include typing for all rooms - uses Room Durable Objects
     const typingByRoom = await getTypingForRooms(c.env, userRoomIds);

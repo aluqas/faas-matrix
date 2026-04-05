@@ -8,7 +8,7 @@ import {
   projectGlobalAccountData,
 } from "../../sync-projection";
 import { projectPresenceEvents } from "../presence/project";
-import type { TopLevelSyncResult } from "./contracts";
+import type { RoomVisibilityContext, TopLevelSyncResult } from "./contracts";
 
 export interface TopLevelSyncPorts {
   repository: SyncRepository;
@@ -19,6 +19,11 @@ export interface ProjectTopLevelSyncInput {
   userId: string;
   deviceId: string | null;
   roomIds: string[];
+  /**
+   * When set (e.g. from `/sync` assembler), presence scope uses
+   * `visibleJoinedRoomIds` from this context — the canonical visibility boundary.
+   */
+  visibilityContext?: RoomVisibilityContext;
   sincePosition: number;
   sinceToDevice: number;
   sinceDeviceKeys: number;
@@ -89,12 +94,14 @@ export async function projectTopLevelSync(
     );
   }
 
+  const presenceVisibleRoomIds = input.visibilityContext?.visibleJoinedRoomIds ?? input.roomIds;
+
   const presence = await projectPresenceEvents(
     ports.appContext.capabilities.sql.connection as D1Database,
     ports.appContext.capabilities.kv.cache as KVNamespace | undefined,
     {
       userId: input.userId,
-      visibleRoomIds: input.roomIds,
+      visibleRoomIds: presenceVisibleRoomIds,
       filter: input.filter?.presence as never,
       debugEnabled: ports.appContext.profile.name === "complement",
     },

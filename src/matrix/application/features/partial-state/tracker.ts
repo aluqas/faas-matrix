@@ -1,18 +1,6 @@
-export interface PartialStateJoinMarker {
-  roomId: string;
-  userId: string;
-  eventId: string;
-  remoteServer?: string;
-  serversInRoom?: string[];
-  encrypted?: boolean;
-  startedAt: number;
-}
+import type { PartialStateJoinMarker, PartialStateStatus } from "../../../../types/partial-state";
 
-export interface PartialStateStatus extends PartialStateJoinMarker {
-  phase: "partial" | "catchup_published" | "complete";
-  catchupPublishedAt?: number;
-  completedAt?: number;
-}
+export type { PartialStateJoinMarker, PartialStateStatus };
 
 const PARTIAL_STATE_JOIN_PREFIX = "partial_state_join";
 const PARTIAL_STATE_ROOM_PREFIX = "partial_state_room";

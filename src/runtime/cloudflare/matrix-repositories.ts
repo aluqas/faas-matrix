@@ -1,4 +1,5 @@
 import { discoverServer } from "../../services/server-discovery";
+import { EFFECTIVE_MEMBERSHIPS_AND_JOINED_MEMBERS_CTE } from "../../matrix/repositories/membership-repository";
 import { upsertPresence as dbUpsertPresence } from "../../matrix/repositories/presence-repository";
 import {
   createRoom,
@@ -243,6 +244,7 @@ export class CloudflareSyncRepository implements SyncRepository {
     sinceEventPosition: number,
     sinceDeviceKeyPosition: number,
   ): Promise<{ changed: string[]; left: string[] }> {
+    const effCte = EFFECTIVE_MEMBERSHIPS_AND_JOINED_MEMBERS_CTE.trim();
     const [localChanged, remoteChanged, newlyShared, currentMembersInJoinedRooms, noLongerShared] =
       await Promise.all([
         this.env.DB.prepare(`
@@ -252,13 +254,11 @@ export class CloudflareSyncRepository implements SyncRepository {
           AND (
             dkc.user_id = ?
             OR EXISTS (
+              WITH ${effCte}
               SELECT 1
-              FROM room_memberships rm1
-              JOIN room_memberships rm2 ON rm1.room_id = rm2.room_id
-              WHERE rm1.user_id = ?
-                AND rm1.membership = 'join'
-                AND rm2.user_id = dkc.user_id
-                AND rm2.membership = 'join'
+              FROM joined_members j1
+              JOIN joined_members j2 ON j1.room_id = j2.room_id
+              WHERE j1.user_id = ? AND j2.user_id = dkc.user_id
             )
           )
       `)
@@ -269,32 +269,7 @@ export class CloudflareSyncRepository implements SyncRepository {
         FROM remote_device_list_streams rdls
         WHERE rdls.stream_id > ?
           AND EXISTS (
-            WITH current_memberships AS (
-              SELECT room_id, user_id, membership
-              FROM room_memberships
-
-              UNION
-
-              SELECT
-                rs.room_id,
-                rs.state_key AS user_id,
-                json_extract(e.content, '$.membership') AS membership
-              FROM room_state rs
-              JOIN events e ON rs.event_id = e.event_id
-              WHERE rs.event_type = 'm.room.member'
-                AND rs.state_key IS NOT NULL
-                AND NOT EXISTS (
-                  SELECT 1
-                  FROM room_memberships rm
-                  WHERE rm.room_id = rs.room_id
-                    AND rm.user_id = rs.state_key
-                )
-            ),
-            joined_members AS (
-              SELECT room_id, user_id
-              FROM current_memberships
-              WHERE membership = 'join'
-            ),
+            WITH ${effCte},
             requester_joined_rooms AS (
               SELECT room_id
               FROM joined_members
@@ -309,16 +284,13 @@ export class CloudflareSyncRepository implements SyncRepository {
           .bind(sinceDeviceKeyPosition, userId)
           .all<{ user_id: string }>(),
         this.env.DB.prepare(`
+        WITH ${effCte}
         SELECT DISTINCT e.state_key as user_id
         FROM events e
-        JOIN room_memberships requester_membership
-          ON requester_membership.room_id = e.room_id
-         AND requester_membership.user_id = ?
-         AND requester_membership.membership = 'join'
-        JOIN room_memberships target_membership
-          ON target_membership.room_id = e.room_id
-         AND target_membership.user_id = e.state_key
-         AND target_membership.membership = 'join'
+        JOIN joined_members requester_j
+          ON requester_j.room_id = e.room_id AND requester_j.user_id = ?
+        JOIN joined_members target_j
+          ON target_j.room_id = e.room_id AND target_j.user_id = e.state_key
         WHERE e.event_type = 'm.room.member'
           AND e.stream_ordering > ?
           AND e.state_key IS NOT NULL
@@ -326,45 +298,17 @@ export class CloudflareSyncRepository implements SyncRepository {
           AND json_extract(e.content, '$.membership') = 'join'
           AND NOT EXISTS (
             SELECT 1
-            FROM room_memberships shared_requester
-            JOIN room_memberships shared_target
-              ON shared_requester.room_id = shared_target.room_id
-            WHERE shared_requester.user_id = ?
-              AND shared_requester.membership = 'join'
-              AND shared_target.user_id = e.state_key
-              AND shared_target.membership = 'join'
-              AND shared_requester.room_id != e.room_id
+            FROM joined_members sr
+            JOIN joined_members st ON sr.room_id = st.room_id
+            WHERE sr.user_id = ?
+              AND st.user_id = e.state_key
+              AND sr.room_id != e.room_id
           )
         `)
           .bind(userId, sinceEventPosition, userId, userId)
           .all<{ user_id: string }>(),
         this.env.DB.prepare(`
-        WITH current_memberships AS (
-          SELECT room_id, user_id, membership
-          FROM room_memberships
-
-          UNION
-
-          SELECT
-            rs.room_id,
-            rs.state_key AS user_id,
-            json_extract(e.content, '$.membership') AS membership
-          FROM room_state rs
-          JOIN events e ON rs.event_id = e.event_id
-          WHERE rs.event_type = 'm.room.member'
-            AND rs.state_key IS NOT NULL
-            AND NOT EXISTS (
-              SELECT 1
-              FROM room_memberships rm
-              WHERE rm.room_id = rs.room_id
-                AND rm.user_id = rs.state_key
-            )
-        ),
-        joined_members AS (
-          SELECT room_id, user_id
-          FROM current_memberships
-          WHERE membership = 'join'
-        )
+        WITH ${effCte}
         SELECT DISTINCT joined_members.user_id
         FROM events requester_join_event
         JOIN joined_members
@@ -377,14 +321,18 @@ export class CloudflareSyncRepository implements SyncRepository {
           .bind(sinceEventPosition, userId)
           .all<{ user_id: string }>(),
         this.env.DB.prepare(`
+        WITH ${effCte},
+        non_join_members AS (
+          SELECT room_id, user_id
+          FROM current_memberships
+          WHERE membership IN ('leave', 'ban')
+        )
         SELECT DISTINCT left_user_id as user_id
         FROM (
           SELECT e.state_key as left_user_id
           FROM events e
-          JOIN room_memberships requester_membership
-            ON requester_membership.room_id = e.room_id
-           AND requester_membership.user_id = ?
-           AND requester_membership.membership = 'join'
+          JOIN joined_members requester_j
+            ON requester_j.room_id = e.room_id AND requester_j.user_id = ?
           WHERE e.event_type = 'm.room.member'
             AND e.stream_ordering > ?
             AND e.state_key IS NOT NULL
@@ -392,40 +340,32 @@ export class CloudflareSyncRepository implements SyncRepository {
             AND json_extract(e.content, '$.membership') IN ('leave', 'ban')
             AND NOT EXISTS (
               SELECT 1
-              FROM room_memberships shared_requester
-              JOIN room_memberships shared_target
-                ON shared_requester.room_id = shared_target.room_id
-              WHERE shared_requester.user_id = ?
-                AND shared_requester.membership = 'join'
-                AND shared_target.user_id = e.state_key
-                AND shared_target.membership = 'join'
+              FROM joined_members sr
+              JOIN joined_members st ON sr.room_id = st.room_id
+              WHERE sr.user_id = ?
+                AND st.user_id = e.state_key
+                AND sr.room_id != e.room_id
             )
 
           UNION
 
-          SELECT other_membership.user_id as left_user_id
+          SELECT other_j.user_id as left_user_id
           FROM events e
-          JOIN room_memberships requester_membership
-            ON requester_membership.room_id = e.room_id
-           AND requester_membership.user_id = ?
-           AND requester_membership.membership IN ('leave', 'ban')
-          JOIN room_memberships other_membership
-            ON other_membership.room_id = e.room_id
-           AND other_membership.membership = 'join'
+          JOIN non_join_members requester_nj
+            ON requester_nj.room_id = e.room_id AND requester_nj.user_id = ?
+          JOIN joined_members other_j
+            ON other_j.room_id = e.room_id
           WHERE e.event_type = 'm.room.member'
             AND e.stream_ordering > ?
             AND e.state_key = ?
-            AND other_membership.user_id != ?
+            AND other_j.user_id != ?
             AND json_extract(e.content, '$.membership') IN ('leave', 'ban')
             AND NOT EXISTS (
               SELECT 1
-              FROM room_memberships shared_requester
-              JOIN room_memberships shared_target
-                ON shared_requester.room_id = shared_target.room_id
-              WHERE shared_requester.user_id = ?
-                AND shared_requester.membership = 'join'
-                AND shared_target.user_id = other_membership.user_id
-                AND shared_target.membership = 'join'
+              FROM joined_members sr
+              JOIN joined_members st ON sr.room_id = st.room_id
+              WHERE sr.user_id = ?
+                AND st.user_id = other_j.user_id
             )
         )
       `)

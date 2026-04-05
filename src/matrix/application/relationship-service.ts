@@ -2,20 +2,13 @@ import { getDefaultRoomVersion } from "../../services/room-versions";
 import { getAuthChain, getEvent, storeEvent } from "../../services/database";
 import { federationPost } from "../../services/federation-keys";
 import type { PDU } from "../../types";
+import type { EventRelationshipsRequest } from "../../types/events";
 import { encodeUnpaddedBase64 } from "../../utils/crypto";
 import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
 import { tryValidateIncomingPdu } from "./pdu-validator";
-
 export type EventRelationshipsDirection = "up" | "down";
 
-export interface EventRelationshipsRequest {
-  eventId: string;
-  roomId?: string;
-  direction: EventRelationshipsDirection;
-  includeParent?: boolean;
-  recentFirst?: boolean;
-  maxDepth?: number;
-}
+export type { EventRelationshipsRequest };
 
 export interface EventRelationshipsResult {
   roomId: string;
