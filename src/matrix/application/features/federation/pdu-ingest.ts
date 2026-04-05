@@ -3,6 +3,7 @@ import type { AppContext } from "../../../../foundation/app-context";
 import type { SignedTransport } from "../../../../fedcore/contracts";
 import { verifyRemoteSignature } from "../../../../services/federation-keys";
 import { federationGet, federationPost } from "../../../../services/federation-keys";
+import { storeEvent } from "../../../../services/database";
 import { resolveState } from "../../../../services/state-resolution";
 import { getDefaultRoomVersion, getRoomVersion } from "../../../../services/room-versions";
 import type { PDU, RoomMemberContent } from "../../../../types";
@@ -961,7 +962,14 @@ export async function ingestFederationPdu(
   await ports.repository.recordProcessedPdu(normalizedEventId, pduOrigin, roomId, true);
 
   if (input.historicalOnly) {
-    await ports.repository.storeIncomingEvent(normalizedPdu);
+    const db = isD1Database(ports.appContext.capabilities.sql.connection)
+      ? ports.appContext.capabilities.sql.connection
+      : undefined;
+    if (db) {
+      await storeEvent(db, normalizedPdu, { skipRoomState: true });
+    } else {
+      await ports.repository.storeIncomingEvent(normalizedPdu);
+    }
   } else {
     await storeAcceptedPdu(ports, normalizedPdu, {
       deferredPartialStateAuthReason,

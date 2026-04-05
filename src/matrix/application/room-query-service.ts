@@ -388,7 +388,6 @@ export class MatrixRoomQueryService {
     input: GetVisibleRoomEventInput,
   ): Effect.Effect<ClientRoomEvent, DomainError | InfraError> {
     const db = this.getDb();
-    const cache = this.getCache();
     const loadVisibleEvent = this.fromPromise.bind(this);
     const dependencies = this.dependencies;
 
@@ -401,15 +400,7 @@ export class MatrixRoomQueryService {
         return yield* Effect.fail(notFoundDomainError("Event not found"));
       }
 
-      const partialStateStatus = yield* loadVisibleEvent(
-        "Failed to load partial-state status",
-        () => dependencies.getPartialStateJoin(cache, input.userId, input.roomId),
-      );
-      if (
-        partialStateStatus &&
-        partialStateStatus.phase !== "complete" &&
-        getPartialStateDeferredAuthReason(event)
-      ) {
+      if (getPartialStateDeferredAuthReason(event)) {
         return yield* Effect.fail(notFoundDomainError("Event not found"));
       }
 

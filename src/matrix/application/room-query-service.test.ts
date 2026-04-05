@@ -271,7 +271,7 @@ describe("MatrixRoomQueryService", () => {
     });
   });
 
-  it("hides deferred partial-state auth events until completion", async () => {
+  it("hides deferred partial-state auth events", async () => {
     const service = new MatrixRoomQueryService(
       createTestAppContext(),
       createDependencies({
@@ -292,9 +292,6 @@ describe("MatrixRoomQueryService", () => {
             },
           } as PDU;
         },
-        async getPartialStateJoin() {
-          return { roomId: "!room:test", phase: "partial" } as never;
-        },
       }),
     );
 
@@ -309,6 +306,41 @@ describe("MatrixRoomQueryService", () => {
     ).rejects.toMatchObject({
       errcode: "M_NOT_FOUND",
       status: 404,
+    });
+  });
+
+  it("reveals events once deferred marker is cleared by re-evaluation", async () => {
+    const clearedEvent: PDU = {
+      event_id: "$cleared:test",
+      room_id: "!room:test",
+      sender: "@elsie:remote.test",
+      type: "m.room.test",
+      state_key: "",
+      content: { body: "now visible" },
+      origin_server_ts: 123,
+      depth: 2,
+      auth_events: [],
+      prev_events: [],
+    };
+    const service = new MatrixRoomQueryService(
+      createTestAppContext(),
+      createDependencies({
+        async getVisibleEventForUser() {
+          return clearedEvent;
+        },
+      }),
+    );
+
+    await expect(
+      runClientEffect(
+        service.getVisibleEvent({
+          userId: "@alice:test",
+          roomId: "!room:test",
+          eventId: "$cleared:test",
+        }),
+      ),
+    ).resolves.toMatchObject({
+      event_id: "$cleared:test",
     });
   });
 });

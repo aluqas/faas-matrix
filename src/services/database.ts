@@ -530,7 +530,12 @@ export async function getRoom(db: D1Database, roomId: string): Promise<Room | nu
 }
 
 // Event operations
-export async function storeEvent(db: D1Database, event: PDU): Promise<number> {
+export async function storeEvent(
+  db: D1Database,
+  event: PDU,
+  options?: { skipRoomState?: boolean },
+): Promise<number> {
+  const skipRoomState = options?.skipRoomState ?? false;
   const existing = await db
     .prepare(`SELECT stream_ordering FROM events WHERE event_id = ?`)
     .bind(event.event_id)
@@ -538,7 +543,7 @@ export async function storeEvent(db: D1Database, event: PDU): Promise<number> {
   if (existing) {
     await persistEventRelation(db, event);
 
-    if (event.state_key !== undefined) {
+    if (!skipRoomState && event.state_key !== undefined) {
       await db
         .prepare(
           `INSERT OR REPLACE INTO room_state (room_id, event_type, state_key, event_id)
@@ -587,8 +592,8 @@ export async function storeEvent(db: D1Database, event: PDU): Promise<number> {
 
   await persistEventRelation(db, event);
 
-  // Update room state if this is a state event
-  if (event.state_key !== undefined) {
+  // Update room state if this is a state event (skip for historical/auth-chain events)
+  if (!skipRoomState && event.state_key !== undefined) {
     await db
       .prepare(
         `INSERT OR REPLACE INTO room_state (room_id, event_type, state_key, event_id)
@@ -1138,6 +1143,94 @@ export async function getEventsByIds(db: D1Database, eventIds: string[]): Promis
     .all<StoredEventRow>();
 
   return result.results.map(toStoredPdu);
+}
+
+const DEFERRED_AUTH_MARKER_SEARCH_PATTERN = `%"io.tuwunel.partial_state_auth_deferred"%`;
+
+export async function getDeferredPartialStateAuthEventsForRoom(
+  db: D1Database,
+  roomId: string,
+): Promise<PDU[]> {
+  const result = await db
+    .prepare(
+      `SELECT event_id, room_id, sender, event_type, state_key, content,
+       origin_server_ts, unsigned, depth, auth_events, prev_events, event_origin, event_membership,
+       prev_state, hashes, signatures
+       FROM events
+       WHERE room_id = ? AND unsigned LIKE ?`,
+    )
+    .bind(roomId, DEFERRED_AUTH_MARKER_SEARCH_PATTERN)
+    .all<StoredEventRow>();
+
+  return result.results.map(toStoredPdu);
+}
+
+export async function rejectProcessedPdu(
+  db: D1Database,
+  eventId: string,
+  reason: string,
+): Promise<void> {
+  await db
+    .prepare(`UPDATE processed_pdus SET accepted = 0, rejection_reason = ? WHERE event_id = ?`)
+    .bind(reason, eventId)
+    .run();
+}
+
+export async function clearDeferredAuthMarkerForEvent(
+  db: D1Database,
+  eventId: string,
+): Promise<void> {
+  const row = await db
+    .prepare(`SELECT unsigned FROM events WHERE event_id = ?`)
+    .bind(eventId)
+    .first<{ unsigned: string | null }>();
+
+  if (!row?.unsigned) return;
+
+  let unsignedObj: Record<string, unknown>;
+  try {
+    unsignedObj = JSON.parse(row.unsigned) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  delete unsignedObj["io.tuwunel.partial_state_auth_deferred"];
+  delete unsignedObj["io.tuwunel.partial_state_auth_deferred_previous_event_id"];
+  delete unsignedObj["io.tuwunel.partial_state_auth_deferred_previous_membership"];
+
+  const newUnsigned = Object.keys(unsignedObj).length > 0 ? JSON.stringify(unsignedObj) : null;
+  await db
+    .prepare(`UPDATE events SET unsigned = ? WHERE event_id = ?`)
+    .bind(newUnsigned, eventId)
+    .run();
+}
+
+export async function setRoomStateEvent(
+  db: D1Database,
+  roomId: string,
+  eventType: string,
+  stateKey: string,
+  eventId: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT OR REPLACE INTO room_state (room_id, event_type, state_key, event_id)
+       VALUES (?, ?, ?, ?)`,
+    )
+    .bind(roomId, eventType, stateKey, eventId)
+    .run();
+}
+
+export async function deleteRoomStateEvent(
+  db: D1Database,
+  roomId: string,
+  eventType: string,
+  stateKey: string,
+): Promise<void> {
+  await db
+    .prepare(`DELETE FROM room_state WHERE room_id = ? AND event_type = ? AND state_key = ?`)
+    .bind(roomId, eventType, stateKey)
+    .run();
 }
 
 // Get the auth chain for an event (all auth_events recursively)

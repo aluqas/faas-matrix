@@ -1,7 +1,7 @@
 # Complement Status
 
 Current-state Complement status for this repository.
-Last updated: 2026-04-02.
+Last updated: 2026-04-05.
 
 This document is intentionally current-state only. Historical progression and old run-to-run comparisons are out of scope here.
 
@@ -105,6 +105,17 @@ These are currently green in either the stable full-run baseline or clean target
   - `TestRoomForget`
   - `TestRoomMembers`
   - `TestUnbanViaInvite`
+- partial state join (MSC3902) core state correctness
+  - `TestPartialStateJoin/State_accepted_incorrectly` (2026-04-05 targeted rerun: deferred auth events that passed auth incorrectly are now correctly rejected after resync)
+  - `TestPartialStateJoin/State_rejected_incorrectly` (2026-04-05 targeted rerun: deferred auth events that passed auth are now correctly retained in room_state after resync)
+  - `TestPartialStateJoin/Rejected_events_remain_rejected_after_resync`
+  - `TestPartialStateJoin/CanReceiveEventsDuringPartialStateJoin`
+  - `TestPartialStateJoin/CanFastJoinDuringPartialStateJoin`
+  - `TestPartialStateJoin/EagerIncrementalSyncDuringPartialStateJoin`
+  - `TestPartialStateJoin/EagerInitialSyncDuringPartialStateJoin`
+  - `TestPartialStateJoin/EagerLongPollingSyncWokenWhenResyncCompletes`
+  - `TestPartialStateJoin/GappySyncAfterPartialStateSynced`
+  - `TestPartialStateJoin/Leave_during_resync` subtests (kick, does-not-wait, is-seen-after, rejoin, second-join)
 - auth and account lifecycle
   - `TestLogin`
   - `TestLogout`
@@ -132,13 +143,14 @@ These are the implementation buckets still red in the stable full-run baseline.
 
 - `TestSync`
 - `TestPresence`
-- `TestPartialStateJoin`
 - `TestMSC4308ThreadSubscriptionsSlidingSync`
+- `TestPartialStateJoin` sub-tests: lazy-loading sync membership, `MembersRequestBlocksDuringPartialStateJoin`, `joined_members_blocks_during_partial_state_join`, `CanReceiveTypingDuringPartialStateJoin`, device-list propagation sub-tests, `PartialStateJoinContinuesAfterRestart`, `PartialStateJoinSyncsUsingOtherHomeservers`
 
 Working interpretation:
 
 - remaining issues are in aggregate semantics, not basic route reachability
 - likely pressure points are lazy-loaded membership state, incremental sliding-sync merge behavior, and partial-state interaction with top-level projection
+- the core partial-state auth correctness (`State_rejected_incorrectly`, `State_accepted_incorrectly`) is now resolved as of 2026-04-05
 
 ### 2. Federation query/auth residuals
 
@@ -250,7 +262,7 @@ Current flake backlog should be read from the 60m diagnostic run, not the stable
 - `TestFederationThumbnail`
 - `TestMSC4297StateResolutionV2_1_starts_from_empty_set`
 - `TestMSC4297StateResolutionV2_1_includes_conflicted_subgraph`
-- `TestPartialStateJoin`
+- `TestPartialStateJoin` (parent test classified as `infra_flake` due to "Network connection lost" during federation sends; individual sub-tests pass or fail independently — see targeted reruns for per-sub-test evidence)
 
 Working interpretation:
 
@@ -268,8 +280,9 @@ Use these rules when reading Complement results:
 
 ## Current Priority Order
 
-1. `TestPartialStateJoin`, `TestSync`, `TestPresence`, `TestMSC4308ThreadSubscriptionsSlidingSync`
-2. `TestInboundFederationKeys`, `TestInboundFederationProfile`
-3. `TestDeviceListsUpdateOverFederationOnRoomJoin`
-4. `TestRoomCreate`, `TestFetchEvent`, `TestDelayedEvents`
-5. `TestMSC3757OwnedState`
+1. `TestSync`, `TestPresence`, `TestMSC4308ThreadSubscriptionsSlidingSync`
+2. `TestPartialStateJoin` remaining sub-tests: lazy-loading membership sync, `MembersRequestBlocksDuringPartialStateJoin`, `PartialStateJoinContinuesAfterRestart`, `PartialStateJoinSyncsUsingOtherHomeservers`, device-list propagation
+3. `TestInboundFederationKeys`, `TestInboundFederationProfile`
+4. `TestDeviceListsUpdateOverFederationOnRoomJoin`
+5. `TestRoomCreate`, `TestFetchEvent`, `TestDelayedEvents`
+6. `TestMSC3757OwnedState`

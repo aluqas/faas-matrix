@@ -27,6 +27,7 @@ import {
 } from "../matrix/application/membership-transition-service";
 import {
   persistFederationStateSnapshot,
+  reevaluateDeferredPartialStateAuthEvents,
   restoreDeferredPartialStateMemberships,
 } from "../matrix/application/federation-handler-service";
 import {
@@ -487,6 +488,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
         });
 
         await step.do("finalize-partial-state", async () => {
+          await reevaluateDeferredPartialStateAuthEvents(this.env.DB, roomId);
           const completedStatus = {
             roomId,
             userId,
