@@ -1,13 +1,15 @@
 import { Effect } from "effect";
 import type { AppEnv, JsonObject, ProfileResponseBody, UserId } from "../../../../types";
-import { getUserById, updateUserProfile } from "../../../../services/database";
-import { FederationQueryService } from "../../federation-query-service";
 import { InfraError } from "../../domain-error";
+import {
+  getLocalProfileRecord,
+  updateLocalProfile,
+} from "../../../repositories/profile-repository";
 import type { ProfileCommandPorts } from "./command";
 import type { ProfileQueryPorts } from "./query";
+import { queryProfileResponse } from "./profile-query";
 import { parseStoredProfileCustomData } from "./shared";
 
-const federationQueryService = new FederationQueryService();
 const PROFILE_CACHE_TTL_SECONDS = 365 * 24 * 60 * 60;
 
 function toInfraError(message: string, cause: unknown, status = 500): InfraError {
@@ -37,7 +39,7 @@ export function createProfileQueryPorts(
     getProfile: (userId, field) =>
       Effect.tryPromise({
         try: () =>
-          federationQueryService.getProfile({
+          queryProfileResponse({
             userId,
             ...(field !== undefined ? { field } : {}),
             localServerName: env.SERVER_NAME,
@@ -48,7 +50,7 @@ export function createProfileQueryPorts(
       }),
     getLocalUserExists: (userId) =>
       Effect.tryPromise({
-        try: async () => (await getUserById(env.DB, userId)) !== null,
+        try: async () => (await getLocalProfileRecord(env.DB, userId)) !== null,
         catch: (cause) => toInfraError("Failed to load local user", cause),
       }),
     getStoredCustomProfile: (userId) => getStoredProfileCustomDataEffect(env.CACHE, userId),
@@ -62,7 +64,7 @@ export function createProfileCommandPorts(
     localServerName: env.SERVER_NAME,
     updateProfile: (userId, update) =>
       Effect.tryPromise({
-        try: () => updateUserProfile(env.DB, userId, update.displayname, update.avatar_url),
+        try: () => updateLocalProfile(env.DB, userId, update),
         catch: (cause) => toInfraError("Failed to update profile", cause),
       }),
     getStoredCustomProfile: (userId) => getStoredProfileCustomDataEffect(env.CACHE, userId),

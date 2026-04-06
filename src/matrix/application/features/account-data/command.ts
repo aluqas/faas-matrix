@@ -6,6 +6,7 @@ import type {
   PutGlobalAccountDataInput,
   PutRoomAccountDataInput,
 } from "../../../../types/account-data";
+import { isEmptyAccountDataContent } from "../../../../types/account-data";
 import type { RoomId, UserId } from "../../../../types/matrix";
 import { Errors, MatrixApiError } from "../../../../utils/errors";
 import { InfraError } from "../../domain-error";
@@ -65,6 +66,15 @@ export function putGlobalAccountDataEffect(
   });
 }
 
+export function upsertGlobalAccountDataEffect(
+  ports: AccountDataCommandPorts,
+  input: PutGlobalAccountDataInput,
+): Effect.Effect<void, MatrixApiError | InfraError> {
+  return isEmptyAccountDataContent(input.content)
+    ? deleteGlobalAccountDataEffect(ports, input)
+    : putGlobalAccountDataEffect(ports, input);
+}
+
 export function deleteGlobalAccountDataEffect(
   ports: AccountDataCommandPorts,
   input: DeleteGlobalAccountDataInput,
@@ -98,6 +108,15 @@ export function putRoomAccountDataEffect(
       eventType: input.eventType,
     });
   });
+}
+
+export function upsertRoomAccountDataEffect(
+  ports: AccountDataCommandPorts,
+  input: PutRoomAccountDataInput,
+): Effect.Effect<void, MatrixApiError | InfraError> {
+  return isEmptyAccountDataContent(input.content)
+    ? deleteRoomAccountDataEffect(ports, input)
+    : putRoomAccountDataEffect(ports, input);
 }
 
 export function deleteRoomAccountDataEffect(

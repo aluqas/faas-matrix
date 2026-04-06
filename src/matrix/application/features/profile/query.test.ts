@@ -1,7 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { runClientEffect } from "../../effect-runtime";
-import { InfraError } from "../../domain-error";
 import { queryCustomProfileKeyEffect, queryProfileEffect, type ProfileQueryPorts } from "./query";
 
 function createPorts(overrides: Partial<ProfileQueryPorts> = {}): ProfileQueryPorts {

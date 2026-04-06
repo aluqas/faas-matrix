@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { runClientEffect } from "../../effect-runtime";
+import type { JsonObject } from "../../../../types/common";
 import { type ProfileCommandPorts } from "./command";
 import {
   deleteCustomProfileKeyEffect,
@@ -8,7 +9,7 @@ import {
   updateProfileFieldEffect,
 } from "./command";
 
-function createPorts(store: Record<string, unknown> = {}): ProfileCommandPorts {
+function createPorts(store: JsonObject = {}): ProfileCommandPorts {
   return {
     localServerName: "test",
     updateProfile: () => Effect.void,
@@ -57,7 +58,7 @@ describe("profile command", () => {
   });
 
   it("updates and deletes custom profile keys through stored JSON objects", async () => {
-    const store: Record<string, unknown> = { "im.example.theme": "light" };
+    const store: JsonObject = { "im.example.theme": "light" };
     const ports = createPorts(store);
 
     await runClientEffect(

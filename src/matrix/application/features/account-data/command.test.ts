@@ -5,6 +5,7 @@ import {
   deleteGlobalAccountDataEffect,
   putGlobalAccountDataEffect,
   putRoomAccountDataEffect,
+  upsertGlobalAccountDataEffect,
   type AccountDataCommandPorts,
 } from "./command";
 
@@ -55,6 +56,19 @@ describe("account-data command effect", () => {
         authUserId: "@alice:test",
         targetUserId: "@alice:test",
         eventType: "m.direct",
+      }),
+    );
+    expect(recorder).toEqual(["delete-global:m.direct", "notify:global:m.direct"]);
+  });
+
+  it("treats empty global account-data bodies as delete semantics", async () => {
+    const recorder: string[] = [];
+    await runClientEffect(
+      upsertGlobalAccountDataEffect(createPorts(recorder), {
+        authUserId: "@alice:test",
+        targetUserId: "@alice:test",
+        eventType: "m.direct",
+        content: {},
       }),
     );
     expect(recorder).toEqual(["delete-global:m.direct", "notify:global:m.direct"]);

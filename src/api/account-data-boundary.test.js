@@ -10,8 +10,8 @@ describe("account-data route boundary", () => {
     expect(source).not.toMatch(/\bJSON\.parse\(/);
     expect(source).toMatch(/decodeGetGlobalAccountDataInput/);
     expect(source).toMatch(/queryGlobalAccountDataEffect/);
-    expect(source).toMatch(/putGlobalAccountDataEffect/);
+    expect(source).toMatch(/upsertGlobalAccountDataEffect/);
     expect(source).toMatch(/queryRoomAccountDataEffect/);
-    expect(source).toMatch(/putRoomAccountDataEffect/);
+    expect(source).toMatch(/upsertRoomAccountDataEffect/);
   });
 });

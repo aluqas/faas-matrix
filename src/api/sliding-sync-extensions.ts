@@ -11,6 +11,7 @@ import type { SlidingSyncExtensionConfig } from "../types/client";
 import type { AccountDataEvent } from "../types";
 
 import { projectPresenceEvents } from "../matrix/application/features/presence/project";
+import { getE2EEAccountDataFromDO } from "../matrix/application/features/account-data/effect-adapters";
 import { projectDeviceLists } from "../matrix/application/sync-projection";
 import { CloudflareSyncRepository } from "../runtime/cloudflare/matrix-repositories";
 import { getThreadSubscriptionsExtension } from "../matrix/application/features/sync/thread-subscriptions";
@@ -102,7 +103,6 @@ export async function buildSlidingSyncExtensions(
     }
 
     // E2EE account data must come from DO for strong consistency (SSSS / cross-signing keys).
-    const { getE2EEAccountDataFromDO } = await import("./account-data");
     try {
       const e2eeData = await getE2EEAccountDataFromDO(env, userId);
       for (const [eventType, content] of Object.entries(e2eeData ?? {})) {

@@ -21,7 +21,10 @@ import {
   storeEvent,
   updateMembership,
 } from "../../services/database";
-import { getGlobalAccountData, getRoomAccountData } from "../../api/account-data";
+import {
+  getGlobalAccountData,
+  getRoomAccountData,
+} from "../../matrix/repositories/account-data-repository";
 import { getReceiptsForRoom } from "../../api/receipts";
 import { getToDeviceMessages } from "../../api/to-device";
 import { getTypingUsers } from "../../api/typing";

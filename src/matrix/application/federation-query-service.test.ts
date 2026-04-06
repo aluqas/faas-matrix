@@ -7,31 +7,40 @@ class FakeD1Database {
   prepare(query: string) {
     let boundArgs: unknown[] = [];
 
+    const lookupUser = () => {
+      if (!query.includes("users") || !query.includes("user_id")) {
+        return null;
+      }
+
+      const userId = boundArgs[0] as string;
+      const user = this.users.get(userId);
+      if (!user) {
+        return null;
+      }
+
+      return {
+        user_id: userId,
+        localpart: userId.slice(1).split(":")[0],
+        display_name: user.display_name,
+        avatar_url: user.avatar_url,
+        is_guest: 0,
+        is_deactivated: 0,
+        admin: 0,
+        created_at: 0,
+      };
+    };
+
     return {
       bind(...args: unknown[]) {
         boundArgs = args;
         return this;
       },
+      all: async () => {
+        const row = lookupUser();
+        return { results: row ? [row] : [] };
+      },
       first: async () => {
-        if (query.includes("FROM users WHERE user_id = ?")) {
-          const userId = boundArgs[0] as string;
-          const user = this.users.get(userId);
-          if (!user) {
-            return null;
-          }
-          return {
-            user_id: userId,
-            localpart: userId.slice(1).split(":")[0],
-            display_name: user.display_name,
-            avatar_url: user.avatar_url,
-            is_guest: 0,
-            is_deactivated: 0,
-            admin: 0,
-            created_at: 0,
-          };
-        }
-
-        return null;
+        return lookupUser();
       },
     };
   }

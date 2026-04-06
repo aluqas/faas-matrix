@@ -9,8 +9,8 @@ import { runClientEffect } from "../matrix/application/effect-runtime";
 import {
   deleteGlobalAccountDataEffect,
   deleteRoomAccountDataEffect,
-  putGlobalAccountDataEffect,
-  putRoomAccountDataEffect,
+  upsertGlobalAccountDataEffect,
+  upsertRoomAccountDataEffect,
 } from "../matrix/application/features/account-data/command";
 import {
   decodeDeleteGlobalAccountDataInput,
@@ -23,19 +23,11 @@ import {
 import {
   createAccountDataCommandPorts,
   createAccountDataQueryPorts,
-  getE2EEAccountDataFromDO,
 } from "../matrix/application/features/account-data/effect-adapters";
 import {
   queryGlobalAccountDataEffect,
   queryRoomAccountDataEffect,
 } from "../matrix/application/features/account-data/query";
-import {
-  getAccountDataStreamPosition,
-  getAllRoomAccountData,
-  getGlobalAccountData,
-  getRoomAccountData,
-} from "../matrix/repositories/account-data-repository";
-import { isEmptyAccountDataContent } from "../types/account-data";
 
 const app = new Hono<AppEnv>();
 
@@ -92,9 +84,7 @@ app.put("/_matrix/client/v3/user/:userId/account_data/:type", requireAuth(), asy
       body,
     }).pipe(
       Effect.flatMap((input) =>
-        isEmptyAccountDataContent(input.content)
-          ? deleteGlobalAccountDataEffect(createAccountDataCommandPorts(c.env), input)
-          : putGlobalAccountDataEffect(createAccountDataCommandPorts(c.env), input),
+        upsertGlobalAccountDataEffect(createAccountDataCommandPorts(c.env), input),
       ),
     ),
     () => c.json({}),
@@ -165,9 +155,7 @@ app.put(
         body,
       }).pipe(
         Effect.flatMap((input) =>
-          isEmptyAccountDataContent(input.content)
-            ? deleteRoomAccountDataEffect(createAccountDataCommandPorts(c.env), input)
-            : putRoomAccountDataEffect(createAccountDataCommandPorts(c.env), input),
+          upsertRoomAccountDataEffect(createAccountDataCommandPorts(c.env), input),
         ),
       ),
       () => c.json({}),
@@ -197,10 +185,3 @@ app.delete(
 );
 
 export default app;
-export {
-  getAccountDataStreamPosition,
-  getAllRoomAccountData,
-  getE2EEAccountDataFromDO,
-  getGlobalAccountData,
-  getRoomAccountData,
-};

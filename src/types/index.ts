@@ -1,4 +1,5 @@
 export * from "./account-data";
+export * from "./e2ee";
 export * from "./env";
 export * from "./error";
 export * from "./events";

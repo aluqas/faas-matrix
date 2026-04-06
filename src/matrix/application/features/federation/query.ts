@@ -10,23 +10,22 @@ import { normalizeMatrixBase64, signJson } from "../../../../utils/crypto";
 import { Errors, MatrixApiError } from "../../../../utils/errors";
 import { isLocalServerName, isValidServerName, parseUserId } from "../../../../utils/ids";
 import { validateUrl } from "../../../../utils/url-validator";
+import {
+  listCurrentServerKeys,
+  type CurrentServerKeyRecord,
+} from "../../../repositories/server-keys-repository";
 import { InfraError } from "../../domain-error";
-import { FederationQueryService, type FederationProfile } from "../../federation-query-service";
+import type { FederationProfile } from "../../federation-query-service";
 import {
   buildFederatedEventRelationshipsResponse,
   type EventRelationshipsRequest,
 } from "../../relationship-service";
+import { queryProfileResponse } from "../profile/profile-query";
+import type { ProfileField } from "../../../../types/profile";
 
-const federationQueryService = new FederationQueryService();
 const SERVER_KEY_VALIDITY_FALLBACK_MS = 365 * 24 * 60 * 60 * 1000;
 
 export const MAX_BATCH_SERVERS = 100;
-
-export interface CurrentServerKeyRecord {
-  keyId: string;
-  publicKey: string;
-  validUntil: number | null;
-}
 
 export interface FederationServerKeysBatchQueryInput {
   serverKeys: Record<string, Record<string, { minimum_valid_until_ts?: number } | undefined>>;
@@ -40,7 +39,7 @@ export interface FederationServerKeysQueryInput {
 
 export interface FederationProfileQueryInput {
   userId: string;
-  field?: string;
+  field?: ProfileField;
 }
 
 export interface FederationDirectoryQueryInput {
@@ -53,7 +52,10 @@ export type FederationRelationshipsResult = Awaited<
 
 export interface FederationQueryPorts {
   localServerName: string;
-  getProfile(userId: string, field?: string): Effect.Effect<FederationProfile | null, InfraError>;
+  getProfile(
+    userId: string,
+    field?: ProfileField,
+  ): Effect.Effect<FederationProfile | null, InfraError>;
   getRoomByAlias(alias: string): Effect.Effect<string | null, InfraError>;
   getNotarySigningKey(): Effect.Effect<SigningKey | null, InfraError>;
   getCurrentServerKeys(keyId?: string | null): Effect.Effect<CurrentServerKeyRecord[], InfraError>;
@@ -91,7 +93,7 @@ export function createFederationQueryPorts(input: {
     getProfile: (userId, field) =>
       Effect.tryPromise({
         try: () =>
-          federationQueryService.getProfile({
+          queryProfileResponse({
             userId,
             ...(field ? { field } : {}),
             localServerName: input.localServerName,
@@ -112,25 +114,7 @@ export function createFederationQueryPorts(input: {
       }),
     getCurrentServerKeys: (keyId) =>
       Effect.tryPromise({
-        try: async () => {
-          const statement = keyId
-            ? input.db
-                .prepare(`SELECT key_id, public_key, valid_until FROM server_keys WHERE key_id = ?`)
-                .bind(keyId)
-            : input.db.prepare(
-                `SELECT key_id, public_key, valid_until FROM server_keys WHERE is_current = 1`,
-              );
-          const result = await statement.all<{
-            key_id: string;
-            public_key: string;
-            valid_until: number | null;
-          }>();
-          return result.results.map((row) => ({
-            keyId: row.key_id,
-            publicKey: row.public_key,
-            validUntil: row.valid_until,
-          }));
-        },
+        try: () => listCurrentServerKeys(input.db, keyId),
         catch: (cause) => toInfraError("Failed to load current server keys", cause),
       }),
     getNotarizedServerKeys: (serverName, keyId, minimumValidUntilTs, notaryKey) =>

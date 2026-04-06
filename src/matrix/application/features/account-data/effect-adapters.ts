@@ -16,6 +16,7 @@ import {
 } from "../../../repositories/account-data-repository";
 import { isUserJoinedToRoom } from "../../../repositories/membership-repository";
 import { InfraError } from "../../domain-error";
+import { requireLogContext, withLogContext } from "../../logging";
 import type { AccountDataCommandPorts } from "./command";
 import type { AccountDataQueryPorts } from "./query";
 
@@ -106,37 +107,88 @@ async function deleteE2EEAccountDataFromDO(
   }
 }
 
+function loadDatabaseAccountDataEffect(
+  env: Pick<AppEnv["Bindings"], "DB">,
+  userId: UserId,
+  roomId: string,
+  eventType: string,
+): Effect.Effect<AccountDataContent | null, InfraError> {
+  return Effect.tryPromise({
+    try: async () => {
+      const record = await findAccountDataRecord(env.DB, userId, roomId, eventType);
+      return record && !record.deleted ? record.content : null;
+    },
+    catch: (cause) => toInfraError("Failed to load account data", cause),
+  });
+}
+
+function logAccountDataFallbackEffect(
+  userId: UserId,
+  eventType: string,
+  source: "do" | "kv",
+  cause: unknown,
+): Effect.Effect<void> {
+  const logger = withLogContext(
+    requireLogContext(
+      "account_data.global_fallback",
+      {
+        component: "account_data",
+        operation: "global_fallback",
+        user_id: userId,
+      },
+      ["user_id"],
+    ),
+  );
+
+  return logger.warn("account_data.global.fallback", {
+    event_type: eventType,
+    fallback_source: source,
+    error_message: cause instanceof Error ? cause.message : String(cause),
+  });
+}
+
 function loadGlobalAccountDataEffect(
   env: Pick<AppEnv["Bindings"], "DB" | "ACCOUNT_DATA" | "USER_KEYS">,
   userId: UserId,
   eventType: string,
 ): Effect.Effect<AccountDataContent | null, InfraError> {
-  return Effect.tryPromise({
-    try: async () => {
-      if (isDoBackedAccountDataEventType(eventType)) {
-        try {
-          const doData = await getE2EEAccountDataFromDO(env, userId, eventType);
-          if (doData) {
-            return doData;
-          }
-        } catch (cause) {
-          console.error("[account-data] DO unavailable, trying fallbacks:", cause);
-        }
+  return Effect.gen(function* () {
+    if (isDoBackedAccountDataEventType(eventType)) {
+      const doData = yield* Effect.catchAll(
+        Effect.tryPromise({
+          try: () => getE2EEAccountDataFromDO(env, userId, eventType),
+          catch: (cause) => toInfraError("Failed to load E2EE account data from DO", cause),
+        }),
+        (error) =>
+          logAccountDataFallbackEffect(userId, eventType, "do", error).pipe(
+            Effect.zipRight(Effect.succeed<AccountDataContent | null>(null)),
+          ),
+      );
 
-        try {
-          const kvData = await env.ACCOUNT_DATA.get(`global:${userId}:${eventType}`);
-          if (kvData) {
-            return parseStoredAccountDataContent(kvData);
-          }
-        } catch (cause) {
-          console.error("[account-data] KV fallback failed:", cause);
-        }
+      if (doData) {
+        return doData;
       }
 
-      const record = await findAccountDataRecord(env.DB, userId, "", eventType);
-      return record && !record.deleted ? record.content : null;
-    },
-    catch: (cause) => toInfraError("Failed to load global account data", cause),
+      const kvData = yield* Effect.catchAll(
+        Effect.tryPromise({
+          try: async () => {
+            const stored = await env.ACCOUNT_DATA.get(`global:${userId}:${eventType}`);
+            return stored ? parseStoredAccountDataContent(stored) : null;
+          },
+          catch: (cause) => toInfraError("Failed to load E2EE account data from KV", cause),
+        }),
+        (error) =>
+          logAccountDataFallbackEffect(userId, eventType, "kv", error).pipe(
+            Effect.zipRight(Effect.succeed<AccountDataContent | null>(null)),
+          ),
+      );
+
+      if (kvData) {
+        return kvData;
+      }
+    }
+
+    return yield* loadDatabaseAccountDataEffect(env, userId, "", eventType);
   });
 }
 
@@ -147,13 +199,7 @@ export function createAccountDataQueryPorts(
     getGlobalAccountData: (userId, eventType) =>
       loadGlobalAccountDataEffect(env, userId, eventType),
     getRoomAccountData: (userId, roomId, eventType) =>
-      Effect.tryPromise({
-        try: async () => {
-          const record = await findAccountDataRecord(env.DB, userId, roomId, eventType);
-          return record && !record.deleted ? record.content : null;
-        },
-        catch: (cause) => toInfraError("Failed to load room account data", cause),
-      }),
+      loadDatabaseAccountDataEffect(env, userId, roomId, eventType),
     isUserJoinedToRoom: (userId, roomId) =>
       Effect.tryPromise({
         try: () => isUserJoinedToRoom(env.DB, roomId, userId),

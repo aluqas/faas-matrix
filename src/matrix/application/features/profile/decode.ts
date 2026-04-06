@@ -9,6 +9,7 @@ import type {
   SetDisplayNameRequest,
   UpdateProfileFieldInput,
 } from "../../../../types/profile";
+import type { JsonValue } from "../../../../types/common";
 import { SetAvatarUrlRequestSchema, SetDisplayNameRequestSchema } from "../../../../types/profile";
 import { isJsonObject, isJsonValue } from "../../../../types/common";
 import { DomainError } from "../../domain-error";
@@ -66,16 +67,16 @@ export function decodeProfileFieldUpdateInput(input: {
   return Effect.gen(function* () {
     const authUserId = yield* decodeProfileUserId(input.authUserId);
     const targetUserId = yield* decodeProfileUserId(input.targetUserId);
-    const request =
+    const value =
       input.field === "displayname"
-        ? yield* decodeSetDisplayNameRequest(input.body)
-        : yield* decodeSetAvatarUrlRequest(input.body);
+        ? (yield* decodeSetDisplayNameRequest(input.body)).displayname
+        : (yield* decodeSetAvatarUrlRequest(input.body)).avatar_url;
 
     return {
       authUserId,
       targetUserId,
       field: input.field,
-      value: input.field === "displayname" ? request.displayname : request.avatar_url,
+      value,
     };
   });
 }
@@ -112,7 +113,8 @@ export function decodePutCustomProfileKeyInput(input: {
       yield* Effect.fail(malformed("Malformed profile key request: expected a JSON object"));
     }
 
-    const value = input.body[keyName];
+    const body = input.body as Record<string, unknown>;
+    const value = body[keyName];
     if (value === undefined) {
       yield* Effect.fail(
         new DomainError({
@@ -127,7 +129,7 @@ export function decodePutCustomProfileKeyInput(input: {
       yield* Effect.fail(invalidParam(`Profile key '${keyName}' must be valid JSON`));
     }
 
-    return { authUserId, targetUserId, keyName, value };
+    return { authUserId, targetUserId, keyName, value: value as JsonValue };
   });
 }
 
