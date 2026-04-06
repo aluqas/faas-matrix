@@ -9,9 +9,14 @@
 import type { SlidingSyncExtensionContext, SlidingSyncExtensionOutput } from "../types/sync";
 import type { SlidingSyncExtensionConfig } from "../types/client";
 import type { AccountDataEvent } from "../types";
+import type { RoomId } from "../types/matrix";
+import type { ToDeviceEvent } from "../types/matrix";
 
 import { projectPresenceEvents } from "../matrix/application/features/presence/project";
-import { getE2EEAccountDataFromDO } from "../matrix/application/features/account-data/effect-adapters";
+import {
+  projectGlobalAccountDataSnapshot,
+  projectRoomAccountDataSnapshot,
+} from "../matrix/application/features/account-data/storage";
 import { projectDeviceLists } from "../matrix/application/sync-projection";
 import { CloudflareSyncRepository } from "../runtime/cloudflare/matrix-repositories";
 import { getThreadSubscriptionsExtension } from "../matrix/application/features/sync/thread-subscriptions";
@@ -25,12 +30,6 @@ const THREAD_SUBSCRIPTIONS_EVENT_TYPE = "io.element.msc4306.thread_subscriptions
 // ---------------------------------------------------------------------------
 
 export type { SlidingSyncExtensionConfig, SlidingSyncExtensionContext, SlidingSyncExtensionOutput };
-
-function ensureRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
 
 // ---------------------------------------------------------------------------
 // Main builder
@@ -51,6 +50,7 @@ export async function buildSlidingSyncExtensions(
     ctx;
   const allJoinedRoomIds = ctx.visibilityContext.visibleJoinedRoomIds;
   const output: SlidingSyncExtensionOutput = {};
+  const syncRepository = new CloudflareSyncRepository(env);
 
   // ── to_device ─────────────────────────────────────────────────────────────
   if (config.to_device) {
@@ -63,12 +63,11 @@ export async function buildSlidingSyncExtensions(
       config.to_device.since,
       limit,
     );
-    output.to_device = { next_batch: nextBatch, events };
+    output.to_device = { next_batch: nextBatch, events: events as ToDeviceEvent[] };
   }
 
   // ── e2ee ──────────────────────────────────────────────────────────────────
   if (config.e2ee) {
-    const syncRepository = new CloudflareSyncRepository(env);
     const keyCounts = deviceId ? await syncRepository.getOneTimeKeyCounts(userId, deviceId) : {};
     const unusedFallbackTypes = deviceId
       ? await syncRepository.getUnusedFallbackKeyTypes(userId, deviceId)
@@ -80,7 +79,14 @@ export async function buildSlidingSyncExtensions(
       sinceDeviceKeyPosition: sincePos,
     });
     output.e2ee = {
-      device_lists: deviceLists ?? { changed: [], left: [] },
+      device_lists:
+        (deviceLists as
+          | NonNullable<SlidingSyncExtensionOutput["e2ee"]>["device_lists"]
+          | undefined) ??
+        ({
+          changed: [],
+          left: [],
+        } as NonNullable<SlidingSyncExtensionOutput["e2ee"]>["device_lists"]),
       device_one_time_keys_count: keyCounts,
       device_unused_fallback_key_types: unusedFallbackTypes,
     };
@@ -88,51 +94,20 @@ export async function buildSlidingSyncExtensions(
 
   // ── account_data ──────────────────────────────────────────────────────────
   if (config.account_data) {
-    const globalData = await db
-      .prepare(`SELECT event_type, content FROM account_data WHERE user_id = ? AND room_id = ''`)
-      .bind(userId)
-      .all();
-
-    const globalAccountData: Record<string, Record<string, unknown>> = {};
-    for (const d of globalData.results as { event_type: string; content: string }[]) {
-      try {
-        globalAccountData[d.event_type] = ensureRecord(JSON.parse(d.content) as unknown);
-      } catch {
-        globalAccountData[d.event_type] = {};
-      }
-    }
-
-    // E2EE account data must come from DO for strong consistency (SSSS / cross-signing keys).
-    try {
-      const e2eeData = await getE2EEAccountDataFromDO(env, userId);
-      for (const [eventType, content] of Object.entries(e2eeData ?? {})) {
-        globalAccountData[eventType] = ensureRecord(content);
-      }
-    } catch (err) {
-      console.error("[sliding-sync-extensions] Failed to get E2EE account data from DO:", err);
-    }
+    const globalAccountData = await projectGlobalAccountDataSnapshot(env, userId);
 
     const accountDataRooms: Record<string, AccountDataEvent[]> = {};
     // Client-specified rooms take precedence; fall back to all joined rooms for completeness.
     const roomsForAccountData = config.account_data.rooms ?? allJoinedRoomIds;
     for (const roomId of roomsForAccountData) {
-      const roomData = await db
-        .prepare(`SELECT event_type, content FROM account_data WHERE user_id = ? AND room_id = ?`)
-        .bind(userId, roomId)
-        .all<{ event_type: string; content: string }>();
-      if (roomData.results.length > 0) {
-        accountDataRooms[roomId] = roomData.results.map((d) => {
-          try {
-            return { type: d.event_type, content: ensureRecord(JSON.parse(d.content) as unknown) };
-          } catch {
-            return { type: d.event_type, content: {} };
-          }
-        });
+      const roomData = await projectRoomAccountDataSnapshot(env, userId, roomId as RoomId);
+      if (roomData.length > 0) {
+        accountDataRooms[roomId] = roomData;
       }
     }
 
     output.account_data = {
-      global: Object.entries(globalAccountData).map(([type, content]) => ({ type, content })),
+      global: globalAccountData,
       rooms: accountDataRooms,
     };
   }

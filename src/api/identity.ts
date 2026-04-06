@@ -230,7 +230,7 @@ async function getPepper(cache: KVNamespace): Promise<string> {
   const existing = await cache.get("identity:pepper");
   if (existing) return existing;
 
-  const pepper = crypto.randomUUID().replaceAll('-', "");
+  const pepper = crypto.randomUUID().replaceAll("-", "");
   await cache.put("identity:pepper", pepper, { expirationTtl: 7 * 24 * 60 * 60 }); // 7 day TTL
   return pepper;
 }

@@ -24,12 +24,14 @@ import {
 import {
   getGlobalAccountData,
   getRoomAccountData,
+  upsertAccountDataRecord,
 } from "../../matrix/repositories/account-data-repository";
 import { getReceiptsForRoom } from "../../api/receipts";
 import { getToDeviceMessages } from "../../api/to-device";
 import { getTypingUsers } from "../../api/typing";
 import { countUnreadNotificationSummaryWithRules } from "../../services/push-rule-evaluator";
-import type { Env, PDU, Room } from "../../types";
+import type { Env, PDU, Room, ToDeviceEvent, UserId } from "../../types";
+import type { AccountDataContent } from "../../types/account-data";
 import type {
   FederationProcessedPdu,
   FederationRepository,
@@ -107,13 +109,13 @@ export class CloudflareRoomRepository implements RoomRepository {
     eventType: string,
     content: Record<string, unknown>,
   ): Promise<void> {
-    await this.env.DB.prepare(
-      `INSERT INTO account_data (user_id, room_id, event_type, content)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET content = excluded.content`,
-    )
-      .bind(userId, roomId, eventType, JSON.stringify(content))
-      .run();
+    await upsertAccountDataRecord(
+      this.env.DB,
+      userId,
+      roomId,
+      eventType,
+      JSON.stringify(content as AccountDataContent),
+    );
   }
 
   storeEvent(event: PDU): Promise<void> {
@@ -210,8 +212,15 @@ export class CloudflareSyncRepository implements SyncRepository {
     return result?.position ?? 0;
   }
 
-  getToDeviceMessages(userId: string, deviceId: string, since: string) {
-    return getToDeviceMessages(this.env.DB, userId, deviceId, since);
+  getToDeviceMessages(
+    userId: string,
+    deviceId: string,
+    since: string,
+  ): Promise<{ events: ToDeviceEvent[]; nextBatch: string }> {
+    return getToDeviceMessages(this.env.DB, userId, deviceId, since) as Promise<{
+      events: ToDeviceEvent[];
+      nextBatch: string;
+    }>;
   }
 
   async getOneTimeKeyCounts(userId: string, deviceId: string): Promise<Record<string, number>> {
@@ -246,7 +255,7 @@ export class CloudflareSyncRepository implements SyncRepository {
     userId: string,
     sinceEventPosition: number,
     sinceDeviceKeyPosition: number,
-  ): Promise<{ changed: string[]; left: string[] }> {
+  ): Promise<{ changed: UserId[]; left: UserId[] }> {
     const effCte = EFFECTIVE_MEMBERSHIPS_AND_JOINED_MEMBERS_CTE.trim();
     const [localChanged, remoteChanged, newlyShared, currentMembersInJoinedRooms, noLongerShared] =
       await Promise.all([
@@ -408,8 +417,8 @@ export class CloudflareSyncRepository implements SyncRepository {
     }
 
     return {
-      changed: [...changed],
-      left: [...left],
+      changed: [...changed] as UserId[],
+      left: [...left] as UserId[],
     };
   }
 
@@ -685,7 +694,7 @@ export class CloudflareFederationRepository implements FederationRepository {
 
 export class CloudflareSignedTransport implements SignedTransport {
   verifyJson(): Promise<boolean> {
-    return false;
+    return Promise.resolve(false);
   }
 }
 

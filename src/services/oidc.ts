@@ -191,8 +191,8 @@ export function decodeJWT(token: string): { header: any; payload: any; signature
     throw new Error("Invalid JWT format");
   }
 
-  const header = JSON.parse(atob(parts[0].replaceAll('-', "+").replaceAll('_', "/")));
-  const payload = JSON.parse(atob(parts[1].replaceAll('-', "+").replaceAll('_', "/")));
+  const header = JSON.parse(atob(parts[0].replaceAll("-", "+").replaceAll("_", "/")));
+  const payload = JSON.parse(atob(parts[1].replaceAll("-", "+").replaceAll("_", "/")));
 
   return { header, payload, signature: parts[2] };
 }
@@ -255,7 +255,7 @@ async function verifyJWTSignature(token: string, jwks: JWKS): Promise<boolean> {
 
   // Decode signature from base64url
   const signatureBytes = Uint8Array.from(
-    atob(signature.replaceAll('-', "+").replaceAll('_', "/")),
+    atob(signature.replaceAll("-", "+").replaceAll("_", "/")),
     (c) => c.codePointAt(0),
   );
 

@@ -14,8 +14,8 @@ const SECTION_BY_FAMILY = {
 export function normalize(value = "") {
   return value
     .toLowerCase()
-    .replaceAll(/`/g, "")
-    .replaceAll(/&/g, "and")
+    .replaceAll('`', "")
+    .replaceAll('&', "and")
     .replaceAll(/[^a-z0-9]+/g, " ")
     .trim()
     .replaceAll(/\s+/g, " ");

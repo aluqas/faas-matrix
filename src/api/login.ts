@@ -524,9 +524,9 @@ app.post("/_matrix/client/v1/login/get_token", requireAuth(), async (c) => {
   // Generate a login token
   const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
   const loginToken = btoa(String.fromCodePoint(...tokenBytes))
-    .replaceAll('+', "-")
-    .replaceAll('/', "_")
-    .replaceAll('=', "");
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
 
   // Token is valid for 2 minutes (per Matrix spec recommendation)
   const expiresInMs = 2 * 60 * 1000;

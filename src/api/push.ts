@@ -1171,7 +1171,7 @@ function matchesRule(
 
     // Convert glob pattern to regex
     const regex = new RegExp(
-      rule.pattern.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll('\\*', ".*"),
+      rule.pattern.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll("\\*", ".*"),
       "i",
     );
     return regex.test(body);
@@ -1203,7 +1203,7 @@ function matchesCondition(
       // Handle user_id placeholder
       const pattern = condition.pattern === "" ? userId : condition.pattern;
       const regex = new RegExp(
-        pattern.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll('\\*', ".*"),
+        pattern.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll("\\*", ".*"),
         "i",
       );
       return regex.test(String(value));
@@ -1247,13 +1247,13 @@ function matchesCondition(
 
     case "event_property_is": {
       if (!condition.key) return false;
-      const value = getNestedValue(event, condition.key.replaceAll('\\.', "."));
+      const value = getNestedValue(event, condition.key.replaceAll("\\.", "."));
       return value === condition.value;
     }
 
     case "event_property_contains": {
       if (!condition.key) return false;
-      const value = getNestedValue(event, condition.key.replaceAll('\\.', "."));
+      const value = getNestedValue(event, condition.key.replaceAll("\\.", "."));
       if (!Array.isArray(value)) return false;
       return value.includes(condition.value);
     }
@@ -1661,15 +1661,14 @@ async function sendDirectAPNs(
       );
       return true;
     }
-      await runClientEffect(
-        logger.warn("push.command.gateway_error", {
-          command: "direct_apns",
-          topic,
-          error_message: result.error,
-        }),
-      );
-      return false;
-    
+    await runClientEffect(
+      logger.warn("push.command.gateway_error", {
+        command: "direct_apns",
+        topic,
+        error_message: result.error,
+      }),
+    );
+    return false;
   } catch (error) {
     await runClientEffect(
       logger.error("push.command.error", error, {

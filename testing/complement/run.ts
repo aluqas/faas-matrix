@@ -97,7 +97,7 @@ const logPath =
   (() => {
     const dir = path.join(repoRoot, "logs");
     fs.mkdirSync(dir, { recursive: true });
-    const baseTs = new Date().toISOString().replace("T", "_").replaceAll(/:/g, "-").slice(0, 19);
+    const baseTs = new Date().toISOString().replace("T", "_").replaceAll(':', "-").slice(0, 19);
     const pidSuffix = process.pid;
     let candidate = path.join(dir, `${baseTs}-${pidSuffix}.log`);
     let suffix = 1;

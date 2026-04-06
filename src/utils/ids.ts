@@ -24,12 +24,12 @@ export function generateOpaqueId(length: number = 18): Promise<string> {
 // Base64 URL-safe encoding
 export function base64UrlEncode(bytes: Uint8Array): string {
   const base64 = btoa(String.fromCodePoint(...bytes));
-  return base64.replaceAll('+', "-").replaceAll('/', "_").replaceAll('=', "");
+  return base64.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
 // Base64 URL-safe decoding
 export function base64UrlDecode(str: string): Uint8Array {
-  const base64 = str.replaceAll('-', "+").replaceAll('_', "/");
+  const base64 = str.replaceAll("-", "+").replaceAll("_", "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = atob(padded);
   return new Uint8Array([...binary].map((c) => c.codePointAt(0)));

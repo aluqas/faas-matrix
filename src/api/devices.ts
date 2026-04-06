@@ -13,7 +13,8 @@ import { recordDeviceKeyChange } from "../services/device-key-changes";
 import { publishDeviceListUpdateToSharedServers } from "../matrix/application/features/device-lists/command";
 import { getSharedServersInRoomsWithUserIncludingPartialState } from "../matrix/application/features/partial-state/shared-servers";
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
-import { parseDeviceKeysPayload, type DeviceKeysPayload } from "./keys-contracts";
+import type { DeviceKeysPayload } from "../types/client";
+import { parseDeviceKeysPayload } from "./keys-contracts";
 
 const app = new Hono<AppEnv>();
 

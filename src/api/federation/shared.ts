@@ -40,8 +40,8 @@ export async function logFederationRouteWarning(
 }
 
 function getEventReferenceLookupCandidates(eventId: string): string[] {
-  const normalized = eventId.replaceAll('+', "-").replaceAll('/', "_");
-  const standard = eventId.replaceAll('-', "+").replaceAll('_', "/");
+  const normalized = eventId.replaceAll("+", "-").replaceAll("/", "_");
+  const standard = eventId.replaceAll("-", "+").replaceAll("_", "/");
   return Array.from(new Set([eventId, normalized, standard]));
 }
 

@@ -1,4 +1,4 @@
-import type { DeviceKeysPayload } from "../../../../api/keys-contracts";
+import type { DeviceKeysPayload } from "../../../../types/client";
 import type {
   DeviceListBroadcastInput,
   DeviceListBroadcastPorts,

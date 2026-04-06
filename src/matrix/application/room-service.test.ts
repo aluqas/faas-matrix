@@ -109,11 +109,7 @@ class MemoryRoomRepository implements RoomRepository {
     return this.memberships.get(this.membershipKey(roomId, userId)) ?? null;
   }
 
-  getStateEvent(
-    roomId: string,
-    eventType: string,
-    stateKey: string = "",
-  ): Promise<PDU | null> {
+  getStateEvent(roomId: string, eventType: string, stateKey: string = ""): Promise<PDU | null> {
     return this.stateEvents.get(this.stateKey(roomId, eventType, stateKey)) ?? null;
   }
 

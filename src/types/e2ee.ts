@@ -12,6 +12,10 @@ import type { JsonObject } from "./common";
 import { isJsonObject } from "./common";
 import type { DeviceId, MatrixSignatures, UserId } from "./matrix";
 
+export function parseJsonObject(value: unknown): JsonObject | null {
+  return isJsonObject(value) ? value : null;
+}
+
 export interface FederationKeysQueryInput {
   requestedKeys: DeviceKeyRequestMap;
 }
@@ -62,7 +66,11 @@ function isUserIdLike(value: unknown): value is UserId {
   return typeof value === "string" && /^@[^:]+:.+$/.test(value);
 }
 
-function toStringMap(value: unknown): Record<string, string> | null {
+export function parseStringArray(value: unknown): string[] | null {
+  return isStringArray(value) ? [...value] : null;
+}
+
+export function parseStringMap(value: unknown): Record<string, string> | null {
   if (!isJsonObject(value)) {
     return null;
   }
@@ -78,13 +86,13 @@ function toStringMap(value: unknown): Record<string, string> | null {
   return Object.fromEntries(entries as Array<readonly [string, string]>);
 }
 
-function toSignatureMap(value: unknown): MatrixSignatures | null {
+export function parseMatrixSignatures(value: unknown): MatrixSignatures | null {
   if (!isJsonObject(value)) {
     return null;
   }
 
   const entries = Object.entries(value).map(([serverName, signatures]) => {
-    const parsed = toStringMap(signatures);
+    const parsed = parseStringMap(signatures);
     return parsed ? ([serverName, parsed] as const) : null;
   });
 
@@ -97,7 +105,7 @@ function toSignatureMap(value: unknown): MatrixSignatures | null {
   ) as MatrixSignatures;
 }
 
-export function parseE2EEDeviceKeysPayload(value: unknown): DeviceKeysPayload | null {
+export function parseDeviceKeysPayload(value: unknown): DeviceKeysPayload | null {
   if (!isJsonObject(value)) {
     return null;
   }
@@ -119,7 +127,7 @@ export function parseE2EEDeviceKeysPayload(value: unknown): DeviceKeysPayload | 
 
   let parsedKeys: Record<string, string> | undefined;
   if (keys !== undefined) {
-    const normalized = toStringMap(keys);
+    const normalized = parseStringMap(keys);
     if (!normalized) {
       return null;
     }
@@ -128,7 +136,7 @@ export function parseE2EEDeviceKeysPayload(value: unknown): DeviceKeysPayload | 
 
   let parsedSignatures: MatrixSignatures | undefined;
   if (signatures !== undefined) {
-    const normalized = toSignatureMap(signatures);
+    const normalized = parseMatrixSignatures(signatures);
     if (!normalized) {
       return null;
     }
@@ -154,13 +162,15 @@ export function parseE2EEDeviceKeysPayload(value: unknown): DeviceKeysPayload | 
   };
 }
 
-export function parseE2EEDeviceKeysMap(value: unknown): Record<string, DeviceKeysPayload> | null {
+export const parseE2EEDeviceKeysPayload = parseDeviceKeysPayload;
+
+export function parseDeviceKeysMap(value: unknown): Record<string, DeviceKeysPayload> | null {
   if (!isJsonObject(value)) {
     return null;
   }
 
   const entries = Object.entries(value).map(([deviceId, payload]) => {
-    const parsed = parseE2EEDeviceKeysPayload(payload);
+    const parsed = parseDeviceKeysPayload(payload);
     return parsed ? ([deviceId, parsed] as const) : null;
   });
 
@@ -171,7 +181,9 @@ export function parseE2EEDeviceKeysMap(value: unknown): Record<string, DeviceKey
   return Object.fromEntries(entries as Array<readonly [string, DeviceKeysPayload]>);
 }
 
-function parseCrossSigningKeyPayload(value: unknown): CrossSigningKeyPayload | null {
+export const parseE2EEDeviceKeysMap = parseDeviceKeysMap;
+
+export function parseCrossSigningKeyPayload(value: unknown): CrossSigningKeyPayload | null {
   if (!isJsonObject(value)) {
     return null;
   }
@@ -191,7 +203,7 @@ function parseCrossSigningKeyPayload(value: unknown): CrossSigningKeyPayload | n
 
   let parsedKeys: Record<string, string> | undefined;
   if (keys !== undefined) {
-    const normalized = toStringMap(keys);
+    const normalized = parseStringMap(keys);
     if (!normalized) {
       return null;
     }
@@ -200,7 +212,7 @@ function parseCrossSigningKeyPayload(value: unknown): CrossSigningKeyPayload | n
 
   let parsedSignatures: MatrixSignatures | undefined;
   if (signatures !== undefined) {
-    const normalized = toSignatureMap(signatures);
+    const normalized = parseMatrixSignatures(signatures);
     if (!normalized) {
       return null;
     }
@@ -220,7 +232,7 @@ function parseCrossSigningKeyPayload(value: unknown): CrossSigningKeyPayload | n
   };
 }
 
-export function parseE2EECrossSigningKeysStore(value: unknown): CrossSigningKeysStore | null {
+export function parseCrossSigningKeysStore(value: unknown): CrossSigningKeysStore | null {
   if (!isJsonObject(value)) {
     return null;
   }
@@ -249,6 +261,8 @@ export function parseE2EECrossSigningKeysStore(value: unknown): CrossSigningKeys
     ...(parsedUserSigning ? { user_signing: parsedUserSigning } : {}),
   };
 }
+
+export const parseE2EECrossSigningKeysStore = parseCrossSigningKeysStore;
 
 export function parseStoredOneTimeKeyBuckets(value: unknown): StoredOneTimeKeyBuckets | null {
   if (!isJsonObject(value)) {
@@ -296,42 +310,29 @@ export function parseStoredOneTimeKeyBuckets(value: unknown): StoredOneTimeKeyBu
   ) as StoredOneTimeKeyBuckets;
 }
 
-export function parseE2EEKeysQueryRequest(value: unknown): FederationKeysQueryInput | null {
+export function parseDeviceKeyRequestMap(value: unknown): DeviceKeyRequestMap | null {
   if (!isJsonObject(value)) {
     return null;
   }
 
-  const requested = value["device_keys"];
-  if (!isJsonObject(requested)) {
-    return null;
-  }
-
-  const entries = Object.entries(requested).map(([userId, devices]) =>
-    isStringArray(devices) ? ([userId, devices] as const) : null,
-  );
+  const entries = Object.entries(value).map(([userId, devices]) => {
+    const parsedDevices = parseStringArray(devices);
+    return parsedDevices ? ([userId, parsedDevices] as const) : null;
+  });
 
   if (entries.some((entry) => entry === null)) {
     return null;
   }
 
-  return {
-    requestedKeys: Object.fromEntries(
-      entries as Array<readonly [string, string[]]>,
-    ) as DeviceKeyRequestMap,
-  };
+  return Object.fromEntries(entries as Array<readonly [string, string[]]>) as DeviceKeyRequestMap;
 }
 
-export function parseE2EEKeysClaimRequest(value: unknown): FederationKeysClaimInput | null {
+export function parseOneTimeKeyClaimMap(value: unknown): OneTimeKeyClaimMap | null {
   if (!isJsonObject(value)) {
     return null;
   }
 
-  const requested = value["one_time_keys"];
-  if (!isJsonObject(requested)) {
-    return null;
-  }
-
-  const userEntries = Object.entries(requested).map(([userId, devices]) => {
+  const userEntries = Object.entries(value).map(([userId, devices]) => {
     if (!isJsonObject(devices)) {
       return null;
     }
@@ -351,10 +352,48 @@ export function parseE2EEKeysClaimRequest(value: unknown): FederationKeysClaimIn
     return null;
   }
 
+  return Object.fromEntries(
+    userEntries as Array<readonly [string, Record<string, string>]>,
+  ) as OneTimeKeyClaimMap;
+}
+
+export function parseE2EEKeysQueryRequest(value: unknown): FederationKeysQueryInput | null {
+  if (!isJsonObject(value)) {
+    return null;
+  }
+
+  const requested = value["device_keys"];
+  if (!isJsonObject(requested)) {
+    return null;
+  }
+
+  const entries = parseDeviceKeyRequestMap(requested);
+  if (!entries) {
+    return null;
+  }
+
   return {
-    requestedKeys: Object.fromEntries(
-      userEntries as Array<readonly [string, Record<string, string>]>,
-    ) as OneTimeKeyClaimMap,
+    requestedKeys: entries,
+  };
+}
+
+export function parseE2EEKeysClaimRequest(value: unknown): FederationKeysClaimInput | null {
+  if (!isJsonObject(value)) {
+    return null;
+  }
+
+  const requested = value["one_time_keys"];
+  if (!isJsonObject(requested)) {
+    return null;
+  }
+
+  const entries = parseOneTimeKeyClaimMap(requested);
+  if (!entries) {
+    return null;
+  }
+
+  return {
+    requestedKeys: entries,
   };
 }
 

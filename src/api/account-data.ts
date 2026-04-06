@@ -116,25 +116,21 @@ app.delete(
 // ============================================
 
 // GET /_matrix/client/v3/user/:userId/rooms/:roomId/account_data/:type
-app.get(
-  "/_matrix/client/v3/user/:userId/rooms/:roomId/account_data/:type",
-  requireAuth(),
-  (c) => {
-    return respondWithClientEffect(
-      decodeGetRoomAccountDataInput({
-        authUserId: c.get("userId"),
-        targetUserId: decodeURIComponent(c.req.param("userId")),
-        roomId: decodeURIComponent(c.req.param("roomId")),
-        eventType: decodeURIComponent(c.req.param("type")),
-      }).pipe(
-        Effect.flatMap((input) =>
-          queryRoomAccountDataEffect(createAccountDataQueryPorts(c.env), input),
-        ),
+app.get("/_matrix/client/v3/user/:userId/rooms/:roomId/account_data/:type", requireAuth(), (c) => {
+  return respondWithClientEffect(
+    decodeGetRoomAccountDataInput({
+      authUserId: c.get("userId"),
+      targetUserId: decodeURIComponent(c.req.param("userId")),
+      roomId: decodeURIComponent(c.req.param("roomId")),
+      eventType: decodeURIComponent(c.req.param("type")),
+    }).pipe(
+      Effect.flatMap((input) =>
+        queryRoomAccountDataEffect(createAccountDataQueryPorts(c.env), input),
       ),
-      (content) => c.json(content),
-    );
-  },
-);
+    ),
+    (content) => c.json(content),
+  );
+});
 
 // PUT /_matrix/client/v3/user/:userId/rooms/:roomId/account_data/:type
 app.put(

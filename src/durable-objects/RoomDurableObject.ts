@@ -35,8 +35,6 @@ export class RoomDurableObject extends DurableObject<Env> {
   private receiptsCache: Map<string, ReceiptData> = new Map();
   private receiptsCacheLoaded: boolean = false;
 
-  
-
   private async loadTypingCache(): Promise<void> {
     if (this.typingCacheLoaded) return;
 
@@ -419,12 +417,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     }
   }
 
-  webSocketClose(
-    ws: WebSocket,
-    code: number,
-    reason: string,
-    _wasClean: boolean,
-  ): Promise<void> {
+  webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
     const session = ws.deserializeAttachment() as RoomSession | null;
     if (session) {
       this.sessions.delete(ws);

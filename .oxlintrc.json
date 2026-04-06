@@ -6,9 +6,18 @@
     "pedantic": "warn"
   },
   "rules": {
+    // 数系。リファクタリング過程では許容。
     "max-lines-per-function": ["allow"],
     "max-lines": ["allow"],
-    "no-inline-comments": ["allow"]
+    "no-inline-comments": ["allow"],
+    "max-depth": ["allow"],
+    "max-classes-per-file": ["allow"],
+
+    "no-negated-condition": "allow", // 二重否定。いつか直すでいいと思う。
+    "no-shadow": "allow",
+
+    "no-unused-vars": "allow", // これもリファクタリング過程のため許容。
+    "no-async-endpoint-handlers": "allow" // honoなのでいいでしょう
   },
   "env": {
     "builtin": true,

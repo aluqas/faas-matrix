@@ -29,7 +29,7 @@ interface LiveKitClaims {
 function base64UrlEncode(data: Uint8Array | string): string {
   const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
   const base64 = btoa(String.fromCodePoint(...bytes));
-  return base64.replaceAll('+', "-").replaceAll('/', "_").replaceAll('=', "");
+  return base64.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
 // Create HMAC-SHA256 signature

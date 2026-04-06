@@ -48,8 +48,6 @@ export class AdminDurableObject extends DurableObject<Env> {
   private statsCache: ServerStats | null = null;
   private statsCacheTime: number = 0;
 
-  
-
   fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;

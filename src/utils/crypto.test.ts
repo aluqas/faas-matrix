@@ -51,7 +51,7 @@ describe("crypto content hashes", () => {
     };
 
     const hash = await calculateContentHash(event);
-    const urlsafeHash = hash.replaceAll('+', "-").replaceAll('/', "_");
+    const urlsafeHash = hash.replaceAll("+", "-").replaceAll("/", "_");
 
     expect(await verifyContentHash(event, hash)).toBe(true);
     expect(await verifyContentHash(event, urlsafeHash)).toBe(true);

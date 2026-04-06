@@ -1,70 +1,74 @@
 import type {
-    CrossSigningKeyPayload,
-    CrossSigningKeysStore,
-    CrossSigningUploadRequest,
-    DeviceKeyRequestMap,
-    DeviceKeysPayload,
-    DeviceOneTimeKeysMap,
-    JsonObject,
-    JsonObjectMap,
-    KeysClaimRequest,
-    KeysQueryRequest,
-    KeysQueryResponse,
-    KeysUploadRequest,
-    OneTimeKeyClaimMap,
-    SignaturesUploadRequest,
-    SignedKeyPayload,
-    StoredOneTimeKey,
-    StoredOneTimeKeyBuckets,
-    StringMap,
-    TokenSubmitRequest,
-    UIAAuthDict,
-    UiaSessionData,
-    UserCrossSigningKeyMap,
-    UserDeviceKeysMap,
-    UserOneTimeKeysMap,
+  CrossSigningKeyPayload,
+  CrossSigningKeysStore,
+  CrossSigningUploadRequest,
+  DeviceKeyRequestMap,
+  DeviceKeysPayload,
+  DeviceOneTimeKeysMap,
+  JsonObject,
+  JsonObjectMap,
+  KeysClaimRequest,
+  KeysQueryRequest,
+  KeysQueryResponse,
+  KeysUploadRequest,
+  SignaturesUploadRequest,
+  SignedKeyPayload,
+  StoredOneTimeKeyBuckets,
+  StringMap,
+  TokenSubmitRequest,
+  UIAAuthDict,
+  UiaSessionData,
+  UserCrossSigningKeyMap,
+  UserDeviceKeysMap,
+  UserOneTimeKeysMap,
 } from "../types/client";
+import {
+  parseCrossSigningKeyPayload,
+  parseDeviceKeyRequestMap,
+  parseDeviceKeysMap,
+  parseDeviceKeysPayload,
+  parseJsonObject as parseJsonObjectValue,
+  parseOneTimeKeyClaimMap,
+  parseStringArray,
+  parseStringMap,
+} from "../types/e2ee";
 
 export type {
-    CrossSigningKeyPayload, CrossSigningKeysStore, CrossSigningUploadRequest, DeviceKeyRequestMap, DeviceKeysPayload, DeviceOneTimeKeysMap,
-    JsonObject,
-    JsonObjectMap,
-    KeysClaimRequest,
-    KeysQueryRequest,
-    KeysQueryResponse,
-    KeysUploadRequest,
-    SignaturesUploadRequest,
-    SignedKeyPayload, StoredOneTimeKey,
-    StoredOneTimeKeyBuckets, StringMap, TokenSubmitRequest,
-    UIAAuthDict,
-    UiaSessionData,
-    UserCrossSigningKeyMap,
-    UserDeviceKeysMap,
-    UserOneTimeKeysMap
+  CrossSigningKeyPayload,
+  CrossSigningKeysStore,
+  CrossSigningUploadRequest,
+  DeviceKeyRequestMap,
+  DeviceKeysPayload,
+  DeviceOneTimeKeysMap,
+  JsonObject,
+  JsonObjectMap,
+  KeysClaimRequest,
+  KeysQueryRequest,
+  KeysQueryResponse,
+  KeysUploadRequest,
+  SignaturesUploadRequest,
+  SignedKeyPayload,
+  StoredOneTimeKeyBuckets,
+  StringMap,
+  TokenSubmitRequest,
+  UIAAuthDict,
+  UiaSessionData,
+  UserCrossSigningKeyMap,
+  UserDeviceKeysMap,
+  UserOneTimeKeysMap,
 };
+
+export {
+  parseCrossSigningKeysStore,
+  parseDeviceKeysMap,
+  parseDeviceKeysPayload,
+  parseStoredOneTimeKeyBuckets,
+} from "../types/e2ee";
+
+export type { OneTimeKeyClaimMap } from "../types/client";
 
 function isPlainObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function toJsonObject(value: unknown): JsonObject | null {
-  return isPlainObject(value) ? value : null;
-}
-
-function toRecordOfStrings(value: unknown): Record<string, string> | null {
-  if (!isPlainObject(value)) {
-    return null;
-  }
-
-  const entries = Object.entries(value).map(([key, entry]) =>
-    typeof entry === "string" ? ([key, entry] as const) : null,
-  );
-
-  if (entries.some((entry) => entry === null)) {
-    return null;
-  }
-
-  return Object.fromEntries(entries as Array<readonly [string, string]>) as StringMap;
 }
 
 function toRecordOfStringRecords(value: unknown): Record<string, StringMap> | null {
@@ -73,7 +77,7 @@ function toRecordOfStringRecords(value: unknown): Record<string, StringMap> | nu
   }
 
   const entries = Object.entries(value).map(([key, entry]) => {
-    const normalized = toRecordOfStrings(entry);
+    const normalized = parseStringMap(entry);
     return normalized ? ([key, normalized] as const) : null;
   });
 
@@ -87,19 +91,13 @@ function toRecordOfStringRecords(value: unknown): Record<string, StringMap> | nu
   >;
 }
 
-function toStringArray(value: unknown): string[] | null {
-  return Array.isArray(value) && value.every((entry) => typeof entry === "string")
-    ? [...value]
-    : null;
-}
-
 function toRecordOfJsonObjects(value: unknown): JsonObjectMap | null {
   if (!isPlainObject(value)) {
     return null;
   }
 
   const entries = Object.entries(value).map(([key, entry]) => {
-    const normalized = toJsonObject(entry);
+    const normalized = parseJsonObject(entry);
     return normalized ? [key, normalized] : null;
   });
 
@@ -110,66 +108,16 @@ function toRecordOfJsonObjects(value: unknown): JsonObjectMap | null {
   return Object.fromEntries(entries as Array<[string, JsonObject]>) as JsonObjectMap;
 }
 
-function toDeviceKeysRequestMap(value: unknown): DeviceKeyRequestMap | null {
-  if (!isPlainObject(value)) {
-    return null;
-  }
-
-  const entries = Object.entries(value).map(([userId, devices]) => {
-    const normalized = toStringArray(devices);
-    return normalized ? [userId, normalized] : null;
-  });
-
-  if (entries.some((entry) => entry === null)) {
-    return null;
-  }
-
-  return Object.fromEntries(entries as Array<[string, string[]]>) as DeviceKeyRequestMap;
-}
-
-function toCrossSigningKeyPayload(value: unknown): CrossSigningKeyPayload | null {
-  if (!isPlainObject(value)) {
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
-  const userId = record["user_id"];
-  const usage = record["usage"];
-  const keys = record["keys"];
-  const signatures = record["signatures"];
-  const parsedUsage = usage === undefined ? undefined : toStringArray(usage);
-  const parsedKeys = keys === undefined ? undefined : toRecordOfStrings(keys);
-  const parsedSignatures =
-    signatures === undefined ? undefined : toRecordOfStringRecords(signatures);
-
-  if (
-    (userId !== undefined && typeof userId !== "string") ||
-    (usage !== undefined && !parsedUsage) ||
-    (keys !== undefined && !parsedKeys) ||
-    (signatures !== undefined && !parsedSignatures)
-  ) {
-    return null;
-  }
-
-  return {
-    ...(userId ? { user_id: userId } : {}),
-    ...(parsedUsage ? { usage: parsedUsage } : {}),
-    ...(parsedKeys ? { keys: parsedKeys } : {}),
-    ...(parsedSignatures ? { signatures: parsedSignatures } : {}),
-  };
-}
-
 function canonicalizeJson(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map((entry) => canonicalizeJson(entry));
   }
 
   if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value)
-        .toSorted(([left], [right]) => left.localeCompare(right))
-        .map(([key, entry]) => [key, canonicalizeJson(entry)]),
+    const sortedEntries = [...Object.entries(value)].sort(([left], [right]) =>
+      left.localeCompare(right),
     );
+    return Object.fromEntries(sortedEntries.map(([key, entry]) => [key, canonicalizeJson(entry)]));
   }
 
   return value;
@@ -212,7 +160,7 @@ function toCrossSigningKeyMap(value: unknown): UserCrossSigningKeyMap | null {
   }
 
   const entries = Object.entries(value).map(([userId, payload]) => {
-    const parsed = toCrossSigningKeyPayload(payload);
+    const parsed = parseCrossSigningKeyPayload(payload);
     return parsed ? ([userId, parsed] as const) : null;
   });
 
@@ -244,36 +192,6 @@ function toUserDeviceKeysMap(value: unknown): UserDeviceKeysMap | null {
   ) as UserDeviceKeysMap;
 }
 
-function toOneTimeClaims(value: unknown): OneTimeKeyClaimMap | null {
-  if (!isPlainObject(value)) {
-    return null;
-  }
-
-  const userEntries = Object.entries(value).map(([userId, devices]) => {
-    if (!isPlainObject(devices)) {
-      return null;
-    }
-
-    const deviceEntries = Object.entries(devices).map(([deviceId, algorithm]) =>
-      typeof algorithm === "string" ? [deviceId, algorithm] : null,
-    );
-
-    if (deviceEntries.some((entry) => entry === null)) {
-      return null;
-    }
-
-    return [userId, Object.fromEntries(deviceEntries as Array<[string, string]>)] as const;
-  });
-
-  if (userEntries.some((entry) => entry === null)) {
-    return null;
-  }
-
-  return Object.fromEntries(
-    userEntries as Array<readonly [string, StringMap]>,
-  ) as OneTimeKeyClaimMap;
-}
-
 export function parseKeysUploadRequest(value: unknown): KeysUploadRequest | null {
   if (!isPlainObject(value)) {
     return null;
@@ -282,10 +200,8 @@ export function parseKeysUploadRequest(value: unknown): KeysUploadRequest | null
   const deviceKeys = value["device_keys"];
   const oneTimeKeys = value["one_time_keys"];
   const fallbackKeys = value["fallback_keys"];
-
-  if (deviceKeys !== undefined && !isPlainObject(deviceKeys)) {
-    return null;
-  }
+  const parsedDeviceKeys =
+    deviceKeys === undefined ? undefined : parseDeviceKeysPayload(deviceKeys);
 
   const parsedOneTimeKeys =
     oneTimeKeys === undefined ? undefined : toRecordOfJsonObjects(oneTimeKeys);
@@ -293,6 +209,7 @@ export function parseKeysUploadRequest(value: unknown): KeysUploadRequest | null
     fallbackKeys === undefined ? undefined : toRecordOfJsonObjects(fallbackKeys);
 
   if (
+    (deviceKeys !== undefined && !parsedDeviceKeys) ||
     (oneTimeKeys !== undefined && !parsedOneTimeKeys) ||
     (fallbackKeys !== undefined && !parsedFallbackKeys)
   ) {
@@ -300,72 +217,14 @@ export function parseKeysUploadRequest(value: unknown): KeysUploadRequest | null
   }
 
   return {
-    ...(deviceKeys ? { device_keys: deviceKeys as DeviceKeysPayload } : {}),
+    ...(parsedDeviceKeys ? { device_keys: parsedDeviceKeys } : {}),
     ...(parsedOneTimeKeys ? { one_time_keys: parsedOneTimeKeys } : {}),
     ...(parsedFallbackKeys ? { fallback_keys: parsedFallbackKeys } : {}),
   };
 }
 
 export function parseJsonObject(value: unknown): JsonObject | null {
-  return toJsonObject(value);
-}
-
-export function parseDeviceKeysPayload(value: unknown): DeviceKeysPayload | null {
-  if (!isPlainObject(value)) {
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
-  const userId = record["user_id"];
-  const deviceId = record["device_id"];
-  const unsigned = record["unsigned"];
-  const algorithms = record["algorithms"];
-  const keys = record["keys"];
-  const signatures = record["signatures"];
-  const parsedAlgorithms = algorithms === undefined ? undefined : toStringArray(algorithms);
-  const parsedKeys = keys === undefined ? undefined : toRecordOfStrings(keys);
-  const parsedSignatures =
-    signatures === undefined ? undefined : toRecordOfStringRecords(signatures);
-
-  if (
-    (userId !== undefined && typeof userId !== "string") ||
-    (deviceId !== undefined && typeof deviceId !== "string") ||
-    (unsigned !== undefined && !isPlainObject(unsigned)) ||
-    (algorithms !== undefined && !parsedAlgorithms) ||
-    (keys !== undefined && !parsedKeys) ||
-    (signatures !== undefined && !parsedSignatures)
-  ) {
-    return null;
-  }
-
-  return {
-    ...(userId ? { user_id: userId } : {}),
-    ...(deviceId ? { device_id: deviceId } : {}),
-    ...(unsigned ? { unsigned: unsigned as JsonObject } : {}),
-    ...(parsedAlgorithms ? { algorithms: parsedAlgorithms } : {}),
-    ...(parsedKeys ? { keys: parsedKeys } : {}),
-    ...(parsedSignatures ? { signatures: parsedSignatures } : {}),
-  };
-}
-
-export function parseDeviceKeysMap(value: unknown): Record<string, DeviceKeysPayload> | null {
-  if (!isPlainObject(value)) {
-    return null;
-  }
-
-  const entries = Object.entries(value).map(([deviceId, payload]) => {
-    const parsed = parseDeviceKeysPayload(payload);
-    return parsed ? ([deviceId, parsed] as const) : null;
-  });
-
-  if (entries.some((entry) => entry === null)) {
-    return null;
-  }
-
-  return Object.fromEntries(entries as Array<readonly [string, DeviceKeysPayload]>) as Record<
-    string,
-    DeviceKeysPayload
-  >;
+  return parseJsonObjectValue(value);
 }
 
 export function parseKeysQueryRequest(value: unknown): KeysQueryRequest | null {
@@ -378,7 +237,7 @@ export function parseKeysQueryRequest(value: unknown): KeysQueryRequest | null {
     return {};
   }
 
-  const parsed = toDeviceKeysRequestMap(requested);
+  const parsed = parseDeviceKeyRequestMap(requested);
   return parsed ? { device_keys: parsed } : null;
 }
 
@@ -426,7 +285,7 @@ export function parseKeysClaimRequest(value: unknown): KeysClaimRequest | null {
     return {};
   }
 
-  const parsed = toOneTimeClaims(requested);
+  const parsed = parseOneTimeKeyClaimMap(requested);
   return parsed ? { one_time_keys: parsed } : null;
 }
 
@@ -441,44 +300,26 @@ export function parseCrossSigningUploadRequest(value: unknown): CrossSigningUplo
   const userSigning = record["user_signing_key"];
   const auth = record["auth"];
 
+  const parsedMaster = master === undefined ? undefined : parseCrossSigningKeyPayload(master);
+  const parsedSelfSigning =
+    selfSigning === undefined ? undefined : parseCrossSigningKeyPayload(selfSigning);
+  const parsedUserSigning =
+    userSigning === undefined ? undefined : parseCrossSigningKeyPayload(userSigning);
+
   if (
-    (master !== undefined && !isPlainObject(master)) ||
-    (selfSigning !== undefined && !isPlainObject(selfSigning)) ||
-    (userSigning !== undefined && !isPlainObject(userSigning)) ||
+    (master !== undefined && !parsedMaster) ||
+    (selfSigning !== undefined && !parsedSelfSigning) ||
+    (userSigning !== undefined && !parsedUserSigning) ||
     (auth !== undefined && !isPlainObject(auth))
   ) {
     return null;
   }
 
   return {
-    ...(master ? { master_key: master as CrossSigningKeyPayload } : {}),
-    ...(selfSigning ? { self_signing_key: selfSigning as CrossSigningKeyPayload } : {}),
-    ...(userSigning ? { user_signing_key: userSigning as CrossSigningKeyPayload } : {}),
+    ...(parsedMaster ? { master_key: parsedMaster } : {}),
+    ...(parsedSelfSigning ? { self_signing_key: parsedSelfSigning } : {}),
+    ...(parsedUserSigning ? { user_signing_key: parsedUserSigning } : {}),
     ...(auth ? { auth: auth as UIAAuthDict } : {}),
-  };
-}
-
-export function parseCrossSigningKeysStore(value: unknown): CrossSigningKeysStore | null {
-  if (!isPlainObject(value)) {
-    return null;
-  }
-
-  const master = value["master"];
-  const selfSigning = value["self_signing"];
-  const userSigning = value["user_signing"];
-
-  if (
-    (master !== undefined && !toCrossSigningKeyPayload(master)) ||
-    (selfSigning !== undefined && !toCrossSigningKeyPayload(selfSigning)) ||
-    (userSigning !== undefined && !toCrossSigningKeyPayload(userSigning))
-  ) {
-    return null;
-  }
-
-  return {
-    ...(master ? { master: toCrossSigningKeyPayload(master)! } : {}),
-    ...(selfSigning ? { self_signing: toCrossSigningKeyPayload(selfSigning)! } : {}),
-    ...(userSigning ? { user_signing: toCrossSigningKeyPayload(userSigning)! } : {}),
   };
 }
 
@@ -569,7 +410,7 @@ export function parseUiaSessionData(value: unknown): UiaSessionData | null {
     typeof userId !== "string" ||
     typeof createdAt !== "number" ||
     typeof type !== "string" ||
-    (completedStages !== undefined && !toStringArray(completedStages)) ||
+    (completedStages !== undefined && !parseStringArray(completedStages)) ||
     (redirectUrl !== undefined && typeof redirectUrl !== "string") ||
     (isOidcUser !== undefined && typeof isOidcUser !== "boolean") ||
     (hasPassword !== undefined && typeof hasPassword !== "boolean") ||
@@ -581,59 +422,14 @@ export function parseUiaSessionData(value: unknown): UiaSessionData | null {
 
   return {
     ...value,
-    user_id: userId,
+    user_id: userId as UiaSessionData["user_id"],
     created_at: createdAt,
     type,
-    completed_stages: toStringArray(completedStages) ?? [],
+    completed_stages: parseStringArray(completedStages) ?? [],
     ...(redirectUrl ? { redirect_url: redirectUrl } : {}),
     ...(isOidcUser !== undefined ? { is_oidc_user: isOidcUser } : {}),
     ...(hasPassword !== undefined ? { has_password: hasPassword } : {}),
     ...(ssoCompletedAt !== undefined ? { sso_completed_at: ssoCompletedAt } : {}),
     ...(tokenCompletedAt !== undefined ? { token_completed_at: tokenCompletedAt } : {}),
   };
-}
-
-export function parseStoredOneTimeKeyBuckets(value: unknown): StoredOneTimeKeyBuckets | null {
-  if (!isPlainObject(value)) {
-    return null;
-  }
-
-  const entries = Object.entries(value).map(([algorithm, keys]) => {
-    if (!Array.isArray(keys)) {
-      return null;
-    }
-
-    const normalizedKeys = keys.map((entry) => {
-      if (!isPlainObject(entry)) {
-        return null;
-      }
-
-      const keyId = entry["keyId"];
-      const keyData = entry["keyData"];
-      const claimed = entry["claimed"];
-      if (typeof keyId !== "string" || !isPlainObject(keyData) || typeof claimed !== "boolean") {
-        return null;
-      }
-
-      return {
-        keyId,
-        keyData,
-        claimed,
-      } satisfies StoredOneTimeKey;
-    });
-
-    if (normalizedKeys.some((entry) => entry === null)) {
-      return null;
-    }
-
-    return [algorithm, normalizedKeys as StoredOneTimeKey[]] as const;
-  });
-
-  if (entries.some((entry) => entry === null)) {
-    return null;
-  }
-
-  return Object.fromEntries(
-    entries as Array<readonly [string, StoredOneTimeKey[]]>,
-  ) as StoredOneTimeKeyBuckets;
 }

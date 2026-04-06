@@ -49,8 +49,6 @@ export class SyncDurableObject extends DurableObject<Env> {
   // Waiting resolvers for long-polling requests
   private waitingResolvers: Array<(hasEvents: boolean) => void> = [];
 
-  
-
   fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -346,12 +344,7 @@ export class SyncDurableObject extends DurableObject<Env> {
     }
   }
 
-  webSocketClose(
-    ws: WebSocket,
-    code: number,
-    reason: string,
-    _wasClean: boolean,
-  ): Promise<void> {
+  webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
     const session = ws.deserializeAttachment() as SyncSession | null;
     if (session) {
       this.sessions.delete(ws);

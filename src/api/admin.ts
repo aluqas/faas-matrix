@@ -481,7 +481,7 @@ app.get("/admin/api/federation/status", requireAuth(), requireAdmin, async (c) =
   return c.json({
     server_name: serverName,
     federation_enabled: true,
-    signing_key_id: signingKeyId || `ed25519:a_${serverName.replaceAll('.', "_").slice(0, 4)}`,
+    signing_key_id: signingKeyId || `ed25519:a_${serverName.replaceAll(".", "_").slice(0, 4)}`,
     known_servers_count: serversCount?.count || 0,
   });
 });
@@ -2551,48 +2551,47 @@ app.put("/_synapse/admin/v2/users/:userId", requireAuth(), requireAdmin, async (
       deactivated: deactivated !== undefined ? deactivated : null,
     });
   }
-    // Create new user
-    if (!password) {
-      return Errors.missingParam("password required for new user").toResponse();
-    }
+  // Create new user
+  if (!password) {
+    return Errors.missingParam("password required for new user").toResponse();
+  }
 
-    // Extract localpart from user_id
-    const match = userId.match(/^@([^:]+):/);
-    if (!match) {
-      return c.json({ errcode: "M_INVALID_USERNAME", error: "Invalid user ID format" }, 400);
-    }
-    const localpart = match[1];
+  // Extract localpart from user_id
+  const match = userId.match(/^@([^:]+):/);
+  if (!match) {
+    return c.json({ errcode: "M_INVALID_USERNAME", error: "Invalid user ID format" }, 400);
+  }
+  const localpart = match[1];
 
-    const { hashPassword } = await import("../utils/crypto");
-    const passwordHash = await hashPassword(password);
+  const { hashPassword } = await import("../utils/crypto");
+  const passwordHash = await hashPassword(password);
 
-    await db
-      .prepare(`
+  await db
+    .prepare(`
       INSERT INTO users (user_id, localpart, password_hash, display_name, avatar_url, admin, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `)
-      .bind(
-        userId,
-        localpart,
-        passwordHash,
-        displayname || null,
-        avatar_url || null,
-        admin ? 1 : 0,
-        Date.now(),
-        Date.now(),
-      )
-      .run();
+    .bind(
+      userId,
+      localpart,
+      passwordHash,
+      displayname || null,
+      avatar_url || null,
+      admin ? 1 : 0,
+      Date.now(),
+      Date.now(),
+    )
+    .run();
 
-    // Invalidate stats cache
-    await invalidateStatsCache(c.env);
+  // Invalidate stats cache
+  await invalidateStatsCache(c.env);
 
-    return c.json({
-      name: userId,
-      displayname: displayname || null,
-      admin: admin || false,
-      deactivated: false,
-    });
-  
+  return c.json({
+    name: userId,
+    displayname: displayname || null,
+    admin: admin || false,
+    deactivated: false,
+  });
 });
 
 // ============================================

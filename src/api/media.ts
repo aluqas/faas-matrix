@@ -461,15 +461,15 @@ function decodeHtmlEntities(text: string): string {
   // Use a proper HTML entity decoder that handles all entities correctly
   // and prevents double-decoding by checking if the text is already decoded
   const decoded = text
-    .replaceAll('&amp;', "__AMP__") // Temporarily replace to prevent double-decode
-    .replaceAll('&lt;', "<")
-    .replaceAll('&gt;', ">")
-    .replaceAll('&quot;', '"')
-    .replaceAll('&#039;', "'")
-    .replaceAll('&#x27;', "'")
-    .replaceAll('&#x2F;', "/")
-    .replaceAll('&nbsp;', " ")
-    .replaceAll('__AMP__', "&"); // Restore ampersands last
+    .replaceAll("&amp;", "__AMP__") // Temporarily replace to prevent double-decode
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#039;", "'")
+    .replaceAll("&#x27;", "'")
+    .replaceAll("&#x2F;", "/")
+    .replaceAll("&nbsp;", " ")
+    .replaceAll("__AMP__", "&"); // Restore ampersands last
   return decoded;
 }
 

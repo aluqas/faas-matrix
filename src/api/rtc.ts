@@ -171,12 +171,7 @@ app.post("/livekit/get_token/sfu/get", async (c) => {
   let body: GetTokenRequest;
   try {
     const rawBody = await c.req.text();
-    console.log(
-      "[LiveKit] Raw body length:",
-      rawBody.length,
-      "preview:",
-      rawBody.slice(0, 200),
-    );
+    console.log("[LiveKit] Raw body length:", rawBody.length, "preview:", rawBody.slice(0, 200));
     body = JSON.parse(rawBody);
   } catch (e) {
     console.log("[LiveKit] JSON parse error:", e);

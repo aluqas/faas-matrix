@@ -17,7 +17,7 @@ function escapeRegex(pattern: string): string {
 }
 
 function patternToRegExp(pattern: string): RegExp {
-  return new RegExp(`^${escapeRegex(pattern.toLowerCase()).replaceAll('\\*', ".*")}$`, "i");
+  return new RegExp(`^${escapeRegex(pattern.toLowerCase()).replaceAll("\\*", ".*")}$`, "i");
 }
 
 function isIpLiteral(serverName: string): boolean {

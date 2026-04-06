@@ -31,14 +31,14 @@ function generateRandomString(length: number = 32): string {
 // Base64URL encode
 function base64UrlEncode(data: Uint8Array): string {
   return btoa(String.fromCodePoint(...data))
-    .replaceAll('+', "-")
-    .replaceAll('/', "_")
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
     .replace(/=+$/, "");
 }
 
 // Base64URL decode (for future JWT parsing)
 function base64UrlDecode(str: string): Uint8Array {
-  const base64 = str.replaceAll('-', "+").replaceAll('_', "/");
+  const base64 = str.replaceAll("-", "+").replaceAll("_", "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = atob(padded);
   return Uint8Array.from(binary, (c) => c.codePointAt(0));
@@ -572,14 +572,13 @@ app.post("/oauth/token", async (c) => {
       scope: tokenData.scope,
     });
   }
-    return c.json(
-      {
-        error: "unsupported_grant_type",
-        error_description: "Only authorization_code and refresh_token grants are supported",
-      },
-      400,
-    );
-  
+  return c.json(
+    {
+      error: "unsupported_grant_type",
+      error_description: "Only authorization_code and refresh_token grants are supported",
+    },
+    400,
+  );
 });
 
 // ============================================
@@ -892,11 +891,11 @@ function generateLoginPage(
 
 function escapeHtml(str: string): string {
   return str
-    .replaceAll('&', "&amp;")
-    .replaceAll('<', "&lt;")
-    .replaceAll('>', "&gt;")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
-    .replaceAll('\'', "&#039;");
+    .replaceAll("'", "&#039;");
 }
 
 // ============================================

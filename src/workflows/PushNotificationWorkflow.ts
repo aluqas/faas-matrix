@@ -454,15 +454,14 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
           .run();
         return true;
       }
-        // Update pusher failure
-        await this.env.DB.prepare(`
+      // Update pusher failure
+      await this.env.DB.prepare(`
           UPDATE pushers SET last_failure = ?, failure_count = failure_count + 1
           WHERE user_id = ? AND pushkey = ? AND app_id = ?
         `)
-          .bind(Date.now(), userId, pusher.pushkey, pusher.appId)
-          .run();
-        return false;
-      
+        .bind(Date.now(), userId, pusher.pushkey, pusher.appId)
+        .run();
+      return false;
     } catch (error) {
       // Update pusher failure
       await this.env.DB.prepare(`

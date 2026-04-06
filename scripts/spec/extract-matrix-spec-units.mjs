@@ -7,9 +7,9 @@ const specRoot = path.join(repoRoot, ".saqula", "matrix-spec");
 function slugify(value) {
   return value
     .toLowerCase()
-    .replaceAll(/`/g, "")
+    .replaceAll('`', "")
     .replaceAll(/\{#.*\}/g, "")
-    .replaceAll(/&/g, "and")
+    .replaceAll('&', "and")
     .replaceAll(/[^a-z0-9]+/g, "-")
     .replaceAll(/^-+|-+$/g, "");
 }

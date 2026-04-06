@@ -657,9 +657,9 @@ app.post("/_matrix/client/v3/user/:userId/openid/request_token", requireAuth(), 
   // This token can be exchanged with third-party services to prove identity
   const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
   const accessToken = btoa(String.fromCodePoint(...tokenBytes))
-    .replaceAll('+', "-")
-    .replaceAll('/', "_")
-    .replaceAll('=', "");
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
 
   // Token expires in 1 hour (3600 seconds)
   const expiresIn = 3600;

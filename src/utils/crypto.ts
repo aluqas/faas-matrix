@@ -77,13 +77,13 @@ export async function sha256(data: string | Uint8Array): Promise<string> {
   const bytes = typeof data === "string" ? encoder.encode(data) : data;
   const hash = await crypto.subtle.digest("SHA-256", bytes);
   return btoa(String.fromCodePoint(...new Uint8Array(hash)))
-    .replaceAll('+', "-")
-    .replaceAll('/', "_")
-    .replaceAll('=', "");
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
 }
 
 export function encodeUnpaddedBase64(bytes: Uint8Array): string {
-  return btoa(String.fromCodePoint(...bytes)).replaceAll('=', "");
+  return btoa(String.fromCodePoint(...bytes)).replaceAll("=", "");
 }
 
 export function decodeUnpaddedBase64(str: string): Uint8Array {
@@ -606,7 +606,9 @@ export async function verifyContentHash(
   const actualHash = await calculateContentHash(content);
   try {
     const actualBytes = decodeUnpaddedBase64(actualHash);
-    const expectedBytes = decodeUnpaddedBase64(expectedHash.replaceAll('-', "+").replaceAll('_', "/"));
+    const expectedBytes = decodeUnpaddedBase64(
+      expectedHash.replaceAll("-", "+").replaceAll("_", "/"),
+    );
     if (actualBytes.length !== expectedBytes.length) {
       return false;
     }

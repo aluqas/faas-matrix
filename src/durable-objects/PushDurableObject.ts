@@ -57,8 +57,6 @@ export class PushDurableObject extends DurableObject<Env> {
   private jwtCache: JWTCache | null = null;
   private pendingPushes: Map<string, PendingPush> = new Map();
 
-  
-
   fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -272,10 +270,10 @@ export class PushDurableObject extends DurableObject<Env> {
   private importPrivateKey(pemKey: string): Promise<CryptoKey> {
     // Remove PEM headers and decode
     const pemContents = pemKey
-      .replaceAll('-----BEGIN PRIVATE KEY-----', "")
-      .replaceAll('-----END PRIVATE KEY-----', "")
-      .replaceAll('-----BEGIN EC PRIVATE KEY-----', "")
-      .replaceAll('-----END EC PRIVATE KEY-----', "")
+      .replaceAll("-----BEGIN PRIVATE KEY-----", "")
+      .replaceAll("-----END PRIVATE KEY-----", "")
+      .replaceAll("-----BEGIN EC PRIVATE KEY-----", "")
+      .replaceAll("-----END EC PRIVATE KEY-----", "")
       .replaceAll(/\s/g, "");
 
     const binaryKey = Uint8Array.from(atob(pemContents), (c) => c.codePointAt(0));
@@ -297,7 +295,7 @@ export class PushDurableObject extends DurableObject<Env> {
     } else {
       base64 = btoa(String.fromCodePoint(...input));
     }
-    return base64.replaceAll('+', "-").replaceAll('/', "_").replace(/=+$/, "");
+    return base64.replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
   }
 
   // Convert DER signature to raw format (for ECDSA P-256)

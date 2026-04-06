@@ -120,7 +120,16 @@ function getHistoryVisibilityAtEvent(
   let visibility: HistoryVisibility = "shared";
 
   for (const row of historyRows) {
-    if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) > 0) {
+    if (
+      compareEventOrder(
+        {
+          event_id: row.event_id as EventId,
+          origin_server_ts: row.origin_server_ts,
+          depth: row.depth,
+        },
+        event,
+      ) > 0
+    ) {
       break;
     }
 
@@ -138,7 +147,16 @@ function getHistoryVisibilityBeforeEvent(
   let hasPriorEvent = false;
 
   for (const row of historyRows) {
-    if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) >= 0) {
+    if (
+      compareEventOrder(
+        {
+          event_id: row.event_id as EventId,
+          origin_server_ts: row.origin_server_ts,
+          depth: row.depth,
+        },
+        event,
+      ) >= 0
+    ) {
       break;
     }
 
@@ -161,7 +179,16 @@ function getMembershipAtOrBeforeEvent(
       continue;
     }
 
-    if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) > 0) {
+    if (
+      compareEventOrder(
+        {
+          event_id: row.event_id as EventId,
+          origin_server_ts: row.origin_server_ts,
+          depth: row.depth,
+        },
+        event,
+      ) > 0
+    ) {
       break;
     }
 
@@ -183,7 +210,16 @@ function getMembershipBeforeEvent(
       continue;
     }
 
-    if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) >= 0) {
+    if (
+      compareEventOrder(
+        {
+          event_id: row.event_id as EventId,
+          origin_server_ts: row.origin_server_ts,
+          depth: row.depth,
+        },
+        event,
+      ) >= 0
+    ) {
       break;
     }
 
@@ -199,7 +235,16 @@ function joinedAfterEvent(event: PDU, membershipRows: MembershipRow[], userId: s
       continue;
     }
 
-    if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) <= 0) {
+    if (
+      compareEventOrder(
+        {
+          event_id: row.event_id as EventId,
+          origin_server_ts: row.origin_server_ts,
+          depth: row.depth,
+        },
+        event,
+      ) <= 0
+    ) {
       continue;
     }
 
@@ -287,7 +332,16 @@ function isServerAllowedToSeeEventAtHistoryVisibility(
       continue;
     }
 
-        if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) <= 0) {
+    if (
+      compareEventOrder(
+        {
+          event_id: row.event_id as EventId,
+          origin_server_ts: row.origin_server_ts,
+          depth: row.depth,
+        },
+        event,
+      ) <= 0
+    ) {
     }
 
     if (membership === "invite" && historyVisibility === "invited") {
