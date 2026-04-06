@@ -14,11 +14,11 @@ const SECTION_BY_FAMILY = {
 export function normalize(value = "") {
   return value
     .toLowerCase()
-    .replace(/`/g, "")
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replaceAll(/`/g, "")
+    .replaceAll(/&/g, "and")
+    .replaceAll(/[^a-z0-9]+/g, " ")
     .trim()
-    .replace(/\s+/g, " ");
+    .replaceAll(/\s+/g, " ");
 }
 
 function isDividerLine(line) {
@@ -33,11 +33,11 @@ function parseTableCells(line) {
 }
 
 function normalizeHeader(header) {
-  return normalize(header).replace(/\s+/g, "_");
+  return normalize(header).replaceAll(/\s+/g, "_");
 }
 
 function stripCodeTicks(value = "") {
-  return value.replace(/^`|`$/g, "").trim();
+  return value.replaceAll(/^`|`$/g, "").trim();
 }
 
 function rowTitleFromCells(cells) {

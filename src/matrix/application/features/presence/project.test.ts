@@ -21,7 +21,7 @@ class FakePresenceDatabase {
         boundArgs = args;
         return this;
       },
-      all: async () => {
+      all: () => {
         if (query.includes("FROM room_state rs")) {
           return {
             results: this.visibleUsers.map((user_id) => ({ user_id })),

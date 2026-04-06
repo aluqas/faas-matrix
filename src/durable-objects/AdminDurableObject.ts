@@ -48,11 +48,9 @@ export class AdminDurableObject extends DurableObject<Env> {
   private statsCache: ServerStats | null = null;
   private statsCacheTime: number = 0;
 
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
-  }
+  
 
-  async fetch(request: Request): Promise<Response> {
+  fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -244,7 +242,7 @@ export class AdminDurableObject extends DurableObject<Env> {
     return new Response("OK");
   }
 
-  private async broadcastToAdmins(message: unknown): Promise<void> {
+  private broadcastToAdmins(message: unknown): Promise<void> {
     const messageStr = JSON.stringify(message);
     const webSockets = this.ctx.getWebSockets("admin");
 
@@ -295,7 +293,7 @@ export class AdminDurableObject extends DurableObject<Env> {
     // WebSocket is already closed, no action needed
   }
 
-  async webSocketError(_ws: WebSocket, error: unknown): Promise<void> {
+  webSocketError(_ws: WebSocket, error: unknown): Promise<void> {
     console.error("Admin WebSocket error:", error);
   }
 

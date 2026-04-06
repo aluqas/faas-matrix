@@ -59,7 +59,7 @@ describe("rooms moderation helpers", () => {
       membership: "leave",
       reason: "cleanup",
       serverName: "test",
-      generateEventId: async () => "$generated",
+      generateEventId: () => "$generated",
       now: () => 4,
       createEvent: {
         event_id: "$create",

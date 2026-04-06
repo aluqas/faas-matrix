@@ -273,7 +273,7 @@ app.put("/_matrix/client/v1/rooms/:roomId/call", requireAuth(), async (c) => {
   }
 
   // Store the updated m.call.member state event
-  const eventId = `$${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  const eventId = `$${Date.now()}_${Math.random().toString(36).slice(2, 15)}`;
   const content = { memberships };
   const now = Date.now();
 
@@ -366,7 +366,7 @@ app.delete("/_matrix/client/v1/rooms/:roomId/call", requireAuth(), async (c) => 
   const newMemberships = memberships.filter((m) => m.device_id !== targetDeviceId);
 
   // Store the updated m.call.member state event (with empty or reduced memberships)
-  const eventId = `$${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  const eventId = `$${Date.now()}_${Math.random().toString(36).slice(2, 15)}`;
   const content = { memberships: newMemberships };
   const now = Date.now();
 

@@ -31,8 +31,8 @@ export async function hashPassword(password: string): Promise<string> {
   );
 
   // Format: $pbkdf2-sha256$iterations$salt$hash
-  const saltB64 = btoa(String.fromCharCode(...salt));
-  const hashB64 = btoa(String.fromCharCode(...new Uint8Array(hash)));
+  const saltB64 = btoa(String.fromCodePoint(...salt));
+  const hashB64 = btoa(String.fromCodePoint(...new Uint8Array(hash)));
   return `$pbkdf2-sha256$100000$${saltB64}$${hashB64}`;
 }
 
@@ -44,7 +44,7 @@ export async function verifyPassword(password: string, storedHash: string): Prom
   }
 
   const iterations = parseInt(parts[2], 10);
-  const salt = Uint8Array.from(atob(parts[3]), (c) => c.charCodeAt(0));
+  const salt = Uint8Array.from(atob(parts[3]), (c) => c.codePointAt(0));
   const expectedHash = parts[4];
 
   const encoder = new TextEncoder();
@@ -67,7 +67,7 @@ export async function verifyPassword(password: string, storedHash: string): Prom
     256,
   );
 
-  const hashB64 = btoa(String.fromCharCode(...new Uint8Array(hash)));
+  const hashB64 = btoa(String.fromCodePoint(...new Uint8Array(hash)));
   return hashB64 === expectedHash;
 }
 
@@ -76,20 +76,20 @@ export async function sha256(data: string | Uint8Array): Promise<string> {
   const encoder = new TextEncoder();
   const bytes = typeof data === "string" ? encoder.encode(data) : data;
   const hash = await crypto.subtle.digest("SHA-256", bytes);
-  return btoa(String.fromCharCode(...new Uint8Array(hash)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
+  return btoa(String.fromCodePoint(...new Uint8Array(hash)))
+    .replaceAll('+', "-")
+    .replaceAll('/', "_")
+    .replaceAll('=', "");
 }
 
 export function encodeUnpaddedBase64(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes)).replace(/=/g, "");
+  return btoa(String.fromCodePoint(...bytes)).replaceAll('=', "");
 }
 
 export function decodeUnpaddedBase64(str: string): Uint8Array {
   const padded = str + "=".repeat((4 - (str.length % 4)) % 4);
   const binary = atob(padded);
-  return new Uint8Array([...binary].map((c) => c.charCodeAt(0)));
+  return new Uint8Array([...binary].map((c) => c.codePointAt(0)));
 }
 
 export function decodeMatrixBase64(str: string): Uint8Array {
@@ -112,7 +112,7 @@ async function sha256UnpaddedBase64(data: string | Uint8Array): Promise<string> 
 }
 
 // Hash an access token for storage
-export async function hashToken(token: string): Promise<string> {
+export function hashToken(token: string): Promise<string> {
   return sha256(token);
 }
 
@@ -305,7 +305,7 @@ export function canonicalJson(obj: unknown): string {
   }
 
   if (typeof obj === "object") {
-    const keys = Object.keys(obj).sort();
+    const keys = Object.keys(obj).toSorted();
     const pairs = keys
       .filter((key) => (obj as Record<string, unknown>)[key] !== undefined)
       .map((key) => {
@@ -544,21 +544,21 @@ function redactEventForReferenceHash(
   return redacted;
 }
 
-export async function calculateReferenceHash(
+export function calculateReferenceHash(
   event: Record<string, unknown>,
   roomVersion?: string,
 ): Promise<string> {
   return calculateReferenceHashWithEncoding(event, roomVersion, "urlsafe");
 }
 
-export async function calculateReferenceHashStandard(
+export function calculateReferenceHashStandard(
   event: Record<string, unknown>,
   roomVersion?: string,
 ): Promise<string> {
   return calculateReferenceHashWithEncoding(event, roomVersion, "standard");
 }
 
-async function calculateReferenceHashWithEncoding(
+function calculateReferenceHashWithEncoding(
   event: Record<string, unknown>,
   roomVersion: string | undefined,
   encoding: "urlsafe" | "standard",
@@ -587,7 +587,7 @@ export async function calculateReferenceHashEventIdStandard(
 }
 
 // Calculate content hash for PDU
-export async function calculateContentHash(content: Record<string, unknown>): Promise<string> {
+export function calculateContentHash(content: Record<string, unknown>): Promise<string> {
   // Remove signatures and unsigned before hashing
   const toHash = { ...content };
   delete toHash["signatures"];
@@ -606,7 +606,7 @@ export async function verifyContentHash(
   const actualHash = await calculateContentHash(content);
   try {
     const actualBytes = decodeUnpaddedBase64(actualHash);
-    const expectedBytes = decodeUnpaddedBase64(expectedHash.replace(/-/g, "+").replace(/_/g, "/"));
+    const expectedBytes = decodeUnpaddedBase64(expectedHash.replaceAll('-', "+").replaceAll('_', "/"));
     if (actualBytes.length !== expectedBytes.length) {
       return false;
     }

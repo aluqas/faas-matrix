@@ -5,7 +5,7 @@ import { openApiUnitsPath, repoRoot } from "./paths.mjs";
 const specRoot = path.join(repoRoot, ".saqula", "matrix-spec", "data", "api");
 
 function normalizePathKey(rawPath) {
-  return rawPath.replace(/^["']|["']$/g, "");
+  return rawPath.replaceAll(/^["']|["']$/g, "");
 }
 
 function leadingSpaces(line) {
@@ -16,14 +16,14 @@ function leadingSpaces(line) {
 function slugifyPath(value) {
   return value
     .toLowerCase()
-    .replace(/[{}]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replaceAll(/[{}]/g, "")
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "");
 }
 
 async function extractSpec(specName) {
   const dirPath = path.join(specRoot, specName);
-  const files = (await readdir(dirPath)).filter((entry) => entry.endsWith(".yaml")).sort();
+  const files = (await readdir(dirPath)).filter((entry) => entry.endsWith(".yaml")).toSorted();
   const specUnits = [];
 
   for (const entry of files) {

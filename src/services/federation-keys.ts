@@ -144,7 +144,7 @@ export async function fetchRemoteServerKeys(
       return dbKeys.results;
     }
 
-    throw new Error(`Cannot fetch signing keys from ${serverName}`);
+    throw new Error(`Cannot fetch signing keys from ${serverName}`, { cause: error });
   }
 }
 

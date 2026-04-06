@@ -9,30 +9,30 @@ class FakeFederationRepository implements FederationRepository {
   cached: Record<string, unknown> | null = null;
   storedResponses: Array<{ origin: string; txnId: string; response: Record<string, unknown> }> = [];
 
-  async getCachedTransaction() {
+  getCachedTransaction() {
     return this.cached;
   }
-  async storeCachedTransaction(origin: string, txnId: string, response: Record<string, unknown>) {
+  storeCachedTransaction(origin: string, txnId: string, response: Record<string, unknown>) {
     this.storedResponses.push({ origin, txnId, response });
   }
-  async getProcessedPdu() {
+  getProcessedPdu() {
     return null;
   }
   async recordProcessedPdu() {}
   async createRoom() {}
-  async getRoom(roomId: string) {
+  getRoom(roomId: string) {
     if (roomId === "!room:test") {
       return { room_id: roomId, room_version: "10", is_public: true, created_at: 1 };
     }
     return null;
   }
-  async getEvent() {
+  getEvent() {
     return null;
   }
-  async getLatestRoomEvents() {
+  getLatestRoomEvents() {
     return [];
   }
-  async getRoomState(roomId: string) {
+  getRoomState(roomId: string) {
     if (roomId !== "!room:test") {
       return [];
     }
@@ -51,7 +51,7 @@ class FakeFederationRepository implements FederationRepository {
       },
     ];
   }
-  async getInviteStrippedState() {
+  getInviteStrippedState() {
     return [];
   }
   async storeIncomingEvent() {}
@@ -71,30 +71,30 @@ function createAppContext(): AppContext {
       blob: {},
       jobs: { defer() {} },
       workflow: {
-        async createRoomJoin() {
+        createRoomJoin() {
           return {};
         },
-        async createPushNotification() {
+        createPushNotification() {
           return {};
         },
       },
       rateLimit: {},
       realtime: {
         async notifyRoomEvent() {},
-        async waitForUserEvents() {
+        waitForUserEvents() {
           return { hasEvents: false };
         },
       },
       metrics: {},
       clock: { now: () => 1234 },
       id: {
-        async generateRoomId() {
+        generateRoomId() {
           return "!room:test";
         },
-        async generateEventId() {
+        generateEventId() {
           return "$event:test";
         },
-        async generateOpaqueId() {
+        generateOpaqueId() {
           return "opaque";
         },
         formatRoomAlias(localpart: string, serverName: string) {

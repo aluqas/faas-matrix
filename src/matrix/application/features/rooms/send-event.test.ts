@@ -141,7 +141,7 @@ describe("rooms send-event helpers", () => {
         },
       ],
       serverName: "test",
-      generateEventId: async () => "$generated",
+      generateEventId: () => "$generated",
       now: () => 4,
     });
 

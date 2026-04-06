@@ -29,7 +29,7 @@ const ENCRYPTION_VERSION_LEGACY = 0x01;
 const ENCRYPTION_VERSION_SECURE = 0x02;
 
 // Get the encryption key (prefer OIDC_ENCRYPTION_KEY, fall back to SERVER_NAME for legacy)
-async function getEncryptionKey(
+function getEncryptionKey(
   env: { SERVER_NAME: string; OIDC_ENCRYPTION_KEY?: string },
   version: number,
 ): Promise<CryptoKey> {
@@ -37,7 +37,7 @@ async function getEncryptionKey(
 
   if (version === ENCRYPTION_VERSION_SECURE && env.OIDC_ENCRYPTION_KEY) {
     // Use the secure key (base64-encoded 32 bytes)
-    const keyBytes = Uint8Array.from(atob(env.OIDC_ENCRYPTION_KEY), (c) => c.charCodeAt(0));
+    const keyBytes = Uint8Array.from(atob(env.OIDC_ENCRYPTION_KEY), (c) => c.codePointAt(0));
     if (keyBytes.length !== 32) {
       throw new Error("OIDC_ENCRYPTION_KEY must be 32 bytes (base64 encoded)");
     }
@@ -81,7 +81,7 @@ async function encryptSecret(
   combined.set(iv, 1);
   combined.set(encryptedBytes, 1 + iv.length);
 
-  return btoa(String.fromCharCode(...combined));
+  return btoa(String.fromCodePoint(...combined));
 }
 
 // Decrypt a secret
@@ -90,7 +90,7 @@ async function decryptSecret(
   encryptedSecret: string,
   env: { SERVER_NAME: string; OIDC_ENCRYPTION_KEY?: string },
 ): Promise<string> {
-  const combined = Uint8Array.from(atob(encryptedSecret), (c) => c.charCodeAt(0));
+  const combined = Uint8Array.from(atob(encryptedSecret), (c) => c.codePointAt(0));
 
   // Check if this is a versioned secret (starts with 0x01 or 0x02)
   let version: number;
@@ -469,7 +469,7 @@ Device ID: ${deviceId}\`;
 // GET /_matrix/client/v1/auth_metadata - Get authentication metadata
 // Returns information about supported authentication methods (MSC2965 / Matrix v1.17)
 // This is the STABLE endpoint as of Matrix v1.17
-app.get("/_matrix/client/v1/auth_metadata", async (c) => {
+app.get("/_matrix/client/v1/auth_metadata", (c) => {
   const serverName = c.env.SERVER_NAME;
   const baseUrl = `https://${serverName}`;
 

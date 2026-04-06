@@ -30,18 +30,18 @@ function generateRandomString(length: number = 32): string {
 
 // Base64URL encode
 function base64UrlEncode(data: Uint8Array): string {
-  return btoa(String.fromCharCode(...data))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
+  return btoa(String.fromCodePoint(...data))
+    .replaceAll('+', "-")
+    .replaceAll('/', "_")
     .replace(/=+$/, "");
 }
 
 // Base64URL decode (for future JWT parsing)
 function base64UrlDecode(str: string): Uint8Array {
-  const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  const base64 = str.replaceAll('-', "+").replaceAll('_', "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = atob(padded);
-  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return Uint8Array.from(binary, (c) => c.codePointAt(0));
 }
 
 // Verify PKCE code challenge
@@ -571,7 +571,7 @@ app.post("/oauth/token", async (c) => {
       refresh_token: newRefreshToken,
       scope: tokenData.scope,
     });
-  } else {
+  }
     return c.json(
       {
         error: "unsupported_grant_type",
@@ -579,7 +579,7 @@ app.post("/oauth/token", async (c) => {
       },
       400,
     );
-  }
+  
 });
 
 // ============================================
@@ -604,12 +604,12 @@ async function buildUserInfoResponse(c: any, userId: string) {
 }
 
 // GET /oauth/userinfo - Get user information
-app.get("/oauth/userinfo", requireAuth(), async (c) => {
+app.get("/oauth/userinfo", requireAuth(), (c) => {
   return buildUserInfoResponse(c, c.get("userId"));
 });
 
 // POST /oauth/userinfo - Same as GET (some clients use POST)
-app.post("/oauth/userinfo", requireAuth(), async (c) => {
+app.post("/oauth/userinfo", requireAuth(), (c) => {
   return buildUserInfoResponse(c, c.get("userId"));
 });
 
@@ -892,11 +892,11 @@ function generateLoginPage(
 
 function escapeHtml(str: string): string {
   return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replaceAll('&', "&amp;")
+    .replaceAll('<', "&lt;")
+    .replaceAll('>', "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll('\'', "&#039;");
 }
 
 // ============================================
@@ -1120,7 +1120,7 @@ function generateUiaApprovalPage(
   serverName: string,
   error?: string,
 ): string {
-  const localpart = userId.split(":")[0].substring(1); // Extract localpart from @user:server
+  const localpart = userId.split(":")[0].slice(1); // Extract localpart from @user:server
 
   return `<!DOCTYPE html>
 <html lang="en">

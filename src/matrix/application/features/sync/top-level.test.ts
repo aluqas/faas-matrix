@@ -4,28 +4,28 @@ import type { SyncRepository } from "../../../repositories/interfaces";
 import { projectTopLevelSync } from "./top-level";
 
 class FakeSyncRepository implements SyncRepository {
-  async loadFilter() {
+  loadFilter() {
     return null;
   }
-  async getLatestStreamPosition() {
+  getLatestStreamPosition() {
     return 12;
   }
-  async getLatestDeviceKeyPosition() {
+  getLatestDeviceKeyPosition() {
     return 20;
   }
-  async getToDeviceMessages() {
+  getToDeviceMessages() {
     return {
       events: [{ sender: "@alice:test", type: "m.room_key", content: { key: "k" } }],
       nextBatch: "9",
     };
   }
-  async getOneTimeKeyCounts() {
+  getOneTimeKeyCounts() {
     return { signed_curve25519: 2 };
   }
-  async getUnusedFallbackKeyTypes() {
+  getUnusedFallbackKeyTypes() {
     return ["signed_curve25519"];
   }
-  async getDeviceListChanges(
+  getDeviceListChanges(
     _userId: string,
     sinceEventPosition: number,
     sinceDeviceKeyPosition: number,
@@ -35,44 +35,44 @@ class FakeSyncRepository implements SyncRepository {
     }
     return { changed: ["@delta:test"], left: ["@left:test"] };
   }
-  async getGlobalAccountData() {
+  getGlobalAccountData() {
     return [{ type: "m.direct", content: { "@alice:test": ["!room:test"] } }];
   }
-  async getRoomAccountData() {
+  getRoomAccountData() {
     return [];
   }
-  async getUserRooms() {
+  getUserRooms() {
     return [];
   }
-  async getMembership() {
+  getMembership() {
     return null;
   }
-  async getEventsSince() {
+  getEventsSince() {
     return [];
   }
-  async getEvent() {
+  getEvent() {
     return null;
   }
-  async getRoomState() {
+  getRoomState() {
     return [];
   }
-  async getInviteStrippedState() {
+  getInviteStrippedState() {
     return [];
   }
-  async getReceiptsForRoom() {
+  getReceiptsForRoom() {
     return { type: "m.receipt", content: {} };
   }
-  async getUnreadNotificationSummary() {
+  getUnreadNotificationSummary() {
     return {
       room: { notification_count: 0, highlight_count: 0 },
       main: { notification_count: 0, highlight_count: 0 },
       threads: {},
     };
   }
-  async getTypingUsers() {
+  getTypingUsers() {
     return [];
   }
-  async waitForUserEvents() {
+  waitForUserEvents() {
     return { hasEvents: false };
   }
 }
@@ -83,10 +83,10 @@ function createAppContext(): AppContext {
       return {
         bind() {
           return {
-            async all() {
+            all() {
               return { results: [] };
             },
-            async first() {
+            first() {
               return null;
             },
           };
@@ -102,30 +102,30 @@ function createAppContext(): AppContext {
       blob: {},
       jobs: { defer() {} },
       workflow: {
-        async createRoomJoin() {
+        createRoomJoin() {
           return {};
         },
-        async createPushNotification() {
+        createPushNotification() {
           return {};
         },
       },
       rateLimit: {},
       realtime: {
         async notifyRoomEvent() {},
-        async waitForUserEvents() {
+        waitForUserEvents() {
           return { hasEvents: false };
         },
       },
       metrics: {},
       clock: { now: () => Date.now() },
       id: {
-        async generateRoomId() {
+        generateRoomId() {
           return "!room:test";
         },
-        async generateEventId() {
+        generateEventId() {
           return "$event:test";
         },
-        async generateOpaqueId() {
+        generateOpaqueId() {
           return "opaque";
         },
         formatRoomAlias(localpart: string, serverName: string) {

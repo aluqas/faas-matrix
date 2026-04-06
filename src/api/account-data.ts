@@ -54,7 +54,7 @@ async function decodeJsonBody(c: import("hono").Context<AppEnv>): Promise<unknow
 }
 
 // GET /_matrix/client/v3/user/:userId/account_data/:type
-app.get("/_matrix/client/v3/user/:userId/account_data/:type", requireAuth(), async (c) => {
+app.get("/_matrix/client/v3/user/:userId/account_data/:type", requireAuth(), (c) => {
   return respondWithClientEffect(
     decodeGetGlobalAccountDataInput({
       authUserId: c.get("userId"),
@@ -95,7 +95,7 @@ app.put("/_matrix/client/v3/user/:userId/account_data/:type", requireAuth(), asy
 app.delete(
   "/_matrix/client/unstable/org.matrix.msc3391/user/:userId/account_data/:type",
   requireAuth(),
-  async (c) => {
+  (c) => {
     return respondWithClientEffect(
       decodeDeleteGlobalAccountDataInput({
         authUserId: c.get("userId"),
@@ -119,7 +119,7 @@ app.delete(
 app.get(
   "/_matrix/client/v3/user/:userId/rooms/:roomId/account_data/:type",
   requireAuth(),
-  async (c) => {
+  (c) => {
     return respondWithClientEffect(
       decodeGetRoomAccountDataInput({
         authUserId: c.get("userId"),
@@ -167,7 +167,7 @@ app.put(
 app.delete(
   "/_matrix/client/unstable/org.matrix.msc3391/user/:userId/rooms/:roomId/account_data/:type",
   requireAuth(),
-  async (c) => {
+  (c) => {
     return respondWithClientEffect(
       decodeDeleteRoomAccountDataInput({
         authUserId: c.get("userId"),

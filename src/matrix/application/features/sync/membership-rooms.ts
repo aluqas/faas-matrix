@@ -11,7 +11,7 @@ export interface MembershipRoomsProjectionPorts {
 
 export type ProjectMembershipRoomsInput = SyncProjectionQuery;
 
-export async function projectMembershipRoomBuckets(
+export function projectMembershipRoomBuckets(
   ports: MembershipRoomsProjectionPorts,
   input: ProjectMembershipRoomsInput,
 ): Promise<SyncProjectionResult> {

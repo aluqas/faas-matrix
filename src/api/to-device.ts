@@ -158,7 +158,7 @@ app.put("/_matrix/client/v3/sendToDevice/:eventType/:txnId", requireAuth(), asyn
 // Internal helper: Get to-device messages for sync
 // ============================================
 
-export async function getToDeviceMessages(
+export function getToDeviceMessages(
   db: D1Database,
   userId: string,
   deviceId: string,

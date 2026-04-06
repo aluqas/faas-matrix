@@ -83,9 +83,9 @@ function rowToPdu(row: StoredEventRow): PDU {
     depth: row.depth,
     auth_events: parseJson<string[]>(row.auth_events, []),
     prev_events: parseJson<string[]>(row.prev_events, []),
-    unsigned: parseJson<Record<string, unknown> | undefined>(row.unsigned, undefined),
-    hashes: parseJson<{ sha256: string } | undefined>(row.hashes, undefined),
-    signatures: parseJson<MatrixSignatures | undefined>(row.signatures, undefined),
+    unsigned: parseJson<Record<string, unknown> | undefined>(row.unsigned),
+    hashes: parseJson<{ sha256: string } | undefined>(row.hashes),
+    signatures: parseJson<MatrixSignatures | undefined>(row.signatures),
   };
 }
 
@@ -455,7 +455,7 @@ export async function persistFederationStateSnapshot(
 
 const eventQueryService = new EventQueryService();
 
-export async function getMissingFederationEvents(
+export function getMissingFederationEvents(
   db: D1Database,
   query: MissingEventsQuery,
 ): Promise<PDU[]> {

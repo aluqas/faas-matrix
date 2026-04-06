@@ -6,7 +6,7 @@ class MockD1Database {
   prepare(query: string) {
     return {
       bind: (...params: unknown[]) => ({
-        all: async <T>() => {
+        all: <T>() => {
           if (/FROM push_rules/.test(query)) {
             return { results: [] as T[] };
           }
@@ -80,7 +80,7 @@ class MockD1Database {
 
           return { results: [] as T[] };
         },
-        first: async <T>() => {
+        first: <T>() => {
           if (/event_type = 'm\.fully_read'/.test(query)) {
             return null as T | null;
           }
@@ -110,7 +110,7 @@ class MockD1Database {
 
           return null as T | null;
         },
-        run: async () => ({ success: true }),
+        run: () => ({ success: true }),
       }),
     };
   }

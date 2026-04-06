@@ -191,8 +191,8 @@ export function decodeJWT(token: string): { header: any; payload: any; signature
     throw new Error("Invalid JWT format");
   }
 
-  const header = JSON.parse(atob(parts[0].replace(/-/g, "+").replace(/_/g, "/")));
-  const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+  const header = JSON.parse(atob(parts[0].replaceAll('-', "+").replaceAll('_', "/")));
+  const payload = JSON.parse(atob(parts[1].replaceAll('-', "+").replaceAll('_', "/")));
 
   return { header, payload, signature: parts[2] };
 }
@@ -255,8 +255,8 @@ async function verifyJWTSignature(token: string, jwks: JWKS): Promise<boolean> {
 
   // Decode signature from base64url
   const signatureBytes = Uint8Array.from(
-    atob(signature.replace(/-/g, "+").replace(/_/g, "/")),
-    (c) => c.charCodeAt(0),
+    atob(signature.replaceAll('-', "+").replaceAll('_', "/")),
+    (c) => c.codePointAt(0),
   );
 
   const algorithm = header.alg;
@@ -267,7 +267,7 @@ async function verifyJWTSignature(token: string, jwks: JWKS): Promise<boolean> {
   } else if (algorithm.startsWith("PS")) {
     verifyAlgorithm = {
       name: "RSA-PSS",
-      saltLength: parseInt(algorithm.slice(-3)) / 8,
+      saltLength: parseInt(algorithm.slice(-3), 10) / 8,
     };
   } else if (algorithm.startsWith("ES")) {
     verifyAlgorithm = {
@@ -380,11 +380,11 @@ export function deriveUsername(claims: OIDCUserClaims, usernameClaim: string): s
   }
 
   // Sanitize username for Matrix (lowercase, allowed chars only)
-  username = username.toLowerCase().replace(/[^a-z0-9._=-]/g, "_");
+  username = username.toLowerCase().replaceAll(/[^a-z0-9._=-]/g, "_");
 
   // Ensure it's not empty
   if (!username) {
-    username = `user_${claims.sub.substring(0, 8)}`;
+    username = `user_${claims.sub.slice(0, 8)}`;
   }
 
   return username;

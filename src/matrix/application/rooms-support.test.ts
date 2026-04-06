@@ -6,7 +6,7 @@ describe("createInitialRoomEvents", () => {
   it("omits guest access for public_chat and enables it for private_chat", async () => {
     const storedEvents: PDU[] = [];
     const repository = {
-      async storeEvent(event: PDU) {
+      storeEvent(event: PDU) {
         storedEvents.push(event);
       },
       async updateMembership() {},
@@ -22,7 +22,7 @@ describe("createInitialRoomEvents", () => {
       "10",
       "@alice:hs1",
       { preset: "public_chat" },
-      async () => "$unused",
+      () => "$unused",
       () => 1,
     );
 
@@ -37,7 +37,7 @@ describe("createInitialRoomEvents", () => {
       "10",
       "@alice:hs1",
       { preset: "private_chat" },
-      async () => "$unused",
+      () => "$unused",
       () => 1,
     );
 
@@ -48,7 +48,7 @@ describe("createInitialRoomEvents", () => {
   it("preserves creation_content on the m.room.create event", async () => {
     const storedEvents: PDU[] = [];
     const repository = {
-      async storeEvent(event: PDU) {
+      storeEvent(event: PDU) {
         storedEvents.push(event);
       },
       async updateMembership() {},
@@ -64,7 +64,7 @@ describe("createInitialRoomEvents", () => {
       "10",
       "@alice:hs1",
       { creation_content: { "m.federate": false } },
-      async () => "$unused",
+      () => "$unused",
       () => 1,
     );
 

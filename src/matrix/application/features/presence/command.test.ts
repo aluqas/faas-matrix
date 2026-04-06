@@ -16,13 +16,13 @@ describe("presence command", () => {
       },
       {
         localServerName: "test",
-        async persistPresence(input) {
+        persistPresence(input) {
           persisted.push(input);
         },
-        async resolveInterestedServers() {
+        resolveInterestedServers() {
           return ["test", "remote-a", "remote-a", "remote-b"];
         },
-        async queueEdu(destination: string, content: PresenceEduContent) {
+        queueEdu(destination: string, content: PresenceEduContent) {
           queued.push({ destination, content });
         },
       },

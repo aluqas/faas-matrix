@@ -274,7 +274,7 @@ export async function projectJoinedRoom(
   if (query.fullState || query.sincePosition === 0) {
     for (const event of roomState) {
       const clientEvent = toClientEvent(event);
-      if (!stateEvents.find((existing) => existing.event_id === event.event_id)) {
+      if (!stateEvents.some((existing) => existing.event_id === event.event_id)) {
         stateEvents.push(clientEvent);
       }
     }
@@ -301,7 +301,7 @@ export async function projectJoinedRoom(
         event.type === "m.room.member" &&
         event.state_key !== undefined &&
         memberUserIds.has(event.state_key) &&
-        !stateEvents.find((existing) => existing.event_id === event.event_id)
+        !stateEvents.some((existing) => existing.event_id === event.event_id)
       ) {
         stateEvents.push(toClientEvent(event));
       }

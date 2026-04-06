@@ -64,7 +64,7 @@ export function extractTestsFromGoFile(content: string): string[] {
       tests.add(testName);
     }
   }
-  return [...tests].sort();
+  return [...tests].toSorted();
 }
 
 function walkFiles(dir: string): string[] {
@@ -101,8 +101,8 @@ export function buildComplementTestIndex(testsRoot: string): ComplementTestIndex
   }
 
   const sorted: ComplementTestIndex = {};
-  for (const [testName, packages] of [...index.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-    sorted[testName] = [...packages].sort();
+  for (const [testName, packages] of [...index.entries()].toSorted((a, b) => a[0].localeCompare(b[0]))) {
+    sorted[testName] = [...packages].toSorted();
   }
   return sorted;
 }
@@ -141,8 +141,8 @@ export function resolveComplementPackages(
   }
 
   return {
-    packages: [...packages].sort(),
-    missing: [...missing].sort(),
+    packages: [...packages].toSorted(),
+    missing: [...missing].toSorted(),
     ambiguous,
     resolvedByTest,
   };
@@ -216,7 +216,7 @@ export function classifyComplementRun(
 
   const failures = summary.fails
     .slice()
-    .sort()
+    .toSorted()
     .map((test) => {
       const testOutput = outputsByTest[test]?.join("\n") ?? "";
       const combined = [packageOutput, testOutput].filter(Boolean).join("\n");

@@ -16,9 +16,9 @@ class MockD1Database {
   prepare(query: string) {
     const handler = this.handlers.find(({ match }) => match.test(query));
     const bound = {
-      first: async <T>() => (handler?.first ?? null) as T | null,
-      run: async () => ({ success: true }),
-      all: async <T>() => ({ results: [] as T[] }),
+      first: <T>() => (handler?.first ?? null) as T | null,
+      run: () => ({ success: true }),
+      all: <T>() => ({ results: [] as T[] }),
     };
 
     return {
@@ -39,11 +39,11 @@ function createMissingEventsDb(options: {
 }): D1Database {
   const db = {
     prepare(query: string) {
-      const normalizedQuery = query.replace(/\s+/g, " ").trim();
+      const normalizedQuery = query.replaceAll(/\s+/g, " ").trim();
 
       return {
         bind: (...args: unknown[]) => ({
-          first: async <T>() => {
+          first: <T>() => {
             if (
               normalizedQuery.includes("SELECT accepted FROM processed_pdus WHERE event_id = ?")
             ) {
@@ -74,7 +74,7 @@ function createMissingEventsDb(options: {
 
             return null as T | null;
           },
-          all: async <T>() => {
+          all: <T>() => {
             if (
               normalizedQuery.includes(
                 "FROM events WHERE room_id = ? AND event_type = 'm.room.history_visibility'",
@@ -101,7 +101,7 @@ function createMissingEventsDb(options: {
 
             return { results: [] as T[] };
           },
-          run: async () => ({ success: true }),
+          run: () => ({ success: true }),
         }),
       };
     },
@@ -115,7 +115,7 @@ describe("normalizeOffsetToken", () => {
     expect(normalizeOffsetToken("offset_12")).toBe(12);
     expect(normalizeOffsetToken("offset_-1")).toBe(0);
     expect(normalizeOffsetToken("bad")).toBe(0);
-    expect(normalizeOffsetToken(undefined)).toBe(0);
+    expect(normalizeOffsetToken()).toBe(0);
   });
 });
 
@@ -231,14 +231,14 @@ describe("EventQueryService.getMissingEvents", () => {
 
     db.prepare = (() => {
       const bound = {
-        first: async <T>(..._args: unknown[]) => null as T | null,
-        run: async () => ({ success: true }),
-        all: async <T>() => ({ results: [] as T[] }),
+        first: <T>(..._args: unknown[]) => null as T | null,
+        run: () => ({ success: true }),
+        all: <T>() => ({ results: [] as T[] }),
       };
       return {
         bind: (eventId: string) => ({
           ...bound,
-          first: async <T>() => (events.get(eventId) ?? null) as T | null,
+          first: <T>() => (events.get(eventId) ?? null) as T | null,
         }),
         first: bound.first,
         run: bound.run,

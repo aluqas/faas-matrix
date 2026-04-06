@@ -81,7 +81,7 @@ app.post("/_matrix/media/v3/upload", requireAuth(), async (c) => {
   const filename = c.req.query("filename");
 
   // Check content length
-  const contentLength = parseInt(c.req.header("Content-Length") || "0");
+  const contentLength = parseInt(c.req.header("Content-Length") || "0", 10);
   if (contentLength > MAX_UPLOAD_SIZE) {
     return Errors.tooLarge("File exceeds maximum upload size").toResponse();
   }
@@ -194,8 +194,8 @@ app.get("/_matrix/media/v3/download/:serverName/:mediaId/:filename", async (c) =
 app.get("/_matrix/media/v3/thumbnail/:serverName/:mediaId", async (c) => {
   const serverName = c.req.param("serverName");
   const mediaId = c.req.param("mediaId");
-  const width = Math.min(parseInt(c.req.query("width") || "96"), 1920);
-  const height = Math.min(parseInt(c.req.query("height") || "96"), 1920);
+  const width = Math.min(parseInt(c.req.query("width") || "96", 10), 1920);
+  const height = Math.min(parseInt(c.req.query("height") || "96", 10), 1920);
   const method = c.req.query("method") || "scale";
 
   if (serverName !== c.env.SERVER_NAME) {
@@ -461,20 +461,20 @@ function decodeHtmlEntities(text: string): string {
   // Use a proper HTML entity decoder that handles all entities correctly
   // and prevents double-decoding by checking if the text is already decoded
   const decoded = text
-    .replace(/&amp;/g, "__AMP__") // Temporarily replace to prevent double-decode
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, "/")
-    .replace(/&nbsp;/g, " ")
-    .replace(/__AMP__/g, "&"); // Restore ampersands last
+    .replaceAll('&amp;', "__AMP__") // Temporarily replace to prevent double-decode
+    .replaceAll('&lt;', "<")
+    .replaceAll('&gt;', ">")
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#039;', "'")
+    .replaceAll('&#x27;', "'")
+    .replaceAll('&#x2F;', "/")
+    .replaceAll('&nbsp;', " ")
+    .replaceAll('__AMP__', "&"); // Restore ampersands last
   return decoded;
 }
 
 // GET /_matrix/media/v3/config - Get media config
-app.get("/_matrix/media/v3/config", async (c) => {
+app.get("/_matrix/media/v3/config", (c) => {
   return c.json({
     "m.upload.size": MAX_UPLOAD_SIZE,
   });
@@ -492,7 +492,7 @@ app.post("/_matrix/client/v1/media/upload", requireAuth(), async (c) => {
   const contentType = c.req.header("Content-Type") || "application/octet-stream";
   const filename = c.req.query("filename");
 
-  const contentLength = parseInt(c.req.header("Content-Length") || "0");
+  const contentLength = parseInt(c.req.header("Content-Length") || "0", 10);
   if (contentLength > MAX_UPLOAD_SIZE) {
     return Errors.tooLarge("File exceeds maximum upload size").toResponse();
   }
@@ -676,8 +676,8 @@ app.get(
 app.get("/_matrix/client/v1/media/thumbnail/:serverName/:mediaId", requireAuth(), async (c) => {
   const serverName = c.req.param("serverName");
   const mediaId = c.req.param("mediaId");
-  const width = Math.min(parseInt(c.req.query("width") || "96"), 1920);
-  const height = Math.min(parseInt(c.req.query("height") || "96"), 1920);
+  const width = Math.min(parseInt(c.req.query("width") || "96", 10), 1920);
+  const height = Math.min(parseInt(c.req.query("height") || "96", 10), 1920);
   const method = c.req.query("method") || "scale";
 
   if (serverName !== c.env.SERVER_NAME) {
@@ -870,7 +870,7 @@ app.get("/_matrix/client/v1/media/preview_url", requireAuth(), async (c) => {
 });
 
 // GET /_matrix/client/v1/media/config - Authenticated media config
-app.get("/_matrix/client/v1/media/config", requireAuth(), async (c) => {
+app.get("/_matrix/client/v1/media/config", requireAuth(), (c) => {
   return c.json({
     "m.upload.size": MAX_UPLOAD_SIZE,
   });

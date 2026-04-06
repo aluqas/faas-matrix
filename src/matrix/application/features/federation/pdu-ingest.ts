@@ -786,12 +786,12 @@ export async function ingestFederationPdu(
           rawHash,
           normalizedHash,
           withoutEventIdHash,
-          rawKeys: Object.keys(input.rawPdu).sort(),
+          rawKeys: Object.keys(input.rawPdu).toSorted(),
           unsignedKeys:
             input.rawPdu["unsigned"] &&
             typeof input.rawPdu["unsigned"] === "object" &&
             !Array.isArray(input.rawPdu["unsigned"])
-              ? Object.keys(input.rawPdu["unsigned"] as Record<string, unknown>).sort()
+              ? Object.keys(input.rawPdu["unsigned"] as Record<string, unknown>).toSorted()
               : [],
         }),
       );

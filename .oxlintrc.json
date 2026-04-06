@@ -1,5 +1,15 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "pedantic": "warn"
+  },
+  "rules": {
+    "max-lines-per-function": ["allow"],
+    "max-lines": ["allow"],
+    "no-inline-comments": ["allow"]
+  },
   "env": {
     "builtin": true,
     "browser": true,

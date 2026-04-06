@@ -395,7 +395,7 @@ app.get("/_matrix/client/v3/publicRooms", async (c) => {
   });
 });
 
-app.post("/_matrix/client/v3/publicRooms", async (c) => {
+app.post("/_matrix/client/v3/publicRooms", (c) => {
   // Same as GET but with search/filter support
   return c.json({
     chunk: [],
@@ -430,7 +430,7 @@ app.post("/_matrix/client/v3/user_directory/search", requireAuth(), async (c) =>
   }
 
   // Search for users using FTS5 for ranked full-text search
-  const ftsSearchTerm = searchTerm.replace(/['"*()]/g, " ").trim();
+  const ftsSearchTerm = searchTerm.replaceAll(/['"*()]/g, " ").trim();
   const results = await db
     .prepare(`
     SELECT u.user_id, u.display_name, u.avatar_url
@@ -469,12 +469,12 @@ app.post("/_matrix/client/v3/user_directory/search", requireAuth(), async (c) =>
 });
 
 // Third-party protocols (stub - no bridges configured)
-app.get("/_matrix/client/v3/thirdparty/protocols", async (c) => {
+app.get("/_matrix/client/v3/thirdparty/protocols", (c) => {
   return c.json({});
 });
 
 // Dehydrated device (MSC3814 - stub)
-app.get("/_matrix/client/unstable/org.matrix.msc3814.v1/dehydrated_device", async (c) => {
+app.get("/_matrix/client/unstable/org.matrix.msc3814.v1/dehydrated_device", (c) => {
   return c.json(
     {
       errcode: "M_NOT_FOUND",
@@ -486,12 +486,12 @@ app.get("/_matrix/client/unstable/org.matrix.msc3814.v1/dehydrated_device", asyn
 
 // OIDC auth metadata endpoints are now handled by oidc-auth.ts
 // Legacy unstable endpoint for backwards compatibility
-app.get("/_matrix/client/unstable/org.matrix.msc2965/auth_issuer", async (c) => {
+app.get("/_matrix/client/unstable/org.matrix.msc2965/auth_issuer", (c) => {
   // Redirect to the stable endpoint implementation
   return c.redirect("/_matrix/client/v1/auth_metadata", 307);
 });
 
-app.get("/_matrix/client/unstable/org.matrix.msc2965/auth_metadata", async (c) => {
+app.get("/_matrix/client/unstable/org.matrix.msc2965/auth_metadata", (c) => {
   // Redirect to the stable endpoint implementation
   return c.redirect("/_matrix/client/v1/auth_metadata", 307);
 });

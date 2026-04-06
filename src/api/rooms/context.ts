@@ -61,7 +61,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), asyn
     roomId,
     eventId,
     limit,
-    userAgent: userAgent?.substring(0, 100),
+    userAgent: userAgent?.slice(0, 100),
     isLikelyNSE,
     timestamp: new Date().toISOString(),
   });
@@ -118,7 +118,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), asyn
       event_id: targetEvent.event_id,
       room_id: targetEvent.room_id,
     },
-    events_before: eventsBefore.results.reverse().map(formatContextEvent),
+    events_before: eventsBefore.results.toReversed().map(formatContextEvent),
     events_after: eventsAfter.results.map(formatContextEvent),
     state: state.map((event) => ({
       type: event.type,
@@ -135,7 +135,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), asyn
         : undefined,
     end:
       eventsAfter.results.length > 0
-        ? String(eventsAfter.results[eventsAfter.results.length - 1].origin_server_ts)
+        ? String(eventsAfter.results.at(-1).origin_server_ts)
         : undefined,
   });
 });

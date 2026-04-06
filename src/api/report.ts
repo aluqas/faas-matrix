@@ -229,7 +229,7 @@ app.get("/_matrix/client/v3/admin/reports", requireAuth(), async (c) => {
   }
 
   const from = c.req.query("from");
-  const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
   const resolved = c.req.query("resolved");
 
   let query = `
@@ -248,7 +248,7 @@ app.get("/_matrix/client/v3/admin/reports", requireAuth(), async (c) => {
 
   if (from) {
     query += ` AND cr.id < ?`;
-    params.push(parseInt(from));
+    params.push(parseInt(from, 10));
   }
 
   query += ` ORDER BY cr.created_at DESC LIMIT ?`;
@@ -288,7 +288,7 @@ app.get("/_matrix/client/v3/admin/reports", requireAuth(), async (c) => {
   };
 
   if (hasMore && results.length > 0) {
-    response.next_token = String(results[results.length - 1].id);
+    response.next_token = String(results.at(-1).id);
   }
 
   return c.json(response);
@@ -319,7 +319,7 @@ app.get("/_matrix/client/v3/admin/reports/:reportId", requireAuth(), async (c) =
     LEFT JOIN events e ON cr.event_id = e.event_id
     WHERE cr.id = ?
   `)
-    .bind(parseInt(reportId))
+    .bind(parseInt(reportId, 10))
     .first<
       ContentReportRecord & {
         reported_user_id: string;
@@ -381,7 +381,7 @@ app.post("/_matrix/client/v3/admin/reports/:reportId/resolve", requireAuth(), as
     SET resolved = 1, resolved_by = ?, resolved_at = ?, resolution_note = ?
     WHERE id = ?
   `)
-    .bind(userId, Date.now(), body.note || null, parseInt(reportId))
+    .bind(userId, Date.now(), body.note || null, parseInt(reportId, 10))
     .run();
 
   if (result.meta.changes === 0) {

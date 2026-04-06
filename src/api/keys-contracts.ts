@@ -167,7 +167,7 @@ function canonicalizeJson(value: unknown): unknown {
   if (isPlainObject(value)) {
     return Object.fromEntries(
       Object.entries(value)
-        .sort(([left], [right]) => left.localeCompare(right))
+        .toSorted(([left], [right]) => left.localeCompare(right))
         .map(([key, entry]) => [key, canonicalizeJson(entry)]),
     );
   }

@@ -169,7 +169,7 @@ export async function getJoinedRoomIdsForUser(db: D1Database, userId: string): P
  * `room_state` → `events` join for any membership events NOT yet reflected in
  * `room_memberships`.  The NOT EXISTS guard prevents double-counting.
  */
-export async function getJoinedRoomIdsIncludingPartialState(
+export function getJoinedRoomIdsIncludingPartialState(
   db: D1Database,
   userId: string,
 ): Promise<string[]> {

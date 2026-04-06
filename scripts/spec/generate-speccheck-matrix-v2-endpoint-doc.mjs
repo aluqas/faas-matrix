@@ -17,7 +17,7 @@ function uniquePreserveOrder(values) {
 
 function escapeMdCell(value) {
   // Markdown table cells: avoid literal pipes breaking the table.
-  return String(value ?? "").replace(/\|/g, "\\|");
+  return String(value ?? "").replaceAll(/\|/g, "\\|");
 }
 
 async function main() {

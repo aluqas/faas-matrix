@@ -32,7 +32,7 @@ class FakeFederationRepository implements Pick<
     deleted?: boolean;
   }> = [];
 
-  async upsertPresence(
+  upsertPresence(
     userId: string,
     presence: string,
     statusMessage: string | null,
@@ -48,7 +48,7 @@ class FakeFederationRepository implements Pick<
     });
   }
 
-  async upsertRemoteDeviceList(
+  upsertRemoteDeviceList(
     userId: string,
     deviceId: string,
     streamId: number,
@@ -89,7 +89,7 @@ class FakeD1Database {
         boundArgs = args;
         return this;
       },
-      first: async () => {
+      first: () => {
         if (query.includes("UPDATE stream_positions")) {
           this.streamPosition += 1;
           return { position: this.streamPosition };
@@ -104,7 +104,7 @@ class FakeD1Database {
 
         return null;
       },
-      all: async () => {
+      all: () => {
         if (query.includes("SELECT device_id FROM devices")) {
           const userId = boundArgs[0] as string;
           return {
@@ -116,7 +116,7 @@ class FakeD1Database {
 
         return { results: [] };
       },
-      run: async () => {
+      run: () => {
         if (query.includes("INSERT INTO to_device_messages")) {
           this.toDeviceMessages.push({
             recipientUserId: boundArgs[0] as string,
@@ -305,10 +305,10 @@ describe("federation-handler-service", () => {
       "remote",
       {
         async notifyRoomEvent() {},
-        async waitForUserEvents() {
+        waitForUserEvents() {
           return { hasEvents: false };
         },
-        async setRoomTyping(roomId: string, userId: string, typing: boolean, timeoutMs?: number) {
+        setRoomTyping(roomId: string, userId: string, typing: boolean, timeoutMs?: number) {
           calls.push({ roomId, userId, typing, timeoutMs });
         },
       },
@@ -348,10 +348,10 @@ describe("federation-handler-service", () => {
       "remote",
       {
         async notifyRoomEvent() {},
-        async waitForUserEvents() {
+        waitForUserEvents() {
           return { hasEvents: false };
         },
-        async setRoomReceipt(
+        setRoomReceipt(
           roomId: string,
           userId: string,
           eventId: string,

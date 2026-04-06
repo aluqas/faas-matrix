@@ -75,7 +75,7 @@ function createRuntimeCapabilities(
 
         return status as RoomJoinWorkflowStatus;
       },
-      async createPushNotification(params: unknown) {
+      createPushNotification(params: unknown) {
         return env.PUSH_NOTIFICATION_WORKFLOW.create({ params });
       },
     },

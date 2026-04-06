@@ -125,7 +125,7 @@ export class RateLimitDurableObject extends DurableObject<Record<string, unknown
     }
   }
 
-  async alarm() {
+  alarm() {
     this.cleanupExpiredEntries();
   }
 }

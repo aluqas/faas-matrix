@@ -13,7 +13,7 @@ export interface FederationProfileQueryInput {
 }
 
 export class FederationQueryService {
-  async getProfile(input: FederationProfileQueryInput): Promise<FederationProfile | null> {
+  getProfile(input: FederationProfileQueryInput): Promise<FederationProfile | null> {
     return queryProfileResponse(input);
   }
 }

@@ -12,14 +12,14 @@ class FakeFederationRepository implements Pick<
   presenceCalls = 0;
   deviceListCalls = 0;
 
-  async getRoom(roomId: string) {
+  getRoom(roomId: string) {
     if (roomId === "!room:test") {
       return { room_id: roomId, room_version: "10", is_public: true, created_at: 1 };
     }
     return null;
   }
 
-  async getRoomState(roomId: string) {
+  getRoomState(roomId: string) {
     if (roomId !== "!room:test") {
       return [];
     }
@@ -39,15 +39,15 @@ class FakeFederationRepository implements Pick<
     ];
   }
 
-  async storeProcessedEdu(origin: string, eduType: string, content: Record<string, unknown>) {
+  storeProcessedEdu(origin: string, eduType: string, content: Record<string, unknown>) {
     this.storedEdus.push({ origin, eduType, content });
   }
 
-  async upsertPresence() {
+  upsertPresence() {
     this.presenceCalls += 1;
   }
 
-  async upsertRemoteDeviceList() {
+  upsertRemoteDeviceList() {
     this.deviceListCalls += 1;
   }
 }
@@ -60,30 +60,30 @@ function createAppContext(): AppContext {
       blob: {},
       jobs: { defer() {} },
       workflow: {
-        async createRoomJoin() {
+        createRoomJoin() {
           return {};
         },
-        async createPushNotification() {
+        createPushNotification() {
           return {};
         },
       },
       rateLimit: {},
       realtime: {
         async notifyRoomEvent() {},
-        async waitForUserEvents() {
+        waitForUserEvents() {
           return { hasEvents: false };
         },
       },
       metrics: {},
       clock: { now: () => 1234 },
       id: {
-        async generateRoomId() {
+        generateRoomId() {
           return "!room:test";
         },
-        async generateEventId() {
+        generateEventId() {
           return "$event:test";
         },
-        async generateOpaqueId() {
+        generateOpaqueId() {
           return "opaque";
         },
         formatRoomAlias(localpart: string, serverName: string) {
@@ -119,7 +119,7 @@ describe("federation edu ingest", () => {
       {
         appContext: createAppContext(),
         repository: repository as unknown as FederationRepository,
-        async runEffect(effect) {
+        runEffect(effect) {
           warnings.push("ran");
           return runFederationEffect(effect);
         },

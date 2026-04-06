@@ -14,7 +14,7 @@ import {
 class FakeKvNamespace {
   private readonly values = new Map<string, string>();
 
-  async get(key: string, type?: "json"): Promise<unknown> {
+  get(key: string, type?: "json"): Promise<unknown> {
     const value = this.values.get(key);
     if (!value) {
       return null;
@@ -27,15 +27,15 @@ class FakeKvNamespace {
     return value;
   }
 
-  async put(key: string, value: string): Promise<void> {
+  put(key: string, value: string): Promise<void> {
     this.values.set(key, value);
   }
 
-  async delete(key: string): Promise<void> {
+  delete(key: string): Promise<void> {
     this.values.delete(key);
   }
 
-  async list(options?: { prefix?: string; cursor?: string }) {
+  list(options?: { prefix?: string; cursor?: string }) {
     const prefix = options?.prefix ?? "";
     return {
       keys: Array.from(this.values.keys())

@@ -13,11 +13,11 @@ function normalizeServerName(serverName: string): string {
 }
 
 function escapeRegex(pattern: string): string {
-  return pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return pattern.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function patternToRegExp(pattern: string): RegExp {
-  return new RegExp(`^${escapeRegex(pattern.toLowerCase()).replace(/\\\*/g, ".*")}$`, "i");
+  return new RegExp(`^${escapeRegex(pattern.toLowerCase()).replaceAll('\\*', ".*")}$`, "i");
 }
 
 function isIpLiteral(serverName: string): boolean {

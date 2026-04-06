@@ -16,32 +16,32 @@ function createTestAppContext(now = 1_700_000_000_000) {
       sql: { connection: {} },
       kv: {},
       blob: {},
-      jobs: { defer: (_task: Promise<unknown>) => undefined },
+      jobs: { defer: (_task: Promise<unknown>) => {} },
       workflow: {
-        async createRoomJoin() {
+        createRoomJoin() {
           return { status: "complete", output: { success: true } };
         },
-        async createPushNotification() {
+        createPushNotification() {
           return {};
         },
       },
       rateLimit: {},
       realtime: {
         async notifyRoomEvent() {},
-        async waitForUserEvents() {
+        waitForUserEvents() {
           return { hasEvents: false };
         },
       },
       metrics: {},
       clock: { now: () => now },
       id: {
-        async generateRoomId(serverName: string) {
+        generateRoomId(serverName: string) {
           return `!room:${serverName}`;
         },
-        async generateEventId() {
+        generateEventId() {
           return "$event:test";
         },
-        async generateOpaqueId() {
+        generateOpaqueId() {
           return "opaque";
         },
         formatRoomAlias(localpart: string, serverName: string) {
@@ -74,13 +74,13 @@ function createDependencies(overrides: Partial<RoomQueryDependencies> = {}): Roo
   };
 
   return {
-    async getMembership() {
+    getMembership() {
       return { membership: "join", eventId: "$member:test" };
     },
-    async getRoomState() {
+    getRoomState() {
       return [defaultEvent];
     },
-    async getStateEvent(_db, roomId, eventType, stateKey) {
+    getStateEvent(_db, roomId, eventType, stateKey) {
       return {
         ...defaultEvent,
         room_id: roomId,
@@ -89,13 +89,13 @@ function createDependencies(overrides: Partial<RoomQueryDependencies> = {}): Roo
         content: { membership: "join" },
       };
     },
-    async getRoomMembers() {
+    getRoomMembers() {
       return [
         { userId: "@alice:test", membership: "join" },
         { userId: "@bob:test", membership: "join" },
       ];
     },
-    async getRoomEvents(
+    getRoomEvents(
       _db,
       roomId,
       _fromToken,
@@ -108,16 +108,16 @@ function createDependencies(overrides: Partial<RoomQueryDependencies> = {}): Roo
         end: 5,
       };
     },
-    async getVisibleEventForUser() {
+    getVisibleEventForUser() {
       return defaultEvent;
     },
-    async findClosestEventByTimestamp() {
+    findClosestEventByTimestamp() {
       return { event_id: "$event:test", origin_server_ts: 123 };
     },
-    async getPartialStateJoin() {
+    getPartialStateJoin() {
       return null;
     },
-    async getPartialStateJoinCompletion() {
+    getPartialStateJoinCompletion() {
       return null;
     },
     async sleep() {},
@@ -131,10 +131,10 @@ describe("MatrixRoomQueryService", () => {
     const service = new MatrixRoomQueryService(
       appContext,
       createDependencies({
-        async getMembership() {
+        getMembership() {
           return { membership: "leave", eventId: "$leave:test" };
         },
-        async getRoomState() {
+        getRoomState() {
           return [
             {
               event_id: "$name:test",
@@ -175,11 +175,11 @@ describe("MatrixRoomQueryService", () => {
     const service = new MatrixRoomQueryService(
       appContext,
       createDependencies({
-        async getPartialStateJoin() {
+        getPartialStateJoin() {
           markerReads += 1;
           return markerReads === 1 ? ({ roomId: "!room:test" } as never) : null;
         },
-        async sleep(ms) {
+        sleep(ms) {
           sleeps.push(ms);
         },
       }),
@@ -207,7 +207,7 @@ describe("MatrixRoomQueryService", () => {
     const service = new MatrixRoomQueryService(
       createTestAppContext(),
       createDependencies({
-        async getRoomEvents(_db, roomId, fromToken) {
+        getRoomEvents(_db, roomId, fromToken) {
           seenFromTokens.push(fromToken);
           return {
             events: [
@@ -251,7 +251,7 @@ describe("MatrixRoomQueryService", () => {
     const service = new MatrixRoomQueryService(
       createTestAppContext(),
       createDependencies({
-        async getVisibleEventForUser() {
+        getVisibleEventForUser() {
           return null;
         },
       }),
@@ -275,7 +275,7 @@ describe("MatrixRoomQueryService", () => {
     const service = new MatrixRoomQueryService(
       createTestAppContext(),
       createDependencies({
-        async getVisibleEventForUser() {
+        getVisibleEventForUser() {
           return {
             event_id: "$deferred:test",
             room_id: "!room:test",
@@ -325,7 +325,7 @@ describe("MatrixRoomQueryService", () => {
     const service = new MatrixRoomQueryService(
       createTestAppContext(),
       createDependencies({
-        async getVisibleEventForUser() {
+        getVisibleEventForUser() {
           return clearedEvent;
         },
       }),

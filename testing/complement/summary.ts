@@ -28,11 +28,11 @@ console.log("=".repeat(60));
 
 if (fails.length > 0) {
   console.log("\nFAILED:");
-  for (const t of [...fails].sort()) console.log(`  ✗ ${t}`);
+  for (const t of [...fails].toSorted()) console.log(`  ✗ ${t}`);
 }
 
 const passes = Object.keys(topResults).filter((t) => topResults[t] === "pass");
 if (passes.length > 0) {
   console.log("\nPASSED:");
-  for (const t of [...passes].sort()) console.log(`  ✓ ${t}`);
+  for (const t of [...passes].toSorted()) console.log(`  ✓ ${t}`);
 }

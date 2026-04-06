@@ -177,7 +177,7 @@ function reverseTopologicalPowerOrder(events: PDU[]): PDU[] {
   // 1. Power level of sender (descending)
   // 2. origin_server_ts (ascending)
   // 3. event_id (ascending, lexicographic)
-  return [...events].sort((a, b) => {
+  return [...events].toSorted((a, b) => {
     const powerA = getSenderPower(a);
     const powerB = getSenderPower(b);
 

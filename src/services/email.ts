@@ -18,7 +18,7 @@ export function generateVerificationToken(): string {
 /**
  * Generate a unique session ID for email verification
  */
-export async function generateSessionId(): Promise<string> {
+export function generateSessionId(): Promise<string> {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))

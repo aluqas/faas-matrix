@@ -16,13 +16,13 @@ describe("typing command", () => {
         timeoutMs: 10_000,
       },
       {
-        async setRoomTyping(roomId, userId, typing, timeoutMs) {
+        setRoomTyping(roomId, userId, typing, timeoutMs) {
           calls.push({ roomId, userId, typing, timeoutMs });
         },
-        async resolveInterestedServers() {
+        resolveInterestedServers() {
           return ["remote-a", "remote-b"];
         },
-        async queueEdu(destination, content) {
+        queueEdu(destination, content) {
           queued.push({ destination, content });
         },
       },

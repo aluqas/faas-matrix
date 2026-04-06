@@ -795,7 +795,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
     const stateIds = (await stateIdsResponse.json()) as RemoteStateIdsResponse;
     if (!Array.isArray(stateIds.pdu_ids) || !Array.isArray(stateIds.auth_chain_ids)) {
-      throw new Error("state_ids returned invalid response");
+      throw new TypeError("state_ids returned invalid response");
     }
 
     const stateResponse = await federationGet(

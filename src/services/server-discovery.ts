@@ -299,7 +299,7 @@ function selectSRVRecord(records: SRVRecord[]): SRVRecord {
   }
 
   // Sort by priority (ascending)
-  const sorted = [...records].sort((a, b) => a.priority - b.priority);
+  const sorted = [...records].toSorted((a, b) => a.priority - b.priority);
 
   // Get all records with the lowest priority
   const lowestPriority = sorted[0].priority;

@@ -68,7 +68,7 @@ export function projectSyncResponseEffect(
                   );
                 }
               },
-              resolveInterestedServers: async (userId) =>
+              resolveInterestedServers: (userId) =>
                 getSharedServersInRoomsWithUserIncludingPartialState(
                   appContext.capabilities.sql.connection as D1Database,
                   appContext.capabilities.kv.cache as KVNamespace | undefined,

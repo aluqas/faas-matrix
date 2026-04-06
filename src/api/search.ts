@@ -122,7 +122,7 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
 
   // Use FTS5 MATCH for full-text search with BM25 ranking
   // Escape FTS5 special characters in search term
-  const ftsSearchTerm = searchTerm.replace(/['"*()]/g, " ").trim();
+  const ftsSearchTerm = searchTerm.replaceAll(/['"*()]/g, " ").trim();
 
   let query = `
     SELECT e.event_id, e.event_type, e.room_id, e.sender, e.origin_server_ts, e.content,

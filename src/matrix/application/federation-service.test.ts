@@ -19,14 +19,14 @@ class FakeFederationRepository implements FederationRepository {
     rejectionReason?: string;
   }> = [];
 
-  async getCachedTransaction() {
+  getCachedTransaction() {
     return this.cachedResponse;
   }
   async storeCachedTransaction() {}
-  async getProcessedPdu(eventId: string): Promise<FederationProcessedPdu | null> {
+  getProcessedPdu(eventId: string): Promise<FederationProcessedPdu | null> {
     return this.processedPdus.get(eventId) ?? null;
   }
-  async recordProcessedPdu(
+  recordProcessedPdu(
     eventId: string,
     origin: string,
     roomId: string,
@@ -37,22 +37,22 @@ class FakeFederationRepository implements FederationRepository {
     this.recordedPdus.push({ eventId, origin, roomId, accepted, rejectionReason });
   }
   async createRoom() {}
-  async getRoom() {
+  getRoom() {
     return this.room;
   }
-  async getEvent(eventId: string) {
+  getEvent(eventId: string) {
     return this.events.get(eventId) ?? null;
   }
-  async getLatestRoomEvents(_roomId: string) {
+  getLatestRoomEvents(_roomId: string) {
     return [];
   }
-  async getRoomState() {
+  getRoomState() {
     return this.roomState;
   }
-  async getInviteStrippedState() {
+  getInviteStrippedState() {
     return [];
   }
-  async storeIncomingEvent(event: any) {
+  storeIncomingEvent(event: any) {
     this.events.set(event.event_id, event);
   }
   async notifyUsersOfEvent() {}
@@ -70,7 +70,7 @@ function createFederationService(repo: FederationRepository) {
         sql: { connection: {} },
         kv: {
           cache: {
-            async get() {
+            get() {
               return null;
             },
             async put() {},
@@ -80,30 +80,30 @@ function createFederationService(repo: FederationRepository) {
         blob: {},
         jobs: { defer() {} },
         workflow: {
-          async createRoomJoin() {
+          createRoomJoin() {
             return {};
           },
-          async createPushNotification() {
+          createPushNotification() {
             return {};
           },
         },
         rateLimit: {},
         realtime: {
           async notifyRoomEvent() {},
-          async waitForUserEvents() {
+          waitForUserEvents() {
             return { hasEvents: false };
           },
         },
         metrics: {},
         clock: { now: () => 1_700_000_000_000 },
         id: {
-          async generateRoomId() {
+          generateRoomId() {
             return "!room:test";
           },
-          async generateEventId() {
+          generateEventId() {
             return "$event";
           },
-          async generateOpaqueId() {
+          generateOpaqueId() {
             return "opaque";
           },
           formatRoomAlias(localpart: string, serverName: string) {
@@ -130,18 +130,18 @@ function createFederationService(repo: FederationRepository) {
     } as AppContext,
     repo,
     {
-      async verifyJson() {
+      verifyJson() {
         return false;
       },
     },
     {
-      async discover() {
+      discover() {
         return { host: "example.com", port: 8448, tlsHostname: "example.com" };
       },
     },
     { async enqueue() {} },
     {
-      async get() {
+      get() {
         return null;
       },
       async put() {},

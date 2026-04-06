@@ -43,7 +43,7 @@ function ipv4ToInt(ip: string): number {
   if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) {
     return -1;
   }
-  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  return Math.trunc(((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]));
 }
 
 /**
@@ -146,7 +146,7 @@ function isBlockedIPAddress(hostname: string): boolean {
   }
 
   // IPv6 check (with brackets removed if present)
-  const ipv6 = hostname.replace(/^\[|\]$/g, "");
+  const ipv6 = hostname.replaceAll(/^\[|\]$/g, "");
   if (ipv6.includes(":")) {
     return isBlockedIPv6(ipv6);
   }

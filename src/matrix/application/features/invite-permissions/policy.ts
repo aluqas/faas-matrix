@@ -59,8 +59,8 @@ function readIgnoredUsers(content: unknown): string[] {
 }
 
 function wildcardToRegExp(pattern: string): RegExp {
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  const withWildcards = escaped.replace(/\*/g, ".*").replace(/\?/g, ".");
+  const escaped = pattern.replaceAll(/[.+^${}()|[\]\\]/g, "\\$&");
+  const withWildcards = escaped.replaceAll('*', ".*").replaceAll('?', ".");
   return new RegExp(`^${withWildcards}$`);
 }
 

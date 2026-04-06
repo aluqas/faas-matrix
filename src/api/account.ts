@@ -126,7 +126,7 @@ app.post("/_matrix/client/v3/account/password", requireAuth(), async (c) => {
 });
 
 // POST /_matrix/client/v3/account/password/email/requestToken - Request password reset via email
-app.post("/_matrix/client/v3/account/password/email/requestToken", async (c) => {
+app.post("/_matrix/client/v3/account/password/email/requestToken", (c) => {
   // Email-based password reset not supported
   return c.json(
     {
@@ -138,7 +138,7 @@ app.post("/_matrix/client/v3/account/password/email/requestToken", async (c) => 
 });
 
 // POST /_matrix/client/v3/account/password/msisdn/requestToken - Request password reset via phone
-app.post("/_matrix/client/v3/account/password/msisdn/requestToken", async (c) => {
+app.post("/_matrix/client/v3/account/password/msisdn/requestToken", (c) => {
   // Phone-based password reset not supported
   return c.json(
     {
@@ -371,7 +371,7 @@ app.post("/_matrix/client/v3/account/3pid/add", requireAuth(), async (c) => {
 });
 
 // POST /_matrix/client/v3/account/3pid/bind - Bind 3PID to identity server
-app.post("/_matrix/client/v3/account/3pid/bind", requireAuth(), async (c) => {
+app.post("/_matrix/client/v3/account/3pid/bind", requireAuth(), (c) => {
   return c.json(
     {
       errcode: "M_THREEPID_AUTH_FAILED",
@@ -412,7 +412,7 @@ app.post("/_matrix/client/v3/account/3pid/delete", requireAuth(), async (c) => {
 });
 
 // POST /_matrix/client/v3/account/3pid/unbind - Unbind 3PID from identity server
-app.post("/_matrix/client/v3/account/3pid/unbind", requireAuth(), async (c) => {
+app.post("/_matrix/client/v3/account/3pid/unbind", requireAuth(), (c) => {
   return c.json({
     id_server_unbind_result: "no-support",
   });
@@ -604,7 +604,7 @@ app.get("/_matrix/client/v3/account/3pid/submit_token", async (c) => {
 });
 
 // POST /_matrix/client/v3/account/3pid/msisdn/requestToken - Request phone verification
-app.post("/_matrix/client/v3/account/3pid/msisdn/requestToken", async (c) => {
+app.post("/_matrix/client/v3/account/3pid/msisdn/requestToken", (c) => {
   return c.json(
     {
       errcode: "M_THREEPID_DENIED",
@@ -619,7 +619,7 @@ app.post("/_matrix/client/v3/account/3pid/msisdn/requestToken", async (c) => {
 // ============================================
 
 // GET /_matrix/client/v1/register/m.login.registration_token/validity - Check registration token
-app.get("/_matrix/client/v1/register/m.login.registration_token/validity", async (c) => {
+app.get("/_matrix/client/v1/register/m.login.registration_token/validity", (c) => {
   const token = c.req.query("token");
 
   if (!token) {
@@ -656,10 +656,10 @@ app.post("/_matrix/client/v3/user/:userId/openid/request_token", requireAuth(), 
   // Generate a short-lived access token for OpenID
   // This token can be exchanged with third-party services to prove identity
   const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
-  const accessToken = btoa(String.fromCharCode(...tokenBytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
+  const accessToken = btoa(String.fromCodePoint(...tokenBytes))
+    .replaceAll('+', "-")
+    .replaceAll('/', "_")
+    .replaceAll('=', "");
 
   // Token expires in 1 hour (3600 seconds)
   const expiresIn = 3600;

@@ -312,8 +312,8 @@ async function handleSendJoin(c: any, version: "v1" | "v2"): Promise<Response> {
   }
 }
 
-app.put("/_matrix/federation/v1/send_join/:roomId/:eventId", async (c) => handleSendJoin(c, "v1"));
-app.put("/_matrix/federation/v2/send_join/:roomId/:eventId", async (c) => handleSendJoin(c, "v2"));
+app.put("/_matrix/federation/v1/send_join/:roomId/:eventId", (c) => handleSendJoin(c, "v1"));
+app.put("/_matrix/federation/v2/send_join/:roomId/:eventId", (c) => handleSendJoin(c, "v2"));
 
 app.get("/_matrix/federation/v1/make_leave/:roomId/:userId", async (c) => {
   const roomId = c.req.param("roomId");
@@ -514,10 +514,10 @@ async function handleSendLeave(c: any, version: "v1" | "v2"): Promise<Response> 
   return version === "v1" ? c.json([200, {}]) : c.json({});
 }
 
-app.put("/_matrix/federation/v1/send_leave/:roomId/:eventId", async (c) =>
+app.put("/_matrix/federation/v1/send_leave/:roomId/:eventId", (c) =>
   handleSendLeave(c, "v1"),
 );
-app.put("/_matrix/federation/v2/send_leave/:roomId/:eventId", async (c) =>
+app.put("/_matrix/federation/v2/send_leave/:roomId/:eventId", (c) =>
   handleSendLeave(c, "v2"),
 );
 
@@ -625,10 +625,10 @@ async function handleFederationInvite(c: any, version: "v1" | "v2"): Promise<Res
   }
 }
 
-app.put("/_matrix/federation/v1/invite/:roomId/:eventId", async (c) =>
+app.put("/_matrix/federation/v1/invite/:roomId/:eventId", (c) =>
   handleFederationInvite(c, "v1"),
 );
-app.put("/_matrix/federation/v2/invite/:roomId/:eventId", async (c) =>
+app.put("/_matrix/federation/v2/invite/:roomId/:eventId", (c) =>
   handleFederationInvite(c, "v2"),
 );
 

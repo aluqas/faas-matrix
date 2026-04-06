@@ -14,7 +14,7 @@ app.get("/_matrix/identity/v2", (c) => {
 });
 
 // GET /_matrix/identity/v2/account - Check if registered
-app.get("/_matrix/identity/v2/account", async (c) => {
+app.get("/_matrix/identity/v2/account", (c) => {
   const token = extractBearerToken(c.req);
   if (!token) {
     return Errors.missingToken().toResponse();
@@ -230,7 +230,7 @@ async function getPepper(cache: KVNamespace): Promise<string> {
   const existing = await cache.get("identity:pepper");
   if (existing) return existing;
 
-  const pepper = crypto.randomUUID().replace(/-/g, "");
+  const pepper = crypto.randomUUID().replaceAll('-', "");
   await cache.put("identity:pepper", pepper, { expirationTtl: 7 * 24 * 60 * 60 }); // 7 day TTL
   return pepper;
 }

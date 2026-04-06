@@ -119,14 +119,14 @@ async function callsRequest<T>(env: Env, method: string, path: string, body?: un
  * Create a new Calls session
  * Each session corresponds to a WebRTC PeerConnection
  */
-export async function createSession(env: Env): Promise<NewSessionResponse> {
+export function createSession(env: Env): Promise<NewSessionResponse> {
   return callsRequest<NewSessionResponse>(env, "POST", "/sessions/new");
 }
 
 /**
  * Add tracks to a session (push local tracks or pull remote tracks)
  */
-export async function addTracks(
+export function addTracks(
   env: Env,
   sessionId: string,
   request: NewTracksRequest,
@@ -137,7 +137,7 @@ export async function addTracks(
 /**
  * Renegotiate a session (required when requiresImmediateRenegotiation is true)
  */
-export async function renegotiate(
+export function renegotiate(
   env: Env,
   sessionId: string,
   request: RenegotiateRequest,
@@ -168,7 +168,7 @@ export async function closeTracks(
 /**
  * Get current session state
  */
-export async function getSessionState(env: Env, sessionId: string): Promise<SessionState> {
+export function getSessionState(env: Env, sessionId: string): Promise<SessionState> {
   return callsRequest<SessionState>(env, "GET", `/sessions/${sessionId}`);
 }
 

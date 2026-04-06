@@ -113,7 +113,7 @@ app.post("/_matrix/key/v2/query", async (c) => {
 
 app.on(["GET", "PUT", "DELETE", "PATCH"], "/_matrix/key/v2/query", () => methodNotAllowedJson());
 
-app.get("/_matrix/key/v2/query/:serverName", async (c) => {
+app.get("/_matrix/key/v2/query/:serverName", (c) => {
   const serverName = c.req.param("serverName");
   const minimumValidUntilTs = Number.parseInt(c.req.query("minimum_valid_until_ts") || "0", 10);
 
@@ -126,7 +126,7 @@ app.get("/_matrix/key/v2/query/:serverName", async (c) => {
   );
 });
 
-app.get("/_matrix/key/v2/query/:serverName/:keyId", async (c) => {
+app.get("/_matrix/key/v2/query/:serverName/:keyId", (c) => {
   const serverName = c.req.param("serverName");
   const keyId = c.req.param("keyId");
   const minimumValidUntilTs = Number.parseInt(c.req.query("minimum_valid_until_ts") || "0", 10);
@@ -141,7 +141,7 @@ app.get("/_matrix/key/v2/query/:serverName/:keyId", async (c) => {
   );
 });
 
-app.get("/_matrix/federation/v1/query/directory", async (c) => {
+app.get("/_matrix/federation/v1/query/directory", (c) => {
   const alias = c.req.query("room_alias");
   if (!alias) {
     return Errors.missingParam("room_alias").toResponse();
@@ -155,7 +155,7 @@ app.get("/_matrix/federation/v1/query/directory", async (c) => {
   );
 });
 
-app.get("/_matrix/federation/v1/query/profile", async (c) => {
+app.get("/_matrix/federation/v1/query/profile", (c) => {
   const userId = c.req.query("user_id");
   const field = c.req.query("field");
 

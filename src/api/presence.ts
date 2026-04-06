@@ -89,7 +89,7 @@ app.put("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
             input.now,
           );
         },
-        async resolveInterestedServers(userId: string) {
+        resolveInterestedServers(userId: string) {
           return getSharedServersInRoomsWithUserIncludingPartialState(db, c.env.CACHE, userId);
         },
         async queueEdu(destination: string, content: PresenceEduContent) {
@@ -143,7 +143,7 @@ app.get("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
 // ============================================
 
 // Get presence for multiple users (for sync)
-export async function getPresenceForUsers(db: D1Database, userIds: string[], cache?: KVNamespace) {
+export function getPresenceForUsers(db: D1Database, userIds: string[], cache?: KVNamespace) {
   return findPresenceByUserIds(db, userIds, cache);
 }
 

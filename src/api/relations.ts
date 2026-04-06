@@ -278,7 +278,7 @@ app.get("/_matrix/client/v1/rooms/:roomId/relations/:eventId", requireAuth(), as
   const from = c.req.query("from");
   // Note: 'to' pagination param reserved for future use
   void c.req.query("to");
-  const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
   const dir = c.req.query("dir") || "b"; // backwards by default
 
   const cursor = parseRelationCursor(from);
@@ -368,7 +368,7 @@ app.get(
     }
 
     // Get pagination params
-    const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
+    const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
     const dir = c.req.query("dir") || "b";
     const cursor = parseRelationCursor(c.req.query("from"));
 
@@ -446,7 +446,7 @@ app.get(
       return Errors.forbidden("Not a member of this room").toResponse();
     }
 
-    const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
+    const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
     const dir = c.req.query("dir") || "b";
     const cursor = parseRelationCursor(c.req.query("from"));
 
@@ -527,7 +527,7 @@ app.get("/_matrix/client/v1/rooms/:roomId/threads", requireAuth(), async (c) => 
     return Errors.forbidden("Not a member of this room").toResponse();
   }
 
-  const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
   const include = c.req.query("include") || "all"; // 'all' or 'participated'
 
   // Find thread roots (events that have replies with m.thread relation)

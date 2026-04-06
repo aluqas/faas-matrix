@@ -488,7 +488,7 @@ async function getRoomData(
     const eventsToUse = timelineEvents.results.slice(0, config.timelineLimit) as any[];
 
     // For initial sync, reverse to get chronological order
-    const eventsToProcess = isIncremental ? eventsToUse : eventsToUse.reverse();
+    const eventsToProcess = isIncremental ? eventsToUse : eventsToUse.toReversed();
 
     result.timeline = eventsToProcess.map((event) => {
       try {
@@ -517,7 +517,7 @@ async function getRoomData(
 
     // Track the max stream_ordering we're sending
     if (eventsToProcess.length > 0) {
-      const maxEvent = eventsToProcess[eventsToProcess.length - 1];
+      const maxEvent = eventsToProcess.at(-1);
       result.maxStreamOrdering = maxEvent.stream_ordering;
     }
 
@@ -683,7 +683,7 @@ async function buildMsc3575SlidingSyncResponse(
   // IMPORTANT: pos can be in query string OR body - check both
   const queryPos = c.req.query("pos");
   const posToken = queryPos || body.pos;
-  const sincePos = posToken ? parseInt(posToken) : 0;
+  const sincePos = posToken ? parseInt(posToken, 10) : 0;
   // Note: isInitialSync is computed but not currently used (for future diagnostics)
   void (!posToken || !connectionState);
 
@@ -1108,7 +1108,7 @@ async function buildSimplifiedSlidingSyncResponse(
   // Parse timeout for long-polling (query string takes precedence, then body, default 0)
   const queryTimeout = c.req.query("timeout");
   const timeout = Math.min(
-    queryTimeout ? parseInt(queryTimeout) : body.timeout || 0,
+    queryTimeout ? parseInt(queryTimeout, 10) : body.timeout || 0,
     25000, // Cap at 25s to stay under Workers 30s limit
   );
 
@@ -1135,7 +1135,7 @@ async function buildSimplifiedSlidingSyncResponse(
   // Element X sends pos in query string, other clients may use body
   const queryPos = c.req.query("pos");
   const posToken = queryPos || body.pos;
-  const sincePos = posToken ? parseInt(posToken) : 0;
+  const sincePos = posToken ? parseInt(posToken, 10) : 0;
 
   // Debug logging for connection state (includes user-agent for NSE debugging)
   console.log("[sliding-sync] Request:", {
@@ -1152,7 +1152,7 @@ async function buildSimplifiedSlidingSyncResponse(
       !!body.room_subscriptions && Object.keys(body.room_subscriptions).length > 0,
     hasExtensions: !!body.extensions,
     extensionKeys: body.extensions ? Object.keys(body.extensions) : [],
-    userAgent: userAgent?.substring(0, 100), // Truncate for log readability
+    userAgent: userAgent?.slice(0, 100), // Truncate for log readability
   });
 
   // If client sends a pos but we don't have connection state, check if the pos

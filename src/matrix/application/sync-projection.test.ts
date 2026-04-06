@@ -43,35 +43,35 @@ class FakeSyncRepository implements SyncRepository {
   deviceListChanges = { changed: [] as string[], left: [] as string[] };
   lastGlobalAccountDataSince?: number;
 
-  async loadFilter() {
+  loadFilter() {
     return null;
   }
-  async getLatestStreamPosition() {
+  getLatestStreamPosition() {
     return 5;
   }
-  async getLatestDeviceKeyPosition() {
+  getLatestDeviceKeyPosition() {
     return 0;
   }
-  async getToDeviceMessages() {
+  getToDeviceMessages() {
     return { events: [], nextBatch: "0" };
   }
-  async getOneTimeKeyCounts() {
+  getOneTimeKeyCounts() {
     return {};
   }
-  async getUnusedFallbackKeyTypes() {
+  getUnusedFallbackKeyTypes() {
     return [];
   }
-  async getDeviceListChanges() {
+  getDeviceListChanges() {
     return this.deviceListChanges;
   }
-  async getGlobalAccountData(_userId: string, since?: number) {
+  getGlobalAccountData(_userId: string, since?: number) {
     this.lastGlobalAccountDataSince = since;
     return this.globalAccountData;
   }
-  async getRoomAccountData(_userId: string, roomId: string) {
+  getRoomAccountData(_userId: string, roomId: string) {
     return this.roomAccountData.get(roomId) ?? [];
   }
-  async getUserRooms(_userId?: string, membership?: "join" | "invite" | "leave" | "ban" | "knock") {
+  getUserRooms(_userId?: string, membership?: "join" | "invite" | "leave" | "ban" | "knock") {
     if (membership === "join") return this.joinedRooms;
     if (membership === "invite") return this.inviteRooms;
     if (membership === "knock") return this.knockRooms;
@@ -83,25 +83,25 @@ class FakeSyncRepository implements SyncRepository {
     }
     return [];
   }
-  async getMembership(roomId: string, userId: string) {
+  getMembership(roomId: string, userId: string) {
     return this.memberships.get(`${roomId}:${userId}`) ?? null;
   }
-  async getEventsSince(roomId: string) {
+  getEventsSince(roomId: string) {
     return this.eventsSince.get(roomId) ?? [];
   }
-  async getEvent(eventId: string) {
+  getEvent(eventId: string) {
     return this.eventsById.get(eventId) ?? null;
   }
-  async getRoomState(roomId: string) {
+  getRoomState(roomId: string) {
     return this.roomStates.get(roomId) ?? [];
   }
-  async getInviteStrippedState(roomId: string) {
+  getInviteStrippedState(roomId: string) {
     return this.inviteStates.get(roomId) ?? [];
   }
-  async getReceiptsForRoom(roomId: string) {
+  getReceiptsForRoom(roomId: string) {
     return this.receiptsByRoom.get(roomId) ?? { type: "m.receipt", content: {} };
   }
-  async getUnreadNotificationSummary(roomId: string) {
+  getUnreadNotificationSummary(roomId: string) {
     return (
       this.unreadSummaryByRoom.get(roomId) ?? {
         room: { notification_count: 0, highlight_count: 0 },
@@ -110,10 +110,10 @@ class FakeSyncRepository implements SyncRepository {
       }
     );
   }
-  async getTypingUsers(roomId: string) {
+  getTypingUsers(roomId: string) {
     return this.typingUsersByRoom.get(roomId) ?? [];
   }
-  async waitForUserEvents() {
+  waitForUserEvents() {
     return { hasEvents: false };
   }
 }

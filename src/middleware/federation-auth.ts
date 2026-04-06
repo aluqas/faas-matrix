@@ -23,7 +23,7 @@ function parseAuthHeader(authHeader: string): MatrixAuthParams | null {
     return null;
   }
 
-  const params = authHeader.substring(9); // Remove "X-Matrix "
+  const params = authHeader.slice(9); // Remove "X-Matrix "
   const result: Partial<MatrixAuthParams> = {};
 
   // Parse key=value pairs

@@ -35,7 +35,7 @@ export async function handleFederationQueue(
 
   // Send transactions to each destination
   const results = await Promise.allSettled(
-    Array.from(byDestination.entries()).map(async ([destination, data]) => {
+    Array.from(byDestination.entries()).map(([destination, data]) => {
       return sendFederationTransaction(env, destination, data);
     }),
   );

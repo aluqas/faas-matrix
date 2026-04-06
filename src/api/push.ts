@@ -1087,7 +1087,7 @@ app.get("/_matrix/client/v3/notifications", requireAuth(), async (c) => {
   // Calculate next_token
   let nextToken: string | undefined;
   if (notifications.results.length > 0) {
-    const lastNotification = notifications.results[notifications.results.length - 1];
+    const lastNotification = notifications.results.at(-1);
     if (lastNotification) {
       nextToken = String(lastNotification.id);
     }
@@ -1171,7 +1171,7 @@ function matchesRule(
 
     // Convert glob pattern to regex
     const regex = new RegExp(
-      rule.pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, ".*"),
+      rule.pattern.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll('\\*', ".*"),
       "i",
     );
     return regex.test(body);
@@ -1203,7 +1203,7 @@ function matchesCondition(
       // Handle user_id placeholder
       const pattern = condition.pattern === "" ? userId : condition.pattern;
       const regex = new RegExp(
-        pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, ".*"),
+        pattern.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll('\\*', ".*"),
         "i",
       );
       return regex.test(String(value));
@@ -1247,13 +1247,13 @@ function matchesCondition(
 
     case "event_property_is": {
       if (!condition.key) return false;
-      const value = getNestedValue(event, condition.key.replace(/\\\./g, "."));
+      const value = getNestedValue(event, condition.key.replaceAll('\\.', "."));
       return value === condition.value;
     }
 
     case "event_property_contains": {
       if (!condition.key) return false;
-      const value = getNestedValue(event, condition.key.replace(/\\\./g, "."));
+      const value = getNestedValue(event, condition.key.replaceAll('\\.', "."));
       if (!Array.isArray(value)) return false;
       return value.includes(condition.value);
     }
@@ -1269,7 +1269,7 @@ function matchesCondition(
 
 // Generate a short correlation ID for tracking push -> NSE flow
 function generatePushCorrelationId(): string {
-  return Math.random().toString(36).substring(2, 10);
+  return Math.random().toString(36).slice(2, 10);
 }
 
 // Send push notification to a user's registered pushers
@@ -1630,7 +1630,7 @@ async function sendDirectAPNs(
       logger.info("push.command.dispatch", {
         command: "direct_apns",
         topic,
-        pushkey_prefix: `${pusher.pushkey.substring(0, 16)}...`,
+        pushkey_prefix: `${pusher.pushkey.slice(0, 16)}...`,
         alert: aps["alert"],
       }),
     );
@@ -1660,7 +1660,7 @@ async function sendDirectAPNs(
         }),
       );
       return true;
-    } else {
+    }
       await runClientEffect(
         logger.warn("push.command.gateway_error", {
           command: "direct_apns",
@@ -1669,7 +1669,7 @@ async function sendDirectAPNs(
         }),
       );
       return false;
-    }
+    
   } catch (error) {
     await runClientEffect(
       logger.error("push.command.error", error, {

@@ -117,7 +117,7 @@ export class CloudflareRoomRepository implements RoomRepository {
   }
 
   storeEvent(event: PDU): Promise<void> {
-    return storeEvent(this.env.DB, event).then(() => undefined);
+    return storeEvent(this.env.DB, event).then(() => {});
   }
 
   persistMembershipEvent(
@@ -171,7 +171,7 @@ export class CloudflareRoomRepository implements RoomRepository {
     return getStateEvent(this.env.DB, roomId, eventType, stateKey);
   }
 
-  async getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]> {
+  getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]> {
     return getLatestRoomEventsByDepth(this.env.DB, roomId, limit);
   }
 }
@@ -550,7 +550,7 @@ export class CloudflareFederationRepository implements FederationRepository {
     return getEvent(this.env.DB, eventId);
   }
 
-  async getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]> {
+  getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]> {
     return getLatestForwardExtremities(this.env.DB, roomId, limit);
   }
 
@@ -684,7 +684,7 @@ export class CloudflareFederationRepository implements FederationRepository {
 }
 
 export class CloudflareSignedTransport implements SignedTransport {
-  async verifyJson(): Promise<boolean> {
+  verifyJson(): Promise<boolean> {
     return false;
   }
 }

@@ -15,7 +15,7 @@ import type {
 import { getRoomVersion, type EventIdFormat } from "../services/room-versions";
 
 // Generate a random opaque ID using Web Crypto API
-export async function generateOpaqueId(length: number = 18): Promise<string> {
+export function generateOpaqueId(length: number = 18): Promise<string> {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
   return base64UrlEncode(bytes);
@@ -23,16 +23,16 @@ export async function generateOpaqueId(length: number = 18): Promise<string> {
 
 // Base64 URL-safe encoding
 export function base64UrlEncode(bytes: Uint8Array): string {
-  const base64 = btoa(String.fromCharCode(...bytes));
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  const base64 = btoa(String.fromCodePoint(...bytes));
+  return base64.replaceAll('+', "-").replaceAll('/', "_").replaceAll('=', "");
 }
 
 // Base64 URL-safe decoding
 export function base64UrlDecode(str: string): Uint8Array {
-  const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  const base64 = str.replaceAll('-', "+").replaceAll('_', "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = atob(padded);
-  return new Uint8Array([...binary].map((c) => c.charCodeAt(0)));
+  return new Uint8Array([...binary].map((c) => c.codePointAt(0)));
 }
 
 // Generate a user ID
@@ -110,7 +110,7 @@ export async function generateDeviceId(): Promise<DeviceId> {
 }
 
 // Generate an access token
-export async function generateAccessToken(): Promise<AccessToken> {
+export function generateAccessToken(): Promise<AccessToken> {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return `syt_${base64UrlEncode(bytes)}` as AccessToken;
@@ -124,14 +124,14 @@ export async function generateTransactionId(): Promise<TransactionId> {
 }
 
 // Generate a login token (for QR code authentication)
-export async function generateLoginToken(): Promise<LoginToken> {
+export function generateLoginToken(): Promise<LoginToken> {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return `mlt_${base64UrlEncode(bytes)}` as LoginToken;
 }
 
 // Generate a refresh token (for token refresh flow)
-export async function generateRefreshToken(): Promise<RefreshToken> {
+export function generateRefreshToken(): Promise<RefreshToken> {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return `syr_${base64UrlEncode(bytes)}` as RefreshToken;

@@ -137,7 +137,7 @@ export class CallRoomDurableObject implements DurableObject {
     });
   }
 
-  async fetch(request: Request): Promise<Response> {
+  fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
     // Initialize call room
@@ -178,7 +178,7 @@ export class CallRoomDurableObject implements DurableObject {
     });
   }
 
-  private async handleWebSocket(request: Request): Promise<Response> {
+  private handleWebSocket(request: Request): Promise<Response> {
     // Verify WebSocket upgrade
     const upgradeHeader = request.headers.get("Upgrade");
     if (!upgradeHeader || upgradeHeader !== "websocket") {
@@ -418,7 +418,7 @@ export class CallRoomDurableObject implements DurableObject {
     }
   }
 
-  private async handleMute(ws: WebSocket, msg: MuteMessage): Promise<void> {
+  private handleMute(ws: WebSocket, msg: MuteMessage): Promise<void> {
     const participant = this.getParticipantBySocket(ws);
     if (!participant) {
       this.sendError(ws, "NOT_JOINED", "Must join before muting");

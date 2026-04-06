@@ -26,7 +26,7 @@ function normalizeMaxDepth(maxDepth: number | undefined): number {
 }
 
 async function computeChildrenHash(eventIds: string[]): Promise<string> {
-  const sorted = [...eventIds].sort();
+  const sorted = [...eventIds].toSorted();
   const bytes = new TextEncoder().encode(sorted.join(""));
   const hash = await crypto.subtle.digest("SHA-256", bytes);
   return encodeUnpaddedBase64(new Uint8Array(hash));
@@ -146,7 +146,7 @@ async function loadChildEvents(
     }>();
 
   return Promise.all(
-    rows.results.map(async (row) =>
+    rows.results.map((row) =>
       augmentEvent(db, {
         event_id: row.event_id,
         room_id: row.room_id,
@@ -216,7 +216,7 @@ export async function getRemoteServersForRoom(
           (serverName): serverName is string => !!serverName && serverName !== localServerName,
         ),
     ),
-  ).sort();
+  ).toSorted();
 }
 
 export async function persistFederatedRelationshipResponse(

@@ -23,9 +23,9 @@ class MockD1Database {
   prepare(query: string) {
     const handler = this.handlers.find(({ match }) => match.test(query));
     const bound = {
-      all: async <T>() => ({ results: (handler?.all ?? []) as T[] }),
-      first: async <T>() => (handler?.first ?? null) as T | null,
-      run: async () => ({ success: true }),
+      all: <T>() => ({ results: (handler?.all ?? []) as T[] }),
+      first: <T>() => (handler?.first ?? null) as T | null,
+      run: () => ({ success: true }),
     };
 
     return {
@@ -278,14 +278,14 @@ describe("database state helpers", () => {
             bind: (...params: unknown[]) => {
               boundParams.push(params);
               return {
-                first: async () => ({ max_ordering: 41 }),
-                run: async () => ({ success: true }),
-                all: async () => ({ results: [] }),
+                first: () => ({ max_ordering: 41 }),
+                run: () => ({ success: true }),
+                all: () => ({ results: [] }),
               };
             },
-            first: async () => ({ max_ordering: 41 }),
-            run: async () => ({ success: true }),
-            all: async () => ({ results: [] }),
+            first: () => ({ max_ordering: 41 }),
+            run: () => ({ success: true }),
+            all: () => ({ results: [] }),
           };
         }
 
@@ -295,16 +295,16 @@ describe("database state helpers", () => {
 
             if (/SELECT stream_ordering FROM events WHERE event_id = \?/.test(query)) {
               return {
-                first: async () => null,
-                run: async () => ({ success: true }),
-                all: async () => ({ results: [] }),
+                first: () => null,
+                run: () => ({ success: true }),
+                all: () => ({ results: [] }),
               };
             }
 
             return {
-              first: async () => null,
-              run: async () => ({ success: true }),
-              all: async () => ({ results: [] }),
+              first: () => null,
+              run: () => ({ success: true }),
+              all: () => ({ results: [] }),
             };
           },
         };
@@ -347,20 +347,20 @@ describe("database state helpers", () => {
             boundParams.push(params);
             if (/SELECT MAX\(pos\) as next_pos/.test(query)) {
               return {
-                first: async () => ({ next_pos: 10 }),
-                run: async () => ({ success: true }),
-                all: async () => ({ results: [] }),
+                first: () => ({ next_pos: 10 }),
+                run: () => ({ success: true }),
+                all: () => ({ results: [] }),
               };
             }
             return {
-              first: async () => null,
-              run: async () => ({ success: true }),
-              all: async () => ({ results: [] }),
+              first: () => null,
+              run: () => ({ success: true }),
+              all: () => ({ results: [] }),
             };
           },
-          first: async () => null,
-          run: async () => ({ success: true }),
-          all: async () => ({ results: [] }),
+          first: () => null,
+          run: () => ({ success: true }),
+          all: () => ({ results: [] }),
         };
       },
     } as unknown as D1Database;
@@ -387,7 +387,7 @@ describe("database state helpers", () => {
             boundParams.push(params);
             if (/SELECT event_type\s+FROM account_data/.test(query)) {
               return {
-                all: async () => ({
+                all: () => ({
                   results: [
                     {
                       event_type: "org.matrix.msc3890.local_notification_settings.A",
@@ -397,26 +397,26 @@ describe("database state helpers", () => {
                     },
                   ],
                 }),
-                first: async () => null,
-                run: async () => ({ success: true }),
+                first: () => null,
+                run: () => ({ success: true }),
               };
             }
             if (/SELECT MAX\(pos\) as next_pos/.test(query)) {
               return {
-                first: async () => ({ next_pos: 10 }),
-                run: async () => ({ success: true }),
-                all: async () => ({ results: [] }),
+                first: () => ({ next_pos: 10 }),
+                run: () => ({ success: true }),
+                all: () => ({ results: [] }),
               };
             }
             return {
-              all: async () => ({ results: [] }),
-              first: async () => null,
-              run: async () => ({ success: true }),
+              all: () => ({ results: [] }),
+              first: () => null,
+              run: () => ({ success: true }),
             };
           },
-          all: async () => ({ results: [] }),
-          first: async () => null,
-          run: async () => ({ success: true }),
+          all: () => ({ results: [] }),
+          first: () => null,
+          run: () => ({ success: true }),
         };
       },
     } as unknown as D1Database;

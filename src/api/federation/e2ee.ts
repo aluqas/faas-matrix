@@ -88,7 +88,7 @@ app.post("/_matrix/federation/v1/user/keys/claim", async (c) => {
   );
 });
 
-app.get("/_matrix/federation/v1/user/devices/:userId", async (c) => {
+app.get("/_matrix/federation/v1/user/devices/:userId", (c) => {
   return respondWithFederationEffect(
     decodeFederationUserDevicesInput(c.req.param("userId")).pipe(
       Effect.flatMap((input) => queryFederationUserDevicesEffect(getFederationE2EEPorts(c), input)),

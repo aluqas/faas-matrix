@@ -28,11 +28,9 @@ interface OutboundEdu {
 }
 
 export class FederationDurableObject extends DurableObject<Env> {
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
-  }
+  
 
-  async fetch(request: Request): Promise<Response> {
+  fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 

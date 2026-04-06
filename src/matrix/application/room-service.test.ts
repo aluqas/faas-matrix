@@ -9,11 +9,11 @@ import type { PDU, Room, RoomJoinWorkflowParams, RoomJoinWorkflowStatus } from "
 class MemoryIdempotencyStore {
   private readonly entries = new Map<string, Record<string, unknown>>();
 
-  async get(scope: string, key: string): Promise<Record<string, unknown> | null> {
+  get(scope: string, key: string): Promise<Record<string, unknown> | null> {
     return this.entries.get(`${scope}:${key}`) ?? null;
   }
 
-  async put(scope: string, key: string, value: Record<string, unknown>): Promise<void> {
+  put(scope: string, key: string, value: Record<string, unknown>): Promise<void> {
     this.entries.set(`${scope}:${key}`, value);
   }
 }
@@ -35,11 +35,11 @@ class MemoryRoomRepository implements RoomRepository {
     return `${roomId}:${eventType}:${stateKey}`;
   }
 
-  async getRoomByAlias(alias: string): Promise<string | null> {
+  getRoomByAlias(alias: string): Promise<string | null> {
     return this.roomAliases.get(alias) ?? null;
   }
 
-  async createRoom(
+  createRoom(
     roomId: string,
     roomVersion: string,
     creatorId: string,
@@ -54,11 +54,11 @@ class MemoryRoomRepository implements RoomRepository {
     });
   }
 
-  async createRoomAlias(alias: string, roomId: string): Promise<void> {
+  createRoomAlias(alias: string, roomId: string): Promise<void> {
     this.roomAliases.set(alias, roomId);
   }
 
-  async upsertRoomAccountData(
+  upsertRoomAccountData(
     userId: string,
     roomId: string,
     eventType: string,
@@ -67,7 +67,7 @@ class MemoryRoomRepository implements RoomRepository {
     this.accountData.set(`${userId}:${roomId}:${eventType}`, content);
   }
 
-  async storeEvent(event: PDU): Promise<void> {
+  storeEvent(event: PDU): Promise<void> {
     this.storedEvents.push(event);
     if (event.state_key !== undefined) {
       this.stateEvents.set(this.stateKey(event.room_id, event.type, event.state_key), event);
@@ -84,7 +84,7 @@ class MemoryRoomRepository implements RoomRepository {
     }
   }
 
-  async updateMembership(
+  updateMembership(
     roomId: string,
     userId: string,
     membership: MembershipRecord["membership"],
@@ -93,23 +93,23 @@ class MemoryRoomRepository implements RoomRepository {
     this.memberships.set(this.membershipKey(roomId, userId), { membership, eventId });
   }
 
-  async notifyUsersOfEvent(): Promise<void> {
+  notifyUsersOfEvent(): Promise<void> {
     this.notifyCount += 1;
   }
 
-  async getRoom(roomId: string): Promise<Room | null> {
+  getRoom(roomId: string): Promise<Room | null> {
     return this.rooms.get(roomId) ?? null;
   }
 
-  async getEvent(eventId: string): Promise<PDU | null> {
+  getEvent(eventId: string): Promise<PDU | null> {
     return this.storedEvents.find((event) => event.event_id === eventId) ?? null;
   }
 
-  async getMembership(roomId: string, userId: string): Promise<MembershipRecord | null> {
+  getMembership(roomId: string, userId: string): Promise<MembershipRecord | null> {
     return this.memberships.get(this.membershipKey(roomId, userId)) ?? null;
   }
 
-  async getStateEvent(
+  getStateEvent(
     roomId: string,
     eventType: string,
     stateKey: string = "",
@@ -117,11 +117,11 @@ class MemoryRoomRepository implements RoomRepository {
     return this.stateEvents.get(this.stateKey(roomId, eventType, stateKey)) ?? null;
   }
 
-  async getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]> {
+  getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]> {
     return this.storedEvents
       .filter((event) => event.room_id === roomId)
       .slice(-limit)
-      .reverse();
+      .toReversed();
   }
 }
 
@@ -140,13 +140,13 @@ function createTestAppContext(
       sql: { connection: {} },
       kv: {},
       blob: {},
-      jobs: { defer: (_task: Promise<unknown>) => undefined },
+      jobs: { defer: (_task: Promise<unknown>) => {} },
       workflow: {
-        async createRoomJoin(params: RoomJoinWorkflowParams) {
+        createRoomJoin(params: RoomJoinWorkflowParams) {
           roomJoinCalls.push(params);
           return roomJoinStatus;
         },
-        async createPushNotification(params: unknown) {
+        createPushNotification(params: unknown) {
           pushCalls.push(params as Record<string, unknown>);
           return {};
         },
@@ -154,22 +154,22 @@ function createTestAppContext(
       rateLimit: {},
       realtime: {
         async notifyRoomEvent() {},
-        async waitForUserEvents() {
+        waitForUserEvents() {
           return { hasEvents: false };
         },
       },
       metrics: {},
       clock: { now: () => 1_700_000_000_000 },
       id: {
-        async generateRoomId(serverName: string) {
+        generateRoomId(serverName: string) {
           roomCounter += 1;
           return `!room${roomCounter}:${serverName}`;
         },
-        async generateEventId() {
+        generateEventId() {
           eventCounter += 1;
           return `$event${eventCounter}`;
         },
-        async generateOpaqueId() {
+        generateOpaqueId() {
           return "opaque";
         },
         formatRoomAlias(localpart: string, serverName: string) {

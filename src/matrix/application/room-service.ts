@@ -499,8 +499,8 @@ export class MatrixRoomService {
 
     await this.eventPipeline.execute({
       input,
-      validate: () => undefined,
-      resolveAuth: async () => ({ userId: input.userId, roomVersion: room.room_version }),
+      validate: () => {},
+      resolveAuth: () => ({ userId: input.userId, roomVersion: room.room_version }),
       authorize: async (_pipelineInput, auth) => {
         const currentMembership = await this.repository.getMembership(
           validated.roomId,
@@ -886,8 +886,8 @@ export class MatrixRoomService {
     );
     await this.eventPipeline.execute({
       input,
-      validate: () => undefined,
-      resolveAuth: async () => ({ userId: input.userId }),
+      validate: () => {},
+      resolveAuth: () => ({ userId: input.userId }),
       authorize: async (_pipelineInput, auth) => {
         const membership = await this.repository.getMembership(input.roomId, auth.userId);
         await runClientEffect(validateLeavePreconditions(membership?.membership));
@@ -895,7 +895,7 @@ export class MatrixRoomService {
       buildEvent: async (_pipelineInput, auth) => {
         const currentMembership = await this.repository.getMembership(input.roomId, auth.userId);
         if (currentMembership?.membership === "leave") {
-          return undefined;
+          return;
         }
 
         const createEvent = await this.repository.getStateEvent(input.roomId, "m.room.create");
@@ -995,8 +995,8 @@ export class MatrixRoomService {
 
     await this.eventPipeline.execute({
       input,
-      validate: () => undefined,
-      resolveAuth: async () => ({ userId: input.userId }),
+      validate: () => {},
+      resolveAuth: () => ({ userId: input.userId }),
       authorize: async (_pipelineInput, auth) => {
         const inviterMembership = await this.repository.getMembership(
           validated.roomId,
@@ -1334,7 +1334,7 @@ export class MatrixRoomService {
                 input.eventType,
               );
             },
-            notifyFederation: async (_pipelineInput, auth, event) => {
+            notifyFederation: (_pipelineInput, auth, event) => {
               this.deferRoomAsyncTask(
                 logger,
                 {
@@ -1432,8 +1432,8 @@ export class MatrixRoomService {
     );
     await this.eventPipeline.execute({
       input,
-      validate: () => undefined,
-      resolveAuth: async () => ({ userId: input.actorUserId }),
+      validate: () => {},
+      resolveAuth: () => ({ userId: input.actorUserId }),
       authorize: async () => {
         const actorMembership = await this.repository.getMembership(
           input.roomId,

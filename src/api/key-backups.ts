@@ -31,7 +31,7 @@ export type { BackupVersionResponse };
 // ============================================
 
 function generateEtag(): string {
-  return crypto.randomUUID().replace(/-/g, "").substring(0, 16);
+  return crypto.randomUUID().replaceAll('-', "").slice(0, 16);
 }
 
 // ============================================

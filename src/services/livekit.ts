@@ -28,8 +28,8 @@ interface LiveKitClaims {
 // Base64URL encode (no padding)
 function base64UrlEncode(data: Uint8Array | string): string {
   const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
-  const base64 = btoa(String.fromCharCode(...bytes));
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  const base64 = btoa(String.fromCodePoint(...bytes));
+  return base64.replaceAll('+', "-").replaceAll('/', "_").replaceAll('=', "");
 }
 
 // Create HMAC-SHA256 signature

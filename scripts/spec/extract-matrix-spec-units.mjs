@@ -7,11 +7,11 @@ const specRoot = path.join(repoRoot, ".saqula", "matrix-spec");
 function slugify(value) {
   return value
     .toLowerCase()
-    .replace(/`/g, "")
-    .replace(/\{#.*\}/g, "")
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replaceAll(/`/g, "")
+    .replaceAll(/\{#.*\}/g, "")
+    .replaceAll(/&/g, "and")
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "");
 }
 
 function cleanHeading(value) {
@@ -50,7 +50,7 @@ async function extractClientServerModules() {
   const dirPath = path.join(specRoot, "content", "client-server-api", "modules");
   const files = (await readdir(dirPath))
     .filter((entry) => entry.endsWith(".md") && entry !== "index.md")
-    .sort();
+    .toSorted();
   const units = [];
 
   for (const entry of files) {
@@ -120,7 +120,7 @@ async function extractServerServerUnits() {
 
 async function extractOpenApiInventory(specName) {
   const dirPath = path.join(specRoot, "data", "api", specName);
-  const files = (await readdir(dirPath)).filter((entry) => entry.endsWith(".yaml")).sort();
+  const files = (await readdir(dirPath)).filter((entry) => entry.endsWith(".yaml")).toSorted();
   return files.map((entry) => ({
     id: `${specName}-${entry.replace(/\.yaml$/, "")}`,
     title: entry.replace(/\.yaml$/, ""),

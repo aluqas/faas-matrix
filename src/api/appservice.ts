@@ -54,7 +54,7 @@ app.get("/_matrix/app/v1/rooms/:roomAlias", requireAppServiceAuth, async (c) => 
 });
 
 // GET /_matrix/app/v1/thirdparty/protocol/:protocol - Get third party protocol info
-app.get("/_matrix/app/v1/thirdparty/protocol/:protocol", requireAppServiceAuth, async (c) => {
+app.get("/_matrix/app/v1/thirdparty/protocol/:protocol", requireAppServiceAuth, (c) => {
   // Stub - return empty protocol info
   return c.json({
     user_fields: [],
@@ -65,12 +65,12 @@ app.get("/_matrix/app/v1/thirdparty/protocol/:protocol", requireAppServiceAuth, 
 });
 
 // GET /_matrix/app/v1/thirdparty/user/:protocol - Lookup third party users
-app.get("/_matrix/app/v1/thirdparty/user/:protocol", requireAppServiceAuth, async (c) => {
+app.get("/_matrix/app/v1/thirdparty/user/:protocol", requireAppServiceAuth, (c) => {
   return c.json([]);
 });
 
 // GET /_matrix/app/v1/thirdparty/location/:protocol - Lookup third party locations
-app.get("/_matrix/app/v1/thirdparty/location/:protocol", requireAppServiceAuth, async (c) => {
+app.get("/_matrix/app/v1/thirdparty/location/:protocol", requireAppServiceAuth, (c) => {
   return c.json([]);
 });
 

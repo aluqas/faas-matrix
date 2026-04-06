@@ -9,7 +9,7 @@ describe("queueFederationEduWithPorts", () => {
     await queueFederationEduWithPorts(
       {
         runEffect: Effect.runPromise,
-        async enqueue(destination) {
+        enqueue(destination) {
           enqueued.push(destination);
         },
       },

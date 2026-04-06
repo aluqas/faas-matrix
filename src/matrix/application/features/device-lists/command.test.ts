@@ -16,13 +16,13 @@ function createPorts(
   return {
     localServerName: "hs1",
     now: () => 1000,
-    async getSharedRemoteServers() {
+    getSharedRemoteServers() {
       return ["hs2", "hs3"];
     },
-    async getUserDevices() {
+    getUserDevices() {
       return [{ device_id: "A", display_name: "Alpha" }, { device_id: "B" }];
     },
-    async getStoredDeviceKeys(userId, deviceId) {
+    getStoredDeviceKeys(userId, deviceId) {
       return {
         user_id: userId,
         device_id: deviceId,
@@ -32,7 +32,7 @@ function createPorts(
         unsigned: deviceId === "A" ? { device_display_name: "Display Alpha" } : {},
       };
     },
-    async queueEdu(destination, eduType, content) {
+    queueEdu(destination, eduType, content) {
       sent.push({ destination, eduType, content });
     },
     ...overrides,
@@ -73,7 +73,7 @@ describe("publishDeviceListUpdatesForNewlySharedServers", () => {
 
   it("sends updates without stored keys and avoids sending when no new servers exist", async () => {
     const noDestinationPorts = createPorts({
-      async getSharedRemoteServers() {
+      getSharedRemoteServers() {
         return ["hs1", "hs2"];
       },
     });
@@ -90,7 +90,7 @@ describe("publishDeviceListUpdatesForNewlySharedServers", () => {
     expect(noDestinationPorts.sent).toHaveLength(0);
 
     const missingKeyPorts = createPorts({
-      async getStoredDeviceKeys(userId, deviceId) {
+      getStoredDeviceKeys(userId, deviceId) {
         if (deviceId === "B") {
           return null;
         }
@@ -130,7 +130,7 @@ describe("publishDeviceListUpdatesForNewlySharedServers", () => {
 
   it("unions handshake-provided shared servers with the database view", async () => {
     const ports = createPorts({
-      async getSharedRemoteServers() {
+      getSharedRemoteServers() {
         return ["hs2"];
       },
     });
@@ -172,10 +172,10 @@ describe("publishDeviceListUpdateToSharedServers", () => {
     return {
       localServerName: "hs1",
       now: () => 2000,
-      async getSharedRemoteServers() {
+      getSharedRemoteServers() {
         return ["hs1", "hs2", "hs3"];
       },
-      async queueEdu(destination, eduType, content) {
+      queueEdu(destination, eduType, content) {
         sent.push({ destination, eduType, content });
       },
       ...overrides,
@@ -223,7 +223,7 @@ describe("publishDeviceListUpdateToSharedServers", () => {
 
   it("omits keys and display name for deleted device updates", async () => {
     const ports = createBroadcastPorts({
-      async getSharedRemoteServers() {
+      getSharedRemoteServers() {
         return ["hs2"];
       },
     });

@@ -69,7 +69,7 @@ export function requireAuth() {
     }
 
     // Log token prefix for debugging (first 8 chars only for security)
-    const tokenPrefix = token.substring(0, 8);
+    const tokenPrefix = token.slice(0, 8);
     console.log(`[AUTH] Validating token ${tokenPrefix}... for ${path}`);
 
     let auth = await validateAccessToken(c.env.DB, token);

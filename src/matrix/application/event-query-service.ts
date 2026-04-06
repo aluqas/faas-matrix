@@ -502,7 +502,7 @@ export class EventQueryService {
       }
     }
 
-    const sortedEvents = events.sort(compareEventOrder);
+    const sortedEvents = events.toSorted(compareEventOrder);
 
     if (!query.requestingServer) {
       return sortedEvents;
@@ -569,7 +569,7 @@ export class EventQueryService {
     });
   }
 
-  async findClosestEventByTimestamp(
+  findClosestEventByTimestamp(
     db: D1Database,
     roomId: string,
     ts: number,

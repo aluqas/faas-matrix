@@ -80,17 +80,17 @@ describe("fanoutEventToRemoteServersWithPorts", () => {
     }> = [];
     const db = {
       prepare(query: string) {
-        const normalizedQuery = query.replace(/\s+/g, " ").trim();
+        const normalizedQuery = query.replaceAll(/\s+/g, " ").trim();
 
         return {
           bind: () => ({
-            first: async <T>() => {
+            first: <T>() => {
               if (normalizedQuery.includes("rs.event_type = 'm.room.server_acl'")) {
                 return null as T | null;
               }
               return null as T | null;
             },
-            all: async <T>() => {
+            all: <T>() => {
               if (normalizedQuery.includes("WITH current_memberships AS")) {
                 return {
                   results: [
@@ -110,7 +110,7 @@ describe("fanoutEventToRemoteServersWithPorts", () => {
       {
         now: () => 123,
         runEffect: Effect.runPromise,
-        async enqueuePdu(input) {
+        enqueuePdu(input) {
           sends.push(input);
         },
       },

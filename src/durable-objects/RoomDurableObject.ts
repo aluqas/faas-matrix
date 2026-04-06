@@ -35,9 +35,7 @@ export class RoomDurableObject extends DurableObject<Env> {
   private receiptsCache: Map<string, ReceiptData> = new Map();
   private receiptsCacheLoaded: boolean = false;
 
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
-  }
+  
 
   private async loadTypingCache(): Promise<void> {
     if (this.typingCacheLoaded) return;
@@ -93,7 +91,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     this.receiptsCacheLoaded = true;
   }
 
-  async fetch(request: Request): Promise<Response> {
+  fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -304,7 +302,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     );
   }
 
-  private async handleWebSocket(request: Request): Promise<Response> {
+  private handleWebSocket(request: Request): Promise<Response> {
     const upgradeHeader = request.headers.get("Upgrade");
     if (!upgradeHeader || upgradeHeader !== "websocket") {
       return new Response("Expected websocket upgrade", { status: 426 });
@@ -363,7 +361,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     return new Response("OK");
   }
 
-  private async handleState(_request: Request): Promise<Response> {
+  private handleState(_request: Request): Promise<Response> {
     // Return current room state
     const webSockets = this.ctx.getWebSockets();
     const users: string[] = [];
@@ -421,7 +419,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     }
   }
 
-  async webSocketClose(
+  webSocketClose(
     ws: WebSocket,
     code: number,
     reason: string,
@@ -452,7 +450,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     ws.close(code, reason);
   }
 
-  async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
+  webSocketError(ws: WebSocket, error: unknown): Promise<void> {
     console.error("WebSocket error:", error);
     const session = ws.deserializeAttachment() as RoomSession | null;
     if (session) {
@@ -460,7 +458,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     }
   }
 
-  private async broadcastTyping(userId: string, isTyping: boolean): Promise<void> {
+  private broadcastTyping(userId: string, isTyping: boolean): Promise<void> {
     const message = JSON.stringify({
       type: "typing",
       user_id: userId,

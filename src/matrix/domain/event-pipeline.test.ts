@@ -6,13 +6,13 @@ describe("DefaultEventPipeline", () => {
     const pipeline = new DefaultEventPipeline();
     const result = await pipeline.execute({
       input: { value: 1 },
-      validate: () => undefined,
-      resolveAuth: async () => ({ userId: "@alice:test" }),
-      authorize: () => undefined,
-      buildEvent: async () => ({ event_id: "$1" }),
-      persist: async () => ({ ok: true }),
-      fanout: async () => undefined,
-      notifyFederation: async () => undefined,
+      validate: () => {},
+      resolveAuth: () => ({ userId: "@alice:test" }),
+      authorize: () => {},
+      buildEvent: () => ({ event_id: "$1" }),
+      persist: () => ({ ok: true }),
+      fanout: async () => {},
+      notifyFederation: async () => {},
     });
 
     expect(result.trace).toEqual([
@@ -30,12 +30,12 @@ describe("DefaultEventPipeline", () => {
     const pipeline = new DefaultEventPipeline();
     const result = await pipeline.execute({
       input: { value: 1 },
-      validate: () => undefined,
-      resolveAuth: async () => ({ userId: "@alice:test" }),
-      authorize: () => undefined,
-      buildEvent: async () => ({ event_id: "$1" }),
-      persist: async () => ({ eventId: "$1" }),
-      fanout: async () => {
+      validate: () => {},
+      resolveAuth: () => ({ userId: "@alice:test" }),
+      authorize: () => {},
+      buildEvent: () => ({ event_id: "$1" }),
+      persist: () => ({ eventId: "$1" }),
+      fanout: () => {
         throw new Error("fanout failed");
       },
     });

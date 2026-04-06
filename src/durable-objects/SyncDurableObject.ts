@@ -49,11 +49,9 @@ export class SyncDurableObject extends DurableObject<Env> {
   // Waiting resolvers for long-polling requests
   private waitingResolvers: Array<(hasEvents: boolean) => void> = [];
 
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
-  }
+  
 
-  async fetch(request: Request): Promise<Response> {
+  fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -182,7 +180,7 @@ export class SyncDurableObject extends DurableObject<Env> {
     this.sessions.set(server, session);
 
     // Send any pending events immediately
-    const pending = await this.getPendingEvents(parseInt(since || "0"));
+    const pending = await this.getPendingEvents(parseInt(since || "0", 10));
     if (pending.length > 0) {
       server.send(
         JSON.stringify({
@@ -295,7 +293,7 @@ export class SyncDurableObject extends DurableObject<Env> {
 
   private async handlePending(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    const since = parseInt(url.searchParams.get("since") || "0");
+    const since = parseInt(url.searchParams.get("since") || "0", 10);
 
     const pending = await this.getPendingEvents(since);
 
@@ -321,7 +319,7 @@ export class SyncDurableObject extends DurableObject<Env> {
     return events;
   }
 
-  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+  webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const session = ws.deserializeAttachment() as SyncSession | null;
     if (!session) return;
 
@@ -348,7 +346,7 @@ export class SyncDurableObject extends DurableObject<Env> {
     }
   }
 
-  async webSocketClose(
+  webSocketClose(
     ws: WebSocket,
     code: number,
     reason: string,
@@ -361,7 +359,7 @@ export class SyncDurableObject extends DurableObject<Env> {
     ws.close(code, reason);
   }
 
-  async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
+  webSocketError(ws: WebSocket, error: unknown): Promise<void> {
     console.error("Sync WebSocket error:", error);
     const session = ws.deserializeAttachment() as SyncSession | null;
     if (session) {

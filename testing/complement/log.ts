@@ -122,7 +122,7 @@ export function byCat(fails: string[]): Array<[string, number]> {
     const cat = categorize(f);
     cats[cat] = (cats[cat] ?? 0) + 1;
   }
-  return Object.entries(cats).sort((a, b) => b[1] - a[1]);
+  return Object.entries(cats).toSorted((a, b) => b[1] - a[1]);
 }
 
 // ---------------------------------------------------------------------------
@@ -156,8 +156,8 @@ export function loadLogs(logsDir: string, maxDepth = 0, lastN = Infinity): Parse
   let files = fs
     .readdirSync(logsDir)
     .filter((f) => LOG_PATTERN.test(f))
-    .sort()
-    .reverse();
+    .toSorted()
+    .toReversed();
   if (Number.isFinite(lastN)) files = files.slice(0, lastN);
   return files.map((f) => {
     const filepath = path.join(logsDir, f);

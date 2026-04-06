@@ -139,8 +139,8 @@ app.get("/admin/api/stats/history", requireAuth(), requireAdmin, async (c) => {
 // GET /admin/api/users - List all users
 app.get("/admin/api/users", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
-  const offset = parseInt(c.req.query("offset") || "0");
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
+  const offset = parseInt(c.req.query("offset") || "0", 10);
   const search = c.req.query("search");
 
   let query = `
@@ -324,8 +324,8 @@ app.post("/admin/api/users/:userId/reset-password", requireAuth(), requireAdmin,
 // GET /admin/api/rooms - List all rooms
 app.get("/admin/api/rooms", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
-  const offset = parseInt(c.req.query("offset") || "0");
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
+  const offset = parseInt(c.req.query("offset") || "0", 10);
 
   const rooms = await db
     .prepare(`
@@ -481,7 +481,7 @@ app.get("/admin/api/federation/status", requireAuth(), requireAdmin, async (c) =
   return c.json({
     server_name: serverName,
     federation_enabled: true,
-    signing_key_id: signingKeyId || `ed25519:a_${serverName.replace(/\./g, "_").substring(0, 4)}`,
+    signing_key_id: signingKeyId || `ed25519:a_${serverName.replaceAll('.', "_").slice(0, 4)}`,
     known_servers_count: serversCount?.count || 0,
   });
 });
@@ -625,8 +625,8 @@ app.get("/admin/api/federation/servers", requireAuth(), requireAdmin, async (c) 
 // GET /admin/api/media - List media files
 app.get("/admin/api/media", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
-  const offset = parseInt(c.req.query("offset") || "0");
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
+  const offset = parseInt(c.req.query("offset") || "0", 10);
 
   const media = await db
     .prepare(`
@@ -687,7 +687,7 @@ app.post("/admin/api/media/:mediaId/quarantine", requireAuth(), requireAdmin, as
 });
 
 // GET /admin/api/config - Get server configuration
-app.get("/admin/api/config", requireAuth(), requireAdmin, async (c) => {
+app.get("/admin/api/config", requireAuth(), requireAdmin, (c) => {
   return c.json({
     server_name: c.env.SERVER_NAME,
     version: c.env.SERVER_VERSION,
@@ -1194,7 +1194,7 @@ app.delete("/admin/api/sessions/:sessionId", requireAuth(), requireAdmin, async 
 app.get("/admin/api/rooms/:roomId/events", requireAuth(), requireAdmin, async (c) => {
   const roomId = decodeURIComponent(c.req.param("roomId"));
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
   const before = c.req.query("before");
 
   let query = `
@@ -1206,7 +1206,7 @@ app.get("/admin/api/rooms/:roomId/events", requireAuth(), requireAdmin, async (c
 
   if (before) {
     query += ` AND stream_position < ?`;
-    params.push(parseInt(before));
+    params.push(parseInt(before, 10));
   }
 
   query += ` ORDER BY stream_position DESC LIMIT ?`;
@@ -1228,8 +1228,8 @@ app.get("/admin/api/rooms/:roomId/events", requireAuth(), requireAdmin, async (c
 // GET /admin/api/reports - Get content reports (proxy to existing endpoint format)
 app.get("/admin/api/reports", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "50"), 100);
-  const offset = parseInt(c.req.query("offset") || "0");
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
+  const offset = parseInt(c.req.query("offset") || "0", 10);
   const resolved = c.req.query("resolved");
 
   let query = `
@@ -1305,7 +1305,7 @@ app.post("/admin/api/reports/:reportId/resolve", requireAuth(), requireAdmin, as
     SET resolved = 1, resolved_by = ?, resolved_at = ?, resolution_note = ?
     WHERE id = ?
   `)
-    .bind(userId, Date.now(), body.note || null, parseInt(reportId))
+    .bind(userId, Date.now(), body.note || null, parseInt(reportId, 10))
     .run();
 
   if (result.meta.changes === 0) {
@@ -1329,7 +1329,7 @@ app.post("/admin/api/reports/:reportId/unresolve", requireAuth(), requireAdmin, 
     SET resolved = 0, resolved_by = NULL, resolved_at = NULL, resolution_note = NULL
     WHERE id = ?
   `)
-    .bind(parseInt(reportId))
+    .bind(parseInt(reportId, 10))
     .run();
 
   if (result.meta.changes === 0) {
@@ -2015,7 +2015,7 @@ app.get("/_matrix/client/v3/admin/whois/:userId", requireAuth(), async (c) => {
 // ============================================
 
 // GET /_synapse/admin/v1/server_version - Server version info (Synapse format)
-app.get("/_synapse/admin/v1/server_version", requireAuth(), requireAdmin, async (c) => {
+app.get("/_synapse/admin/v1/server_version", requireAuth(), requireAdmin, (c) => {
   return c.json({
     server_version: c.env.SERVER_VERSION,
     python_version: "N/A (Cloudflare Workers)",
@@ -2025,8 +2025,8 @@ app.get("/_synapse/admin/v1/server_version", requireAuth(), requireAdmin, async 
 // GET /_synapse/admin/v2/users - List users (Synapse format)
 app.get("/_synapse/admin/v2/users", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "100"), 1000);
-  const from = parseInt(c.req.query("from") || "0");
+  const limit = Math.min(parseInt(c.req.query("limit") || "100", 10), 1000);
+  const from = parseInt(c.req.query("from") || "0", 10);
   const guests = c.req.query("guests") !== "false";
   const deactivated = c.req.query("deactivated") === "true";
   const name = c.req.query("name"); // Search by name
@@ -2167,8 +2167,8 @@ app.post("/_synapse/admin/v1/reset_password/:userId", requireAuth(), requireAdmi
 // GET /_synapse/admin/v1/rooms - List rooms (Synapse format)
 app.get("/_synapse/admin/v1/rooms", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "100"), 1000);
-  const from = parseInt(c.req.query("from") || "0");
+  const limit = Math.min(parseInt(c.req.query("limit") || "100", 10), 1000);
+  const from = parseInt(c.req.query("from") || "0", 10);
   const orderBy = c.req.query("order_by") || "name";
   const dir = c.req.query("dir") === "b" ? "DESC" : "ASC";
   const searchTerm = c.req.query("search_term");
@@ -2368,8 +2368,8 @@ app.get("/_synapse/admin/v1/rooms/:roomId", requireAuth(), requireAdmin, async (
 // GET /_synapse/admin/v1/federation/destinations - Federation destinations (Synapse format)
 app.get("/_synapse/admin/v1/federation/destinations", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "100"), 1000);
-  const from = parseInt(c.req.query("from") || "0");
+  const limit = Math.min(parseInt(c.req.query("limit") || "100", 10), 1000);
+  const from = parseInt(c.req.query("from") || "0", 10);
 
   const servers = await db
     .prepare(`
@@ -2402,8 +2402,8 @@ app.get("/_synapse/admin/v1/federation/destinations", requireAuth(), requireAdmi
 // GET /_synapse/admin/v1/event_reports - Event reports (Synapse format)
 app.get("/_synapse/admin/v1/event_reports", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "100"), 1000);
-  const from = parseInt(c.req.query("from") || "0");
+  const limit = Math.min(parseInt(c.req.query("limit") || "100", 10), 1000);
+  const from = parseInt(c.req.query("from") || "0", 10);
   const dir = c.req.query("dir") === "f" ? "ASC" : "DESC";
   const roomId = c.req.query("room_id");
   const userId = c.req.query("user_id");
@@ -2550,7 +2550,7 @@ app.put("/_synapse/admin/v2/users/:userId", requireAuth(), requireAdmin, async (
       admin: admin !== undefined ? admin : null,
       deactivated: deactivated !== undefined ? deactivated : null,
     });
-  } else {
+  }
     // Create new user
     if (!password) {
       return Errors.missingParam("password required for new user").toResponse();
@@ -2592,7 +2592,7 @@ app.put("/_synapse/admin/v2/users/:userId", requireAuth(), requireAdmin, async (
       admin: admin || false,
       deactivated: false,
     });
-  }
+  
 });
 
 // ============================================

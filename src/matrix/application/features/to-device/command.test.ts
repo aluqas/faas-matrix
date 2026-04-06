@@ -28,17 +28,17 @@ describe("to-device command", () => {
       },
       {
         localServerName: "test",
-        async getUserDevices() {
+        getUserDevices() {
           return ["DEVICE1", "DEVICE2"];
         },
-        async nextStreamPosition() {
+        nextStreamPosition() {
           streamPosition += 1;
           return streamPosition;
         },
-        async storeLocalMessage(input) {
+        storeLocalMessage(input) {
           stored.push(input);
         },
-        async queueEdu(destination, content) {
+        queueEdu(destination, content) {
           queued.push({ destination, content });
         },
       },

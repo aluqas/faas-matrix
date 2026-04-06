@@ -42,7 +42,7 @@ export function buildModerationAuthorizationContext(input: {
   };
 }
 
-export async function buildModerationMembershipEvent(input: {
+export function buildModerationMembershipEvent(input: {
   roomId: string;
   actorUserId: string;
   targetUserId: string;

@@ -6,7 +6,7 @@ describe("sync contracts", () => {
     expect(parseSyncToken("s42_td9_dk12")).toEqual({ events: 42, toDevice: 9, deviceKeys: 12 });
     expect(parseSyncToken("s42_td9")).toEqual({ events: 42, toDevice: 9, deviceKeys: 42 });
     expect(parseSyncToken("17")).toEqual({ events: 17, toDevice: 17, deviceKeys: 17 });
-    expect(parseSyncToken(undefined)).toEqual({ events: 0, toDevice: 0, deviceKeys: 0 });
+    expect(parseSyncToken()).toEqual({ events: 0, toDevice: 0, deviceKeys: 0 });
   });
 
   it("builds composite sync tokens", () => {

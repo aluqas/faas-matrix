@@ -26,9 +26,9 @@ let failingOnly = false;
 let lastN = Infinity;
 
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === "--depth" && args[i + 1] !== undefined) depth = parseInt(args[++i]);
+  if (args[i] === "--depth" && args[i + 1] !== undefined) depth = parseInt(args[++i], 10);
   else if (args[i] === "--failing") failingOnly = true;
-  else if (args[i] === "--last" && args[i + 1] !== undefined) lastN = parseInt(args[++i]);
+  else if (args[i] === "--last" && args[i + 1] !== undefined) lastN = parseInt(args[++i], 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -68,15 +68,15 @@ for (let i = parsed.length - 1; i >= 1; i--) {
   for (const t of d.newPasses) console.log(`  + ${t}`);
   console.log(`Newly FAILING (${d.newFails.length}):`);
   for (const t of d.newFails) console.log(`  - ${t}`);
-  if (d.appeared.length) {
+  if (d.appeared.length > 0) {
     console.log(`New passes not in before (${d.appeared.length}):`);
     for (const t of d.appeared) console.log(`  * ${t}`);
   }
 }
 
 if (parsed.length > 2) {
-  const d = delta(parsed[parsed.length - 1].results, parsed[0].results);
-  console.log(`\n=== ${parsed[parsed.length - 1].name} → ${parsed[0].name} (overall) ===`);
+  const d = delta(parsed.at(-1).results, parsed[0].results);
+  console.log(`\n=== ${parsed.at(-1).name} → ${parsed[0].name} (overall) ===`);
   console.log(`Newly PASSING (${d.newPasses.length}):`);
   for (const t of d.newPasses) console.log(`  + ${t}`);
   console.log(`Newly FAILING (${d.newFails.length}):`);
@@ -100,5 +100,5 @@ if (latestFails.length === 0) {
 
 if (failingOnly) {
   console.log(`\n=== Failing tests in ${parsed[0].name} ===`);
-  for (const t of [...latestFails].sort()) console.log(`  ✗ ${t}`);
+  for (const t of [...latestFails].toSorted()) console.log(`  ✗ ${t}`);
 }

@@ -42,7 +42,7 @@ function methodNotAllowedJson(): Response {
   );
 }
 
-app.get("/_matrix/federation/v1/version", async (c) => {
+app.get("/_matrix/federation/v1/version", (c) => {
   return c.json({
     server: {
       name: "matrix-worker",
@@ -388,7 +388,7 @@ app.get("/_matrix/federation/v1/publicRooms", async (c) => {
 
   let offset = 0;
   if (since && since.startsWith("offset_")) {
-    offset = Number.parseInt(since.substring(7), 10) || 0;
+    offset = Number.parseInt(since.slice(7), 10) || 0;
   }
 
   const rooms = await c.env.DB.prepare(
@@ -443,7 +443,7 @@ app.post("/_matrix/federation/v1/publicRooms", async (c) => {
 
   let offset = 0;
   if (since && since.startsWith("offset_")) {
-    offset = Number.parseInt(since.substring(7), 10) || 0;
+    offset = Number.parseInt(since.slice(7), 10) || 0;
   }
 
   const rooms = searchTerm

@@ -8,7 +8,7 @@ export interface AdminService {
 export class CloudflareBackedAdminService implements AdminService {
   constructor(private readonly appContext: AppContext) {}
 
-  async getStats(refresh: boolean = false): Promise<Record<string, unknown>> {
+  getStats(refresh: boolean = false): Promise<Record<string, unknown>> {
     const capability = this.appContext.capabilities;
     const namespace = capability.rateLimit.namespace;
     void namespace;

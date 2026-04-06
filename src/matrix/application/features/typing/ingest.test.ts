@@ -15,10 +15,10 @@ describe("typing ingest", () => {
         timeout: 5_000,
       },
       {
-        async getMembership() {
+        getMembership() {
           return "join";
         },
-        async setRoomTyping(roomId, userId, typing, timeoutMs) {
+        setRoomTyping(roomId, userId, typing, timeoutMs) {
           calls.push({ roomId, userId, typing, timeoutMs });
         },
       },
@@ -32,10 +32,10 @@ describe("typing ingest", () => {
         typing: true,
       },
       {
-        async getMembership() {
+        getMembership() {
           return "join";
         },
-        async setRoomTyping() {
+        setRoomTyping() {
           throw new Error("should not be called");
         },
       },

@@ -686,7 +686,7 @@ export async function getRoomEvents(
 
   const events = result.results.map(toStoredPdu);
 
-  const lastEvent = result.results[result.results.length - 1];
+  const lastEvent = result.results.at(-1);
   const end = lastEvent?.stream_ordering ?? fromToken ?? 0;
 
   return { events, end };
@@ -877,7 +877,7 @@ export async function getInviteStrippedState(
  * Returns room IDs for the given user, optionally filtered by membership.
  * Delegates to [`getUserRoomIdsWithEffectiveMembership`](../matrix/repositories/membership-repository.ts).
  */
-export async function getUserRooms(
+export function getUserRooms(
   db: D1Database,
   userId: string,
   membership?: Membership,
@@ -1042,7 +1042,7 @@ export async function getEventsSince(
       ? await statement.bind(roomId, since, limit).all<StoredEventRow>()
       : await statement.bind(roomId, limit).all<StoredEventRow>();
 
-  const rows = since > 0 ? result.results : [...result.results].reverse();
+  const rows = since > 0 ? result.results : [...result.results].toReversed();
   return rows.map(toStoredPdu);
 }
 
@@ -1247,7 +1247,7 @@ export async function getStateAtEvent(db: D1Database, eventId: string): Promise<
 }
 
 // Get servers that share rooms with a user
-export async function getServersInRoomsWithUser(db: D1Database, userId: string): Promise<string[]> {
+export function getServersInRoomsWithUser(db: D1Database, userId: string): Promise<string[]> {
   return getServersInRoomsWithUserExcludingRooms(db, userId, []);
 }
 
@@ -1321,7 +1321,7 @@ async function getServersInRoomsWithUserScope(
   return result.results.map((r) => r.server_name).filter((s): s is string => s !== null);
 }
 
-export async function getServersInRoomsWithUserExcludingRooms(
+export function getServersInRoomsWithUserExcludingRooms(
   db: D1Database,
   userId: string,
   excludedRoomIds: string[],
@@ -1329,14 +1329,14 @@ export async function getServersInRoomsWithUserExcludingRooms(
   return getServersInRoomsWithUserScope(db, userId, excludedRoomIds);
 }
 
-export async function getServersInEncryptedRoomsWithUser(
+export function getServersInEncryptedRoomsWithUser(
   db: D1Database,
   userId: string,
 ): Promise<string[]> {
   return getServersInRoomsWithUserScope(db, userId, [], { encryptedOnly: true });
 }
 
-export async function getServersInEncryptedRoomsWithUserExcludingRooms(
+export function getServersInEncryptedRoomsWithUserExcludingRooms(
   db: D1Database,
   userId: string,
   excludedRoomIds: string[],

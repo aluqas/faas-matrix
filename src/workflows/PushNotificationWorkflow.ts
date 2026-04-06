@@ -453,7 +453,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
           .bind(Date.now(), userId, pusher.pushkey, pusher.appId)
           .run();
         return true;
-      } else {
+      }
         // Update pusher failure
         await this.env.DB.prepare(`
           UPDATE pushers SET last_failure = ?, failure_count = failure_count + 1
@@ -462,7 +462,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
           .bind(Date.now(), userId, pusher.pushkey, pusher.appId)
           .run();
         return false;
-      }
+      
     } catch (error) {
       // Update pusher failure
       await this.env.DB.prepare(`

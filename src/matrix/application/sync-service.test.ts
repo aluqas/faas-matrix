@@ -24,38 +24,38 @@ class FakeSyncRepository implements SyncRepository {
   eventsSince = new Map<string, PDU[]>();
   eventsById = new Map<string, PDU>();
 
-  async loadFilter(_userId?: string, filterParam?: string) {
+  loadFilter(_userId?: string, filterParam?: string) {
     if (filterParam?.startsWith("{")) {
       return JSON.parse(filterParam) as Awaited<ReturnType<SyncRepository["loadFilter"]>>;
     }
 
     return this.loadedFilter as Awaited<ReturnType<SyncRepository["loadFilter"]>>;
   }
-  async getLatestStreamPosition() {
+  getLatestStreamPosition() {
     return 5;
   }
-  async getLatestDeviceKeyPosition() {
+  getLatestDeviceKeyPosition() {
     return 7;
   }
-  async getToDeviceMessages() {
+  getToDeviceMessages() {
     return { events: [], nextBatch: "0" };
   }
-  async getOneTimeKeyCounts() {
+  getOneTimeKeyCounts() {
     return {};
   }
-  async getUnusedFallbackKeyTypes() {
+  getUnusedFallbackKeyTypes() {
     return [];
   }
-  async getDeviceListChanges() {
+  getDeviceListChanges() {
     return { changed: [], left: [] };
   }
-  async getGlobalAccountData() {
+  getGlobalAccountData() {
     return [];
   }
-  async getRoomAccountData() {
+  getRoomAccountData() {
     return this.roomAccountData.get(arguments[1] as string) ?? [];
   }
-  async getUserRooms(_userId?: string, membership?: "join" | "invite" | "leave" | "ban" | "knock") {
+  getUserRooms(_userId?: string, membership?: "join" | "invite" | "leave" | "ban" | "knock") {
     if (membership === "join") return this.joinedRooms;
     if (membership === "invite") return this.inviteRooms;
     if (membership === "leave") {
@@ -70,35 +70,35 @@ class FakeSyncRepository implements SyncRepository {
     }
     return [];
   }
-  async getMembership(roomId: string, userId: string) {
+  getMembership(roomId: string, userId: string) {
     return this.memberships.get(`${roomId}:${userId}`) ?? null;
   }
-  async getEventsSince(roomId: string) {
+  getEventsSince(roomId: string) {
     return this.eventsSince.get(roomId) ?? [];
   }
-  async getEvent(eventId: string) {
+  getEvent(eventId: string) {
     return this.eventsById.get(eventId) ?? null;
   }
-  async getRoomState(roomId: string) {
+  getRoomState(roomId: string) {
     return this.roomStates.get(roomId) ?? [];
   }
-  async getInviteStrippedState(roomId: string) {
+  getInviteStrippedState(roomId: string) {
     return this.inviteStates.get(roomId) ?? [];
   }
-  async getReceiptsForRoom() {
+  getReceiptsForRoom() {
     return { type: "m.receipt", content: {} };
   }
-  async getUnreadNotificationSummary() {
+  getUnreadNotificationSummary() {
     return {
       room: { notification_count: 0, highlight_count: 0 },
       main: { notification_count: 0, highlight_count: 0 },
       threads: {},
     };
   }
-  async getTypingUsers() {
+  getTypingUsers() {
     return [];
   }
-  async waitForUserEvents() {
+  waitForUserEvents() {
     this.waitCalls += 1;
     return { hasEvents: false };
   }
@@ -110,10 +110,10 @@ function createTestAppContext(): AppContext {
       return {
         bind() {
           return {
-            async first() {
+            first() {
               return null;
             },
-            async all() {
+            all() {
               return { results: [] };
             },
           };
@@ -129,7 +129,7 @@ function createTestAppContext(): AppContext {
       blob: {},
       jobs: { defer() {} },
       workflow: {
-        async createRoomJoin() {
+        createRoomJoin() {
           return { status: "complete", output: { success: true } };
         },
         async createPushNotification() {},
@@ -137,20 +137,20 @@ function createTestAppContext(): AppContext {
       rateLimit: {},
       realtime: {
         async notifyRoomEvent() {},
-        async waitForUserEvents() {
+        waitForUserEvents() {
           return { hasEvents: false };
         },
       },
       metrics: {},
       clock: { now: () => Date.now() },
       id: {
-        async generateRoomId() {
+        generateRoomId() {
           return "!room:test";
         },
-        async generateEventId() {
+        generateEventId() {
           return "$event:test";
         },
-        async generateOpaqueId() {
+        generateOpaqueId() {
           return "opaque";
         },
         formatRoomAlias(localpart: string, serverName: string) {
@@ -176,7 +176,7 @@ function createCacheBackedAppContext(entries?: Record<string, unknown>): AppCont
 
   context.capabilities.kv = {
     cache: {
-      async get(key: string, type?: "json") {
+      get(key: string, type?: "json") {
         const value = store.get(key);
         if (!value) {
           return null;
@@ -188,7 +188,7 @@ function createCacheBackedAppContext(entries?: Record<string, unknown>): AppCont
 
         return value;
       },
-      async delete(key: string) {
+      delete(key: string) {
         store.delete(key);
       },
     } as KVNamespace,
@@ -209,7 +209,7 @@ function createPersistedPartialStateAppContext(entries?: Record<string, unknown>
         return {
           bind(userId: string, roomId?: string, eventType?: string) {
             return {
-              async first() {
+              first() {
                 if (
                   query.includes("FROM account_data") &&
                   typeof roomId === "string" &&
@@ -228,10 +228,10 @@ function createPersistedPartialStateAppContext(entries?: Record<string, unknown>
 
                 return null;
               },
-              async all() {
+              all() {
                 return { results: [] };
               },
-              async run() {
+              run() {
                 if (
                   query.includes("INSERT INTO account_data") &&
                   typeof roomId === "string" &&
@@ -563,7 +563,7 @@ describe("MatrixSyncService", () => {
     const roomId = "!room:hs1";
     repo.eventsSince.set(roomId, []);
     repo.roomStates.set(roomId, []);
-    repo.getUserRooms = async (
+    repo.getUserRooms = (
       _userId?: string,
       membership?: "join" | "invite" | "leave" | "ban" | "knock",
     ) => {
@@ -654,7 +654,7 @@ describe("MatrixSyncService", () => {
   it("returns full room state on the first sync after partial-state completion", async () => {
     const repo = new FakeSyncRepository();
     const roomId = "!room:hs1";
-    repo.getUserRooms = async (
+    repo.getUserRooms = (
       _userId?: string,
       membership?: "join" | "invite" | "leave" | "ban" | "knock",
     ) => {

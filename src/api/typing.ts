@@ -135,7 +135,7 @@ app.put("/_matrix/client/v3/rooms/:roomId/typing/:userId", requireAuth(), async 
           }),
         );
       },
-      async resolveInterestedServers(targetRoomId: string) {
+      resolveInterestedServers(targetRoomId: string) {
         return getRemoteJoinedServers(db, targetRoomId, c.env.SERVER_NAME);
       },
       async queueEdu(destination: string, content: TypingEduContent) {

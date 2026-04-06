@@ -35,11 +35,11 @@ class FakeD1Database {
         boundArgs = args;
         return this;
       },
-      all: async () => {
+      all: () => {
         const row = lookupUser();
         return { results: row ? [row] : [] };
       },
-      first: async () => {
+      first: () => {
         return lookupUser();
       },
     };
@@ -78,7 +78,7 @@ describe("FederationQueryService", () => {
         localServerName: "test",
         db: {} as D1Database,
         cache: {} as KVNamespace,
-        async fetchProfile(serverName, path) {
+        fetchProfile(serverName, path) {
           expect(serverName).toBe("remote.example");
           expect(path).toContain("/_matrix/federation/v1/query/profile?");
           expect(path).toContain("user_id=%40alice%3Aremote.example");

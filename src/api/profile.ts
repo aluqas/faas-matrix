@@ -58,7 +58,7 @@ function toFieldResponse(field: ProfileField, profile: ProfileResponseBody) {
 }
 
 // GET /_matrix/client/v3/profile/:userId - Get user profile
-app.get("/_matrix/client/v3/profile/:userId", optionalAuth(), async (c) => {
+app.get("/_matrix/client/v3/profile/:userId", optionalAuth(), (c) => {
   return respondWithClientEffect(
     decodeProfileUserId(decodeURIComponent(c.req.param("userId"))).pipe(
       Effect.flatMap((userId) => queryProfileEffect(createProfileQueryPorts(c.env), { userId })),
@@ -68,7 +68,7 @@ app.get("/_matrix/client/v3/profile/:userId", optionalAuth(), async (c) => {
 });
 
 // GET /_matrix/client/v3/profile/:userId/displayname - Get display name
-app.get("/_matrix/client/v3/profile/:userId/displayname", optionalAuth(), async (c) => {
+app.get("/_matrix/client/v3/profile/:userId/displayname", optionalAuth(), (c) => {
   return respondWithClientEffect(
     decodeProfileUserId(decodeURIComponent(c.req.param("userId"))).pipe(
       Effect.flatMap((userId) =>
@@ -103,7 +103,7 @@ app.put("/_matrix/client/v3/profile/:userId/displayname", requireAuth(), async (
 });
 
 // GET /_matrix/client/v3/profile/:userId/avatar_url - Get avatar URL
-app.get("/_matrix/client/v3/profile/:userId/avatar_url", optionalAuth(), async (c) => {
+app.get("/_matrix/client/v3/profile/:userId/avatar_url", optionalAuth(), (c) => {
   return respondWithClientEffect(
     decodeProfileUserId(decodeURIComponent(c.req.param("userId"))).pipe(
       Effect.flatMap((userId) =>
@@ -138,7 +138,7 @@ app.put("/_matrix/client/v3/profile/:userId/avatar_url", requireAuth(), async (c
 });
 
 // GET /_matrix/client/v3/profile/:userId/:keyName - Get custom profile key
-app.get("/_matrix/client/v3/profile/:userId/:keyName", optionalAuth(), async (c) => {
+app.get("/_matrix/client/v3/profile/:userId/:keyName", optionalAuth(), (c) => {
   const targetUserId = decodeURIComponent(c.req.param("userId"));
   const keyName = c.req.param("keyName");
 
@@ -175,7 +175,7 @@ app.put("/_matrix/client/v3/profile/:userId/:keyName", requireAuth(), async (c) 
 });
 
 // DELETE /_matrix/client/v3/profile/:userId/:keyName - Delete custom profile key
-app.delete("/_matrix/client/v3/profile/:userId/:keyName", requireAuth(), async (c) => {
+app.delete("/_matrix/client/v3/profile/:userId/:keyName", requireAuth(), (c) => {
   return respondWithClientEffect(
     decodeDeleteCustomProfileKeyInput({
       authUserId: c.get("userId"),

@@ -34,7 +34,7 @@ app.get("/_matrix/client/unstable/org.matrix.msc4143/rtc/transports", (c) => {
 });
 
 // Verify OpenID token with the homeserver
-async function verifyOpenIDToken(
+function verifyOpenIDToken(
   token: OpenIDToken,
   serverName: string,
 ): Promise<{ sub: string } | null> {
@@ -62,7 +62,7 @@ async function verifyOpenIDToken(
 function roomIdToLiveKitName(roomId: string): string {
   // LiveKit room names can only contain alphanumeric, dash, underscore
   // Matrix room IDs look like: !roomid:server.name
-  return roomId.replace(/[^a-zA-Z0-9-_]/g, "_");
+  return roomId.replaceAll(/[^a-zA-Z0-9-_]/g, "_");
 }
 
 // POST /livekit/get_token - Get a LiveKit JWT token
@@ -108,7 +108,7 @@ app.post("/livekit/get_token", async (c) => {
     participantId = body.member.claimed_user_id;
     participantName = participantId.split(":")[0].replace("@", "");
   } else {
-    participantId = body.device_id || body.openid_token.access_token.substring(0, 16);
+    participantId = body.device_id || body.openid_token.access_token.slice(0, 16);
     participantName = body.device_id || "participant";
   }
 
@@ -175,7 +175,7 @@ app.post("/livekit/get_token/sfu/get", async (c) => {
       "[LiveKit] Raw body length:",
       rawBody.length,
       "preview:",
-      rawBody.substring(0, 200),
+      rawBody.slice(0, 200),
     );
     body = JSON.parse(rawBody);
   } catch (e) {
@@ -219,7 +219,7 @@ app.post("/livekit/get_token/sfu/get", async (c) => {
   } else {
     // For Element X, derive identity from openid_token
     // The access_token's user can be looked up, but for simplicity use device_id
-    participantId = body.device_id || body.openid_token.access_token.substring(0, 16);
+    participantId = body.device_id || body.openid_token.access_token.slice(0, 16);
     participantName = body.device_id || "participant";
   }
 

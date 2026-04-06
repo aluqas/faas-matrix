@@ -6,7 +6,7 @@ import { requireAuth } from "../../middleware/auth";
 const app = new Hono<AppEnv>();
 
 async function parseKnockBody(c: import("hono").Context<AppEnv>) {
-  const parsed = await parseOptionalJsonObjectBody(c).catch(() => undefined);
+  const parsed = await parseOptionalJsonObjectBody(c).catch(() => {});
   return {
     reason: typeof parsed?.reason === "string" ? parsed.reason : undefined,
     server_name: Array.isArray(parsed?.server_name)

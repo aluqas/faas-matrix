@@ -57,11 +57,9 @@ export class PushDurableObject extends DurableObject<Env> {
   private jwtCache: JWTCache | null = null;
   private pendingPushes: Map<string, PendingPush> = new Map();
 
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
-  }
+  
 
-  async fetch(request: Request): Promise<Response> {
+  fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -127,7 +125,7 @@ export class PushDurableObject extends DurableObject<Env> {
   }
 
   // Get status of push delivery
-  private async handleStatus(): Promise<Response> {
+  private handleStatus(): Promise<Response> {
     const pending = Array.from(this.pendingPushes.values());
     return new Response(
       JSON.stringify({
@@ -163,7 +161,7 @@ export class PushDurableObject extends DurableObject<Env> {
       const apnsHost = isProduction ? "api.push.apple.com" : "api.sandbox.push.apple.com";
 
       // Build APNs request
-      const deviceToken = notification.pushkey.replace(/[<>\s]/g, "");
+      const deviceToken = notification.pushkey.replaceAll(/[<>\s]/g, "");
       const url = `https://${apnsHost}/3/device/${deviceToken}`;
 
       console.log("[PushDO] Sending to APNs:", url, "topic:", notification.topic);
@@ -271,16 +269,16 @@ export class PushDurableObject extends DurableObject<Env> {
   }
 
   // Import PEM private key for Web Crypto
-  private async importPrivateKey(pemKey: string): Promise<CryptoKey> {
+  private importPrivateKey(pemKey: string): Promise<CryptoKey> {
     // Remove PEM headers and decode
     const pemContents = pemKey
-      .replace(/-----BEGIN PRIVATE KEY-----/g, "")
-      .replace(/-----END PRIVATE KEY-----/g, "")
-      .replace(/-----BEGIN EC PRIVATE KEY-----/g, "")
-      .replace(/-----END EC PRIVATE KEY-----/g, "")
-      .replace(/\s/g, "");
+      .replaceAll('-----BEGIN PRIVATE KEY-----', "")
+      .replaceAll('-----END PRIVATE KEY-----', "")
+      .replaceAll('-----BEGIN EC PRIVATE KEY-----', "")
+      .replaceAll('-----END EC PRIVATE KEY-----', "")
+      .replaceAll(/\s/g, "");
 
-    const binaryKey = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
+    const binaryKey = Uint8Array.from(atob(pemContents), (c) => c.codePointAt(0));
 
     return crypto.subtle.importKey(
       "pkcs8",
@@ -297,9 +295,9 @@ export class PushDurableObject extends DurableObject<Env> {
     if (typeof input === "string") {
       base64 = btoa(input);
     } else {
-      base64 = btoa(String.fromCharCode(...input));
+      base64 = btoa(String.fromCodePoint(...input));
     }
-    return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    return base64.replaceAll('+', "-").replaceAll('/', "_").replace(/=+$/, "");
   }
 
   // Convert DER signature to raw format (for ECDSA P-256)

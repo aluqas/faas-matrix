@@ -8,7 +8,7 @@ import { withLogContext } from "../../matrix/application/logging";
 
 export type { FederationEventRow };
 
-export async function runDomainValidation<A>(effect: Effect.Effect<A, DomainError>): Promise<A> {
+export function runDomainValidation<A>(effect: Effect.Effect<A, DomainError>): Promise<A> {
   return runFederationEffect(effect);
 }
 
@@ -40,8 +40,8 @@ export async function logFederationRouteWarning(
 }
 
 function getEventReferenceLookupCandidates(eventId: string): string[] {
-  const normalized = eventId.replace(/\+/g, "-").replace(/\//g, "_");
-  const standard = eventId.replace(/-/g, "+").replace(/_/g, "/");
+  const normalized = eventId.replaceAll('+', "-").replaceAll('/', "_");
+  const standard = eventId.replaceAll('-', "+").replaceAll('_', "/");
   return Array.from(new Set([eventId, normalized, standard]));
 }
 

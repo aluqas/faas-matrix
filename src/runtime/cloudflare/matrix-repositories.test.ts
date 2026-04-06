@@ -11,20 +11,20 @@ class RecordingD1Database {
       bind: (...boundArgs: unknown[]) => {
         args = boundArgs;
         return {
-          run: async () => {
+          run: () => {
             this.statements.push({ query, args });
             return { success: true };
           },
-          first: async <T>() => null as T | null,
-          all: async <T>() => ({ results: [] as T[] }),
+          first: <T>() => null as T | null,
+          all: <T>() => ({ results: [] as T[] }),
         };
       },
-      run: async () => {
+      run: () => {
         this.statements.push({ query, args });
         return { success: true };
       },
-      first: async <T>() => null as T | null,
-      all: async <T>() => ({ results: [] as T[] }),
+      first: <T>() => null as T | null,
+      all: <T>() => ({ results: [] as T[] }),
     };
   }
 }
@@ -34,9 +34,9 @@ class QueryResultD1Database {
     return {
       bind: (..._boundArgs: unknown[]) => {
         return {
-          run: async () => ({ success: true }),
-          first: async <T>() => null as T | null,
-          all: async <T>() => {
+          run: () => ({ success: true }),
+          first: <T>() => null as T | null,
+          all: <T>() => {
             if (query.includes("FROM device_key_changes")) {
               return {
                 results: [{ user_id: "@alice:test" }, { user_id: "@bob:test" }] as T[],
@@ -67,9 +67,9 @@ class QueryResultD1Database {
           },
         };
       },
-      run: async () => ({ success: true }),
-      first: async <T>() => null as T | null,
-      all: async <T>() => {
+      run: () => ({ success: true }),
+      first: <T>() => null as T | null,
+      all: <T>() => {
         if (query.includes("FROM device_key_changes")) {
           return {
             results: [{ user_id: "@alice:test" }, { user_id: "@bob:test" }] as T[],
@@ -126,7 +126,7 @@ describe("CloudflareSyncRepository", () => {
     const repositoryModule = await import("./matrix-repositories");
     const repository = new repositoryModule.CloudflareSyncRepository({
       CACHE: {
-        async get() {
+        get() {
           return "{invalid";
         },
       },
