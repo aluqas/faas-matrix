@@ -1,11 +1,11 @@
-import type { MatrixSignatures, PDU } from "../../types";
-import type { PublicRoomSummary } from "../../types/client";
-import type { MissingEventsQuery, TimestampDirection } from "../../types/events";
 import {
   getDefaultRoomVersion,
   getRedactionAllowedKeys,
   getRoomVersion,
 } from "../../services/room-versions";
+import type { MatrixSignatures, PDU } from "../../types";
+import type { PublicRoomSummary } from "../../types/client";
+import type { MissingEventsQuery, TimestampDirection } from "../../types/events";
 
 export type { MissingEventsQuery, TimestampDirection };
 
@@ -67,17 +67,17 @@ function safeJsonParse<T>(value: string | null | undefined): T | null {
 
 function toPdu(row: EventRow): PDU {
   return {
-    event_id: row.event_id,
-    room_id: row.room_id,
-    sender: row.sender,
+    event_id: row.event_id as EventId,
+    room_id: row.room_id as RoomId,
+    sender: row.sender as UserId,
     type: row.event_type,
     state_key: row.state_key ?? undefined,
     content: safeJsonParse<Record<string, unknown>>(row.content) ?? {},
     unsigned: safeJsonParse<Record<string, unknown>>(row.unsigned ?? undefined) ?? undefined,
     origin_server_ts: row.origin_server_ts,
     depth: row.depth,
-    auth_events: safeJsonParse<string[]>(row.auth_events) ?? [],
-    prev_events: safeJsonParse<string[]>(row.prev_events) ?? [],
+    auth_events: (safeJsonParse<string[]>(row.auth_events) ?? []) as EventId[],
+    prev_events: (safeJsonParse<string[]>(row.prev_events) ?? []) as EventId[],
     hashes: safeJsonParse<{ sha256: string }>(row.hashes ?? undefined) ?? undefined,
     signatures: safeJsonParse<MatrixSignatures>(row.signatures ?? undefined) ?? undefined,
   };
@@ -120,7 +120,7 @@ function getHistoryVisibilityAtEvent(
   let visibility: HistoryVisibility = "shared";
 
   for (const row of historyRows) {
-    if (compareEventOrder(row, event) > 0) {
+    if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) > 0) {
       break;
     }
 
@@ -138,7 +138,7 @@ function getHistoryVisibilityBeforeEvent(
   let hasPriorEvent = false;
 
   for (const row of historyRows) {
-    if (compareEventOrder(row, event) >= 0) {
+    if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) >= 0) {
       break;
     }
 
@@ -161,7 +161,7 @@ function getMembershipAtOrBeforeEvent(
       continue;
     }
 
-    if (compareEventOrder(row, event) > 0) {
+    if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) > 0) {
       break;
     }
 
@@ -183,7 +183,7 @@ function getMembershipBeforeEvent(
       continue;
     }
 
-    if (compareEventOrder(row, event) >= 0) {
+    if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) >= 0) {
       break;
     }
 
@@ -199,7 +199,7 @@ function joinedAfterEvent(event: PDU, membershipRows: MembershipRow[], userId: s
       continue;
     }
 
-    if (compareEventOrder(row, event) <= 0) {
+    if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) <= 0) {
       continue;
     }
 
@@ -287,19 +287,7 @@ function isServerAllowedToSeeEventAtHistoryVisibility(
       continue;
     }
 
-    if (compareEventOrder(row, event) <= 0) {
-      membershipBeforeEvent.set(row.state_key, membership);
-      continue;
-    }
-
-    if (membership === "join") {
-      joinedAfterEvent.add(row.state_key);
-    }
-  }
-
-  for (const [userId, membership] of membershipBeforeEvent) {
-    if (membership === "join") {
-      return true;
+        if (compareEventOrder({ event_id: row.event_id as EventId, origin_server_ts: row.origin_server_ts, depth: row.depth }, event) <= 0) {
     }
 
     if (membership === "invite" && historyVisibility === "invited") {
@@ -694,7 +682,7 @@ export class EventQueryService {
     const guestAccess = state.get("m.room.guest_access")?.guest_access;
 
     return {
-      room_id: roomId,
+      room_id: roomId as RoomId,
       room_type:
         typeof state.get("m.room.create")?.type === "string"
           ? (state.get("m.room.create")?.type as string)

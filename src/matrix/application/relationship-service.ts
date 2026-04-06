@@ -84,7 +84,7 @@ async function augmentEvent(db: D1Database, event: PDU): Promise<PDU> {
   return {
     ...event,
     unsigned: {
-      ...(event.unsigned ?? {}),
+      ...event.unsigned,
       ...relationSummary,
     },
   };

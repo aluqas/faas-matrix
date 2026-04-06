@@ -37,7 +37,7 @@ export function markPartialStateDeferredAuthEvent<T extends PDU>(event: T, reaso
   return {
     ...event,
     unsigned: {
-      ...(event.unsigned ?? {}),
+      ...event.unsigned,
       [PARTIAL_STATE_AUTH_DEFERRED_UNSIGNED_KEY]: reason,
     },
   };
@@ -89,7 +89,7 @@ export function markPartialStateDeferredMembershipEvent<T extends PDU>(
   return {
     ...markedEvent,
     unsigned: {
-      ...(markedEvent.unsigned ?? {}),
+      ...markedEvent.unsigned,
       ...(input.previousEvent
         ? {
             [PARTIAL_STATE_AUTH_DEFERRED_PREVIOUS_EVENT_ID_UNSIGNED_KEY]:

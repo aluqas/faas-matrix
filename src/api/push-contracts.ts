@@ -1,31 +1,28 @@
 import type {
-  JsonObject,
-  PushAction,
-  PushCondition,
-  PushEvaluationResult,
-  PushEvent,
-  PushNotificationCounts,
-  PusherData,
-  PusherRequestBody,
-  PushRule,
-  PushRuleActionsRequest,
-  PushRuleEnabledRequest,
-  PushRuleUpsertRequest,
+    JsonObject,
+    PushAction,
+    PushCondition,
+    PusherData,
+    PusherRequestBody,
+    PushEvaluationResult,
+    PushEvent,
+    PushNotificationCounts,
+    PushRule,
+    PushRuleActionsRequest,
+    PushRuleEnabledRequest,
+    PushRuleUpsertRequest,
 } from "../types/client";
 
 export type {
-  JsonObject,
-  PushAction,
-  PushCondition,
-  PushEvaluationResult,
-  PushEvent,
-  PushNotificationCounts,
-  PusherData,
-  PusherRequestBody,
-  PushRule,
-  PushRuleActionsRequest,
-  PushRuleEnabledRequest,
-  PushRuleUpsertRequest,
+    JsonObject,
+    PushAction,
+    PushCondition, PusherData,
+    PusherRequestBody, PushEvaluationResult,
+    PushEvent,
+    PushNotificationCounts, PushRule,
+    PushRuleActionsRequest,
+    PushRuleEnabledRequest,
+    PushRuleUpsertRequest
 };
 
 function isPlainObject(value: unknown): value is JsonObject {
@@ -57,14 +54,15 @@ function parsePushAction(value: unknown): PushAction | null {
     return null;
   }
 
-  const setTweak = value["set_tweak"];
+  const record = value as Record<string, unknown>;
+  const setTweak = record["set_tweak"];
   if (typeof setTweak !== "string") {
     return null;
   }
 
   return {
-    ...value,
     set_tweak: setTweak,
+    ...(record["value"] !== undefined ? { value: record["value"] } : {}),
   };
 }
 
@@ -86,10 +84,11 @@ function parsePushCondition(value: unknown): PushCondition | null {
     return null;
   }
 
-  const kind = value["kind"];
-  const key = value["key"];
-  const pattern = value["pattern"];
-  const isValue = value["is"];
+  const record = value as Record<string, unknown>;
+  const kind = record["kind"];
+  const key = record["key"];
+  const pattern = record["pattern"];
+  const isValue = record["is"];
 
   if (
     typeof kind !== "string" ||
@@ -101,11 +100,11 @@ function parsePushCondition(value: unknown): PushCondition | null {
   }
 
   return {
-    ...value,
     kind,
     ...(key !== undefined ? { key } : {}),
     ...(pattern !== undefined ? { pattern } : {}),
     ...(isValue !== undefined ? { is: isValue } : {}),
+    ...(record["value"] !== undefined ? { value: record["value"] } : {}),
   };
 }
 
@@ -127,9 +126,10 @@ export function parsePusherData(value: unknown): PusherData | null {
     return null;
   }
 
-  const url = value["url"];
-  const format = value["format"];
-  const defaultPayload = value["default_payload"];
+  const record = value as Record<string, unknown>;
+  const url = record["url"];
+  const format = record["format"];
+  const defaultPayload = record["default_payload"];
 
   if (
     (url !== undefined && typeof url !== "string") ||
@@ -140,10 +140,9 @@ export function parsePusherData(value: unknown): PusherData | null {
   }
 
   return {
-    ...value,
     ...(url !== undefined ? { url } : {}),
     ...(format !== undefined ? { format } : {}),
-    ...(defaultPayload !== undefined ? { default_payload: defaultPayload } : {}),
+    ...(defaultPayload !== undefined ? { default_payload: defaultPayload as JsonObject } : {}),
   };
 }
 
@@ -152,15 +151,16 @@ export function parsePusherRequestBody(value: unknown): PusherRequestBody | null
     return null;
   }
 
-  const pushkey = value["pushkey"];
-  const kind = value["kind"];
-  const appId = value["app_id"];
-  const appDisplayName = value["app_display_name"];
-  const deviceDisplayName = value["device_display_name"];
-  const profileTag = value["profile_tag"];
-  const lang = value["lang"];
-  const data = value["data"];
-  const append = value["append"];
+  const record = value as Record<string, unknown>;
+  const pushkey = record["pushkey"];
+  const kind = record["kind"];
+  const appId = record["app_id"];
+  const appDisplayName = record["app_display_name"];
+  const deviceDisplayName = record["device_display_name"];
+  const profileTag = record["profile_tag"];
+  const lang = record["lang"];
+  const data = record["data"];
+  const append = record["append"];
   const parsedData = data === undefined ? undefined : parsePusherData(data);
 
   if (
@@ -195,14 +195,15 @@ export function parsePushRuleUpsertRequest(value: unknown): PushRuleUpsertReques
     return null;
   }
 
-  const actions = parsePushActions(value["actions"]);
+  const record = value as Record<string, unknown>;
+  const actions = parsePushActions(record["actions"]);
   const conditions =
-    value["conditions"] === undefined ? undefined : parsePushConditions(value["conditions"]);
-  const pattern = value["pattern"];
+    record["conditions"] === undefined ? undefined : parsePushConditions(record["conditions"]);
+  const pattern = record["pattern"];
 
   if (
     !actions ||
-    (value["conditions"] !== undefined && !conditions) ||
+    (record["conditions"] !== undefined && !conditions) ||
     (pattern !== undefined && typeof pattern !== "string")
   ) {
     return null;

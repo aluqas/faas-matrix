@@ -140,7 +140,7 @@ export async function createInitialRoomEvents(
   }
 
   const createContent: RoomCreateContent = {
-    ...(options.creation_content ?? {}),
+    ...options.creation_content,
     creator: creatorId,
     room_version: roomVersion,
   };
@@ -260,7 +260,7 @@ export async function createMembershipEvent(options: CreateMembershipEventOption
     sender: options.sender,
     type: "m.room.member",
     state_key: options.userId,
-    content: { ...(options.content ?? {}), membership: options.membership },
+    content: { ...options.content, membership: options.membership },
     origin_server_ts: options.now(),
     depth: options.depth,
     auth_events: authEvents,

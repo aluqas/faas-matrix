@@ -64,7 +64,7 @@ function withUpdatedDisplayName(
   keys: DeviceKeysPayload,
   displayName: string | null | undefined,
 ): DeviceKeysPayload {
-  const nextUnsigned = { ...(keys.unsigned ?? {}) };
+  const nextUnsigned = { ...keys.unsigned };
   if (typeof displayName === "string" && displayName.length > 0) {
     nextUnsigned["device_display_name"] = displayName;
   } else {

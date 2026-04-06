@@ -66,12 +66,12 @@ function mergeDeviceSignatures(
   }
 
   const mergedSignatures: NonNullable<DeviceKeysPayload["signatures"]> = {
-    ...(deviceKey.signatures ?? {}),
+    ...deviceKey.signatures,
   };
 
   for (const signature of signatures) {
     mergedSignatures[signature.signerUserId] = {
-      ...(mergedSignatures[signature.signerUserId] ?? {}),
+      ...mergedSignatures[signature.signerUserId],
       [signature.signerKeyId]: signature.signature,
     };
   }

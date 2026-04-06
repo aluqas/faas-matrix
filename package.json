@@ -29,10 +29,9 @@
     "test": "vitest",
     "typecheck": "tsc --noEmit",
     "typecheck:strict-core": "bun run scripts/typecheck-strict-core.mjs",
-    "lint": "oxlint src --deny-warnings",
-    "lint:strict-core": "bun run check:no-direct-effect-run && oxlint src/matrix/application/domain-error.ts src/matrix/application/effect-debug.ts src/matrix/application/effect-runtime.ts src/matrix/application/logging.ts src/matrix/application/features/presence src/matrix/application/features/typing src/matrix/application/features/to-device src/matrix/application/features/device-lists src/matrix/application/features/federation src/matrix/application/features/sync src/matrix/application/room-service.ts src/matrix/application/room-validation.ts src/matrix/application/room-membership-policy.ts src/matrix/application/member-transition-service.ts src/matrix/application/federation-service.ts src/runtime/cloudflare/matrix-repositories.ts src/services/database.ts src/workflows/RoomJoinWorkflow.ts src/types/workflows.ts src/api/presence.ts src/api/sync.ts src/api/typing.ts src/api/to-device.ts src/api/keys.ts src/api/keys-contracts.ts src/api/push.ts src/api/push-contracts.ts --deny-warnings",
     "check:no-explicit-any": "bun run scripts/check-no-explicit-any.mjs",
     "check:no-direct-effect-run": "bun run scripts/check-effect-runtime-boundary.mjs",
+    "lint": "oxlint src --deny-warnings",
     "lint:fix": "oxlint src --fix",
     "fmt": "oxfmt src",
     "fmt:check": "oxfmt --check src"
@@ -46,6 +45,7 @@
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0",
+    "knip": "^6.3.0",
     "oxfmt": "^0.42.0",
     "oxlint": "^1.57.0",
     "typescript": "^6.0.2",

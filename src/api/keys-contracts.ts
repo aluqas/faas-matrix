@@ -1,54 +1,46 @@
 import type {
-  CrossSigningKeysStore,
-  CrossSigningKeyPayload,
-  DeviceKeysPayload,
-  DeviceKeyRequestMap,
-  DeviceOneTimeKeysMap,
-  JsonObject,
-  JsonObjectMap,
-  KeysClaimRequest,
-  KeysQueryRequest,
-  KeysQueryResponse,
-  KeysUploadRequest,
-  OneTimeKeyClaimMap,
-  SignaturesUploadRequest,
-  SignedKeyPayload,
-  StringMap,
-  StoredOneTimeKey,
-  StoredOneTimeKeyBuckets,
-  TokenSubmitRequest,
-  UIAAuthDict,
-  UiaSessionData,
-  UserCrossSigningKeyMap,
-  UserDeviceKeysMap,
-  UserOneTimeKeysMap,
-  CrossSigningUploadRequest,
+    CrossSigningKeyPayload,
+    CrossSigningKeysStore,
+    CrossSigningUploadRequest,
+    DeviceKeyRequestMap,
+    DeviceKeysPayload,
+    DeviceOneTimeKeysMap,
+    JsonObject,
+    JsonObjectMap,
+    KeysClaimRequest,
+    KeysQueryRequest,
+    KeysQueryResponse,
+    KeysUploadRequest,
+    OneTimeKeyClaimMap,
+    SignaturesUploadRequest,
+    SignedKeyPayload,
+    StoredOneTimeKey,
+    StoredOneTimeKeyBuckets,
+    StringMap,
+    TokenSubmitRequest,
+    UIAAuthDict,
+    UiaSessionData,
+    UserCrossSigningKeyMap,
+    UserDeviceKeysMap,
+    UserOneTimeKeysMap,
 } from "../types/client";
 
 export type {
-  CrossSigningKeysStore,
-  CrossSigningKeyPayload,
-  DeviceKeysPayload,
-  DeviceKeyRequestMap,
-  DeviceOneTimeKeysMap,
-  JsonObject,
-  JsonObjectMap,
-  KeysClaimRequest,
-  KeysQueryRequest,
-  KeysQueryResponse,
-  KeysUploadRequest,
-  SignaturesUploadRequest,
-  SignedKeyPayload,
-  StringMap,
-  StoredOneTimeKey,
-  StoredOneTimeKeyBuckets,
-  TokenSubmitRequest,
-  UIAAuthDict,
-  UiaSessionData,
-  UserCrossSigningKeyMap,
-  UserDeviceKeysMap,
-  UserOneTimeKeysMap,
-  CrossSigningUploadRequest,
+    CrossSigningKeyPayload, CrossSigningKeysStore, CrossSigningUploadRequest, DeviceKeyRequestMap, DeviceKeysPayload, DeviceOneTimeKeysMap,
+    JsonObject,
+    JsonObjectMap,
+    KeysClaimRequest,
+    KeysQueryRequest,
+    KeysQueryResponse,
+    KeysUploadRequest,
+    SignaturesUploadRequest,
+    SignedKeyPayload, StoredOneTimeKey,
+    StoredOneTimeKeyBuckets, StringMap, TokenSubmitRequest,
+    UIAAuthDict,
+    UiaSessionData,
+    UserCrossSigningKeyMap,
+    UserDeviceKeysMap,
+    UserOneTimeKeysMap
 };
 
 function isPlainObject(value: unknown): value is JsonObject {
@@ -140,10 +132,11 @@ function toCrossSigningKeyPayload(value: unknown): CrossSigningKeyPayload | null
     return null;
   }
 
-  const userId = value["user_id"];
-  const usage = value["usage"];
-  const keys = value["keys"];
-  const signatures = value["signatures"];
+  const record = value as Record<string, unknown>;
+  const userId = record["user_id"];
+  const usage = record["usage"];
+  const keys = record["keys"];
+  const signatures = record["signatures"];
   const parsedUsage = usage === undefined ? undefined : toStringArray(usage);
   const parsedKeys = keys === undefined ? undefined : toRecordOfStrings(keys);
   const parsedSignatures =
@@ -159,7 +152,6 @@ function toCrossSigningKeyPayload(value: unknown): CrossSigningKeyPayload | null
   }
 
   return {
-    ...value,
     ...(userId ? { user_id: userId } : {}),
     ...(parsedUsage ? { usage: parsedUsage } : {}),
     ...(parsedKeys ? { keys: parsedKeys } : {}),
@@ -323,12 +315,13 @@ export function parseDeviceKeysPayload(value: unknown): DeviceKeysPayload | null
     return null;
   }
 
-  const userId = value["user_id"];
-  const deviceId = value["device_id"];
-  const unsigned = value["unsigned"];
-  const algorithms = value["algorithms"];
-  const keys = value["keys"];
-  const signatures = value["signatures"];
+  const record = value as Record<string, unknown>;
+  const userId = record["user_id"];
+  const deviceId = record["device_id"];
+  const unsigned = record["unsigned"];
+  const algorithms = record["algorithms"];
+  const keys = record["keys"];
+  const signatures = record["signatures"];
   const parsedAlgorithms = algorithms === undefined ? undefined : toStringArray(algorithms);
   const parsedKeys = keys === undefined ? undefined : toRecordOfStrings(keys);
   const parsedSignatures =
@@ -346,10 +339,9 @@ export function parseDeviceKeysPayload(value: unknown): DeviceKeysPayload | null
   }
 
   return {
-    ...value,
     ...(userId ? { user_id: userId } : {}),
     ...(deviceId ? { device_id: deviceId } : {}),
-    ...(unsigned ? { unsigned } : {}),
+    ...(unsigned ? { unsigned: unsigned as JsonObject } : {}),
     ...(parsedAlgorithms ? { algorithms: parsedAlgorithms } : {}),
     ...(parsedKeys ? { keys: parsedKeys } : {}),
     ...(parsedSignatures ? { signatures: parsedSignatures } : {}),
@@ -443,10 +435,11 @@ export function parseCrossSigningUploadRequest(value: unknown): CrossSigningUplo
     return null;
   }
 
-  const master = value["master_key"];
-  const selfSigning = value["self_signing_key"];
-  const userSigning = value["user_signing_key"];
-  const auth = value["auth"];
+  const record = value as Record<string, unknown>;
+  const master = record["master_key"];
+  const selfSigning = record["self_signing_key"];
+  const userSigning = record["user_signing_key"];
+  const auth = record["auth"];
 
   if (
     (master !== undefined && !isPlainObject(master)) ||
