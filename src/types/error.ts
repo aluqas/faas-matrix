@@ -1,8 +1,10 @@
 import type { ErrorCode, MatrixError } from "./matrix";
 
 export type DomainErrorKind =
+  | "decode_violation"
   | "spec_violation"
   | "auth_violation"
+  | "permission_violation"
   | "state_invariant"
   | "unsupported_room_version"
   | "incompatible_room_version";

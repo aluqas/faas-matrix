@@ -1,15 +1,13 @@
 import { federationGet } from "../../services/federation-keys";
 import { getUserById } from "../../services/database";
+import type { ProfileField, ProfileResponseBody } from "../../types/profile";
 import { isLocalServerName, parseUserId } from "../../utils/ids";
 
-export interface FederationProfile {
-  displayname: string | null;
-  avatar_url: string | null;
-}
+export type FederationProfile = ProfileResponseBody;
 
 export interface FederationProfileQueryInput {
   userId: string;
-  field?: string;
+  field?: ProfileField;
   localServerName: string;
   db: D1Database;
   cache: KVNamespace;
@@ -22,7 +20,7 @@ export interface FederationProfileQueryInput {
   ) => Promise<Response>;
 }
 
-function isSupportedProfileField(field: string | undefined): field is "displayname" | "avatar_url" {
+function isSupportedProfileField(field: string | undefined): field is ProfileField {
   return field === undefined || field === "displayname" || field === "avatar_url";
 }
 

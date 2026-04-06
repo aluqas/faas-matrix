@@ -1,264 +1,193 @@
 // Matrix profile endpoints
 
+import { Effect } from "effect";
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { Errors } from "../utils/errors";
+import type { AppEnv, ProfileField, ProfileResponseBody } from "../types";
+import { Errors, MatrixApiError } from "../utils/errors";
 import { requireAuth, optionalAuth } from "../middleware/auth";
-import { getUserById, updateUserProfile } from "../services/database";
-import { isLocalServerName, parseUserId } from "../utils/ids";
-import { FederationQueryService } from "../matrix/application/federation-query-service";
+import { runClientEffect } from "../matrix/application/effect-runtime";
+import {
+  deleteCustomProfileKeyEffect,
+  putCustomProfileKeyEffect,
+  updateProfileFieldEffect,
+} from "../matrix/application/features/profile/command";
+import {
+  decodeDeleteCustomProfileKeyInput,
+  decodeGetCustomProfileKeyInput,
+  decodeProfileFieldUpdateInput,
+  decodeProfileUserId,
+  decodePutCustomProfileKeyInput,
+} from "../matrix/application/features/profile/decode";
+import {
+  createProfileCommandPorts,
+  createProfileQueryPorts,
+} from "../matrix/application/features/profile/effect-adapters";
+import {
+  queryCustomProfileKeyEffect,
+  queryProfileEffect,
+} from "../matrix/application/features/profile/query";
 
 const app = new Hono<AppEnv>();
-const federationQueryService = new FederationQueryService();
+
+async function respondWithClientEffect<A>(
+  effect: Effect.Effect<A, unknown>,
+  respond: (value: A) => Response,
+): Promise<Response> {
+  try {
+    return respond(await runClientEffect(effect));
+  } catch (error) {
+    if (error instanceof MatrixApiError) {
+      return error.toResponse();
+    }
+    throw error;
+  }
+}
+
+async function decodeJsonBody(c: import("hono").Context<AppEnv>): Promise<unknown | Response> {
+  try {
+    return await c.req.json();
+  } catch {
+    return Errors.badJson().toResponse();
+  }
+}
+
+function toFieldResponse(field: ProfileField, profile: ProfileResponseBody) {
+  return field === "displayname"
+    ? { displayname: profile.displayname }
+    : { avatar_url: profile.avatar_url };
+}
 
 // GET /_matrix/client/v3/profile/:userId - Get user profile
 app.get("/_matrix/client/v3/profile/:userId", optionalAuth(), async (c) => {
-  const targetUserId = decodeURIComponent(c.req.param("userId"));
-
-  // Check if this is a local user
-  const parsed = parseUserId(targetUserId);
-  if (!parsed) {
-    return Errors.invalidParam("user_id", "Invalid user ID format").toResponse();
-  }
-
-  const profile = await federationQueryService.getProfile({
-    userId: targetUserId,
-    localServerName: c.env.SERVER_NAME,
-    db: c.env.DB,
-    cache: c.env.CACHE,
-  });
-
-  if (!profile) {
-    return Errors.notFound("User not found").toResponse();
-  }
-
-  console.log("[profile] Fetching profile for:", targetUserId, {
-    hasDisplayName: !!profile.displayname,
-    hasAvatar: !!profile.avatar_url,
-  });
-
-  // Always return both fields (even if null) to indicate user exists
-  // Element X uses this to verify users from directory search
-  return c.json({
-    displayname: profile.displayname,
-    avatar_url: profile.avatar_url,
-  });
+  return respondWithClientEffect(
+    decodeProfileUserId(decodeURIComponent(c.req.param("userId"))).pipe(
+      Effect.flatMap((userId) => queryProfileEffect(createProfileQueryPorts(c.env), { userId })),
+    ),
+    (profile) => c.json(profile),
+  );
 });
 
 // GET /_matrix/client/v3/profile/:userId/displayname - Get display name
 app.get("/_matrix/client/v3/profile/:userId/displayname", optionalAuth(), async (c) => {
-  const targetUserId = decodeURIComponent(c.req.param("userId"));
-
-  const parsed = parseUserId(targetUserId);
-  if (!parsed) {
-    return Errors.invalidParam("user_id", "Invalid user ID format").toResponse();
-  }
-
-  const profile = await federationQueryService.getProfile({
-    userId: targetUserId,
-    field: "displayname",
-    localServerName: c.env.SERVER_NAME,
-    db: c.env.DB,
-    cache: c.env.CACHE,
-  });
-  if (!profile) {
-    return Errors.notFound("User not found").toResponse();
-  }
-
-  return c.json({
-    displayname: profile.displayname,
-  });
+  return respondWithClientEffect(
+    decodeProfileUserId(decodeURIComponent(c.req.param("userId"))).pipe(
+      Effect.flatMap((userId) =>
+        queryProfileEffect(createProfileQueryPorts(c.env), {
+          userId,
+          field: "displayname",
+        }),
+      ),
+    ),
+    (profile) => c.json(toFieldResponse("displayname", profile)),
+  );
 });
 
 // PUT /_matrix/client/v3/profile/:userId/displayname - Set display name
 app.put("/_matrix/client/v3/profile/:userId/displayname", requireAuth(), async (c) => {
-  const userId = c.get("userId");
-  const targetUserId = decodeURIComponent(c.req.param("userId"));
-
-  // Can only change own profile
-  if (userId !== targetUserId) {
-    return Errors.forbidden("Cannot modify another user's profile").toResponse();
+  const body = await decodeJsonBody(c);
+  if (body instanceof Response) {
+    return body;
   }
 
-  let body: any;
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
-  }
-
-  const { displayname } = body;
-
-  await updateUserProfile(c.env.DB, userId, displayname);
-
-  return c.json({});
+  return respondWithClientEffect(
+    decodeProfileFieldUpdateInput({
+      authUserId: c.get("userId"),
+      targetUserId: decodeURIComponent(c.req.param("userId")),
+      field: "displayname",
+      body,
+    }).pipe(
+      Effect.flatMap((input) => updateProfileFieldEffect(createProfileCommandPorts(c.env), input)),
+    ),
+    () => c.json({}),
+  );
 });
 
 // GET /_matrix/client/v3/profile/:userId/avatar_url - Get avatar URL
 app.get("/_matrix/client/v3/profile/:userId/avatar_url", optionalAuth(), async (c) => {
-  const targetUserId = decodeURIComponent(c.req.param("userId"));
-
-  const parsed = parseUserId(targetUserId);
-  if (!parsed) {
-    return Errors.invalidParam("user_id", "Invalid user ID format").toResponse();
-  }
-
-  const profile = await federationQueryService.getProfile({
-    userId: targetUserId,
-    field: "avatar_url",
-    localServerName: c.env.SERVER_NAME,
-    db: c.env.DB,
-    cache: c.env.CACHE,
-  });
-  if (!profile) {
-    return Errors.notFound("User not found").toResponse();
-  }
-
-  return c.json({
-    avatar_url: profile.avatar_url,
-  });
+  return respondWithClientEffect(
+    decodeProfileUserId(decodeURIComponent(c.req.param("userId"))).pipe(
+      Effect.flatMap((userId) =>
+        queryProfileEffect(createProfileQueryPorts(c.env), {
+          userId,
+          field: "avatar_url",
+        }),
+      ),
+    ),
+    (profile) => c.json(toFieldResponse("avatar_url", profile)),
+  );
 });
 
 // PUT /_matrix/client/v3/profile/:userId/avatar_url - Set avatar URL
 app.put("/_matrix/client/v3/profile/:userId/avatar_url", requireAuth(), async (c) => {
-  const userId = c.get("userId");
-  const targetUserId = decodeURIComponent(c.req.param("userId"));
-
-  // Can only change own profile
-  if (userId !== targetUserId) {
-    return Errors.forbidden("Cannot modify another user's profile").toResponse();
+  const body = await decodeJsonBody(c);
+  if (body instanceof Response) {
+    return body;
   }
 
-  let body: any;
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
-  }
-
-  const { avatar_url } = body;
-
-  await updateUserProfile(c.env.DB, userId, undefined, avatar_url);
-
-  return c.json({});
+  return respondWithClientEffect(
+    decodeProfileFieldUpdateInput({
+      authUserId: c.get("userId"),
+      targetUserId: decodeURIComponent(c.req.param("userId")),
+      field: "avatar_url",
+      body,
+    }).pipe(
+      Effect.flatMap((input) => updateProfileFieldEffect(createProfileCommandPorts(c.env), input)),
+    ),
+    () => c.json({}),
+  );
 });
-
-// ============================================
-// Custom Profile Keys (Matrix v1.17 Extension)
-// ============================================
 
 // GET /_matrix/client/v3/profile/:userId/:keyName - Get custom profile key
 app.get("/_matrix/client/v3/profile/:userId/:keyName", optionalAuth(), async (c) => {
   const targetUserId = decodeURIComponent(c.req.param("userId"));
   const keyName = c.req.param("keyName");
 
-  // These are handled by the specific endpoints above
   if (keyName === "displayname" || keyName === "avatar_url") {
-    // Let Hono route to the correct handler
-    // This shouldn't be reached due to route ordering, but defensive coding
     return c.json({ errcode: "M_UNRECOGNIZED", error: "Use specific endpoint" }, 400);
   }
 
-  const parsed = parseUserId(targetUserId);
-  if (!parsed) {
-    return Errors.invalidParam("user_id", "Invalid user ID format").toResponse();
-  }
-
-  if (!isLocalServerName(parsed.serverName, c.env.SERVER_NAME)) {
-    return Errors.notFound("User not found").toResponse();
-  }
-
-  const user = await getUserById(c.env.DB, targetUserId);
-  if (!user) {
-    return Errors.notFound("User not found").toResponse();
-  }
-
-  // Get custom profile data from KV
-  const profileJson = await c.env.CACHE.get(`profile:${targetUserId}:custom`);
-  const profileData = profileJson ? JSON.parse(profileJson) : {};
-
-  if (!(keyName in profileData)) {
-    return Errors.notFound(`Profile key '${keyName}' not found`).toResponse();
-  }
-
-  return c.json({ [keyName]: profileData[keyName] });
+  return respondWithClientEffect(
+    decodeGetCustomProfileKeyInput({ targetUserId, keyName }).pipe(
+      Effect.flatMap((input) => queryCustomProfileKeyEffect(createProfileQueryPorts(c.env), input)),
+    ),
+    (body) => c.json(body),
+  );
 });
 
 // PUT /_matrix/client/v3/profile/:userId/:keyName - Set custom profile key
 app.put("/_matrix/client/v3/profile/:userId/:keyName", requireAuth(), async (c) => {
-  const authUserId = c.get("userId");
-  const targetUserId = decodeURIComponent(c.req.param("userId"));
-  const keyName = c.req.param("keyName");
-
-  // Cannot modify another user's profile
-  if (authUserId !== targetUserId) {
-    return Errors.forbidden("Cannot modify another user's profile").toResponse();
+  const body = await decodeJsonBody(c);
+  if (body instanceof Response) {
+    return body;
   }
 
-  // Standard keys are handled by specific endpoints
-  if (keyName === "displayname" || keyName === "avatar_url") {
-    return c.json({ errcode: "M_UNRECOGNIZED", error: "Use specific endpoint" }, 400);
-  }
-
-  let body: Record<string, unknown>;
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
-  }
-
-  const value = body[keyName];
-  if (value === undefined) {
-    return c.json(
-      { errcode: "M_MISSING_PARAM", error: `Missing '${keyName}' in request body` },
-      400,
-    );
-  }
-
-  // Get current profile data from KV
-  const profileJson = await c.env.CACHE.get(`profile:${targetUserId}:custom`);
-  const profileData = profileJson ? JSON.parse(profileJson) : {};
-
-  // Update the key
-  profileData[keyName] = value;
-
-  // Store back in KV with 1-year TTL
-  await c.env.CACHE.put(`profile:${targetUserId}:custom`, JSON.stringify(profileData), {
-    expirationTtl: 365 * 24 * 60 * 60,
-  });
-
-  return c.json({});
+  return respondWithClientEffect(
+    decodePutCustomProfileKeyInput({
+      authUserId: c.get("userId"),
+      targetUserId: decodeURIComponent(c.req.param("userId")),
+      keyName: c.req.param("keyName"),
+      body,
+    }).pipe(
+      Effect.flatMap((input) => putCustomProfileKeyEffect(createProfileCommandPorts(c.env), input)),
+    ),
+    () => c.json({}),
+  );
 });
 
 // DELETE /_matrix/client/v3/profile/:userId/:keyName - Delete custom profile key
 app.delete("/_matrix/client/v3/profile/:userId/:keyName", requireAuth(), async (c) => {
-  const authUserId = c.get("userId");
-  const targetUserId = decodeURIComponent(c.req.param("userId"));
-  const keyName = c.req.param("keyName");
-
-  // Cannot modify another user's profile
-  if (authUserId !== targetUserId) {
-    return Errors.forbidden("Cannot modify another user's profile").toResponse();
-  }
-
-  // Cannot delete standard keys
-  if (keyName === "displayname" || keyName === "avatar_url") {
-    return Errors.forbidden("Cannot delete standard profile keys").toResponse();
-  }
-
-  // Get current profile data from KV
-  const profileJson = await c.env.CACHE.get(`profile:${targetUserId}:custom`);
-  const profileData = profileJson ? JSON.parse(profileJson) : {};
-
-  // Remove the key
-  delete profileData[keyName];
-
-  // Store back in KV
-  await c.env.CACHE.put(`profile:${targetUserId}:custom`, JSON.stringify(profileData), {
-    expirationTtl: 365 * 24 * 60 * 60,
-  });
-
-  return c.json({});
+  return respondWithClientEffect(
+    decodeDeleteCustomProfileKeyInput({
+      authUserId: c.get("userId"),
+      targetUserId: decodeURIComponent(c.req.param("userId")),
+      keyName: c.req.param("keyName"),
+    }).pipe(
+      Effect.flatMap((input) =>
+        deleteCustomProfileKeyEffect(createProfileCommandPorts(c.env), input),
+      ),
+    ),
+    () => c.json({}),
+  );
 });
 
 export default app;

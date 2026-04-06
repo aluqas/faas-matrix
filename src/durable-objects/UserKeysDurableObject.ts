@@ -5,6 +5,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../types";
+import type { JsonObject } from "../types/common";
 
 interface CrossSigningKeys {
   master?: any;
@@ -37,8 +38,13 @@ export class UserKeysDurableObject extends DurableObject<Env> {
       }
 
       if (path === "/account-data/put" && request.method === "POST") {
-        const body = (await request.json()) as { event_type: string; content: any };
+        const body = (await request.json()) as { event_type: string; content: JsonObject };
         return this.putAccountData(body.event_type, body.content);
+      }
+
+      if (path === "/account-data/delete" && request.method === "POST") {
+        const body = (await request.json()) as { event_type: string };
+        return this.deleteAccountData(body.event_type);
       }
 
       // Device keys endpoints
@@ -117,7 +123,7 @@ export class UserKeysDurableObject extends DurableObject<Env> {
     });
   }
 
-  private async putAccountData(eventType: string, content: any): Promise<Response> {
+  private async putAccountData(eventType: string, content: JsonObject): Promise<Response> {
     await this.ctx.storage.put(`account_data:${eventType}`, content);
 
     // Track event types
@@ -129,6 +135,18 @@ export class UserKeysDurableObject extends DurableObject<Env> {
 
     console.log("[UserKeysDO] Stored account data:", eventType);
     return new Response(JSON.stringify({ success: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  private async deleteAccountData(eventType: string): Promise<Response> {
+    await this.ctx.storage.delete(`account_data:${eventType}`);
+
+    const eventTypes = (await this.ctx.storage.get<string[]>("account_data_types")) || [];
+    const nextEventTypes = eventTypes.filter((type) => type !== eventType);
+    await this.ctx.storage.put("account_data_types", nextEventTypes);
+
+    return new Response(JSON.stringify({ success: true, deleted: true }), {
       headers: { "Content-Type": "application/json" },
     });
   }
