@@ -66,7 +66,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
 
     try {
       // Step 1: Get room members (excluding sender)
-      const members = (await step.do("get-members", async () => {
+      const members = await step.do("get-members", async () => {
         const result = await this.env.DB.prepare(`
           SELECT user_id FROM room_memberships
           WHERE room_id = ? AND membership = 'join' AND user_id != ?
@@ -74,7 +74,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
           .bind(roomId, sender)
           .all<{ user_id: string }>();
         return result.results.map((m) => m.user_id);
-      })) as string[];
+      });
 
       if (members.length === 0) {
         console.log("[PushNotificationWorkflow] No members to notify");
@@ -82,9 +82,9 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
       }
 
       // Step 2: Get room context (member count, sender name, room name)
-      const roomContext = (await step.do("get-room-context", async () => {
-        return await this.getRoomContext(roomId, sender);
-      })) as RoomContext;
+      const roomContext = await step.do("get-room-context", () => {
+        return this.getRoomContext(roomId, sender);
+      });
 
       // Step 3: Process members in batches of 50
       const BATCH_SIZE = 50;
@@ -95,7 +95,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
       for (let i = 0; i < members.length; i += BATCH_SIZE) {
         const batch = members.slice(i, i + BATCH_SIZE);
 
-        const batchResults = (await step.do(
+        const batchResults = await step.do(
           `notify-batch-${i}`,
           {
             retries: {
@@ -105,8 +105,8 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
             },
             timeout: 60000, // 60 seconds per batch
           },
-          async () => {
-            return await this.processMemberBatch(batch, {
+          () => {
+            return this.processMemberBatch(batch, {
               eventId,
               roomId,
               eventType,
@@ -118,7 +118,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
               memberCount: roomContext.memberCount,
             });
           },
-        )) as MemberResult[];
+        );
 
         // Aggregate results
         for (const result of batchResults) {
@@ -167,7 +167,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
     `)
       .bind(roomId)
       .first<{ count: number }>();
-    const memberCount = memberCountResult?.count || 0;
+    const memberCount = memberCountResult?.count ?? 0;
 
     // Get sender's display name
     const senderMembership = await this.env.DB.prepare(`
@@ -177,7 +177,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
       .bind(roomId, sender)
       .first<{ display_name: string | null }>();
     const senderDisplayName =
-      senderMembership?.display_name || sender.split(":")[0].replace("@", "");
+      senderMembership?.display_name ?? sender.split(":")[0].replace("@", "");
 
     // Get room name
     const roomNameEvent = await this.env.DB.prepare(`
@@ -335,7 +335,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
       .bind(roomId, userId, roomId, userId)
       .first<{ count: number }>();
 
-    return result?.count || 1;
+    return result?.count ?? 1;
   }
 
   // Get user's pushers
@@ -385,10 +385,10 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
     }
 
     const senderDisplayName = eventContext.senderDisplayName;
-    const roomDisplayName = eventContext.roomName || "Chat";
+    const roomDisplayName = eventContext.roomName ?? "Chat";
 
     // Build device data with APNs alert
-    const deviceData = JSON.parse(JSON.stringify(pusherData.default_payload || {}));
+    const deviceData = JSON.parse(JSON.stringify(pusherData.default_payload ?? {}));
 
     if (deviceData.aps) {
       if (eventContext.eventType === "m.room.encrypted") {
@@ -397,7 +397,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
           body: roomDisplayName,
         };
       } else {
-        const messageBody = eventContext.content?.body || "New message";
+        const messageBody = eventContext.content?.body ?? "New message";
         deviceData.aps.alert = {
           title: senderDisplayName,
           subtitle: roomDisplayName,

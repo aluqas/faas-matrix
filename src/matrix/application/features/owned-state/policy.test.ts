@@ -8,7 +8,7 @@ describe("owned state policy", () => {
   const ownedState = requireRoomVersionPolicy("org.matrix.msc3757.10");
 
   it("forbids reserved state keys for other users in v10 rooms", () => {
-    expect(() =>
+    expect(() => {
       authorizeOwnedStateEvent({
         policy: v10,
         eventType: "com.example.test",
@@ -16,12 +16,12 @@ describe("owned state policy", () => {
         senderUserId: "@alice:hs1",
         actorPower: 100,
         requiredEventPower: 0,
-      }),
-    ).toThrow(/reserved/);
+      });
+    }).toThrow(/reserved/);
   });
 
   it("allows exact self-owned state keys in v10 rooms", () => {
-    expect(() =>
+    expect(() => {
       authorizeOwnedStateEvent({
         policy: v10,
         eventType: "com.example.test",
@@ -29,12 +29,12 @@ describe("owned state policy", () => {
         senderUserId: "@alice:hs1",
         actorPower: 0,
         requiredEventPower: 0,
-      }),
-    ).not.toThrow();
+      });
+    }).not.toThrow();
   });
 
   it("allows suffixed owned-state writes for the owner in MSC3757 rooms", () => {
-    expect(() =>
+    expect(() => {
       authorizeOwnedStateEvent({
         policy: ownedState,
         eventType: "com.example.test",
@@ -42,12 +42,12 @@ describe("owned state policy", () => {
         senderUserId: "@alice:hs1",
         actorPower: 0,
         requiredEventPower: 0,
-      }),
-    ).not.toThrow();
+      });
+    }).not.toThrow();
   });
 
   it("allows privileged users to write another user's owned state in MSC3757 rooms", () => {
-    expect(() =>
+    expect(() => {
       authorizeOwnedStateEvent({
         policy: ownedState,
         eventType: "com.example.test",
@@ -55,12 +55,12 @@ describe("owned state policy", () => {
         senderUserId: "@creator:hs1",
         actorPower: 100,
         requiredEventPower: 0,
-      }),
-    ).not.toThrow();
+      });
+    }).not.toThrow();
   });
 
   it("rejects malformed state keys in MSC3757 rooms", () => {
-    expect(() =>
+    expect(() => {
       authorizeOwnedStateEvent({
         policy: ownedState,
         eventType: "com.example.test",
@@ -68,12 +68,12 @@ describe("owned state policy", () => {
         senderUserId: "@creator:hs1",
         actorPower: 100,
         requiredEventPower: 0,
-      }),
-    ).toThrow(/valid Matrix user ID/);
+      });
+    }).toThrow(/valid Matrix user ID/);
   });
 
   it("rejects improperly suffixed state keys in MSC3757 rooms", () => {
-    expect(() =>
+    expect(() => {
       authorizeOwnedStateEvent({
         policy: ownedState,
         eventType: "com.example.test",
@@ -81,7 +81,7 @@ describe("owned state policy", () => {
         senderUserId: "@creator:hs1",
         actorPower: 100,
         requiredEventPower: 0,
-      }),
-    ).toThrow(/suffix/);
+      });
+    }).toThrow(/suffix/);
   });
 });

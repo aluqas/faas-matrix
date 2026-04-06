@@ -208,8 +208,8 @@ app.delete("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async 
     if (powerLevels) {
       try {
         const levels = JSON.parse(powerLevels.content);
-        const userPower = levels.users?.[userId] || levels.users_default || 0;
-        const aliasLevel = levels.state_default || 50;
+        const userPower = levels.users?.[userId] ?? levels.users_default ?? 0;
+        const aliasLevel = levels.state_default ?? 50;
 
         if (userPower < aliasLevel) {
           return Errors.forbidden("Insufficient power level to delete alias").toResponse();
@@ -296,8 +296,8 @@ app.put("/_matrix/client/v3/directory/list/room/:roomId", requireAuth(), async (
   if (powerLevels) {
     try {
       const levels = JSON.parse(powerLevels.content);
-      const userPower = levels.users?.[userId] || levels.users_default || 0;
-      const requiredPower = levels.state_default || 50;
+      const userPower = levels.users?.[userId] ?? levels.users_default ?? 0;
+      const requiredPower = levels.state_default ?? 50;
 
       if (userPower < requiredPower) {
         return Errors.forbidden("Insufficient power level").toResponse();

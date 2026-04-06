@@ -131,9 +131,9 @@ export class CallRoomDurableObject implements DurableObject {
     this.env = env;
 
     // Load persisted state
-    this.state.blockConcurrencyWhile(async () => {
-      this.callId = (await this.state.storage.get("callId")) || null;
-      this.matrixRoomId = (await this.state.storage.get("matrixRoomId")) || null;
+    void this.state.blockConcurrencyWhile(async () => {
+      this.callId = (await this.state.storage.get("callId")) ?? null;
+      this.matrixRoomId = (await this.state.storage.get("matrixRoomId")) ?? null;
     });
   }
 
@@ -164,7 +164,7 @@ export class CallRoomDurableObject implements DurableObject {
   }
 
   private async handleInit(request: Request): Promise<Response> {
-    const body = (await request.json()) as { roomId: string; callId: string };
+    const body = await request.json();
 
     this.matrixRoomId = body.roomId;
     this.callId = body.callId;
@@ -284,7 +284,7 @@ export class CallRoomDurableObject implements DurableObject {
     // Send welcome message with current participants
     const welcomeMsg: WelcomeMessage = {
       type: "welcome",
-      callId: this.callId || "",
+      callId: this.callId ?? "",
       participants: Array.from(this.participants.values())
         .filter((p) => p.oderId !== msg.userId || p.deviceId !== msg.deviceId)
         .map((p) => ({
@@ -335,7 +335,7 @@ export class CallRoomDurableObject implements DurableObject {
 
     const track = response.tracks[0];
     if (track.errorCode) {
-      this.sendError(ws, track.errorCode, track.errorDescription || "Track error");
+      this.sendError(ws, track.errorCode, track.errorDescription ?? "Track error");
       return;
     }
 

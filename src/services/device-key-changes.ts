@@ -17,7 +17,7 @@ export async function getNextStreamPosition(db: D1Database, streamName: string):
     .bind(streamName)
     .first<{ position: number }>();
 
-  return result?.position || 1;
+  return result?.position ?? 1;
 }
 
 export async function recordDeviceKeyChange(

@@ -46,7 +46,7 @@ function getClientId(c: Context<AppEnv>): string {
   // Fall back to IP address
   const cfConnectingIp = c.req.header("CF-Connecting-IP");
   const xForwardedFor = c.req.header("X-Forwarded-For");
-  const ip = cfConnectingIp || xForwardedFor?.split(",")[0]?.trim() || "unknown";
+  const ip = cfConnectingIp ?? xForwardedFor?.split(",")[0]?.trim() ?? "unknown";
 
   return `ip:${ip}`;
 }
@@ -111,14 +111,14 @@ export async function rateLimitMiddleware(c: Context<AppEnv>, next: Next) {
 
     if (!result.allowed) {
       // Rate limited
-      const retryAfter = Math.ceil((result.retryAfterMs || config.windowMs) / 1000);
+      const retryAfter = Math.ceil((result.retryAfterMs ?? config.windowMs) / 1000);
       c.header("Retry-After", String(retryAfter));
 
       return c.json(
         {
           errcode: "M_LIMIT_EXCEEDED",
           error: "Too many requests",
-          retry_after_ms: result.retryAfterMs || config.windowMs,
+          retry_after_ms: result.retryAfterMs ?? config.windowMs,
         },
         429,
       );
@@ -163,14 +163,14 @@ export function strictRateLimit(requests: number, windowMs: number) {
       };
 
       if (!result.allowed) {
-        const retryAfter = Math.ceil((result.retryAfterMs || windowMs) / 1000);
+        const retryAfter = Math.ceil((result.retryAfterMs ?? windowMs) / 1000);
         c.header("Retry-After", String(retryAfter));
 
         return c.json(
           {
             errcode: "M_LIMIT_EXCEEDED",
             error: "Too many requests",
-            retry_after_ms: result.retryAfterMs || windowMs,
+            retry_after_ms: result.retryAfterMs ?? windowMs,
           },
           429,
         );

@@ -148,7 +148,7 @@ export class FederationDurableObject extends DurableObject<Env> {
       const target = (await this.ctx.storage.get(`server:${serverName}`)) as
         | FederationTarget
         | undefined;
-      return new Response(JSON.stringify(target || { serverName, status: "unknown" }), {
+      return new Response(JSON.stringify(target ?? { serverName, status: "unknown" }), {
         headers: { "Content-Type": "application/json" },
       });
     }
@@ -352,7 +352,7 @@ export class FederationDurableObject extends DurableObject<Env> {
     const target = (await this.ctx.storage.get(`server:${destination}`)) as
       | FederationTarget
       | undefined;
-    const retryCount = (target?.retryCount || 0) + 1;
+    const retryCount = (target?.retryCount ?? 0) + 1;
 
     // Exponential backoff tuned for interactive protocol delivery.
     const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 30000);
@@ -361,7 +361,7 @@ export class FederationDurableObject extends DurableObject<Env> {
     // Update server status
     const newTarget: FederationTarget = {
       serverName: destination,
-      lastContact: target?.lastContact || 0,
+      lastContact: target?.lastContact ?? 0,
       retryCount,
       nextRetry,
     };

@@ -383,7 +383,7 @@ app.get("/_matrix/client/v3/publicRooms", async (c) => {
       room_id: room.room_id,
       name: nameEvent ? JSON.parse(nameEvent.content).name : undefined,
       topic: topicEvent ? JSON.parse(topicEvent.content).topic : undefined,
-      num_joined_members: memberCount?.count || 0,
+      num_joined_members: memberCount?.count ?? 0,
       world_readable: false,
       guest_can_join: false,
     });
@@ -416,7 +416,7 @@ app.post("/_matrix/client/v3/user_directory/search", requireAuth(), async (c) =>
   }
 
   const searchTerm = body.search_term || "";
-  const limit = Math.min(body.limit || 10, 50);
+  const limit = Math.min(body.limit ?? 10, 50);
 
   console.log("[user_directory] Search request:", {
     requestingUserId,
@@ -454,8 +454,8 @@ app.post("/_matrix/client/v3/user_directory/search", requireAuth(), async (c) =>
   // Return explicit null values (not undefined/omitted) so Element X knows user exists
   const users = results.results.slice(0, limit).map((u) => ({
     user_id: u.user_id,
-    display_name: u.display_name || null,
-    avatar_url: u.avatar_url || null,
+    display_name: u.display_name ?? null,
+    avatar_url: u.avatar_url ?? null,
   }));
 
   console.log("[user_directory] Search results:", {

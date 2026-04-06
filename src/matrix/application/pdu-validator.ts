@@ -173,12 +173,12 @@ export async function validateIncomingPdu(
  * Filter-style variant: returns null for malformed events instead of throwing.
  * Useful when processing batches where individual malformed events should be skipped.
  */
-export async function tryValidateIncomingPdu(
+export function tryValidateIncomingPdu(
   event: unknown,
   context?: string,
   roomVersion?: string,
 ): Promise<PDU | null> {
-  return await runFederationEffect(
+  return runFederationEffect(
     validateIncomingPduEffect(event, context, roomVersion).pipe(
       Effect.match({
         onSuccess: (validated) => validated,

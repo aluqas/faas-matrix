@@ -169,7 +169,7 @@ export async function getTypingUsers(env: Env, roomId: string): Promise<string[]
     }),
   );
 
-  const data = (await response.json()) as { user_ids: string[] };
+  const data = await response.json();
   return data.user_ids;
 }
 

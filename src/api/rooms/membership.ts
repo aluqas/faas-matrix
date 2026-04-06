@@ -74,7 +74,7 @@ async function handleKnock(
 
 app.post("/_matrix/client/v3/rooms/:roomId/knock", requireAuth(), async (c) => {
   const body = await parseKnockBody(c);
-  return await handleKnock(c, c.req.param("roomId"), body.reason);
+  return handleKnock(c, c.req.param("roomId"), body.reason);
 });
 
 app.post("/_matrix/client/v3/knock/:roomIdOrAlias", requireAuth(), async (c) => {

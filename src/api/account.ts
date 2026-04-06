@@ -510,7 +510,7 @@ app.post("/_matrix/client/v3/account/3pid/email/requestToken", async (c) => {
       return c.json(
         {
           errcode: "M_THREEPID_DENIED",
-          error: emailResult.error || "Failed to send verification email",
+          error: emailResult.error ?? "Failed to send verification email",
         },
         500,
       );
@@ -557,7 +557,7 @@ app.post("/_matrix/client/v3/account/3pid/submit_token", async (c) => {
     return c.json(
       {
         errcode: "M_THREEPID_AUTH_FAILED",
-        error: result.error || "Verification failed",
+        error: result.error ?? "Verification failed",
       },
       400,
     );
@@ -592,7 +592,7 @@ app.get("/_matrix/client/v3/account/3pid/submit_token", async (c) => {
     return c.json(
       {
         errcode: "M_THREEPID_AUTH_FAILED",
-        error: result.error || "Verification failed",
+        error: result.error ?? "Verification failed",
       },
       400,
     );

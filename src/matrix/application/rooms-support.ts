@@ -156,7 +156,7 @@ export async function createInitialRoomEvents(
   const joinEventId = await createEvent("m.room.member", joinContent, creatorId);
   await repository.updateMembership(roomId, creatorId, "join", joinEventId);
 
-  const preset = options.preset || "private_chat";
+  const preset = options.preset ?? "private_chat";
   await createEvent(
     "m.room.power_levels",
     {
@@ -265,7 +265,7 @@ export async function createMembershipEvent(options: CreateMembershipEventOption
     depth: options.depth,
     auth_events: authEvents,
     prev_events: options.prevEventIds,
-    unsigned: options.unsigned ? options.unsigned : undefined,
+    unsigned: options.unsigned ?? undefined,
   };
   const hash = await calculateContentHash(baseEvent as unknown as Record<string, unknown>);
   const eventWithHash = {

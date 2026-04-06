@@ -399,10 +399,7 @@ h1{color:#ef4444;}</style></head>
 
   // Look up the token
   const tokenHash = await hashToken(token);
-  const tokenData = (await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json")) as {
-    user_id: string;
-    expires_at: number;
-  } | null;
+  const tokenData = await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json");
 
   if (!tokenData) {
     return c.html(
@@ -446,10 +443,7 @@ app.get("/login/qr/:token/check", async (c) => {
   }
 
   const tokenHash = await hashToken(token);
-  const tokenData = (await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json")) as {
-    user_id: string;
-    expires_at: number;
-  } | null;
+  const tokenData = await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json");
 
   if (!tokenData) {
     return c.json({ valid: false, error: "Token not found or expired" }, 404);

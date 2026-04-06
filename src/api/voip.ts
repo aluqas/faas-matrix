@@ -42,7 +42,7 @@ app.get("/_matrix/client/v3/voip/turnServer", requireAuth(), async (c) => {
           {
             errcode: "M_LIMIT_EXCEEDED",
             error: "Too many TURN credential requests. Please try again later.",
-            retry_after_ms: error.retryAfterMs || 60000,
+            retry_after_ms: error.retryAfterMs ?? 60000,
           },
           429,
         );
@@ -132,7 +132,7 @@ app.get("/_matrix/client/v1/rooms/:roomId/call", requireAuth(), async (c) => {
   for (const event of memberEvents.results) {
     try {
       const content = JSON.parse(event.content);
-      const memberships = content.memberships || [];
+      const memberships = content.memberships ?? [];
 
       for (const membership of memberships) {
         // Check if membership is still valid (not expired)
@@ -141,7 +141,7 @@ app.get("/_matrix/client/v1/rooms/:roomId/call", requireAuth(), async (c) => {
             user_id: event.state_key,
             device_id: membership.device_id,
             application: membership.application,
-            call_id: membership.call_id || "",
+            call_id: membership.call_id ?? "",
             expires_ts: membership.expires_ts,
             foci_active: membership.foci_active,
             focus_active: membership.focus_active,
@@ -216,7 +216,7 @@ app.put("/_matrix/client/v1/rooms/:roomId/call", requireAuth(), async (c) => {
     );
   }
 
-  const targetDeviceId = body.device_id || deviceId;
+  const targetDeviceId = body.device_id ?? deviceId;
   if (!targetDeviceId) {
     return c.json(
       {
@@ -248,7 +248,7 @@ app.put("/_matrix/client/v1/rooms/:roomId/call", requireAuth(), async (c) => {
   if (existing) {
     try {
       const content = JSON.parse(existing.content);
-      memberships = content.memberships || [];
+      memberships = content.memberships ?? [];
     } catch (e) {
       console.error("[voip] Failed to parse existing m.call.member:", e);
     }
@@ -256,10 +256,10 @@ app.put("/_matrix/client/v1/rooms/:roomId/call", requireAuth(), async (c) => {
 
   // Create new membership entry
   const newMembership = {
-    application: body.application || "m.call",
-    call_id: body.call_id || "",
+    application: body.application ?? "m.call",
+    call_id: body.call_id ?? "",
     device_id: targetDeviceId,
-    expires_ts: body.expires_ts || Date.now() + 3600000, // Default 1 hour
+    expires_ts: body.expires_ts ?? Date.now() + 3600000, // Default 1 hour
     foci_active: body.foci_active,
     focus_active: body.focus_active,
   };
@@ -319,7 +319,7 @@ app.delete("/_matrix/client/v1/rooms/:roomId/call", requireAuth(), async (c) => 
   const db = c.env.DB;
 
   // Get device_id from query param or use current device
-  const targetDeviceId = c.req.query("device_id") || deviceId;
+  const targetDeviceId = c.req.query("device_id") ?? deviceId;
 
   if (!targetDeviceId) {
     return c.json(
@@ -356,7 +356,7 @@ app.delete("/_matrix/client/v1/rooms/:roomId/call", requireAuth(), async (c) => 
 
   try {
     const content = JSON.parse(existing.content);
-    memberships = content.memberships || [];
+    memberships = content.memberships ?? [];
   } catch (e) {
     console.error("[voip] Failed to parse existing m.call.member:", e);
     return c.json({});

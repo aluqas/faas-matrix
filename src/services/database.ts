@@ -55,9 +55,7 @@ function toStoredPdu(row: StoredEventRow): PDU {
     depth: row.depth,
     auth_events: parseJsonWithFallback<string[]>(row.auth_events, []),
     prev_events: parseJsonWithFallback<string[]>(row.prev_events, []),
-    ...(row.hashes
-      ? { hashes: parseJsonWithFallback<{ sha256: string }>(row.hashes, { sha256: "" }) }
-      : {}),
+    ...(row.hashes ? { hashes: parseJsonWithFallback(row.hashes, { sha256: "" }) } : {}),
     ...(row.signatures
       ? {
           signatures: parseJsonWithFallback<Record<string, Record<string, string>>>(

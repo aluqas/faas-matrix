@@ -77,11 +77,11 @@ app.post("/_matrix/media/v3/upload", requireAuth(), async (c) => {
   const userId = c.get("userId");
 
   // Get content type and filename
-  const contentType = c.req.header("Content-Type") || "application/octet-stream";
+  const contentType = c.req.header("Content-Type") ?? "application/octet-stream";
   const filename = c.req.query("filename");
 
   // Check content length
-  const contentLength = parseInt(c.req.header("Content-Length") || "0", 10);
+  const contentLength = parseInt(c.req.header("Content-Length") ?? "0", 10);
   if (contentLength > MAX_UPLOAD_SIZE) {
     return Errors.tooLarge("File exceeds maximum upload size").toResponse();
   }
@@ -100,7 +100,7 @@ app.post("/_matrix/media/v3/upload", requireAuth(), async (c) => {
     },
     customMetadata: {
       userId,
-      filename: filename || "",
+      filename: filename ?? "",
       uploadedAt: Date.now().toString(),
     },
   });
@@ -110,7 +110,7 @@ app.post("/_matrix/media/v3/upload", requireAuth(), async (c) => {
     `INSERT INTO media (media_id, user_id, content_type, content_length, filename, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
   )
-    .bind(mediaId, userId, contentType, body.byteLength, filename || null, Date.now())
+    .bind(mediaId, userId, contentType, body.byteLength, filename ?? null, Date.now())
     .run();
 
   return c.json({
@@ -146,7 +146,7 @@ app.get("/_matrix/media/v3/download/:serverName/:mediaId", async (c) => {
     .first<{ content_type: string; filename: string | null }>();
 
   const headers = new Headers();
-  headers.set("Content-Type", metadata?.content_type || "application/octet-stream");
+  headers.set("Content-Type", metadata?.content_type ?? "application/octet-stream");
   if (metadata?.filename) {
     headers.set("Content-Disposition", `inline; filename="${metadata.filename}"`);
   }
@@ -183,7 +183,7 @@ app.get("/_matrix/media/v3/download/:serverName/:mediaId/:filename", async (c) =
     .first<{ content_type: string }>();
 
   const headers = new Headers();
-  headers.set("Content-Type", metadata?.content_type || "application/octet-stream");
+  headers.set("Content-Type", metadata?.content_type ?? "application/octet-stream");
   headers.set("Content-Disposition", `inline; filename="${requestedFilename}"`);
   headers.set("Cache-Control", "public, max-age=31536000, immutable");
 
@@ -194,9 +194,9 @@ app.get("/_matrix/media/v3/download/:serverName/:mediaId/:filename", async (c) =
 app.get("/_matrix/media/v3/thumbnail/:serverName/:mediaId", async (c) => {
   const serverName = c.req.param("serverName");
   const mediaId = c.req.param("mediaId");
-  const width = Math.min(parseInt(c.req.query("width") || "96", 10), 1920);
-  const height = Math.min(parseInt(c.req.query("height") || "96", 10), 1920);
-  const method = c.req.query("method") || "scale";
+  const width = Math.min(parseInt(c.req.query("width") ?? "96", 10), 1920);
+  const height = Math.min(parseInt(c.req.query("height") ?? "96", 10), 1920);
+  const method = c.req.query("method") ?? "scale";
 
   if (serverName !== c.env.SERVER_NAME) {
     const remoteResponse = await fetchRemoteMedia(
@@ -302,7 +302,7 @@ app.get("/_matrix/media/v3/preview_url", requireAuth(), async (c) => {
     return c.json(
       {
         errcode: "M_UNKNOWN",
-        error: validation.error || "Invalid URL",
+        error: validation.error ?? "Invalid URL",
       },
       400,
     );
@@ -321,7 +321,9 @@ app.get("/_matrix/media/v3/preview_url", requireAuth(), async (c) => {
 
     // Fetch the URL with timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 5000);
 
     const response = await fetch(url, {
       headers: {
@@ -338,7 +340,7 @@ app.get("/_matrix/media/v3/preview_url", requireAuth(), async (c) => {
       return c.json({});
     }
 
-    const contentType = response.headers.get("Content-Type") || "";
+    const contentType = response.headers.get("Content-Type") ?? "";
 
     // Handle images directly
     if (contentType.startsWith("image/")) {
@@ -385,7 +387,7 @@ app.get("/_matrix/media/v3/preview_url", requireAuth(), async (c) => {
 
     // Extract og:title
     const ogTitle =
-      html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']*)["'][^>]*>/i) ||
+      html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']*)["'][^>]*>/i) ??
       html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*property=["']og:title["'][^>]*>/i);
     if (ogTitle) {
       preview["og:title"] = decodeHtmlEntities(ogTitle[1]);
@@ -399,14 +401,14 @@ app.get("/_matrix/media/v3/preview_url", requireAuth(), async (c) => {
 
     // Extract og:description
     const ogDesc =
-      html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']*)["'][^>]*>/i) ||
+      html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']*)["'][^>]*>/i) ??
       html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*property=["']og:description["'][^>]*>/i);
     if (ogDesc) {
       preview["og:description"] = decodeHtmlEntities(ogDesc[1]);
     } else {
       // Fallback to meta description
       const metaDesc =
-        html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["'][^>]*>/i) ||
+        html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["'][^>]*>/i) ??
         html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*name=["']description["'][^>]*>/i);
       if (metaDesc) {
         preview["og:description"] = decodeHtmlEntities(metaDesc[1]);
@@ -415,7 +417,7 @@ app.get("/_matrix/media/v3/preview_url", requireAuth(), async (c) => {
 
     // Extract og:image
     const ogImage =
-      html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']*)["'][^>]*>/i) ||
+      html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']*)["'][^>]*>/i) ??
       html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*property=["']og:image["'][^>]*>/i);
     if (ogImage) {
       let imageUrl = ogImage[1];
@@ -430,7 +432,7 @@ app.get("/_matrix/media/v3/preview_url", requireAuth(), async (c) => {
 
     // Extract og:site_name
     const ogSiteName =
-      html.match(/<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']*)["'][^>]*>/i) ||
+      html.match(/<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']*)["'][^>]*>/i) ??
       html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*property=["']og:site_name["'][^>]*>/i);
     if (ogSiteName) {
       preview["og:site_name"] = decodeHtmlEntities(ogSiteName[1]);
@@ -438,7 +440,7 @@ app.get("/_matrix/media/v3/preview_url", requireAuth(), async (c) => {
 
     // Extract og:type
     const ogType =
-      html.match(/<meta[^>]*property=["']og:type["'][^>]*content=["']([^"']*)["'][^>]*>/i) ||
+      html.match(/<meta[^>]*property=["']og:type["'][^>]*content=["']([^"']*)["'][^>]*>/i) ??
       html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*property=["']og:type["'][^>]*>/i);
     if (ogType) {
       preview["og:type"] = ogType[1];
@@ -489,10 +491,10 @@ app.get("/_matrix/media/v3/config", (c) => {
 app.post("/_matrix/client/v1/media/upload", requireAuth(), async (c) => {
   const userId = c.get("userId");
 
-  const contentType = c.req.header("Content-Type") || "application/octet-stream";
+  const contentType = c.req.header("Content-Type") ?? "application/octet-stream";
   const filename = c.req.query("filename");
 
-  const contentLength = parseInt(c.req.header("Content-Length") || "0", 10);
+  const contentLength = parseInt(c.req.header("Content-Length") ?? "0", 10);
   if (contentLength > MAX_UPLOAD_SIZE) {
     return Errors.tooLarge("File exceeds maximum upload size").toResponse();
   }
@@ -506,7 +508,7 @@ app.post("/_matrix/client/v1/media/upload", requireAuth(), async (c) => {
     httpMetadata: { contentType },
     customMetadata: {
       userId,
-      filename: filename || "",
+      filename: filename ?? "",
       uploadedAt: Date.now().toString(),
     },
   });
@@ -515,7 +517,7 @@ app.post("/_matrix/client/v1/media/upload", requireAuth(), async (c) => {
     `INSERT INTO media (media_id, user_id, content_type, content_length, filename, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
   )
-    .bind(mediaId, userId, contentType, body.byteLength, filename || null, Date.now())
+    .bind(mediaId, userId, contentType, body.byteLength, filename ?? null, Date.now())
     .run();
 
   return c.json({ content_uri: mxcUri });
@@ -577,7 +579,7 @@ app.put("/_matrix/client/v1/media/upload/:serverName/:mediaId", requireAuth(), a
     );
   }
 
-  const contentType = c.req.header("Content-Type") || "application/octet-stream";
+  const contentType = c.req.header("Content-Type") ?? "application/octet-stream";
   const filename = c.req.query("filename");
 
   const body = await c.req.arrayBuffer();
@@ -586,7 +588,7 @@ app.put("/_matrix/client/v1/media/upload/:serverName/:mediaId", requireAuth(), a
     httpMetadata: { contentType },
     customMetadata: {
       userId,
-      filename: filename || "",
+      filename: filename ?? "",
       uploadedAt: Date.now().toString(),
     },
   });
@@ -594,7 +596,7 @@ app.put("/_matrix/client/v1/media/upload/:serverName/:mediaId", requireAuth(), a
   await c.env.DB.prepare(
     `UPDATE media SET content_type = ?, content_length = ?, filename = ? WHERE media_id = ?`,
   )
-    .bind(contentType, body.byteLength, filename || null, mediaId)
+    .bind(contentType, body.byteLength, filename ?? null, mediaId)
     .run();
 
   return c.json({});
@@ -626,7 +628,7 @@ app.get("/_matrix/client/v1/media/download/:serverName/:mediaId", requireAuth(),
     .first<{ content_type: string; filename: string | null }>();
 
   const headers = new Headers();
-  headers.set("Content-Type", metadata?.content_type || "application/octet-stream");
+  headers.set("Content-Type", metadata?.content_type ?? "application/octet-stream");
   if (metadata?.filename) {
     headers.set("Content-Disposition", `inline; filename="${metadata.filename}"`);
   }
@@ -664,7 +666,7 @@ app.get(
       .first<{ content_type: string }>();
 
     const headers = new Headers();
-    headers.set("Content-Type", metadata?.content_type || "application/octet-stream");
+    headers.set("Content-Type", metadata?.content_type ?? "application/octet-stream");
     headers.set("Content-Disposition", `inline; filename="${requestedFilename}"`);
     headers.set("Cache-Control", "public, max-age=31536000, immutable");
 
@@ -676,9 +678,9 @@ app.get(
 app.get("/_matrix/client/v1/media/thumbnail/:serverName/:mediaId", requireAuth(), async (c) => {
   const serverName = c.req.param("serverName");
   const mediaId = c.req.param("mediaId");
-  const width = Math.min(parseInt(c.req.query("width") || "96", 10), 1920);
-  const height = Math.min(parseInt(c.req.query("height") || "96", 10), 1920);
-  const method = c.req.query("method") || "scale";
+  const width = Math.min(parseInt(c.req.query("width") ?? "96", 10), 1920);
+  const height = Math.min(parseInt(c.req.query("height") ?? "96", 10), 1920);
+  const method = c.req.query("method") ?? "scale";
 
   if (serverName !== c.env.SERVER_NAME) {
     const remoteResponse = await fetchRemoteMedia(
@@ -774,7 +776,7 @@ app.get("/_matrix/client/v1/media/preview_url", requireAuth(), async (c) => {
     return c.json(
       {
         errcode: "M_UNKNOWN",
-        error: validation.error || "Invalid URL",
+        error: validation.error ?? "Invalid URL",
       },
       400,
     );
@@ -791,7 +793,9 @@ app.get("/_matrix/client/v1/media/preview_url", requireAuth(), async (c) => {
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 5000);
 
     const response = await fetch(url, {
       headers: {
@@ -808,7 +812,7 @@ app.get("/_matrix/client/v1/media/preview_url", requireAuth(), async (c) => {
       return c.json({});
     }
 
-    const contentType = response.headers.get("Content-Type") || "";
+    const contentType = response.headers.get("Content-Type") ?? "";
 
     if (contentType.startsWith("image/")) {
       const result = {
@@ -827,7 +831,7 @@ app.get("/_matrix/client/v1/media/preview_url", requireAuth(), async (c) => {
     const preview: Record<string, any> = {};
 
     const ogTitle =
-      html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']*)["'][^>]*>/i) ||
+      html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']*)["'][^>]*>/i) ??
       html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*property=["']og:title["'][^>]*>/i);
     if (ogTitle) {
       preview["og:title"] = decodeHtmlEntities(ogTitle[1]);
@@ -839,14 +843,14 @@ app.get("/_matrix/client/v1/media/preview_url", requireAuth(), async (c) => {
     }
 
     const ogDesc =
-      html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']*)["'][^>]*>/i) ||
+      html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']*)["'][^>]*>/i) ??
       html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*property=["']og:description["'][^>]*>/i);
     if (ogDesc) {
       preview["og:description"] = decodeHtmlEntities(ogDesc[1]);
     }
 
     const ogImage =
-      html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']*)["'][^>]*>/i) ||
+      html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']*)["'][^>]*>/i) ??
       html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*property=["']og:image["'][^>]*>/i);
     if (ogImage) {
       let imageUrl = ogImage[1];

@@ -198,7 +198,7 @@ export async function pushLocalTrack(
 
   const track = response.tracks[0];
   if (track.errorCode) {
-    throw new CloudflareCallsError(track.errorDescription || "Track error", track.errorCode, 400);
+    throw new CloudflareCallsError(track.errorDescription ?? "Track error", track.errorCode, 400);
   }
 
   return {
@@ -238,7 +238,7 @@ export async function pullRemoteTrack(
 
   const track = response.tracks[0];
   if (track.errorCode) {
-    throw new CloudflareCallsError(track.errorDescription || "Track error", track.errorCode, 400);
+    throw new CloudflareCallsError(track.errorDescription ?? "Track error", track.errorCode, 400);
   }
 
   return {

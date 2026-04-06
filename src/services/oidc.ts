@@ -200,8 +200,8 @@ export function decodeJWT(token: string): { header: any; payload: any; signature
 /**
  * Import a JWK as a CryptoKey for verification
  */
-async function importJWK(jwk: JWK): Promise<CryptoKey> {
-  const algorithm = jwk.alg || "RS256";
+function importJWK(jwk: JWK): Promise<CryptoKey> {
+  const algorithm = jwk.alg ?? "RS256";
 
   // Web Crypto API algorithm parameters
   let importAlgorithm: any;
@@ -225,9 +225,7 @@ async function importJWK(jwk: JWK): Promise<CryptoKey> {
     throw new Error(`Unsupported algorithm: ${algorithm}`);
   }
 
-  return await crypto.subtle.importKey("jwk", jwk as JsonWebKey, importAlgorithm, false, [
-    "verify",
-  ]);
+  return crypto.subtle.importKey("jwk", jwk as JsonWebKey, importAlgorithm, false, ["verify"]);
 }
 
 /**
@@ -243,10 +241,8 @@ async function verifyJWTSignature(token: string, jwks: JWKS): Promise<boolean> {
   if (header.kid) {
     key = jwks.keys.find((k) => k.kid === header.kid);
   }
-  if (!key) {
-    // Try first key with matching algorithm
-    key = jwks.keys.find((k) => k.alg === header.alg || !k.alg);
-  }
+  // Try first key with matching algorithm
+  key ??= jwks.keys.find((k) => k.alg === header.alg || !k.alg);
   if (!key) {
     throw new Error("No matching key found in JWKS");
   }
@@ -278,7 +274,7 @@ async function verifyJWTSignature(token: string, jwks: JWKS): Promise<boolean> {
     throw new Error(`Unsupported algorithm: ${algorithm}`);
   }
 
-  return await crypto.subtle.verify(
+  return crypto.subtle.verify(
     verifyAlgorithm,
     cryptoKey,
     signatureBytes,

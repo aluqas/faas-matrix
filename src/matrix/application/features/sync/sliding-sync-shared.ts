@@ -56,11 +56,11 @@ export function trackSlidingSyncRoomReadState(
   notificationCount: number,
   fullyReadEventId: string,
 ): void {
-  state.roomNotificationCounts = state.roomNotificationCounts || {};
+  state.roomNotificationCounts = state.roomNotificationCounts ?? {};
   state.roomNotificationCounts[roomId] = notificationCount;
-  state.roomFullyReadMarkers = state.roomFullyReadMarkers || {};
+  state.roomFullyReadMarkers = state.roomFullyReadMarkers ?? {};
   state.roomFullyReadMarkers[roomId] = fullyReadEventId;
-  state.roomSentAsRead = state.roomSentAsRead || {};
+  state.roomSentAsRead = state.roomSentAsRead ?? {};
 
   if (notificationCount === 0) {
     state.roomSentAsRead[roomId] = true;

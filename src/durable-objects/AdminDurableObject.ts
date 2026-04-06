@@ -93,7 +93,7 @@ export class AdminDurableObject extends DurableObject<Env> {
 
   private async getConfig(): Promise<ServerConfig> {
     const stored = await this.ctx.storage.get<ServerConfig>("config");
-    return stored || DEFAULT_CONFIG;
+    return stored ?? DEFAULT_CONFIG;
   }
 
   private async updateConfig(updates: Partial<ServerConfig>): Promise<ServerConfig> {
@@ -170,22 +170,22 @@ export class AdminDurableObject extends DurableObject<Env> {
 
     return {
       users: {
-        total: users?.count || 0,
-        active: activeUsers?.count || 0,
-        registrations_24h: recentUsers?.count || 0,
+        total: users?.count ?? 0,
+        active: activeUsers?.count ?? 0,
+        registrations_24h: recentUsers?.count ?? 0,
       },
       rooms: {
-        total: rooms?.count || 0,
+        total: rooms?.count ?? 0,
       },
       events: {
-        total: events?.count || 0,
-        last_24h: recentEvents?.count || 0,
+        total: events?.count ?? 0,
+        last_24h: recentEvents?.count ?? 0,
       },
       media: {
-        count: mediaStats?.count || 0,
-        total_size_bytes: mediaStats?.total_size || 0,
+        count: mediaStats?.count ?? 0,
+        total_size_bytes: mediaStats?.total_size ?? 0,
       },
-      unresolvedReports: unresolvedReports?.count || 0,
+      unresolvedReports: unresolvedReports?.count ?? 0,
       lastUpdated: Date.now(),
     };
   }

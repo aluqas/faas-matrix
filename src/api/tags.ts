@@ -54,7 +54,7 @@ app.get("/_matrix/client/v3/user/:userId/rooms/:roomId/tags", requireAuth(), asy
 
   try {
     const content = JSON.parse(accountData.content);
-    return c.json({ tags: content.tags || {} });
+    return c.json({ tags: content.tags ?? {} });
   } catch {
     return c.json({ tags: {} });
   }
@@ -106,7 +106,7 @@ app.put("/_matrix/client/v3/user/:userId/rooms/:roomId/tags/:tag", requireAuth()
   if (existing) {
     try {
       const content = JSON.parse(existing.content);
-      tags = content.tags || {};
+      tags = content.tags ?? {};
     } catch {
       // Start fresh
     }
@@ -159,7 +159,7 @@ app.delete("/_matrix/client/v3/user/:userId/rooms/:roomId/tags/:tag", requireAut
   let tags: Record<string, Record<string, any>> = {};
   try {
     const content = JSON.parse(existing.content);
-    tags = content.tags || {};
+    tags = content.tags ?? {};
   } catch {
     return c.json({});
   }

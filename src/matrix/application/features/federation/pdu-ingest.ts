@@ -108,7 +108,7 @@ function hasRelationContent(pdu: PDU): boolean {
     return false;
   }
 
-  const record = content as Record<string, unknown>;
+  const record = content;
   const relation = record["m.relates_to"] ?? record["m.relationship"];
   return !!relation && typeof relation === "object" && !Array.isArray(relation);
 }
@@ -467,11 +467,11 @@ async function storeAcceptedPdu(
       : [];
   if (!existingRoom) {
     const content = pdu.content as { room_version?: string; creator?: string };
-    const roomVersion = pdu.type === "m.room.create" ? content.room_version || "10" : "10";
+    const roomVersion = pdu.type === "m.room.create" ? (content.room_version ?? "10") : "10";
     await ports.repository.createRoom(
       pdu.room_id,
       roomVersion,
-      content.creator || pdu.sender || "",
+      (content.creator ?? pdu.sender) || "",
       false,
     );
   }
@@ -532,7 +532,7 @@ async function storeAcceptedPdu(
   if (prevEvents.length > 1) {
     try {
       const currentState = await ports.repository.getRoomState(pdu.room_id);
-      const resolved = resolveState(existingRoom?.room_version || "10", [currentState, [pdu]]);
+      const resolved = resolveState(existingRoom?.room_version ?? "10", [currentState, [pdu]]);
       for (const stateEvent of resolved) {
         if (stateEvent.state_key !== undefined) {
           await ports.repository.upsertRoomState(
@@ -577,7 +577,7 @@ export async function ingestFederationPdu(
 
   const room = await ports.repository.getRoom(roomId);
   const roomVersion =
-    room?.room_version ||
+    room?.room_version ??
     (eventType === "m.room.create" && typeof content["room_version"] === "string"
       ? content["room_version"]
       : getDefaultRoomVersion());
@@ -591,7 +591,7 @@ export async function ingestFederationPdu(
       ? (incomingEventId ?? null)
       : await calculateReferenceHashEventIdStandard(input.rawPdu, roomVersion);
   const normalizedEventId = eventIdFormat === "v1" ? (incomingEventId ?? null) : urlsafeEventId;
-  const eventId = normalizedEventId || incomingEventId || "unknown";
+  const eventId = normalizedEventId ?? incomingEventId ?? "unknown";
   if (!normalizedEventId) {
     return {
       kind: "rejected",
@@ -675,7 +675,7 @@ export async function ingestFederationPdu(
       : {
           kind: "rejected",
           eventId,
-          reason: existingPdu.rejectionReason || "Previously rejected",
+          reason: existingPdu.rejectionReason ?? "Previously rejected",
           requiresRefanout: false,
         };
   }
@@ -704,7 +704,7 @@ export async function ingestFederationPdu(
   if (normalizedPdu.signatures) {
     let signatureValid = false;
     const cache = ports.appContext.capabilities.kv.cache as KVNamespace;
-    const signatureCandidate = input.rawPdu as Record<string, unknown>;
+    const signatureCandidate = input.rawPdu;
     const signatories = Object.keys(normalizedPdu.signatures);
     for (const signatory of signatories) {
       const signaturesForSignatory = normalizedPdu.signatures[signatory];
@@ -936,7 +936,7 @@ export async function ingestFederationPdu(
               type: normalizedPdu.type,
               sender: normalizedPdu.sender,
               stateKey: normalizedPdu.state_key,
-              reason: authResult.error || "Auth failed",
+              reason: authResult.error ?? "Auth failed",
             }),
           );
           await ports.repository.recordProcessedPdu(
@@ -944,12 +944,12 @@ export async function ingestFederationPdu(
             pduOrigin,
             roomId,
             false,
-            authResult.error || "Auth failed",
+            authResult.error ?? "Auth failed",
           );
           return {
             kind: "rejected",
             eventId,
-            reason: authResult.error || "Event authorization failed",
+            reason: authResult.error ?? "Event authorization failed",
             requiresRefanout: false,
           };
         }

@@ -67,10 +67,10 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
     });
   }
 
-  const filter = roomEvents.filter || {};
-  const orderBy = roomEvents.order_by || "recent";
+  const filter = roomEvents.filter ?? {};
+  const orderBy = roomEvents.order_by ?? "recent";
   const eventContext = roomEvents.event_context;
-  const includeState = roomEvents.include_state || false;
+  const includeState = roomEvents.include_state ?? false;
 
   // Get rooms the user is a member of
   const userRooms = await db
@@ -220,7 +220,7 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
     .prepare(countQuery)
     .bind(...countParams)
     .first<{ total: number }>();
-  const totalCount = countResult?.total || 0;
+  const totalCount = countResult?.total ?? 0;
 
   // Build response
   const formattedResults: SearchResultEntry[] = [];
@@ -241,8 +241,8 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
 
     // Add context if requested
     if (eventContext) {
-      const beforeLimit = eventContext.before_limit || 5;
-      const afterLimit = eventContext.after_limit || 5;
+      const beforeLimit = eventContext.before_limit ?? 5;
+      const afterLimit = eventContext.after_limit ?? 5;
 
       // Get events before
       const eventsBefore = await db
@@ -318,8 +318,8 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
 
           if (profile) {
             profiles[senderId] = {
-              displayname: profile.display_name || undefined,
-              avatar_url: profile.avatar_url || undefined,
+              displayname: profile.display_name ?? undefined,
+              avatar_url: profile.avatar_url ?? undefined,
             };
           }
         }

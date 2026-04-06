@@ -175,7 +175,7 @@ app.get("/_matrix/federation/v1/make_join/:roomId/:userId", async (c) => {
     .bind(roomId)
     .first<{ event_id: string; depth: number }>();
   const prevEvents = latestEvent ? [latestEvent.event_id] : [];
-  const depth = (latestEvent?.depth || 0) + 1;
+  const depth = (latestEvent?.depth ?? 0) + 1;
 
   const eventTemplate = {
     room_id: roomId,
@@ -268,7 +268,7 @@ async function handleSendJoin(c: any, version: "v1" | "v2"): Promise<Response> {
     const authResult = checkEventAuth(incomingEvent, stateBundle.roomState, room.room_version);
     if (!authResult.allowed) {
       return c.json(
-        { errcode: "M_FORBIDDEN", error: authResult.error || "Join event not allowed" },
+        { errcode: "M_FORBIDDEN", error: authResult.error ?? "Join event not allowed" },
         403,
       );
     }
@@ -373,7 +373,7 @@ app.get("/_matrix/federation/v1/make_leave/:roomId/:userId", async (c) => {
     .bind(roomId)
     .first<{ event_id: string; depth: number }>();
   const prevEvents = latestEvent ? [latestEvent.event_id] : [];
-  const depth = (latestEvent?.depth || 0) + 1;
+  const depth = (latestEvent?.depth ?? 0) + 1;
 
   await logFederationRouteWarning(c, "make_leave", {
     roomId,
@@ -412,7 +412,7 @@ async function persistFederationLeave(
   roomVersion: string,
   origin?: string,
 ): Promise<PDU> {
-  const leaveEventId = body.event_id || fallbackEventId;
+  const leaveEventId = body.event_id ?? fallbackEventId;
   const leavePdu: PDU = {
     event_id: leaveEventId,
     room_id: roomId,
@@ -428,11 +428,11 @@ async function persistFederationLeave(
       : undefined,
     state_key: body.state_key ?? undefined,
     content: body.content ?? {},
-    origin_server_ts: body.origin_server_ts || Date.now(),
+    origin_server_ts: body.origin_server_ts ?? Date.now(),
     unsigned: body.unsigned,
-    depth: body.depth || 0,
-    auth_events: body.auth_events || [],
-    prev_events: body.prev_events || [],
+    depth: body.depth ?? 0,
+    auth_events: body.auth_events ?? [],
+    prev_events: body.prev_events ?? [],
     hashes: body.hashes,
     signatures: body.signatures,
   };
@@ -589,17 +589,17 @@ async function handleFederationInvite(c: any, version: "v1" | "v2"): Promise<Res
 
     const invitePdu: PDU = {
       ...validated.event,
-      event_id: signedEvent.event_id || validated.event.event_id,
+      event_id: signedEvent.event_id ?? validated.event.event_id,
       room_id: validated.roomId,
-      sender: signedEvent.sender || validated.event.sender,
-      type: signedEvent.type || validated.event.type,
+      sender: signedEvent.sender ?? validated.event.sender,
+      type: signedEvent.type ?? validated.event.type,
       state_key: signedEvent.state_key ?? validated.event.state_key,
-      content: signedEvent.content || validated.event.content,
-      origin_server_ts: signedEvent.origin_server_ts || validated.event.origin_server_ts,
-      depth: signedEvent.depth || validated.event.depth,
-      auth_events: signedEvent.auth_events || validated.event.auth_events,
-      prev_events: signedEvent.prev_events || validated.event.prev_events,
-      unsigned: signedEvent.unsigned || validated.event.unsigned,
+      content: signedEvent.content ?? validated.event.content,
+      origin_server_ts: signedEvent.origin_server_ts ?? validated.event.origin_server_ts,
+      depth: signedEvent.depth ?? validated.event.depth,
+      auth_events: signedEvent.auth_events ?? validated.event.auth_events,
+      prev_events: signedEvent.prev_events ?? validated.event.prev_events,
+      unsigned: signedEvent.unsigned ?? validated.event.unsigned,
       hashes: signedEvent.hashes as { sha256: string } | undefined,
       signatures: signedEvent.signatures as MatrixSignatures | undefined,
     };
@@ -697,7 +697,7 @@ app.get("/_matrix/federation/v1/make_knock/:roomId/:userId", async (c) => {
     .bind(roomId)
     .first<{ event_id: string; depth: number }>();
   const prevEvents = latestEvent ? [latestEvent.event_id] : [];
-  const depth = (latestEvent?.depth || 0) + 1;
+  const depth = (latestEvent?.depth ?? 0) + 1;
 
   return c.json({
     room_version: room.room_version,
@@ -966,7 +966,7 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
   };
 
   let signatureValid = false;
-  const publicKeys = inviteContent.public_keys || [];
+  const publicKeys = inviteContent.public_keys ?? [];
   if (inviteContent.public_key) {
     publicKeys.push({ public_key: inviteContent.public_key });
   }
@@ -1072,7 +1072,7 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
     .bind(roomId)
     .first<{ event_id: string; depth: number }>();
   const prevEvents = latestEvent ? [latestEvent.event_id] : [];
-  const depth = (latestEvent?.depth || 0) + 1;
+  const depth = (latestEvent?.depth ?? 0) + 1;
   const originServerTs = Date.now();
 
   const inviteEvent = {
@@ -1083,7 +1083,7 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
     content: {
       membership: "invite",
       third_party_invite: {
-        display_name: inviteContent.display_name || validated.displayName,
+        display_name: inviteContent.display_name ?? validated.displayName,
         signed: validated.signed,
       },
     },
@@ -1094,7 +1094,7 @@ app.put("/_matrix/federation/v1/exchange_third_party_invite/:roomId", async (c) 
   };
 
   const eventIdHash = await sha256(JSON.stringify({ ...inviteEvent, origin: serverName }));
-  const eventId = validated.eventId || `$${eventIdHash}`;
+  const eventId = validated.eventId ?? `$${eventIdHash}`;
 
   const signedEvent = await signJson(
     { ...inviteEvent, event_id: eventId },

@@ -308,7 +308,7 @@ export class MatrixRoomService {
       }
     }
 
-    const version = room_version || getDefaultRoomVersion();
+    const version = room_version ?? getDefaultRoomVersion();
     const serverName = this.appContext.capabilities.config.serverName;
 
     // For v12+ rooms (MSC4291), the room ID is derived from the hash of the
@@ -444,7 +444,7 @@ export class MatrixRoomService {
       ? await this.repository.getStateEvent(validated.roomId, "m.room.create")
       : null;
     const needsRemoteStubJoin = Boolean(
-      room && (isRemoteRoom || preferredRemoteServer) && !createEvent,
+      room && (isRemoteRoom ?? preferredRemoteServer) && !createEvent,
     );
     await runClientEffect(
       logger.info("room.command.start", {
@@ -679,7 +679,7 @@ export class MatrixRoomService {
     await runClientEffect(validateKnockPreconditions(currentMembership?.membership));
 
     const room = await this.repository.getRoom(input.roomId);
-    const remoteServer = input.serverNames?.[0] || getServerFromRoomId(input.roomId);
+    const remoteServer = input.serverNames?.[0] ?? getServerFromRoomId(input.roomId);
     const roomCreateEvent = room
       ? await this.repository.getStateEvent(input.roomId, "m.room.create")
       : null;
@@ -718,10 +718,7 @@ export class MatrixRoomService {
         throw Errors.unknown(`make_knock failed: ${makeKnockResponse.status}`);
       }
 
-      const makeKnock = (await makeKnockResponse.json()) as {
-        room_version?: string;
-        event?: { depth?: number; auth_events?: string[]; prev_events?: string[] };
-      };
+      const makeKnock = await makeKnockResponse.json();
       if (!makeKnock.event) {
         throw Errors.unknown("Remote server did not return a knock template");
       }
@@ -757,23 +754,16 @@ export class MatrixRoomService {
         throw Errors.unknown(`send_knock failed: ${sendKnockResponse.status}`);
       }
 
-      const sendKnock = (await sendKnockResponse.json()) as {
-        knock_room_state?: Array<{
-          type?: string;
-          state_key?: string;
-          content?: Record<string, unknown>;
-          sender?: string;
-        }>;
-      };
+      const sendKnock = await sendKnockResponse.json();
 
-      await ensureFederatedRoomStub(db, input.roomId, makeKnock.room_version || "10", "");
+      await ensureFederatedRoomStub(db, input.roomId, makeKnock.room_version ?? "10", "");
       await persistFederationMembershipEvent(db, {
         roomId: input.roomId,
         event,
         source: "client",
       });
       await this.repository.notifyUsersOfEvent(input.roomId, eventId, "m.room.member");
-      await persistInviteStrippedState(db, input.roomId, sendKnock.knock_room_state || []);
+      await persistInviteStrippedState(db, input.roomId, sendKnock.knock_room_state ?? []);
 
       await runClientEffect(
         logger.info("room.command.success", {

@@ -33,7 +33,7 @@ app.get("/_matrix/client/v3/sync", requireAuth(), async (c) => {
       userId: c.get("userId"),
       deviceId: c.get("deviceId"),
       fullState: c.req.query("full_state") === "true",
-      timeout: Number.parseInt(c.req.query("timeout") || "0", 10) || 0,
+      timeout: Number.parseInt(c.req.query("timeout") ?? "0", 10) || 0,
       ...(since ? { since } : {}),
       ...(filterParam ? { filterParam } : {}),
       ...(setPresence ? { setPresence } : {}),

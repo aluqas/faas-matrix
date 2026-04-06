@@ -265,7 +265,7 @@ describe("MatrixRoomService", () => {
       },
     });
 
-    expect(repo.getStateEvent("!room1:test", "m.room.topic", "")).resolves.toMatchObject({
+    void expect(repo.getStateEvent("!room1:test", "m.room.topic", "")).resolves.toMatchObject({
       content: {
         topic: "Test Room",
         "m.topic": {

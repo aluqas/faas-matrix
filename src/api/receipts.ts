@@ -316,9 +316,7 @@ export async function getReceiptsForRoom(
     }),
   );
 
-  const data = (await response.json()) as {
-    receipts: Record<string, Record<string, Record<string, { ts: number; thread_id?: string }>>>;
-  };
+  const data = await response.json();
 
   // Filter private receipts - m.read.private should only be visible to the owner
   if (requestingUserId) {

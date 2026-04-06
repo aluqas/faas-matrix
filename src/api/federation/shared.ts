@@ -97,9 +97,7 @@ export function toFederationPduFromRow(row: FederationEventRow): PDU {
     depth: row.depth,
     auth_events: parseJsonWithFallback<string[]>(row.auth_events, []),
     prev_events: parseJsonWithFallback<string[]>(row.prev_events, []),
-    ...(row.hashes
-      ? { hashes: parseJsonWithFallback<{ sha256: string }>(row.hashes, { sha256: "" }) }
-      : {}),
+    ...(row.hashes ? { hashes: parseJsonWithFallback(row.hashes, { sha256: "" }) } : {}),
     ...(row.signatures
       ? {
           signatures: parseJsonWithFallback<MatrixSignatures>(row.signatures, {}),
@@ -126,7 +124,7 @@ export async function getDeviceKeysFromDO(
   if (!response.ok) {
     return deviceId ? null : {};
   }
-  return await response.json();
+  return response.json();
 }
 
 export async function getCrossSigningKeysFromDO(
@@ -142,5 +140,5 @@ export async function getCrossSigningKeysFromDO(
   if (!response.ok) {
     return {};
   }
-  return await response.json();
+  return response.json();
 }

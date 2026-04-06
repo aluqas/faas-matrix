@@ -63,7 +63,7 @@ export function requireAuth() {
       // Log full headers for debugging missing token
       const authHeader = c.req.raw.headers.get("Authorization");
       console.log(
-        `[AUTH] Missing token for ${path}. Authorization header: ${authHeader || "NONE"}`,
+        `[AUTH] Missing token for ${path}. Authorization header: ${authHeader ?? "NONE"}`,
       );
       return Errors.missingToken().toResponse();
     }
@@ -83,7 +83,7 @@ export function requireAuth() {
           const url = new URL(c.req.url);
           const asUserId = url.searchParams.get("user_id");
           const serverName = c.env.SERVER_NAME;
-          const senderUserId = asUserId || `@${appservice.sender_localpart}:${serverName}`;
+          const senderUserId = asUserId ?? `@${appservice.sender_localpart}:${serverName}`;
           auth = {
             userId: senderUserId,
             deviceId: null,

@@ -107,7 +107,7 @@ export class SyncDurableObject extends DurableObject<Env> {
       }
     }
 
-    return new Response(JSON.stringify(state || null), {
+    return new Response(JSON.stringify(state ?? null), {
       headers: { "Content-Type": "application/json" },
     });
   }
@@ -171,14 +171,14 @@ export class SyncDurableObject extends DurableObject<Env> {
     const session: SyncSession = {
       userId,
       deviceId,
-      lastSyncToken: since || "0",
+      lastSyncToken: since ?? "0",
     };
 
     server.serializeAttachment(session);
     this.sessions.set(server, session);
 
     // Send any pending events immediately
-    const pending = await this.getPendingEvents(parseInt(since || "0", 10));
+    const pending = await this.getPendingEvents(parseInt(since ?? "0", 10));
     if (pending.length > 0) {
       server.send(
         JSON.stringify({
@@ -243,7 +243,7 @@ export class SyncDurableObject extends DurableObject<Env> {
   private async handleWaitForEvents(request: Request): Promise<Response> {
     try {
       const body = (await request.json()) as { timeout?: number };
-      const timeout = Math.min(body.timeout || 25000, 25000); // Cap at 25s
+      const timeout = Math.min(body.timeout ?? 25000, 25000); // Cap at 25s
 
       console.log(
         "[SyncDO] /wait-for-events started, timeout:",
@@ -261,7 +261,9 @@ export class SyncDurableObject extends DurableObject<Env> {
       });
 
       const timeoutPromise = new Promise<boolean>((resolve) => {
-        setTimeout(() => resolve(false), timeout);
+        setTimeout(() => {
+          resolve(false);
+        }, timeout);
       });
 
       // Wait for either events or timeout
@@ -291,7 +293,7 @@ export class SyncDurableObject extends DurableObject<Env> {
 
   private async handlePending(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    const since = parseInt(url.searchParams.get("since") || "0", 10);
+    const since = parseInt(url.searchParams.get("since") ?? "0", 10);
 
     const pending = await this.getPendingEvents(since);
 

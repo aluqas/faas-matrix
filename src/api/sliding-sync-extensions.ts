@@ -100,7 +100,7 @@ export async function buildSlidingSyncExtensions(
     // Client-specified rooms take precedence; fall back to all joined rooms for completeness.
     const roomsForAccountData = config.account_data.rooms ?? allJoinedRoomIds;
     for (const roomId of roomsForAccountData) {
-      const roomData = await projectRoomAccountDataSnapshot(env, userId, roomId as RoomId);
+      const roomData = await projectRoomAccountDataSnapshot(env, userId, roomId);
       if (roomData.length > 0) {
         accountDataRooms[roomId] = roomData;
       }

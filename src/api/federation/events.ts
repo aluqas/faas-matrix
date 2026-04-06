@@ -225,7 +225,7 @@ app.get("/_matrix/federation/v1/event_auth/:roomId/:eventId", async (c) => {
 
 app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
   const roomId = c.req.param("roomId");
-  const limit = Math.min(Number.parseInt(c.req.query("limit") || "100", 10), 1000);
+  const limit = Math.min(Number.parseInt(c.req.query("limit") ?? "100", 10), 1000);
   const vParam = c.req.query("v");
 
   const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
@@ -244,7 +244,7 @@ app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
       .bind(...startEventIds)
       .first<{ min_depth: number }>();
 
-    const maxDepth = startEvents?.min_depth || 0;
+    const maxDepth = startEvents?.min_depth ?? 0;
     events = (
       await c.env.DB.prepare(
         `SELECT event_id, room_id, sender, event_type, state_key, content,
@@ -306,10 +306,10 @@ app.post("/_matrix/federation/v1/get_missing_events/:roomId", async (c) => {
 
   const events = await queries.getMissingEvents(c.env.DB, {
     roomId,
-    earliestEvents: body.earliest_events || [],
-    latestEvents: body.latest_events || [],
-    limit: Math.min(body.limit || 10, 100),
-    minDepth: body.min_depth || 0,
+    earliestEvents: body.earliest_events ?? [],
+    latestEvents: body.latest_events ?? [],
+    limit: Math.min(body.limit ?? 10, 100),
+    minDepth: body.min_depth ?? 0,
     roomVersion: room.room_version,
     requestingServer: origin,
   });
@@ -319,7 +319,7 @@ app.post("/_matrix/federation/v1/get_missing_events/:roomId", async (c) => {
 
 app.get("/_matrix/federation/v1/timestamp_to_event/:roomId", async (c) => {
   const roomId = c.req.param("roomId");
-  const ts = Number.parseInt(c.req.query("ts") || "0", 10);
+  const ts = Number.parseInt(c.req.query("ts") ?? "0", 10);
   const dir = c.req.query("dir") === "b" ? "b" : "f";
 
   if (!ts || ts <= 0) {

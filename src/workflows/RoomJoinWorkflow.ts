@@ -325,7 +325,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
               try {
                 return JSON.stringify({
                   success: true,
-                  value: await this.sendJoinRequest(successfulRemoteServer!, roomId, joinEventData),
+                  value: await this.sendJoinRequest(successfulRemoteServer, roomId, joinEventData),
                 } satisfies RemoteJoinStepSuccess<RemoteSendJoinResponse>);
               } catch (error) {
                 if (error instanceof RemoteJoinHttpError && !error.retryable) {
@@ -356,7 +356,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
         // Process the room state received from the remote server
         await step.do("process-remote-state", async () => {
-          const roomVersion = remoteEventTemplate?.room_version || "10";
+          const roomVersion = remoteEventTemplate?.room_version ?? "10";
           await persistFederationStateSnapshot(this.env.DB, {
             roomId,
             roomVersion,
@@ -416,11 +416,11 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
             timeout: 120000,
           },
           async () => {
-            const roomVersion = remoteEventTemplate?.room_version || "10";
+            const roomVersion = remoteEventTemplate?.room_version ?? "10";
             await this.fetchAndPersistPartialState(
-              successfulRemoteServer!,
+              successfulRemoteServer,
               roomId,
-              partialStateEventId!,
+              partialStateEventId,
               roomVersion,
             );
             await restoreDeferredPartialStateMemberships(this.env.DB, roomId);
@@ -473,7 +473,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
           const status = {
             roomId,
             userId,
-            eventId: partialStateEventId!,
+            eventId: partialStateEventId,
             startedAt: Date.now(),
             phase: "catchup_published" as const,
             catchupPublishedAt: Date.now(),
@@ -492,7 +492,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
           const completedStatus = {
             roomId,
             userId,
-            eventId: partialStateEventId!,
+            eventId: partialStateEventId,
             startedAt: Date.now(),
             phase: "complete" as const,
             completedAt: Date.now(),
@@ -506,7 +506,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
           await markPartialStateJoinCompleted(this.env.CACHE, {
             roomId,
             userId,
-            eventId: partialStateEventId!,
+            eventId: partialStateEventId,
             startedAt: Date.now(),
             encrypted:
               hasEncryptionStateEvent(remoteSendJoinResponse?.state) ||
@@ -593,7 +593,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       });
     }
 
-    const result = toRemoteJoinTemplate((await response.json()) as unknown);
+    const result = toRemoteJoinTemplate(await response.json());
     if (!result) {
       throw new Error("make_join returned invalid response");
     }
@@ -633,9 +633,9 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
     if (remoteEventTemplate?.event) {
       // Use template from remote server
-      authEvents = remoteEventTemplate.event.auth_events || [];
-      prevEvents = remoteEventTemplate.event.prev_events || [];
-      depth = remoteEventTemplate.event.depth || 1;
+      authEvents = remoteEventTemplate.event.auth_events ?? [];
+      prevEvents = remoteEventTemplate.event.prev_events ?? [];
+      depth = remoteEventTemplate.event.depth ?? 1;
     } else {
       // Get local room state
       const createEvent = await getStateEvent(this.env.DB, roomId, "m.room.create");
@@ -771,7 +771,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       });
     }
 
-    return toRemoteSendJoinResponse((await response.json()) as unknown);
+    return toRemoteSendJoinResponse(await response.json());
   }
 
   private async fetchAndPersistPartialState(

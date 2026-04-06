@@ -52,11 +52,11 @@ async function resolveRoomQueryEffect<A, E>(
   }
 }
 
-async function handleGetRoomStateEvent(
+function handleGetRoomStateEvent(
   c: import("hono").Context<AppEnv>,
   stateKey: string,
 ): Promise<Response> {
-  return await resolveRoomQueryEffect(
+  return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getStateEvent({
       userId: c.get("userId"),
@@ -68,8 +68,8 @@ async function handleGetRoomStateEvent(
   );
 }
 
-async function handleGetVisibleRoomEvent(c: import("hono").Context<AppEnv>): Promise<Response> {
-  return await resolveRoomQueryEffect(
+function handleGetVisibleRoomEvent(c: import("hono").Context<AppEnv>): Promise<Response> {
+  return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getVisibleEvent({
       userId: c.get("userId"),
@@ -79,8 +79,8 @@ async function handleGetVisibleRoomEvent(c: import("hono").Context<AppEnv>): Pro
   );
 }
 
-app.get("/_matrix/client/v3/rooms/:roomId/state", requireAuth(), async (c) => {
-  return await resolveRoomQueryEffect(
+app.get("/_matrix/client/v3/rooms/:roomId/state", requireAuth(), (c) => {
+  return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getCurrentState({
       userId: c.get("userId"),
@@ -96,8 +96,8 @@ app.get("/_matrix/client/v3/rooms/:roomId/state/:eventType/", requireAuth(), (c)
   handleGetRoomStateEvent(c, ""),
 );
 
-app.get("/_matrix/client/v3/rooms/:roomId/members", requireAuth(), async (c) => {
-  return await resolveRoomQueryEffect(
+app.get("/_matrix/client/v3/rooms/:roomId/members", requireAuth(), (c) => {
+  return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getMembers({
       userId: c.get("userId"),
@@ -106,7 +106,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/members", requireAuth(), async (c) => 
   );
 });
 
-app.get("/_matrix/client/v3/rooms/:roomId/messages", requireAuth(), async (c) => {
+app.get("/_matrix/client/v3/rooms/:roomId/messages", requireAuth(), (c) => {
   let relationFilter: RoomMessagesRelationFilter | undefined;
   try {
     const parsedFilter = parseMessagesRelationFilter(c.req.query("filter"));
@@ -118,15 +118,15 @@ app.get("/_matrix/client/v3/rooms/:roomId/messages", requireAuth(), async (c) =>
     return Errors.badJson().toResponse();
   }
 
-  const limitParam = Number.parseInt(c.req.query("limit") || "10", 10);
+  const limitParam = Number.parseInt(c.req.query("limit") ?? "10", 10);
   const limit = Number.isNaN(limitParam) ? 10 : Math.min(limitParam, 100);
-  return await resolveRoomQueryEffect(
+  return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getMessages({
       userId: c.get("userId"),
       roomId: c.req.param("roomId"),
       from: c.req.query("from"),
-      dir: (c.req.query("dir") || "b") as "f" | "b",
+      dir: (c.req.query("dir") ?? "b") as "f" | "b",
       limit,
       relationFilter,
     }),
@@ -144,7 +144,7 @@ app.get(
   handleGetVisibleRoomEvent,
 );
 
-app.get("/_matrix/client/v3/rooms/:roomId/timestamp_to_event", requireAuth(), async (c) => {
+app.get("/_matrix/client/v3/rooms/:roomId/timestamp_to_event", requireAuth(), (c) => {
   const tsParam = c.req.query("ts");
   const dirParam = c.req.query("dir");
 
@@ -176,7 +176,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/timestamp_to_event", requireAuth(), as
     );
   }
 
-  return await resolveRoomQueryEffect(
+  return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getTimestampToEvent({
       userId: c.get("userId"),

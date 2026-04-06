@@ -71,7 +71,7 @@ export class FederationCatchupWorkflow extends WorkflowEntrypoint<Env, CatchupPa
           if (!resp.ok) return 0;
 
           const data = (await resp.json()) as { events?: unknown[] };
-          return data.events?.length || 0;
+          return data.events?.length ?? 0;
         } catch {
           return 0;
         }

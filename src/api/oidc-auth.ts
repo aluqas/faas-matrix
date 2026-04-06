@@ -142,7 +142,7 @@ app.get("/auth/oidc/providers", async (c) => {
 // GET /auth/oidc/:providerId/login - Initiate OAuth flow
 app.get("/auth/oidc/:providerId/login", async (c) => {
   const providerId = c.req.param("providerId");
-  const returnTo = c.req.query("return_to") || "/";
+  const returnTo = c.req.query("return_to") ?? "/";
   const db = c.env.DB;
 
   // Get provider config
@@ -166,7 +166,7 @@ app.get("/auth/oidc/:providerId/login", async (c) => {
     const nonce = generateRandomString(32);
 
     // Build redirect URI
-    const host = c.req.header("host") || c.env.SERVER_NAME;
+    const host = c.req.header("host") ?? c.env.SERVER_NAME;
     const protocol = c.req.url.startsWith("https") ? "https" : "https";
     const redirectUri = `${protocol}://${host}/auth/oidc/${providerId}/callback`;
 
@@ -209,7 +209,7 @@ app.get("/auth/oidc/:providerId/callback", async (c) => {
 
   // Handle error from IdP
   if (error) {
-    return c.html(generateErrorPage("Authentication Failed", errorDescription || error));
+    return c.html(generateErrorPage("Authentication Failed", errorDescription ?? error));
   }
 
   if (!code || !state) {
@@ -292,7 +292,7 @@ app.get("/auth/oidc/:providerId/callback", async (c) => {
         UPDATE idp_user_links SET last_login_at = ?, external_email = ?, external_name = ?
         WHERE id = ?
       `)
-        .bind(Date.now(), claims.email || null, claims.name || null, userLink.id)
+        .bind(Date.now(), claims.email ?? null, claims.name ?? null, userLink.id)
         .run();
     } else {
       // New user
@@ -323,8 +323,8 @@ app.get("/auth/oidc/:providerId/callback", async (c) => {
             providerId,
             claims.sub,
             userId,
-            claims.email || null,
-            claims.name || null,
+            claims.email ?? null,
+            claims.name ?? null,
             Date.now(),
           )
           .run();
@@ -352,8 +352,8 @@ app.get("/auth/oidc/:providerId/callback", async (c) => {
             providerId,
             claims.sub,
             userId,
-            claims.email || null,
-            claims.name || null,
+            claims.email ?? null,
+            claims.name ?? null,
             Date.now(),
           )
           .run();
@@ -449,7 +449,7 @@ function generateSuccessPage(
     </div>
     <p style="font-size: 13px; color: #64748b;">Copy these credentials to configure your Matrix client.</p>
     <button class="btn" onclick="copyCredentials()">Copy Credentials</button>
-    <a href="${returnTo || "/"}" class="btn btn-secondary">Continue</a>
+    <a href="${returnTo ?? "/"}" class="btn btn-secondary">Continue</a>
   </div>
   <script>
     function copyCredentials() {
@@ -536,7 +536,7 @@ async function getNextStreamPosition(db: D1Database, streamName: string): Promis
     .bind(streamName)
     .first<{ position: number }>();
 
-  return result?.position || 1;
+  return result?.position ?? 1;
 }
 
 // Helper to get Durable Object for user keys

@@ -13,7 +13,7 @@ const queries = new EventQueryService();
 app.get("/_matrix/federation/v1/hierarchy/:roomId", async (c) => {
   const roomId = c.req.param("roomId");
   const suggestedOnly = c.req.query("suggested_only") === "true";
-  const limit = Math.min(Number.parseInt(c.req.query("limit") || "50", 10), 100);
+  const limit = Math.min(Number.parseInt(c.req.query("limit") ?? "50", 10), 100);
   const offset = normalizeOffsetToken(c.req.query("from"));
 
   if (!(await queries.roomExists(c.env.DB, roomId))) {

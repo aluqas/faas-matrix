@@ -118,7 +118,7 @@ export const Errors = {
   invalidParam(param: string, message?: string): MatrixApiError {
     return new MatrixApiError(
       ErrorCodes.M_INVALID_PARAM,
-      message || `Invalid parameter: ${param}`,
+      message ?? `Invalid parameter: ${param}`,
       400,
     );
   },

@@ -236,7 +236,7 @@ export async function sendServerNotice(
     .bind(roomId)
     .first<{ event_id: string; depth: number }>();
 
-  const depth = (latest?.depth || 0) + 1;
+  const depth = (latest?.depth ?? 0) + 1;
   const prevEvents = latest ? [latest.event_id] : [];
 
   // Get auth events

@@ -273,10 +273,7 @@ export async function fetchFederatedEventRelationships(
     return false;
   }
 
-  const payload = (await response.json()) as {
-    events?: unknown[];
-    auth_chain?: unknown[];
-  };
+  const payload = await response.json();
   await persistFederatedRelationshipResponse(db, roomVersion, payload);
   return true;
 }

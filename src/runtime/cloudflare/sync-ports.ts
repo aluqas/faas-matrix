@@ -40,7 +40,7 @@ export function createCloudflareSlidingSyncStatePort(
             throw new Error(`DO fetch failed: ${response.status} - ${errorText}`);
           }
 
-          return (await response.json()) as ConnectionState | null;
+          return response.json();
         },
         catch: (cause) => toInfraError("Failed to load sliding sync connection state", cause, 503),
       }),
@@ -77,7 +77,7 @@ export function createCloudflareSlidingSyncStatePort(
               body: JSON.stringify({ timeout: timeoutMs }),
             }),
           );
-          return response.json() as Promise<{ hasEvents: boolean }>;
+          return response.json();
         },
         catch: (cause) => toInfraError("Failed to wait for sliding sync events", cause),
       }),

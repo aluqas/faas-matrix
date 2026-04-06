@@ -136,10 +136,7 @@ app.post("/_matrix/client/v3/login", async (c) => {
 
     // Look up the token in KV
     const tokenHash = await hashToken(token);
-    const tokenData = (await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json")) as {
-      user_id: string;
-      expires_at: number;
-    } | null;
+    const tokenData = await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json");
 
     if (!tokenData) {
       return Errors.forbidden("Invalid or expired login token").toResponse();
@@ -215,7 +212,7 @@ app.post("/_matrix/client/v3/login", async (c) => {
   }
 
   // Generate or use provided device ID
-  const deviceId = deviceIdFromBody || (await generateDeviceId());
+  const deviceId = deviceIdFromBody ?? (await generateDeviceId());
 
   // Create device
   await createDevice(c.env.DB, userId, deviceId, initialDeviceDisplayName);
@@ -306,12 +303,7 @@ app.post("/_matrix/client/v3/refresh", async (c) => {
   const refreshTokenHash = await hashToken(refreshToken);
 
   // Look up in KV
-  const tokenData = (await c.env.SESSIONS.get(`refresh:${refreshTokenHash}`, "json")) as {
-    userId: string;
-    deviceId: string | null;
-    accessTokenId: string;
-    createdAt: number;
-  } | null;
+  const tokenData = await c.env.SESSIONS.get(`refresh:${refreshTokenHash}`, "json");
 
   if (!tokenData) {
     return Errors.unknownToken("Invalid or expired refresh token").toResponse();
@@ -403,7 +395,7 @@ app.post("/_matrix/client/v3/register", async (c) => {
   const auth = isRecord(body["auth"]) ? body["auth"] : null;
 
   // Check registration kind
-  const kind = c.req.query("kind") || "user";
+  const kind = c.req.query("kind") ?? "user";
   if (kind !== "user" && kind !== "guest") {
     return Errors.invalidParam("kind", "Invalid registration kind").toResponse();
   }
@@ -478,7 +470,7 @@ app.post("/_matrix/client/v3/register", async (c) => {
   }
 
   // Generate device and access token
-  const deviceId = deviceIdFromBody || (await generateDeviceId());
+  const deviceId = deviceIdFromBody ?? (await generateDeviceId());
   await createDevice(c.env.DB, userId, deviceId, initialDeviceDisplayName);
 
   const accessToken = await generateAccessToken();

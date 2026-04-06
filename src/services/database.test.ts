@@ -273,7 +273,7 @@ describe("database state helpers", () => {
       prepare(query: string) {
         queries.push(query);
 
-        if (/SELECT MAX\(stream_ordering\) as max_ordering FROM events/.test(query)) {
+        if (query.includes("SELECT MAX(stream_ordering) as max_ordering FROM events")) {
           return {
             bind: (...params: unknown[]) => {
               boundParams.push(params);
@@ -293,7 +293,7 @@ describe("database state helpers", () => {
           bind: (...params: unknown[]) => {
             boundParams.push(params);
 
-            if (/SELECT stream_ordering FROM events WHERE event_id = \?/.test(query)) {
+            if (query.includes("SELECT stream_ordering FROM events WHERE event_id = ?")) {
               return {
                 first: () => null,
                 run: () => ({ success: true }),
@@ -330,7 +330,7 @@ describe("database state helpers", () => {
       prev_events: [],
     });
 
-    expect(queries.some((query) => /INSERT OR REPLACE INTO event_relations/.test(query))).toBe(
+    expect(queries.some((query) => query.includes("INSERT OR REPLACE INTO event_relations"))).toBe(
       true,
     );
     expect(boundParams).toContainEqual(["$reply", "$root", "m.thread", null]);
@@ -345,7 +345,7 @@ describe("database state helpers", () => {
         return {
           bind: (...params: unknown[]) => {
             boundParams.push(params);
-            if (/SELECT MAX\(pos\) as next_pos/.test(query)) {
+            if (query.includes("SELECT MAX(pos) as next_pos")) {
               return {
                 first: () => ({ next_pos: 10 }),
                 run: () => ({ success: true }),
@@ -367,13 +367,13 @@ describe("database state helpers", () => {
 
     await deleteDevice(db, "@alice:test", "DEVICE123");
 
-    expect(queries.some((query) => /INSERT INTO account_data/.test(query))).toBe(true);
+    expect(queries.some((query) => query.includes("INSERT INTO account_data"))).toBe(true);
     expect(boundParams).toContainEqual([
       "@alice:test",
       "org.matrix.msc3890.local_notification_settings.DEVICE123",
     ]);
-    expect(queries.some((query) => /INSERT INTO account_data_changes/.test(query))).toBe(true);
-    expect(queries.some((query) => /DELETE FROM devices/.test(query))).toBe(true);
+    expect(queries.some((query) => query.includes("INSERT INTO account_data_changes"))).toBe(true);
+    expect(queries.some((query) => query.includes("DELETE FROM devices"))).toBe(true);
   });
 
   it("tombstones all device local notification settings when deleting all devices", async () => {
@@ -401,7 +401,7 @@ describe("database state helpers", () => {
                 run: () => ({ success: true }),
               };
             }
-            if (/SELECT MAX\(pos\) as next_pos/.test(query)) {
+            if (query.includes("SELECT MAX(pos) as next_pos")) {
               return {
                 first: () => ({ next_pos: 10 }),
                 run: () => ({ success: true }),
@@ -435,7 +435,7 @@ describe("database state helpers", () => {
       "@alice:test",
       "org.matrix.msc3890.local_notification_settings.B",
     ]);
-    expect(queries.some((query) => /DELETE FROM devices WHERE user_id = \?/.test(query))).toBe(
+    expect(queries.some((query) => query.includes("DELETE FROM devices WHERE user_id = ?"))).toBe(
       true,
     );
   });

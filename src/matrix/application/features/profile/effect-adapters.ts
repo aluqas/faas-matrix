@@ -45,7 +45,7 @@ export function createProfileQueryPorts(
             localServerName: env.SERVER_NAME,
             db: env.DB,
             cache: env.CACHE,
-          }) as Promise<ProfileResponseBody | null>,
+          }),
         catch: (cause) => toInfraError("Failed to query profile", cause),
       }),
     getLocalUserExists: (userId) =>

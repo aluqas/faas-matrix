@@ -115,7 +115,7 @@ app.on(["GET", "PUT", "DELETE", "PATCH"], "/_matrix/key/v2/query", () => methodN
 
 app.get("/_matrix/key/v2/query/:serverName", (c) => {
   const serverName = c.req.param("serverName");
-  const minimumValidUntilTs = Number.parseInt(c.req.query("minimum_valid_until_ts") || "0", 10);
+  const minimumValidUntilTs = Number.parseInt(c.req.query("minimum_valid_until_ts") ?? "0", 10);
 
   return respondWithFederationEffect(
     queryFederationServerKeysEffect(getFederationQueryPorts(c), {
@@ -129,7 +129,7 @@ app.get("/_matrix/key/v2/query/:serverName", (c) => {
 app.get("/_matrix/key/v2/query/:serverName/:keyId", (c) => {
   const serverName = c.req.param("serverName");
   const keyId = c.req.param("keyId");
-  const minimumValidUntilTs = Number.parseInt(c.req.query("minimum_valid_until_ts") || "0", 10);
+  const minimumValidUntilTs = Number.parseInt(c.req.query("minimum_valid_until_ts") ?? "0", 10);
 
   return respondWithFederationEffect(
     queryFederationServerKeysEffect(getFederationQueryPorts(c), {

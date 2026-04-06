@@ -43,7 +43,7 @@ export async function executePresenceCommand(
       {
         user_id: input.userId,
         presence: input.presence,
-        status_msg: input.statusMessage || undefined,
+        status_msg: input.statusMessage ?? undefined,
         last_active_ago: 0,
         currently_active: input.presence === "online",
       },

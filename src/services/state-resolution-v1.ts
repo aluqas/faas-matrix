@@ -18,7 +18,7 @@ export function resolveStateV1(stateSets: PDU[][]): PDU[] {
     for (const event of stateSet) {
       if (event.state_key === undefined) continue;
       const key = stateKey(event.type, event.state_key);
-      const existing = allState.get(key) || [];
+      const existing = allState.get(key) ?? [];
       // Don't add duplicates
       if (!existing.some((e) => e.event_id === event.event_id)) {
         existing.push(event);

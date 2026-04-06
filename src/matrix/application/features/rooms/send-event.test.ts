@@ -30,7 +30,7 @@ describe("rooms send-event helpers", () => {
   });
 
   it("rejects redactions of other users' events without sufficient power", () => {
-    expect(() =>
+    expect(() => {
       assertRedactionAllowed({
         powerLevelsEvent: {
           event_id: "$power",
@@ -62,12 +62,12 @@ describe("rooms send-event helpers", () => {
         },
         roomId: "!room:test",
         userId: "@alice:test",
-      }),
-    ).toThrow(/Insufficient power level/);
+      });
+    }).toThrow(/Insufficient power level/);
   });
 
   it("applies owned-state policy through the room command helper", () => {
-    expect(() =>
+    expect(() => {
       assertOwnedStateEventAllowed({
         roomVersion: "10",
         powerLevelsEvent: {
@@ -90,8 +90,8 @@ describe("rooms send-event helpers", () => {
         eventType: "com.example.test",
         stateKey: "@bob:test",
         senderUserId: "@alice:test",
-      }),
-    ).toThrow(/reserved/);
+      });
+    }).toThrow(/reserved/);
   });
 
   it("builds a room event with auth and prev links", async () => {

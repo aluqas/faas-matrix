@@ -168,7 +168,7 @@ async function fetchTurnCredentials(env: Env, ttl: number): Promise<MatrixTurnRe
   if (response.status === 429) {
     const retryAfter = response.headers.get("Retry-After");
     throw new TurnError(
-      `TURN API rate limited. Retry after ${retryAfter || "unknown"} seconds.`,
+      `TURN API rate limited. Retry after ${retryAfter ?? "unknown"} seconds.`,
       "RATE_LIMITED",
       429,
     );
@@ -328,7 +328,7 @@ async function checkUserRateLimit(cache: KVNamespace, userId: string): Promise<R
     const data = (await cache.get(key, "json")) as { requests: number[] } | null;
 
     // Filter to only requests within the window
-    const recentRequests = data?.requests?.filter((t) => t > windowStart) || [];
+    const recentRequests = data?.requests?.filter((t) => t > windowStart) ?? [];
 
     if (recentRequests.length >= USER_RATE_LIMIT_MAX) {
       // Rate limited - calculate when the oldest request will expire

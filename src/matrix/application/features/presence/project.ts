@@ -75,7 +75,7 @@ export async function projectPresenceEvents(
             : {}),
         },
       })),
-      query.filter as SyncEventFilter | undefined,
+      query.filter,
     ),
   };
 }

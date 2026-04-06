@@ -538,7 +538,7 @@ export class CloudflareFederationRepository implements FederationRepository {
       `INSERT OR REPLACE INTO processed_pdus (event_id, origin, room_id, processed_at, accepted, rejection_reason)
        VALUES (?, ?, ?, ?, ?, ?)`,
     )
-      .bind(eventId, origin, roomId, Date.now(), accepted ? 1 : 0, rejectionReason || null)
+      .bind(eventId, origin, roomId, Date.now(), accepted ? 1 : 0, rejectionReason ?? null)
       .run();
   }
 
@@ -621,7 +621,7 @@ export class CloudflareFederationRepository implements FederationRepository {
       `INSERT OR REPLACE INTO processed_edus (edu_id, edu_type, origin, processed_at, content)
        VALUES (?, ?, ?, ?, ?)`,
     )
-      .bind(String(content["edu_id"] || ""), eduType, origin, Date.now(), JSON.stringify(content))
+      .bind(String(content["edu_id"] ?? ""), eduType, origin, Date.now(), JSON.stringify(content))
       .run();
   }
 
@@ -672,7 +672,7 @@ export class CloudflareFederationRepository implements FederationRepository {
         .bind(
           userId,
           deviceId,
-          displayName || null,
+          displayName ?? null,
           keys ? JSON.stringify(keys) : null,
           streamId,
           Date.now(),
@@ -733,6 +733,6 @@ export class CloudflareRemoteKeyCache implements RemoteKeyCache<{ keyId: string;
 export function assertValidMatrixServerUrl(url: string): void {
   const validation = validateUrl(url);
   if (!validation.valid) {
-    throw new Error(validation.error || "Invalid URL");
+    throw new Error(validation.error ?? "Invalid URL");
   }
 }

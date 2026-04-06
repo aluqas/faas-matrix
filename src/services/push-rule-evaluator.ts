@@ -252,8 +252,8 @@ export async function countUnreadNotificationSummaryWithRules(
         room_id: event.room_id,
         state_key: event.state_key,
       },
-      memberCount?.count || 1,
-      user?.display_name || undefined,
+      memberCount?.count ?? 1,
+      user?.display_name ?? undefined,
     );
 
     await runClientEffect(
@@ -320,9 +320,7 @@ export async function countNotificationsWithRules(
   sinceStreamOrdering?: number,
 ): Promise<{ notification_count: number; highlight_count: number }> {
   let readStreamOrdering = sinceStreamOrdering;
-  if (readStreamOrdering === undefined) {
-    readStreamOrdering = await resolveRoomReadBoundary(db, userId, roomId);
-  }
+  readStreamOrdering ??= await resolveRoomReadBoundary(db, userId, roomId);
 
   // Get unread events (messages and encrypted events from others)
   let unreadEvents: UnreadEvent[];
@@ -396,8 +394,8 @@ export async function countNotificationsWithRules(
         room_id: event.room_id,
         state_key: event.state_key,
       },
-      memberCount?.count || 1,
-      user?.display_name || undefined,
+      memberCount?.count ?? 1,
+      user?.display_name ?? undefined,
     );
 
     if (result.notify) {

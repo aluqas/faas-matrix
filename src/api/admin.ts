@@ -67,7 +67,7 @@ app.get("/admin/api/stats", requireAuth(), requireAdmin, async (c) => {
 // GET /admin/api/stats/history - Time-series statistics for dashboard charts
 app.get("/admin/api/stats/history", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const period = c.req.query("period") || "7d";
+  const period = c.req.query("period") ?? "7d";
 
   // Parse period and calculate date range
   let days: number;
@@ -126,8 +126,8 @@ app.get("/admin/api/stats/history", requireAuth(), requireAdmin, async (c) => {
   // Build the response data array, filling in zeros for missing dates
   const data = dateKeys.map((date) => ({
     date,
-    events: eventsMap.get(date) || 0,
-    registrations: registrationsMap.get(date) || 0,
+    events: eventsMap.get(date) ?? 0,
+    registrations: registrationsMap.get(date) ?? 0,
   }));
 
   return c.json({
@@ -139,8 +139,8 @@ app.get("/admin/api/stats/history", requireAuth(), requireAdmin, async (c) => {
 // GET /admin/api/users - List all users
 app.get("/admin/api/users", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
-  const offset = parseInt(c.req.query("offset") || "0", 10);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
+  const offset = parseInt(c.req.query("offset") ?? "0", 10);
   const search = c.req.query("search");
 
   let query = `
@@ -173,7 +173,7 @@ app.get("/admin/api/users", requireAuth(), requireAdmin, async (c) => {
 
   return c.json({
     users: users.results,
-    total: total?.count || 0,
+    total: total?.count ?? 0,
     limit,
     offset,
   });
@@ -324,8 +324,8 @@ app.post("/admin/api/users/:userId/reset-password", requireAuth(), requireAdmin,
 // GET /admin/api/rooms - List all rooms
 app.get("/admin/api/rooms", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
-  const offset = parseInt(c.req.query("offset") || "0", 10);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
+  const offset = parseInt(c.req.query("offset") ?? "0", 10);
 
   const rooms = await db
     .prepare(`
@@ -362,7 +362,7 @@ app.get("/admin/api/rooms", requireAuth(), requireAdmin, async (c) => {
 
   return c.json({
     rooms: roomsWithNames,
-    total: total?.count || 0,
+    total: total?.count ?? 0,
     limit,
     offset,
   });
@@ -472,7 +472,7 @@ app.get("/admin/api/federation/status", requireAuth(), requireAdmin, async (c) =
     const keyData = await c.env.CACHE.get("server_signing_key");
     if (keyData) {
       const parsed = JSON.parse(keyData);
-      signingKeyId = parsed.keyId || `ed25519:${serverName.split(".")[0]}`;
+      signingKeyId = parsed.keyId ?? `ed25519:${serverName.split(".")[0]}`;
     }
   } catch {
     // Key might not be cached
@@ -481,8 +481,8 @@ app.get("/admin/api/federation/status", requireAuth(), requireAdmin, async (c) =
   return c.json({
     server_name: serverName,
     federation_enabled: true,
-    signing_key_id: signingKeyId || `ed25519:a_${serverName.replaceAll(".", "_").slice(0, 4)}`,
-    known_servers_count: serversCount?.count || 0,
+    signing_key_id: signingKeyId ?? `ed25519:a_${serverName.replaceAll(".", "_").slice(0, 4)}`,
+    known_servers_count: serversCount?.count ?? 0,
   });
 });
 
@@ -500,7 +500,7 @@ app.get("/admin/api/federation/test", requireAuth(), requireAdmin, async (c) => 
       tests.push({
         name: ".well-known/matrix/server",
         passed: true,
-        message: `Delegates to ${data["m.server"] || serverName}`,
+        message: `Delegates to ${data["m.server"] ?? serverName}`,
       });
     } else {
       tests.push({
@@ -513,7 +513,7 @@ app.get("/admin/api/federation/test", requireAuth(), requireAdmin, async (c) => 
     tests.push({
       name: ".well-known/matrix/server",
       passed: false,
-      message: e.message || "Failed to fetch",
+      message: e.message ?? "Failed to fetch",
     });
   }
 
@@ -542,7 +542,7 @@ app.get("/admin/api/federation/test", requireAuth(), requireAdmin, async (c) => 
     tests.push({
       name: "Server signing keys",
       passed: false,
-      message: e.message || "Failed to fetch",
+      message: e.message ?? "Failed to fetch",
     });
   }
 
@@ -555,7 +555,7 @@ app.get("/admin/api/federation/test", requireAuth(), requireAdmin, async (c) => 
       tests.push({
         name: "Federation API",
         passed: true,
-        message: `Server: ${data.server?.name || "Unknown"} ${data.server?.version || ""}`,
+        message: `Server: ${data.server?.name ?? "Unknown"} ${data.server?.version ?? ""}`,
       });
     } else {
       tests.push({
@@ -568,7 +568,7 @@ app.get("/admin/api/federation/test", requireAuth(), requireAdmin, async (c) => 
     tests.push({
       name: "Federation API",
       passed: false,
-      message: e.message || "Failed to fetch",
+      message: e.message ?? "Failed to fetch",
     });
   }
 
@@ -581,7 +581,7 @@ app.get("/admin/api/federation/test", requireAuth(), requireAdmin, async (c) => 
       tests.push({
         name: ".well-known/matrix/client",
         passed: true,
-        message: `Homeserver: ${data["m.homeserver"]?.base_url || "configured"}`,
+        message: `Homeserver: ${data["m.homeserver"]?.base_url ?? "configured"}`,
       });
     } else {
       tests.push({
@@ -594,7 +594,7 @@ app.get("/admin/api/federation/test", requireAuth(), requireAdmin, async (c) => 
     tests.push({
       name: ".well-known/matrix/client",
       passed: false,
-      message: e.message || "Failed to fetch",
+      message: e.message ?? "Failed to fetch",
     });
   }
 
@@ -625,8 +625,8 @@ app.get("/admin/api/federation/servers", requireAuth(), requireAdmin, async (c) 
 // GET /admin/api/media - List media files
 app.get("/admin/api/media", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
-  const offset = parseInt(c.req.query("offset") || "0", 10);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
+  const offset = parseInt(c.req.query("offset") ?? "0", 10);
 
   const media = await db
     .prepare(`
@@ -642,7 +642,7 @@ app.get("/admin/api/media", requireAuth(), requireAdmin, async (c) => {
 
   return c.json({
     media: media.results,
-    total: total?.count || 0,
+    total: total?.count ?? 0,
     limit,
     offset,
   });
@@ -1139,7 +1139,7 @@ app.post("/admin/api/users/create", requireAuth(), requireAdmin, async (c) => {
       userId,
       username,
       passwordHash,
-      display_name || null,
+      display_name ?? null,
       admin ? 1 : 0,
       Date.now(),
       Date.now(),
@@ -1194,7 +1194,7 @@ app.delete("/admin/api/sessions/:sessionId", requireAuth(), requireAdmin, async 
 app.get("/admin/api/rooms/:roomId/events", requireAuth(), requireAdmin, async (c) => {
   const roomId = decodeURIComponent(c.req.param("roomId"));
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
   const before = c.req.query("before");
 
   let query = `
@@ -1228,8 +1228,8 @@ app.get("/admin/api/rooms/:roomId/events", requireAuth(), requireAdmin, async (c
 // GET /admin/api/reports - Get content reports (proxy to existing endpoint format)
 app.get("/admin/api/reports", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
-  const offset = parseInt(c.req.query("offset") || "0", 10);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
+  const offset = parseInt(c.req.query("offset") ?? "0", 10);
   const resolved = c.req.query("resolved");
 
   let query = `
@@ -1280,7 +1280,7 @@ app.get("/admin/api/reports", requireAuth(), requireAdmin, async (c) => {
       resolved_at: r.resolved_at,
       resolution_note: r.resolution_note,
     })),
-    total: total?.count || 0,
+    total: total?.count ?? 0,
     limit,
     offset,
   });
@@ -1305,7 +1305,7 @@ app.post("/admin/api/reports/:reportId/resolve", requireAuth(), requireAdmin, as
     SET resolved = 1, resolved_by = ?, resolved_at = ?, resolution_note = ?
     WHERE id = ?
   `)
-    .bind(userId, Date.now(), body.note || null, parseInt(reportId, 10))
+    .bind(userId, Date.now(), body.note ?? null, parseInt(reportId, 10))
     .run();
 
   if (result.meta.changes === 0) {
@@ -1381,7 +1381,7 @@ app.post("/admin/api/server-notice", requireAuth(), requireAdmin, async (c) => {
     SELECT position FROM stream_positions WHERE stream_name = 'to_device'
   `)
     .first<{ position: number }>();
-  const streamPosition = posResult?.position || 1;
+  const streamPosition = posResult?.position ?? 1;
 
   // Send to each device
   for (const device of devices.results) {
@@ -1494,7 +1494,7 @@ app.post("/admin/api/users/:userId/login-token", requireAuth(), requireAdmin, as
 
   // Build the QR URL that users will scan
   const protocol = c.req.url.startsWith("https") ? "https" : "https"; // Always use https for production
-  const host = c.req.header("host") || c.env.SERVER_NAME;
+  const host = c.req.header("host") ?? c.env.SERVER_NAME;
   const qrUrl = `${protocol}://${host}/login/qr/${loginToken}`;
 
   return c.json({
@@ -1539,7 +1539,7 @@ app.get("/admin/api/idp/providers", requireAuth(), requireAdmin, async (c) => {
         ...p,
         enabled: p.enabled === 1,
         auto_create_users: p.auto_create_users === 1,
-        linked_users: countResult?.count || 0,
+        linked_users: countResult?.count ?? 0,
       };
     }),
   );
@@ -1606,10 +1606,10 @@ app.post("/admin/api/idp/providers", requireAuth(), requireAdmin, async (c) => {
         issuer_url.replace(/\/$/, ""), // Normalize URL
         client_id,
         encryptedSecret,
-        scopes || "openid profile email",
+        scopes ?? "openid profile email",
         auto_create_users !== false ? 1 : 0,
-        username_claim || "email",
-        icon_url || null,
+        username_claim ?? "email",
+        icon_url ?? null,
         Date.now(),
         Date.now(),
       )
@@ -1744,7 +1744,7 @@ app.put("/admin/api/idp/providers/:id", requireAuth(), requireAdmin, async (c) =
   }
   if (body.icon_url !== undefined) {
     updates.push("icon_url = ?");
-    values.push(body.icon_url || null);
+    values.push(body.icon_url ?? null);
   }
 
   if (updates.length === 0) {
@@ -1994,8 +1994,8 @@ app.get("/_matrix/client/v3/admin/whois/:userId", requireAuth(), async (c) => {
         {
           connections: [
             {
-              ip: device.last_seen_ip || null,
-              last_seen: device.last_seen_ts || null,
+              ip: device.last_seen_ip ?? null,
+              last_seen: device.last_seen_ts ?? null,
             },
           ],
         },
@@ -2025,8 +2025,8 @@ app.get("/_synapse/admin/v1/server_version", requireAuth(), requireAdmin, (c) =>
 // GET /_synapse/admin/v2/users - List users (Synapse format)
 app.get("/_synapse/admin/v2/users", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "100", 10), 1000);
-  const from = parseInt(c.req.query("from") || "0", 10);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "100", 10), 1000);
+  const from = parseInt(c.req.query("from") ?? "0", 10);
   const guests = c.req.query("guests") !== "false";
   const deactivated = c.req.query("deactivated") === "true";
   const name = c.req.query("name"); // Search by name
@@ -2059,8 +2059,8 @@ app.get("/_synapse/admin/v2/users", requireAuth(), requireAdmin, async (c) => {
 
   return c.json({
     users: users.results,
-    next_token: from + limit < (total?.count || 0) ? String(from + limit) : undefined,
-    total: total?.count || 0,
+    next_token: from + limit < (total?.count ?? 0) ? String(from + limit) : undefined,
+    total: total?.count ?? 0,
   });
 });
 
@@ -2167,9 +2167,9 @@ app.post("/_synapse/admin/v1/reset_password/:userId", requireAuth(), requireAdmi
 // GET /_synapse/admin/v1/rooms - List rooms (Synapse format)
 app.get("/_synapse/admin/v1/rooms", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "100", 10), 1000);
-  const from = parseInt(c.req.query("from") || "0", 10);
-  const orderBy = c.req.query("order_by") || "name";
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "100", 10), 1000);
+  const from = parseInt(c.req.query("from") ?? "0", 10);
+  const orderBy = c.req.query("order_by") ?? "name";
   const dir = c.req.query("dir") === "b" ? "DESC" : "ASC";
   const searchTerm = c.req.query("search_term");
 
@@ -2243,8 +2243,8 @@ app.get("/_synapse/admin/v1/rooms", requireAuth(), requireAdmin, async (c) => {
         canonical_alias: canonicalAliasEvent ? JSON.parse(canonicalAliasEvent.content).alias : null,
         topic: topicEvent ? JSON.parse(topicEvent.content).topic : null,
         avatar: avatarEvent ? JSON.parse(avatarEvent.content).url : null,
-        joined_members: room.joined_members || 0,
-        joined_local_members: room.joined_local_members || 0,
+        joined_members: room.joined_members ?? 0,
+        joined_local_members: room.joined_local_members ?? 0,
         version: room.room_version,
         creator: room.creator,
         encryption: null, // Would need to check m.room.encryption state
@@ -2253,7 +2253,7 @@ app.get("/_synapse/admin/v1/rooms", requireAuth(), requireAdmin, async (c) => {
         join_rules: null, // Would need to check m.room.join_rules state
         guest_access: null, // Would need to check m.room.guest_access state
         history_visibility: null, // Would need to check m.room.history_visibility state
-        state_events: room.state_events || 0,
+        state_events: room.state_events ?? 0,
       };
     }),
   );
@@ -2263,8 +2263,8 @@ app.get("/_synapse/admin/v1/rooms", requireAuth(), requireAdmin, async (c) => {
   return c.json({
     rooms: roomsWithDetails,
     offset: from,
-    total_rooms: total?.count || 0,
-    next_batch: from + limit < (total?.count || 0) ? from + limit : undefined,
+    total_rooms: total?.count ?? 0,
+    next_batch: from + limit < (total?.count ?? 0) ? from + limit : undefined,
     prev_batch: from > 0 ? Math.max(0, from - limit) : undefined,
   });
 });
@@ -2354,13 +2354,13 @@ app.get("/_synapse/admin/v1/rooms/:roomId", requireAuth(), requireAdmin, async (
     topic: topicEvent ? JSON.parse(topicEvent.content).topic : null,
     canonical_alias: canonicalAliasEvent ? JSON.parse(canonicalAliasEvent.content).alias : null,
     avatar: avatarEvent ? JSON.parse(avatarEvent.content).url : null,
-    joined_members: memberCount?.count || 0,
-    joined_local_members: memberCount?.count || 0,
+    joined_members: memberCount?.count ?? 0,
+    joined_local_members: memberCount?.count ?? 0,
     version: (room as any).room_version,
     creator: (room as any).creator_id,
     public: Boolean((room as any).is_public),
     join_rules: joinRulesEvent ? JSON.parse(joinRulesEvent.content).join_rule : null,
-    state_events: stateCount?.count || 0,
+    state_events: stateCount?.count ?? 0,
     federatable: true,
   });
 });
@@ -2368,8 +2368,8 @@ app.get("/_synapse/admin/v1/rooms/:roomId", requireAuth(), requireAdmin, async (
 // GET /_synapse/admin/v1/federation/destinations - Federation destinations (Synapse format)
 app.get("/_synapse/admin/v1/federation/destinations", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "100", 10), 1000);
-  const from = parseInt(c.req.query("from") || "0", 10);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "100", 10), 1000);
+  const from = parseInt(c.req.query("from") ?? "0", 10);
 
   const servers = await db
     .prepare(`
@@ -2394,16 +2394,16 @@ app.get("/_synapse/admin/v1/federation/destinations", requireAuth(), requireAdmi
       failure_ts: s.failure_ts > 0 ? Date.now() - 60000 * s.retry_count : null,
       last_successful_stream_ordering: s.last_successful_stream_ordering,
     })),
-    total: total?.count || 0,
-    next_token: from + limit < (total?.count || 0) ? String(from + limit) : undefined,
+    total: total?.count ?? 0,
+    next_token: from + limit < (total?.count ?? 0) ? String(from + limit) : undefined,
   });
 });
 
 // GET /_synapse/admin/v1/event_reports - Event reports (Synapse format)
 app.get("/_synapse/admin/v1/event_reports", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const limit = Math.min(parseInt(c.req.query("limit") || "100", 10), 1000);
-  const from = parseInt(c.req.query("from") || "0", 10);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "100", 10), 1000);
+  const from = parseInt(c.req.query("from") ?? "0", 10);
   const dir = c.req.query("dir") === "f" ? "ASC" : "DESC";
   const roomId = c.req.query("room_id");
   const userId = c.req.query("user_id");
@@ -2451,8 +2451,8 @@ app.get("/_synapse/admin/v1/event_reports", requireAuth(), requireAdmin, async (
       event_id: r.event_id,
       event_json: r.content ? { content: JSON.parse(r.content) } : null,
     })),
-    total: total?.count || 0,
-    next_token: from + limit < (total?.count || 0) ? String(from + limit) : undefined,
+    total: total?.count ?? 0,
+    next_token: from + limit < (total?.count ?? 0) ? String(from + limit) : undefined,
   });
 });
 
@@ -2575,8 +2575,8 @@ app.put("/_synapse/admin/v2/users/:userId", requireAuth(), requireAdmin, async (
       userId,
       localpart,
       passwordHash,
-      displayname || null,
-      avatar_url || null,
+      displayname ?? null,
+      avatar_url ?? null,
       admin ? 1 : 0,
       Date.now(),
       Date.now(),
@@ -2588,8 +2588,8 @@ app.put("/_synapse/admin/v2/users/:userId", requireAuth(), requireAdmin, async (
 
   return c.json({
     name: userId,
-    displayname: displayname || null,
-    admin: admin || false,
+    displayname: displayname ?? null,
+    admin: admin ?? false,
     deactivated: false,
   });
 });
@@ -2601,7 +2601,7 @@ app.put("/_synapse/admin/v2/users/:userId", requireAuth(), requireAdmin, async (
 // Get request metrics from Analytics Engine
 app.get("/_matrix/client/v3/admin/analytics/requests", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const period = c.req.query("period") || "1h";
+  const period = c.req.query("period") ?? "1h";
 
   // Calculate time range
   const now = Date.now();
@@ -2648,9 +2648,9 @@ app.get("/_matrix/client/v3/admin/analytics/requests", requireAuth(), requireAdm
   return c.json({
     period,
     since: new Date(since).toISOString(),
-    total_events: totalRequests?.count || 0,
-    active_users: activeUsers?.count || 0,
-    active_rooms: activeRooms?.count || 0,
+    total_events: totalRequests?.count ?? 0,
+    active_users: activeUsers?.count ?? 0,
+    active_rooms: activeRooms?.count ?? 0,
     events_by_type: byType.results,
   });
 });
@@ -2658,7 +2658,7 @@ app.get("/_matrix/client/v3/admin/analytics/requests", requireAuth(), requireAdm
 // Get federation metrics
 app.get("/_matrix/client/v3/admin/analytics/federation", requireAuth(), requireAdmin, async (c) => {
   const db = c.env.DB;
-  const period = c.req.query("period") || "24h";
+  const period = c.req.query("period") ?? "24h";
 
   const now = Date.now();
   const periodMs: Record<string, number> = {
@@ -2697,9 +2697,9 @@ app.get("/_matrix/client/v3/admin/analytics/federation", requireAuth(), requireA
   return c.json({
     period,
     since: new Date(since).toISOString(),
-    inbound_events: inboundEvents?.count || 0,
-    outbound_events: outboundEvents?.count || 0,
-    known_servers: remoteServers?.count || 0,
+    inbound_events: inboundEvents?.count ?? 0,
+    outbound_events: outboundEvents?.count ?? 0,
+    known_servers: remoteServers?.count ?? 0,
   });
 });
 

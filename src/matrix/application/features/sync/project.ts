@@ -54,7 +54,7 @@ export function projectSyncResponseEffect(
                   db,
                   presenceInput.userId,
                   presenceInput.presence,
-                  presenceInput.statusMessage || null,
+                  presenceInput.statusMessage ?? null,
                   presenceInput.now,
                 );
                 const cache = appContext.capabilities.kv.cache as KVNamespace | undefined;
@@ -63,7 +63,7 @@ export function projectSyncResponseEffect(
                     cache,
                     presenceInput.userId,
                     presenceInput.presence,
-                    presenceInput.statusMessage || null,
+                    presenceInput.statusMessage ?? null,
                     presenceInput.now,
                   );
                 }

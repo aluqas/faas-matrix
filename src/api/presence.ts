@@ -68,7 +68,7 @@ app.put("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
       {
         userId: requestingUserId,
         presence: presence as PresenceState,
-        statusMessage: status_msg || null,
+        statusMessage: status_msg ?? null,
         now: Date.now(),
       },
       {
@@ -78,14 +78,14 @@ app.put("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
             db,
             input.userId,
             input.presence,
-            input.statusMessage || null,
+            input.statusMessage ?? null,
             input.now,
           );
           await writePresenceToCache(
             c.env.CACHE,
             input.userId,
             input.presence,
-            input.statusMessage || null,
+            input.statusMessage ?? null,
             input.now,
           );
         },

@@ -395,7 +395,7 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
 
     // Write to Durable Object first (primary - strongly consistent)
     // This is critical for E2EE bootstrap where client uploads then immediately queries
-    await putDeviceKeysToDO(c.env, userId, deviceId!, device_keys);
+    await putDeviceKeysToDO(c.env, userId, deviceId, device_keys);
 
     // Also write to KV as backup/cache
     await c.env.DEVICE_KEYS.put(`device:${userId}:${deviceId}`, JSON.stringify(device_keys));
@@ -442,7 +442,7 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
     const existingKeys =
       parseStoredOneTimeKeyBuckets(
         await c.env.ONE_TIME_KEYS.get(`otk:${userId}:${deviceId}`, "json"),
-      ) || {};
+      ) ?? {};
 
     for (const [keyId, keyData] of Object.entries(one_time_keys)) {
       const [algorithm] = keyId.split(":");
@@ -484,10 +484,7 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
     }
   } else {
     // Just get counts from KV
-    const existingKeys = (await c.env.ONE_TIME_KEYS.get(
-      `otk:${userId}:${deviceId}`,
-      "json",
-    )) as unknown;
+    const existingKeys = await c.env.ONE_TIME_KEYS.get(`otk:${userId}:${deviceId}`, "json");
     const parsedExistingKeys = parseStoredOneTimeKeyBuckets(existingKeys);
 
     if (parsedExistingKeys) {
@@ -586,7 +583,7 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
         : {};
       for (const sig of dbSignatures.results) {
         mergedSignatures[sig.signer_user_id] = mergedSignatures[sig.signer_user_id] || {};
-        mergedSignatures[sig.signer_user_id]![sig.signer_key_id] = sig.signature;
+        mergedSignatures[sig.signer_user_id][sig.signer_key_id] = sig.signature;
       }
       deviceKey.signatures = mergedSignatures;
     }
@@ -603,7 +600,7 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
       const userServerName = extractServerNameFromMatrixId(userId);
       if (userServerName && userServerName !== localServerName) {
         remoteRequestsByServer[userServerName] = remoteRequestsByServer[userServerName] || {};
-        remoteRequestsByServer[userServerName]![userId] = devices;
+        remoteRequestsByServer[userServerName][userId] = devices;
         continue;
       }
 
@@ -1185,7 +1182,7 @@ async function isOIDCUser(db: D1Database, userId: string): Promise<boolean> {
   `)
     .bind(userId)
     .first<{ count: number }>();
-  return (result?.count || 0) > 0;
+  return (result?.count ?? 0) > 0;
 }
 
 // Helper: Check if user has password set
@@ -1239,7 +1236,7 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
     .bind(userId)
     .first<{ count: number }>();
 
-  const hasExistingKeys = (existingKeys?.count || 0) > 0;
+  const hasExistingKeys = (existingKeys?.count ?? 0) > 0;
   const existingCSKeys = hasExistingKeys ? await getCrossSigningKeysFromDO(c.env, userId) : {};
   const uploadRequest = {
     ...(master_key ? { master_key } : {}),
@@ -1579,7 +1576,7 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   // Also write to D1 as backup (for durability/recovery)
   // These writes are eventually consistent but serve as backup storage
   if (master_key) {
-    const keyId = Object.keys(master_key.keys || {})[0] || "";
+    const keyId = Object.keys(master_key.keys ?? {})[0] || "";
     await db
       .prepare(`
       INSERT INTO cross_signing_keys (user_id, key_type, key_id, key_data)
@@ -1594,7 +1591,7 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   }
 
   if (self_signing_key) {
-    const keyId = Object.keys(self_signing_key.keys || {})[0] || "";
+    const keyId = Object.keys(self_signing_key.keys ?? {})[0] || "";
     await db
       .prepare(`
       INSERT INTO cross_signing_keys (user_id, key_type, key_id, key_data)
@@ -1608,7 +1605,7 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   }
 
   if (user_signing_key) {
-    const keyId = Object.keys(user_signing_key.keys || {})[0] || "";
+    const keyId = Object.keys(user_signing_key.keys ?? {})[0] || "";
     await db
       .prepare(`
       INSERT INTO cross_signing_keys (user_id, key_type, key_id, key_data)
@@ -1677,7 +1674,7 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
         // Store all signatures in the database
         for (const [signerKeyId, signature] of Object.entries(signatures)) {
           // Use the device_id as key_id for device keys, otherwise use the provided keyId
-          const effectiveKeyId = signedKeyObj.device_id || keyId;
+          const effectiveKeyId = signedKeyObj.device_id ?? keyId;
 
           await db
             .prepare(`
@@ -1725,7 +1722,7 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
         }
 
         // Record key change for sync notifications
-        await recordDeviceKeyChange(db, userId, signedKeyObj.device_id || null, "update");
+        await recordDeviceKeyChange(db, userId, signedKeyObj.device_id ?? null, "update");
       } catch (err) {
         await runClientEffect(
           logger.error("keys.command.error", err, {
@@ -1794,7 +1791,7 @@ app.get("/_matrix/client/v3/auth/m.login.sso/redirect", async (c) => {
   const baseUrl = `https://${serverName}`;
 
   // Store the redirect URL for after SSO completes
-  session.redirect_url = redirectUrl || `${baseUrl}/_matrix/client/v3/auth/m.login.sso/callback`;
+  session.redirect_url = redirectUrl ?? `${baseUrl}/_matrix/client/v3/auth/m.login.sso/callback`;
   await c.env.CACHE.put(`uia_session:${sessionId}`, JSON.stringify(session), {
     expirationTtl: 300,
   });
@@ -1836,7 +1833,7 @@ app.get("/_matrix/client/v3/auth/m.login.sso/callback", async (c) => {
         error_description: errorDescription,
       }),
     );
-    return c.html(generateSSOErrorPage("SSO Authentication Failed", errorDescription || error));
+    return c.html(generateSSOErrorPage("SSO Authentication Failed", errorDescription ?? error));
   }
 
   if (!state) {

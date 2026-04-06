@@ -118,9 +118,9 @@ app.get("/_matrix/client/v3/devices", requireAuth(), async (c) => {
   return c.json({
     devices: devices.results.map((d) => ({
       device_id: d.device_id,
-      display_name: d.display_name || undefined,
-      last_seen_ts: d.last_seen_ts || undefined,
-      last_seen_ip: d.last_seen_ip || undefined,
+      display_name: d.display_name ?? undefined,
+      last_seen_ts: d.last_seen_ts ?? undefined,
+      last_seen_ip: d.last_seen_ip ?? undefined,
     })),
   });
 });
@@ -151,9 +151,9 @@ app.get("/_matrix/client/v3/devices/:deviceId", requireAuth(), async (c) => {
 
   return c.json({
     device_id: device.device_id,
-    display_name: device.display_name || undefined,
-    last_seen_ts: device.last_seen_ts || undefined,
-    last_seen_ip: device.last_seen_ip || undefined,
+    display_name: device.display_name ?? undefined,
+    last_seen_ts: device.last_seen_ts ?? undefined,
+    last_seen_ip: device.last_seen_ip ?? undefined,
   });
 });
 
@@ -285,13 +285,13 @@ app.delete("/_matrix/client/v3/devices/:deviceId", requireAuth(), async (c) => {
       .first<{ password_hash: string }>();
 
     if (!user || !auth.password) {
-      const sessionId = auth.session || crypto.randomUUID();
+      const sessionId = auth.session ?? crypto.randomUUID();
       return c.json(buildPasswordUiaResponse(sessionId, "Invalid password"), 401);
     }
 
     const valid = await verifyPassword(auth.password, user.password_hash);
     if (!valid) {
-      const sessionId = auth.session || crypto.randomUUID();
+      const sessionId = auth.session ?? crypto.randomUUID();
       return c.json(buildPasswordUiaResponse(sessionId, "Invalid password"), 401);
     }
   }
@@ -352,13 +352,13 @@ app.post("/_matrix/client/v3/delete_devices", requireAuth(), async (c) => {
       .first<{ password_hash: string }>();
 
     if (!user || !body.auth.password) {
-      const sessionId = body.auth.session || crypto.randomUUID();
+      const sessionId = body.auth.session ?? crypto.randomUUID();
       return c.json(buildPasswordUiaResponse(sessionId, "Invalid password"), 401);
     }
 
     const valid = await verifyPassword(body.auth.password, user.password_hash);
     if (!valid) {
-      const sessionId = body.auth.session || crypto.randomUUID();
+      const sessionId = body.auth.session ?? crypto.randomUUID();
       return c.json(buildPasswordUiaResponse(sessionId, "Invalid password"), 401);
     }
   }

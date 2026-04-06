@@ -81,7 +81,7 @@ app.post("/livekit/get_token", async (c) => {
   }
 
   // Handle both old format (room_id, member) and Element X format (room, device_id)
-  const roomId = body.room_id || body.room;
+  const roomId = body.room_id ?? body.room;
 
   // Validate required fields
   if (!roomId || !body.openid_token) {
@@ -108,8 +108,8 @@ app.post("/livekit/get_token", async (c) => {
     participantId = body.member.claimed_user_id;
     participantName = participantId.split(":")[0].replace("@", "");
   } else {
-    participantId = body.device_id || body.openid_token.access_token.slice(0, 16);
-    participantName = body.device_id || "participant";
+    participantId = body.device_id ?? body.openid_token.access_token.slice(0, 16);
+    participantName = body.device_id ?? "participant";
   }
 
   // Convert Matrix room ID to LiveKit room name
@@ -179,7 +179,7 @@ app.post("/livekit/get_token/sfu/get", async (c) => {
   }
 
   // Handle both old format (room_id, member) and Element X format (room, device_id)
-  const roomId = body.room_id || body.room;
+  const roomId = body.room_id ?? body.room;
 
   // Validate required fields
   if (!roomId || !body.openid_token) {
@@ -214,8 +214,8 @@ app.post("/livekit/get_token/sfu/get", async (c) => {
   } else {
     // For Element X, derive identity from openid_token
     // The access_token's user can be looked up, but for simplicity use device_id
-    participantId = body.device_id || body.openid_token.access_token.slice(0, 16);
-    participantName = body.device_id || "participant";
+    participantId = body.device_id ?? body.openid_token.access_token.slice(0, 16);
+    participantName = body.device_id ?? "participant";
   }
 
   // Convert Matrix room ID to LiveKit room name

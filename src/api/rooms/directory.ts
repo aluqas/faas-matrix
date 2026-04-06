@@ -245,7 +245,7 @@ app.get("/_matrix/client/v1/room_summary/:roomIdOrAlias", async (c) => {
 
   const response: Record<string, unknown> = {
     room_id: roomId,
-    num_joined_members: memberCount?.count || 0,
+    num_joined_members: memberCount?.count ?? 0,
     room_version: room.room_version,
   };
 
@@ -300,7 +300,7 @@ app.get("/_matrix/client/v1/room_summary/:roomIdOrAlias", async (c) => {
         .prepare(`SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?`)
         .bind(roomId, tokenResult.user_id)
         .first<{ membership: string }>();
-      response.membership = membership?.membership || "leave";
+      response.membership = membership?.membership ?? "leave";
     }
   }
 

@@ -34,7 +34,7 @@ export async function sendVerificationEmail(
   token: string,
   serverName: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const fromEmail = env.EMAIL_FROM || `noreply@${serverName}`;
+  const fromEmail = env.EMAIL_FROM ?? `noreply@${serverName}`;
 
   if (!env.EMAIL) {
     console.error("EMAIL binding is not configured");
@@ -167,7 +167,7 @@ export async function createVerificationSession(
       (session_id, email, user_id, client_secret, token, send_attempt, validated, created_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
     `)
-      .bind(sessionId, email, userId || null, clientSecret, token, sendAttempt, now, expiresAt)
+      .bind(sessionId, email, userId ?? null, clientSecret, token, sendAttempt, now, expiresAt)
       .run();
 
     return { sessionId, token };
@@ -272,6 +272,6 @@ export async function getValidatedSession(
 
   return {
     email: session.email,
-    userId: session.user_id || undefined,
+    userId: session.user_id ?? undefined,
   };
 }

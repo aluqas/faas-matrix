@@ -100,7 +100,7 @@ export async function getE2EEAccountDataFromDO(
     throw new Error(`DO get failed: ${response.status} - ${errorText}`);
   }
 
-  const payload = (await response.json()) as unknown;
+  const payload = await response.json();
   if (eventType !== undefined) {
     return normalizeE2EEAccountDataMap({ [eventType]: payload })[eventType] ?? null;
   }

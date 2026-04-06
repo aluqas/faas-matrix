@@ -339,11 +339,11 @@ app.put("/_matrix/client/v3/room_keys/keys", requireAuth(), async (c) => {
     SET count = ?, etag = ?
     WHERE user_id = ? AND version = ?
   `)
-    .bind(totalCount?.count || 0, newEtag, userId, version)
+    .bind(totalCount?.count ?? 0, newEtag, userId, version)
     .run();
 
   return c.json({
-    count: totalCount?.count || 0,
+    count: totalCount?.count ?? 0,
     etag: newEtag,
   });
 });
@@ -428,11 +428,11 @@ app.put("/_matrix/client/v3/room_keys/keys/:roomId", requireAuth(), async (c) =>
     SET count = ?, etag = ?
     WHERE user_id = ? AND version = ?
   `)
-    .bind(totalCount?.count || 0, newEtag, userId, version)
+    .bind(totalCount?.count ?? 0, newEtag, userId, version)
     .run();
 
   return c.json({
-    count: totalCount?.count || 0,
+    count: totalCount?.count ?? 0,
     etag: newEtag,
   });
 });
@@ -516,11 +516,11 @@ app.put("/_matrix/client/v3/room_keys/keys/:roomId/:sessionId", requireAuth(), a
     SET count = ?, etag = ?
     WHERE user_id = ? AND version = ?
   `)
-    .bind(totalCount?.count || 0, newEtag, userId, version)
+    .bind(totalCount?.count ?? 0, newEtag, userId, version)
     .run();
 
   return c.json({
-    count: totalCount?.count || 0,
+    count: totalCount?.count ?? 0,
     etag: newEtag,
   });
 });
@@ -783,11 +783,11 @@ app.delete("/_matrix/client/v3/room_keys/keys/:roomId", requireAuth(), async (c)
     SET count = ?, etag = ?
     WHERE user_id = ? AND version = ?
   `)
-    .bind(totalCount?.count || 0, newEtag, userId, version)
+    .bind(totalCount?.count ?? 0, newEtag, userId, version)
     .run();
 
   return c.json({
-    count: totalCount?.count || 0,
+    count: totalCount?.count ?? 0,
     etag: newEtag,
   });
 });
@@ -829,11 +829,11 @@ app.delete("/_matrix/client/v3/room_keys/keys/:roomId/:sessionId", requireAuth()
     SET count = ?, etag = ?
     WHERE user_id = ? AND version = ?
   `)
-    .bind(totalCount?.count || 0, newEtag, userId, version)
+    .bind(totalCount?.count ?? 0, newEtag, userId, version)
     .run();
 
   return c.json({
-    count: totalCount?.count || 0,
+    count: totalCount?.count ?? 0,
     etag: newEtag,
   });
 });

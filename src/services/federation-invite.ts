@@ -83,7 +83,7 @@ export async function sendFederationInvite(
   let errcode: string | undefined;
   let message = `Remote server rejected invite with HTTP ${response.status}`;
   try {
-    const body = (await response.json()) as { errcode?: unknown; error?: unknown };
+    const body = await response.json();
     if (typeof body.errcode === "string") {
       errcode = body.errcode;
     }

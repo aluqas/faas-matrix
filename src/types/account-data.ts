@@ -5,7 +5,7 @@ import type { AccountDataEventOf } from "./matrix-typed";
 
 export type AccountDataEventType = string;
 export type AccountDataContent = JsonObject;
-export type AccountDataSyncEvent = AccountDataEventOf<AccountDataContent, AccountDataEventType>;
+export type AccountDataSyncEvent = AccountDataEventOf;
 export type E2EEAccountDataMap = Record<string, AccountDataContent>;
 
 export interface StoredAccountDataRecord {

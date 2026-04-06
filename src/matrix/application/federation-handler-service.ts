@@ -483,8 +483,8 @@ export async function handleFederationDeviceListEdu(
   await repository.upsertRemoteDeviceList(
     deviceUserId,
     deviceId,
-    Number(content.stream_id || 0),
-    (content.keys as Record<string, unknown> | undefined) || null,
+    Number(content.stream_id ?? 0),
+    (content.keys as Record<string, unknown> | undefined) ?? null,
     typeof content.device_display_name === "string" ? content.device_display_name : undefined,
     Boolean(content.deleted),
   );

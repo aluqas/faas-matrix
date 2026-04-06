@@ -79,11 +79,11 @@ export function traceEffectPromiseEffect<A>(
   );
 }
 
-export async function traceEffectPromise<A>(
+export function traceEffectPromise<A>(
   label: string,
   fields: DebugFields,
   operation: () => Promise<A>,
   options: TraceOptions<A> = {},
 ): Promise<A> {
-  return await runFederationEffect(traceEffectPromiseEffect(label, fields, operation, options));
+  return runFederationEffect(traceEffectPromiseEffect(label, fields, operation, options));
 }

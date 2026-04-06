@@ -103,8 +103,8 @@ function parseFederationRoom(
     ...(typeof room.avatar_url === "string" ? { avatar_url: room.avatar_url } : {}),
     ...(typeof room.join_rule === "string" ? { join_rule: room.join_rule } : {}),
     num_joined_members: room.num_joined_members,
-    world_readable: room.world_readable === true,
-    guest_can_join: room.guest_can_join === true,
+    world_readable: room.world_readable,
+    guest_can_join: room.guest_can_join,
     children_state,
   };
 }
@@ -160,7 +160,7 @@ async function fetchRemoteSnapshot(
         continue;
       }
 
-      const body = (await response.json()) as FederationSpaceHierarchyResponse;
+      const body = await response.json();
       const room = parseFederationRoom(body.room);
       if (!room) {
         continue;
@@ -210,13 +210,13 @@ app.get("/_matrix/client/v1/rooms/:roomId/hierarchy", requireAuth(), async (c) =
     return Errors.notFound("Room not found").toResponse();
   }
 
-  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
   const offsetToken = c.req.query("from");
   const offset =
     offsetToken && offsetToken.startsWith("offset_")
       ? Math.max(0, Number.parseInt(offsetToken.slice("offset_".length), 10) || 0)
       : 0;
-  const maxDepth = Math.max(0, parseInt(c.req.query("max_depth") || "100", 10));
+  const maxDepth = Math.max(0, parseInt(c.req.query("max_depth") ?? "100", 10));
   const suggestedOnly = c.req.query("suggested_only") === "true";
 
   const rooms: SpaceHierarchyRoom[] = [];

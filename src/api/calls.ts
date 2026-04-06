@@ -52,9 +52,9 @@ app.get("/_matrix/client/v3/rooms/:roomId/call", requireAuth(), async (c) => {
   try {
     const content = JSON.parse(callState.content);
     return c.json({
-      active: content.active || false,
+      active: content.active ?? false,
       callId: content.call_id,
-      participants: content.participants || [],
+      participants: content.participants ?? [],
       startedAt: content.started_at,
     });
   } catch {

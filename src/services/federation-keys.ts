@@ -223,7 +223,7 @@ async function fetchKeysFromRemote(
   }
 
   // Process old keys (for verifying historical signatures)
-  for (const [keyId, keyData] of Object.entries(keyResponse.old_verify_keys || {})) {
+  for (const [keyId, keyData] of Object.entries(keyResponse.old_verify_keys ?? {})) {
     try {
       const keyBytes = decodeMatrixBase64(keyData.key);
       if (keyBytes.length !== 32) continue;
@@ -236,7 +236,7 @@ async function fetchKeysFromRemote(
       key_id: keyId,
       public_key: normalizeMatrixBase64(keyData.key),
       valid_from: 0,
-      valid_until: keyData.expired_ts || now,
+      valid_until: keyData.expired_ts ?? now,
       fetched_at: now,
       verified: false, // Old keys don't need self-signature verification
     });
@@ -305,7 +305,7 @@ export async function getRemoteKeysWithNotarySignature(
   notaryPrivateKey: JsonWebKey,
 ): Promise<ServerKeyResponse[]> {
   // Check cache first for keys meeting validity requirement
-  const cacheKey = `notary:keys:${serverName}:${keyId || "all"}`;
+  const cacheKey = `notary:keys:${serverName}:${keyId ?? "all"}`;
   const cached = await cache.get(cacheKey);
 
   if (cached) {
@@ -442,7 +442,7 @@ export async function getRemoteServerKey(
   cache: KVNamespace,
 ): Promise<RemoteServerKey | null> {
   const keys = await fetchRemoteServerKeys(serverName, db, cache);
-  return keys.find((k) => k.key_id === keyId) || null;
+  return keys.find((k) => k.key_id === keyId) ?? null;
 }
 
 /**

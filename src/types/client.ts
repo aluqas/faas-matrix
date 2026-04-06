@@ -13,16 +13,13 @@ export type { JsonObject };
 
 export type StringMap = Record<string, string>;
 export type JsonObjectMap = Record<string, JsonObject>;
-export type DeviceListRequest = Array<DeviceId | string>;
+export type DeviceListRequest = Array<DeviceId>;
 export type DeviceKeyRequestMap = Record<UserId | string, DeviceListRequest>;
-export type OneTimeKeyClaimDeviceMap = Record<DeviceId | string, string>;
+export type OneTimeKeyClaimDeviceMap = Record<DeviceId, string>;
 export type OneTimeKeyClaimMap = Record<UserId | string, OneTimeKeyClaimDeviceMap>;
-export type UserDeviceKeysMap = Record<
-  UserId | string,
-  Record<DeviceId | string, DeviceKeysPayload>
->;
+export type UserDeviceKeysMap = Record<UserId | string, Record<DeviceId, DeviceKeysPayload>>;
 export type UserCrossSigningKeyMap = Record<UserId | string, CrossSigningKeyPayload>;
-export type DeviceOneTimeKeysMap = Record<DeviceId | string, JsonObjectMap>;
+export type DeviceOneTimeKeysMap = Record<DeviceId, JsonObjectMap>;
 export type UserOneTimeKeysMap = Record<UserId | string, DeviceOneTimeKeysMap>;
 
 export type DeviceKeysPayload = JsonObject & {
@@ -340,7 +337,7 @@ export interface ContentReportRecord {
 }
 
 export interface ToDeviceRequest {
-  messages: Record<UserId | string, Record<DeviceId | string, Record<string, unknown>>>;
+  messages: Record<UserId | string, Record<DeviceId, Record<string, unknown>>>;
 }
 
 export interface IdPProvider {

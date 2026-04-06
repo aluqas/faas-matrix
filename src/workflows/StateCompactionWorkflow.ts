@@ -34,7 +34,7 @@ export class StateCompactionWorkflow extends WorkflowEntrypoint<Env, CompactionP
         .bind(roomId, maxDepth)
         .first<{ count: number }>();
 
-      return result?.count || 0;
+      return result?.count ?? 0;
     });
 
     // Step 2: Prune deep auth chain entries

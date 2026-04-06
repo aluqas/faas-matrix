@@ -7,7 +7,7 @@ class MockD1Database {
     return {
       bind: (...params: unknown[]) => ({
         all: <T>() => {
-          if (/FROM push_rules/.test(query)) {
+          if (query.includes("FROM push_rules")) {
             return { results: [] as T[] };
           }
 
@@ -81,11 +81,11 @@ class MockD1Database {
           return { results: [] as T[] };
         },
         first: <T>() => {
-          if (/event_type = 'm\.fully_read'/.test(query)) {
+          if (query.includes("event_type = 'm.fully_read'")) {
             return null as T | null;
           }
 
-          if (/SELECT stream_ordering FROM events WHERE event_id = \?/.test(query)) {
+          if (query.includes("SELECT stream_ordering FROM events WHERE event_id = ?")) {
             const [eventId] = params;
             const positions: Record<string, number> = {
               $A: 1,
@@ -93,18 +93,16 @@ class MockD1Database {
               $D: 4,
               $G: 7,
             };
-            return (
-              eventId && typeof eventId === "string" && positions[eventId] !== undefined
-                ? ({ stream_ordering: positions[eventId] } as T)
-                : null
-            ) as T | null;
+            return eventId && typeof eventId === "string" && positions[eventId] !== undefined
+              ? ({ stream_ordering: positions[eventId] } as T)
+              : null;
           }
 
-          if (/COUNT\(\*\) as count FROM room_memberships/.test(query)) {
+          if (query.includes("COUNT(*) as count FROM room_memberships")) {
             return { count: 2 } as T;
           }
 
-          if (/SELECT display_name FROM users WHERE user_id = \?/.test(query)) {
+          if (query.includes("SELECT display_name FROM users WHERE user_id = ?")) {
             return { display_name: "Bob" } as T;
           }
 

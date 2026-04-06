@@ -237,8 +237,8 @@ async function fetchRoomMetadataFromDB(
     }
   }
 
-  const joinedCount = (joinedCountResult.results[0] as { count: number } | undefined)?.count || 0;
-  const invitedCount = (invitedCountResult.results[0] as { count: number } | undefined)?.count || 0;
+  const joinedCount = (joinedCountResult.results[0] as { count: number } | undefined)?.count ?? 0;
+  const invitedCount = (invitedCountResult.results[0] as { count: number } | undefined)?.count ?? 0;
 
   return {
     name,

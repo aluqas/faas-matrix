@@ -61,7 +61,7 @@ function toAccountDataSyncEvent(
   row: Pick<AccountDataRow, "event_type" | "content">,
 ): AccountDataSyncEvent {
   return {
-    type: row.event_type as AccountDataEventType,
+    type: row.event_type,
     content: parseStoredAccountDataContent(row.content),
   };
 }

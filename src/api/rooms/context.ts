@@ -52,7 +52,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), asyn
   const userId = c.get("userId");
   const roomId = c.req.param("roomId");
   const eventId = c.req.param("eventId");
-  const limit = Math.min(Number.parseInt(c.req.query("limit") || "10", 10), 100);
+  const limit = Math.min(Number.parseInt(c.req.query("limit") ?? "10", 10), 100);
   const userAgent = c.req.header("User-Agent");
   const isLikelyNSE = limit <= 5;
 

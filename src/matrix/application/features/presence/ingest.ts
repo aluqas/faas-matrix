@@ -20,7 +20,7 @@ export async function ingestPresenceEdu(
     await repository.upsertPresence(
       update.user_id,
       update.presence,
-      update.status_msg || null,
+      update.status_msg ?? null,
       lastActiveTs,
       Boolean(update.currently_active),
     );

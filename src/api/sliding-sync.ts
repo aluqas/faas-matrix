@@ -73,7 +73,7 @@ async function loadConnectionState(
       throw new Error(`DO fetch failed: ${response.status} - ${errorText}`);
     }
 
-    return (await response.json()) as ConnectionState | null;
+    return await response.json();
   } catch (error) {
     console.error("[sliding-sync] Failed to get connection state from DO:", error);
     throw error;
@@ -122,7 +122,7 @@ async function waitForSlidingSyncEvents(
       body: JSON.stringify({ timeout: timeoutMs }),
     }),
   );
-  return (await response.json()) as { hasEvents: boolean };
+  return await response.json();
 }
 
 async function getFullyReadMarker(db: D1Database, userId: string, roomId: string): Promise<string> {
@@ -139,7 +139,7 @@ async function getFullyReadMarker(db: D1Database, userId: string, roomId: string
   }
 
   try {
-    return JSON.parse(fullyReadResult.content).event_id || "";
+    return JSON.parse(fullyReadResult.content).event_id ?? "";
   } catch {
     return "";
   }
@@ -195,7 +195,7 @@ async function getUserRooms(
   }
 
   // Default sort: by recency
-  const sortBy = sort || ["by_recency"];
+  const sortBy = sort ?? ["by_recency"];
   if (sortBy.includes("by_recency")) {
     query += ` ORDER BY last_activity DESC`;
   } else if (sortBy.includes("by_name")) {
@@ -240,7 +240,7 @@ async function getUserRooms(
       roomId: row.room_id,
       membership: row.membership,
       lastActivity: row.last_activity,
-      name: name || undefined,
+      name: name ?? undefined,
       isDm,
     });
   }
@@ -337,7 +337,7 @@ async function getRoomData(
   result.initial = config.initial;
 
   const joinedCount = await getEffectiveJoinedMemberCount(db, roomId);
-  const invitedCount = (invitedCountResult.results[0] as { count: number } | undefined)?.count || 0;
+  const invitedCount = (invitedCountResult.results[0] as { count: number } | undefined)?.count ?? 0;
   result.joined_count = joinedCount;
   result.invited_count = invitedCount;
   result.is_dm = joinedCount <= 2;
@@ -499,7 +499,7 @@ async function getRoomData(
           sender: event.sender,
           origin_server_ts: event.origin_server_ts,
           content: JSON.parse(event.content),
-          state_key: event.state_key || undefined,
+          state_key: event.state_key ?? undefined,
           unsigned: event.unsigned ? JSON.parse(event.unsigned) : undefined,
         };
       } catch {
@@ -510,7 +510,7 @@ async function getRoomData(
           sender: event.sender,
           origin_server_ts: event.origin_server_ts,
           content: {},
-          state_key: event.state_key || undefined,
+          state_key: event.state_key ?? undefined,
         };
       }
     });
@@ -529,7 +529,7 @@ async function getRoomData(
     // Get prev_batch for pagination (only useful for initial sync really)
     if (eventsToProcess.length > 0) {
       const oldestEvent = eventsToProcess[0];
-      result.prev_batch = `s${oldestEvent.stream_ordering || oldestEvent.depth}`;
+      result.prev_batch = `s${oldestEvent.stream_ordering ?? oldestEvent.depth}`;
     }
 
     // limited: true means there are more events than what was returned
@@ -643,7 +643,7 @@ async function getInviteRoomData(
     .first<{ count: number }>();
 
   result.joined_count = joinedCount;
-  result.invited_count = invitedCount?.count || 0;
+  result.invited_count = invitedCount?.count ?? 0;
 
   return result;
 }
@@ -656,9 +656,9 @@ async function buildMsc3575SlidingSyncResponse(
   const db = c.env.DB;
   const syncDO = c.env.SYNC; // Use Durable Object for connection state (not KV - avoids rate limits)
 
-  const connId = body.conn_id || "default";
+  const connId = body.conn_id ?? "default";
   // Note: timeout is parsed but not used yet (for future long-polling support)
-  const _ = Math.min(body.timeout || 0, 30000);
+  const _ = Math.min(body.timeout ?? 0, 30000);
   void _;
 
   // Get current stream position from database
@@ -682,7 +682,7 @@ async function buildMsc3575SlidingSyncResponse(
 
   // IMPORTANT: pos can be in query string OR body - check both
   const queryPos = c.req.query("pos");
-  const posToken = queryPos || body.pos;
+  const posToken = queryPos ?? body.pos;
   const sincePos = posToken ? parseInt(posToken, 10) : 0;
   // Note: isInitialSync is computed but not currently used (for future diagnostics)
   void (!posToken || !connectionState);
@@ -717,15 +717,13 @@ async function buildMsc3575SlidingSyncResponse(
     }
   }
 
-  if (!connectionState) {
-    connectionState = {
-      userId,
-      pos: 0,
-      lastAccess: Date.now(),
-      roomStates: {},
-      listStates: {},
-    };
-  }
+  connectionState ??= {
+    userId,
+    pos: 0,
+    lastAccess: Date.now(),
+    roomStates: {},
+    listStates: {},
+  };
 
   connectionState.pos = currentStreamPos;
   connectionState.lastAccess = Date.now();
@@ -791,7 +789,7 @@ async function buildMsc3575SlidingSyncResponse(
       for (const roomInfo of roomsInRange) {
         const roomState = connectionState.roomStates[roomInfo.roomId];
         const isInitialRoom = !roomState?.sentState;
-        const roomSincePos = isInitialRoom ? 0 : roomState?.lastStreamOrdering || 0;
+        const roomSincePos = isInitialRoom ? 0 : (roomState?.lastStreamOrdering ?? 0);
 
         // Handle invited rooms differently - they get invite_state not timeline
         // Always include invited room data (small payload) so client doesn't lose invites on reconnect
@@ -808,13 +806,13 @@ async function buildMsc3575SlidingSyncResponse(
         // For joined rooms, get full room data
         const roomData = await getRoomData(db, roomInfo.roomId, userId, {
           requiredState: listConfig.required_state,
-          timelineLimit: listConfig.timeline_limit || 10,
+          timelineLimit: listConfig.timeline_limit ?? 10,
           initial: isInitialRoom,
           sinceStreamOrdering: isInitialRoom ? undefined : roomSincePos,
         });
 
         // Check if notification count changed (for marking rooms as read)
-        const hasPrevCount = roomInfo.roomId in (connectionState.roomNotificationCounts || {});
+        const hasPrevCount = roomInfo.roomId in (connectionState.roomNotificationCounts ?? {});
         const prevNotificationCount =
           connectionState.roomNotificationCounts?.[roomInfo.roomId] ?? 0;
         const currentNotificationCount = roomData.notification_count ?? 0;
@@ -856,7 +854,7 @@ async function buildMsc3575SlidingSyncResponse(
         }
 
         // Mark as sent with stream ordering tracking
-        const newStreamOrdering = roomData.maxStreamOrdering || roomSincePos;
+        const newStreamOrdering = roomData.maxStreamOrdering ?? roomSincePos;
         connectionState.roomStates[roomInfo.roomId] = {
           sentState: true,
           lastStreamOrdering: newStreamOrdering,
@@ -888,7 +886,7 @@ async function buildMsc3575SlidingSyncResponse(
 
       const roomState = connectionState.roomStates[roomId];
       const isInitialRoom = !roomState?.sentState;
-      const roomSincePos = isInitialRoom ? 0 : roomState?.lastStreamOrdering || 0;
+      const roomSincePos = isInitialRoom ? 0 : (roomState?.lastStreamOrdering ?? 0);
 
       // Handle invited rooms differently - they get invite_state not timeline
       // Always include invited room data (small payload) so client doesn't lose invites on reconnect
@@ -905,13 +903,13 @@ async function buildMsc3575SlidingSyncResponse(
       // For joined rooms, get full room data
       const roomData = await getRoomData(db, roomId, userId, {
         requiredState: subscription.required_state,
-        timelineLimit: subscription.timeline_limit || 10,
+        timelineLimit: subscription.timeline_limit ?? 10,
         initial: isInitialRoom,
         sinceStreamOrdering: isInitialRoom ? undefined : roomSincePos,
       });
 
       // Check if notification count changed (for marking rooms as read)
-      const hasPrevCount = roomId in (connectionState.roomNotificationCounts || {});
+      const hasPrevCount = roomId in (connectionState.roomNotificationCounts ?? {});
       const prevNotificationCount = connectionState.roomNotificationCounts?.[roomId] ?? 0;
       const currentNotificationCount = roomData.notification_count ?? 0;
       const notificationCountChanged =
@@ -946,7 +944,7 @@ async function buildMsc3575SlidingSyncResponse(
         );
       }
 
-      const newStreamOrdering = roomData.maxStreamOrdering || roomSincePos;
+      const newStreamOrdering = roomData.maxStreamOrdering ?? roomSincePos;
       connectionState.roomStates[roomId] = {
         sentState: true,
         lastStreamOrdering: newStreamOrdering,
@@ -1065,7 +1063,7 @@ function detectNSERequest(
   // NSE typically requests small timeline
   if (body.room_subscriptions) {
     const subscriptions = Object.values(body.room_subscriptions);
-    const allSmallTimeline = subscriptions.every((s) => (s.timeline_limit || 10) <= 5);
+    const allSmallTimeline = subscriptions.every((s) => (s.timeline_limit ?? 10) <= 5);
     if (allSmallTimeline && subscriptions.length > 0) {
       indicators.push("small-timeline-limit");
     }
@@ -1089,7 +1087,7 @@ async function buildSimplifiedSlidingSyncResponse(
   // Capture User-Agent for NSE detection
   const userAgent = c.req.header("User-Agent");
 
-  const connId = body.conn_id || "default";
+  const connId = body.conn_id ?? "default";
 
   // NSE Detection - log potential NSE requests
   const nseDetection = detectNSERequest(userAgent, body);
@@ -1108,7 +1106,7 @@ async function buildSimplifiedSlidingSyncResponse(
   // Parse timeout for long-polling (query string takes precedence, then body, default 0)
   const queryTimeout = c.req.query("timeout");
   const timeout = Math.min(
-    queryTimeout ? parseInt(queryTimeout, 10) : body.timeout || 0,
+    queryTimeout ? parseInt(queryTimeout, 10) : (body.timeout ?? 0),
     25000, // Cap at 25s to stay under Workers 30s limit
   );
 
@@ -1134,7 +1132,7 @@ async function buildSimplifiedSlidingSyncResponse(
   // IMPORTANT: pos can be in query string OR body - check both
   // Element X sends pos in query string, other clients may use body
   const queryPos = c.req.query("pos");
-  const posToken = queryPos || body.pos;
+  const posToken = queryPos ?? body.pos;
   const sincePos = posToken ? parseInt(posToken, 10) : 0;
 
   // Debug logging for connection state (includes user-agent for NSE debugging)
@@ -1188,15 +1186,13 @@ async function buildSimplifiedSlidingSyncResponse(
 
   const isInitialSync = !posToken || sincePos === 0;
 
-  if (!connectionState) {
-    connectionState = {
-      userId,
-      pos: 0,
-      lastAccess: Date.now(),
-      roomStates: {},
-      listStates: {},
-    };
-  }
+  connectionState ??= {
+    userId,
+    pos: 0,
+    lastAccess: Date.now(),
+    roomStates: {},
+    listStates: {},
+  };
 
   // Track whether there are any actual changes to report
   let hasChanges = isInitialSync; // Initial sync always has "changes"
@@ -1205,7 +1201,7 @@ async function buildSimplifiedSlidingSyncResponse(
   connectionState.lastAccess = Date.now();
 
   const response: SlidingSyncResponse = {
-    pos: posToken || String(currentStreamPos), // Start with input pos, update later if changes
+    pos: posToken ?? String(currentStreamPos), // Start with input pos, update later if changes
     lists: {},
     rooms: {},
     extensions: {},
@@ -1264,7 +1260,7 @@ async function buildSimplifiedSlidingSyncResponse(
       for (const roomInfo of roomsInRange) {
         const roomState = connectionState.roomStates[roomInfo.roomId];
         const isInitialRoom = !roomState?.sentState;
-        const roomSincePos = isInitialRoom ? 0 : roomState?.lastStreamOrdering || sincePos;
+        const roomSincePos = isInitialRoom ? 0 : (roomState?.lastStreamOrdering ?? sincePos);
 
         // Handle invited rooms differently - they get invite_state not timeline
         // Always include invited room data (small payload) so client doesn't lose invites on reconnect
@@ -1282,13 +1278,13 @@ async function buildSimplifiedSlidingSyncResponse(
         // For joined rooms, get full room data
         const roomData = await getRoomData(db, roomInfo.roomId, userId, {
           requiredState: listConfig.required_state,
-          timelineLimit: listConfig.timeline_limit || 10,
+          timelineLimit: listConfig.timeline_limit ?? 10,
           initial: isInitialRoom,
           sinceStreamOrdering: isInitialRoom ? undefined : roomSincePos,
         });
 
         // Check if notification count changed (for marking rooms as read)
-        const hasPrevCount = roomInfo.roomId in (connectionState.roomNotificationCounts || {});
+        const hasPrevCount = roomInfo.roomId in (connectionState.roomNotificationCounts ?? {});
         const prevNotificationCount =
           connectionState.roomNotificationCounts?.[roomInfo.roomId] ?? 0;
         const currentNotificationCount = roomData.notification_count ?? 0;
@@ -1331,7 +1327,7 @@ async function buildSimplifiedSlidingSyncResponse(
         }
 
         // Update room state tracking
-        const newStreamOrdering = roomData.maxStreamOrdering || roomSincePos;
+        const newStreamOrdering = roomData.maxStreamOrdering ?? roomSincePos;
         connectionState.roomStates[roomInfo.roomId] = {
           sentState: true,
           lastStreamOrdering: newStreamOrdering,
@@ -1352,18 +1348,18 @@ async function buildSimplifiedSlidingSyncResponse(
   // Process room subscriptions
   if (body.room_subscriptions) {
     for (const [roomId, subscription] of Object.entries(body.room_subscriptions)) {
-      const membershipResult = (await db
+      const membershipResult = await db
         .prepare(`
         SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?
       `)
         .bind(roomId, userId)
-        .first()) as { membership: string } | null;
+        .first();
 
       if (!membershipResult) continue;
 
       const roomState = connectionState.roomStates[roomId];
       const isInitialRoom = !roomState?.sentState;
-      const roomSincePos = isInitialRoom ? 0 : roomState?.lastStreamOrdering || sincePos;
+      const roomSincePos = isInitialRoom ? 0 : (roomState?.lastStreamOrdering ?? sincePos);
 
       // Handle invited rooms differently - they get invite_state not timeline
       // Always include invited room data (small payload) so client doesn't lose invites on reconnect
@@ -1381,13 +1377,13 @@ async function buildSimplifiedSlidingSyncResponse(
       // For joined rooms, get full room data
       const roomData = await getRoomData(db, roomId, userId, {
         requiredState: subscription.required_state,
-        timelineLimit: subscription.timeline_limit || 10,
+        timelineLimit: subscription.timeline_limit ?? 10,
         initial: isInitialRoom,
         sinceStreamOrdering: isInitialRoom ? undefined : roomSincePos,
       });
 
       // Check if notification count changed (for marking rooms as read)
-      const hasPrevCount = roomId in (connectionState.roomNotificationCounts || {});
+      const hasPrevCount = roomId in (connectionState.roomNotificationCounts ?? {});
       const prevNotificationCount = connectionState.roomNotificationCounts?.[roomId] ?? 0;
       const currentNotificationCount = roomData.notification_count ?? 0;
       const notificationCountChanged =
@@ -1428,7 +1424,7 @@ async function buildSimplifiedSlidingSyncResponse(
         );
       }
 
-      const newStreamOrdering = roomData.maxStreamOrdering || roomSincePos;
+      const newStreamOrdering = roomData.maxStreamOrdering ?? roomSincePos;
       connectionState.roomStates[roomId] = {
         sentState: true,
         lastStreamOrdering: newStreamOrdering,
@@ -1554,9 +1550,7 @@ async function buildSimplifiedSlidingSyncResponse(
   connectionState.pos = currentStreamPos;
 
   // Mark initial sync as complete so ephemeral fallback doesn't run again on reconnects
-  if (!connectionState.initialSyncComplete) {
-    connectionState.initialSyncComplete = true;
-  }
+  connectionState.initialSyncComplete ??= true;
 
   // Debug logging for response
   console.log("[sliding-sync] Response:", {

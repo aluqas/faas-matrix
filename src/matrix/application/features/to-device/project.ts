@@ -61,7 +61,7 @@ export async function projectToDeviceMessages(
   const nextBatch =
     messages.results.length > 0
       ? String(messages.results.at(-1)?.stream_position ?? sincePos)
-      : String(maxPos?.max_pos || 0);
+      : String(maxPos?.max_pos ?? 0);
 
   return { events, nextBatch };
 }

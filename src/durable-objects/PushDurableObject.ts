@@ -171,7 +171,7 @@ export class PushDurableObject extends DurableObject<Env> {
           authorization: `bearer ${jwt}`,
           "apns-topic": notification.topic,
           "apns-push-type": notification.payload.aps["content-available"] ? "background" : "alert",
-          "apns-priority": String(notification.priority || 10),
+          "apns-priority": String(notification.priority ?? 10),
           ...(notification.expiration && { "apns-expiration": String(notification.expiration) }),
           ...(notification.collapseId && { "apns-collapse-id": notification.collapseId }),
         },
@@ -182,7 +182,7 @@ export class PushDurableObject extends DurableObject<Env> {
 
       if (response.ok) {
         console.log("[PushDO] APNs success, apns-id:", apnsId);
-        return { success: true, apnsId: apnsId || undefined };
+        return { success: true, apnsId: apnsId ?? undefined };
       }
 
       // Handle APNs error response
@@ -190,7 +190,7 @@ export class PushDurableObject extends DurableObject<Env> {
       let reason = "Unknown";
       try {
         const errorJson = JSON.parse(errorBody);
-        reason = errorJson.reason || "Unknown";
+        reason = errorJson.reason ?? "Unknown";
       } catch {
         reason = errorBody;
       }

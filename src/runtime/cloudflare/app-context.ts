@@ -138,7 +138,7 @@ function createRuntimeCapabilities(
             body: JSON.stringify({ timeout: timeoutMs }),
           }),
         );
-        return response.json() as Promise<{ hasEvents: boolean }>;
+        return response.json();
       },
     },
     federation: {
@@ -155,7 +155,7 @@ function createRuntimeCapabilities(
           return;
         }
         env.ANALYTICS.writeDataPoint({
-          blobs: [metric, JSON.stringify(tags || {})],
+          blobs: [metric, JSON.stringify(tags ?? {})],
           doubles: [value],
           indexes: [metric],
         });
@@ -208,7 +208,9 @@ function createCloudflareAppContext(
 
 export function appContextMiddleware(): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
-    const appContext = createCloudflareAppContext(c.env, (task) => c.executionCtx.waitUntil(task));
+    const appContext = createCloudflareAppContext(c.env, (task) => {
+      c.executionCtx.waitUntil(task);
+    });
     c.set("appContext", appContext);
     await next();
   };

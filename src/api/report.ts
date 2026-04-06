@@ -29,7 +29,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/report/:eventId", requireAuth(), asyn
     body = {};
   }
 
-  const reason = body.reason || "";
+  const reason = body.reason ?? "";
   const score = typeof body.score === "number" ? Math.max(-100, Math.min(0, body.score)) : -100;
 
   // Check if user is a member of the room
@@ -101,7 +101,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/report", requireAuth(), async (c) => 
     body = {};
   }
 
-  const reason = body.reason || "";
+  const reason = body.reason ?? "";
   const score = typeof body.score === "number" ? Math.max(-100, Math.min(0, body.score)) : -100;
 
   // Check if room exists
@@ -161,7 +161,7 @@ app.post("/_matrix/client/v3/users/:reportedUserId/report", requireAuth(), async
     body = {};
   }
 
-  const reason = body.reason || "";
+  const reason = body.reason ?? "";
 
   // Check if reported user exists
   const user = await db
@@ -229,7 +229,7 @@ app.get("/_matrix/client/v3/admin/reports", requireAuth(), async (c) => {
   }
 
   const from = c.req.query("from");
-  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
   const resolved = c.req.query("resolved");
 
   let query = `
@@ -381,7 +381,7 @@ app.post("/_matrix/client/v3/admin/reports/:reportId/resolve", requireAuth(), as
     SET resolved = 1, resolved_by = ?, resolved_at = ?, resolution_note = ?
     WHERE id = ?
   `)
-    .bind(userId, Date.now(), body.note || null, parseInt(reportId, 10))
+    .bind(userId, Date.now(), body.note ?? null, parseInt(reportId, 10))
     .run();
 
   if (result.meta.changes === 0) {

@@ -136,7 +136,7 @@ function checkCreateEvent(event: PDU, _state: RoomStateMap): AuthResult {
   }
 
   // 1.3: room_version must be present
-  const content = event.content as Record<string, unknown>;
+  const content = event.content;
   if (!content.room_version && !content.creator) {
     return { allowed: false, error: "m.room.create must have creator or room_version" };
   }

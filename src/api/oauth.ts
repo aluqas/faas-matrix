@@ -110,15 +110,15 @@ app.post("/oauth/register", async (c) => {
   const clientSecretHash = await hashClientSecret(clientSecret);
 
   // Default values
-  const grantTypes = body.grant_types || ["authorization_code"];
-  const responseTypes = body.response_types || ["code"];
-  const tokenEndpointAuthMethod = body.token_endpoint_auth_method || "client_secret_basic";
+  const grantTypes = body.grant_types ?? ["authorization_code"];
+  const responseTypes = body.response_types ?? ["code"];
+  const tokenEndpointAuthMethod = body.token_endpoint_auth_method ?? "client_secret_basic";
 
   // Store client in KV
   const client: OAuthClient = {
     client_id: clientId,
     client_secret_hash: tokenEndpointAuthMethod === "none" ? null : clientSecretHash,
-    client_name: body.client_name || "Unknown Client",
+    client_name: body.client_name ?? "Unknown Client",
     redirect_uris: body.redirect_uris,
     grant_types: grantTypes,
     response_types: responseTypes,
@@ -159,11 +159,11 @@ app.get("/oauth/authorize", async (c) => {
   const clientId = c.req.query("client_id");
   const redirectUri = c.req.query("redirect_uri");
   const responseType = c.req.query("response_type");
-  const scope = c.req.query("scope") || "openid";
+  const scope = c.req.query("scope") ?? "openid";
   const state = c.req.query("state");
   const nonce = c.req.query("nonce");
   const codeChallenge = c.req.query("code_challenge");
-  const codeChallengeMethod = c.req.query("code_challenge_method") || "plain";
+  const codeChallengeMethod = c.req.query("code_challenge_method") ?? "plain";
 
   // Validate required parameters
   if (!clientId) {
@@ -327,13 +327,13 @@ app.post("/oauth/authorize", async (c) => {
 // POST /oauth/token - Exchange authorization code for tokens
 app.post("/oauth/token", async (c) => {
   // Parse request body (form-urlencoded)
-  const contentType = c.req.header("Content-Type") || "";
+  const contentType = c.req.header("Content-Type") ?? "";
   let params: Record<string, string> = {};
 
   if (contentType.includes("application/x-www-form-urlencoded")) {
     const formData = await c.req.formData();
     for (const [key, value] of formData.entries()) {
-      params[key] = value as string;
+      params[key] = value;
     }
   } else if (contentType.includes("application/json")) {
     params = await c.req.json();
@@ -439,7 +439,7 @@ app.post("/oauth/token", async (c) => {
       const valid = await verifyCodeChallenge(
         codeVerifier,
         authCode.code_challenge,
-        authCode.code_challenge_method || "plain",
+        authCode.code_challenge_method ?? "plain",
       );
       if (!valid) {
         return c.json({ error: "invalid_grant", error_description: "Invalid code_verifier" }, 400);
@@ -618,13 +618,13 @@ app.post("/oauth/userinfo", requireAuth(), (c) => {
 
 // POST /oauth/revoke - Revoke a token
 app.post("/oauth/revoke", async (c) => {
-  const contentType = c.req.header("Content-Type") || "";
+  const contentType = c.req.header("Content-Type") ?? "";
   let params: Record<string, string> = {};
 
   if (contentType.includes("application/x-www-form-urlencoded")) {
     const formData = await c.req.formData();
     for (const [key, value] of formData.entries()) {
-      params[key] = value as string;
+      params[key] = value;
     }
   } else if (contentType.includes("application/json")) {
     params = await c.req.json();
@@ -661,13 +661,13 @@ app.post("/oauth/revoke", async (c) => {
 
 // POST /oauth/introspect - Introspect a token
 app.post("/oauth/introspect", async (c) => {
-  const contentType = c.req.header("Content-Type") || "";
+  const contentType = c.req.header("Content-Type") ?? "";
   let params: Record<string, string> = {};
 
   if (contentType.includes("application/x-www-form-urlencoded")) {
     const formData = await c.req.formData();
     for (const [key, value] of formData.entries()) {
-      params[key] = value as string;
+      params[key] = value;
     }
   } else if (contentType.includes("application/json")) {
     params = await c.req.json();
@@ -694,7 +694,7 @@ app.post("/oauth/introspect", async (c) => {
       return c.json({
         active: true,
         sub: payload.sub,
-        client_id: payload.client_id || payload.azp,
+        client_id: payload.client_id ?? payload.azp,
         token_type: "Bearer",
         exp: payload.exp,
         iat: payload.iat,
@@ -1030,7 +1030,7 @@ app.post("/oauth/authorize/uia", async (c) => {
       .bind(userId)
       .first<{ count: number }>();
 
-    if ((idpLink?.count || 0) > 0) {
+    if ((idpLink?.count ?? 0) > 0) {
       // OIDC user - just verify the user ID matches the session
       if (userId !== session.user_id) {
         return c.html(
@@ -1090,7 +1090,7 @@ app.post("/oauth/authorize/uia", async (c) => {
   // Mark the cross-signing reset as approved per MSC4312
   // Use org.matrix.cross_signing_reset (unstable) as the primary marker
   // Also mark m.oauth (stable) and legacy m.login.oauth for compatibility
-  session.completed_stages = session.completed_stages || [];
+  session.completed_stages = session.completed_stages ?? [];
   const stagesToMark = ["org.matrix.cross_signing_reset", "m.oauth", "m.login.oauth"];
   for (const stage of stagesToMark) {
     if (!session.completed_stages.includes(stage)) {

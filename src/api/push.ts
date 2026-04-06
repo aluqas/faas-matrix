@@ -466,7 +466,7 @@ app.get("/_matrix/client/v3/pushers", requireAuth(), async (c) => {
     app_id: p.app_id,
     app_display_name: p.app_display_name,
     device_display_name: p.device_display_name,
-    profile_tag: p.profile_tag || undefined,
+    profile_tag: p.profile_tag ?? undefined,
     lang: p.lang,
     data: parsePusherDataJson(p.data) ?? {},
   }));
@@ -528,7 +528,7 @@ app.post("/_matrix/client/v3/pushers/set", requireAuth(), async (c) => {
       .prepare(`
       DELETE FROM pushers WHERE user_id = ? AND pushkey = ? AND app_id = ?
     `)
-      .bind(userId, pushkey, app_id || "")
+      .bind(userId, pushkey, app_id ?? "")
       .run();
 
     await runClientEffect(
@@ -583,7 +583,7 @@ app.post("/_matrix/client/v3/pushers/set", requireAuth(), async (c) => {
       app_id,
       app_display_name,
       device_display_name,
-      profile_tag || null,
+      profile_tag ?? null,
       lang,
       JSON.stringify(data),
     )
@@ -1015,7 +1015,7 @@ app.put("/_matrix/client/v3/pushrules/:scope/:kind/:ruleId/actions", requireAuth
 app.get("/_matrix/client/v3/notifications", requireAuth(), async (c) => {
   const userId = c.get("userId");
   const from = c.req.query("from");
-  const limit = parseInt(c.req.query("limit") || "20", 10);
+  const limit = parseInt(c.req.query("limit") ?? "20", 10);
   const only = c.req.query("only"); // 'highlight' to only show highlights
   const db = c.env.DB;
 
@@ -1349,8 +1349,8 @@ export async function sendPushNotification(
     pusherData = parsedPusherData;
 
     // Prepare sender and room display names
-    const senderDisplayName = event.sender_display_name || getMxidLocalpart(event.sender);
-    const roomDisplayName = event.room_name || "Chat";
+    const senderDisplayName = event.sender_display_name ?? getMxidLocalpart(event.sender);
+    const roomDisplayName = event.room_name ?? "Chat";
 
     // Check if this is an iOS pusher (has default_payload.aps)
     const isIOSPusher = pusherData.default_payload?.["aps"] !== undefined;
@@ -1649,7 +1649,7 @@ async function sendDirectAPNs(
       }),
     );
 
-    const result = (await response.json()) as { success: boolean; apnsId?: string; error?: string };
+    const result = await response.json();
 
     if (result.success) {
       await runClientEffect(
@@ -1706,7 +1706,7 @@ export async function notifyRoomMembersOfMessage(
   `)
     .bind(event.room_id)
     .first<{ count: number }>();
-  const roomMemberCount = memberCountResult?.count || 0;
+  const roomMemberCount = memberCountResult?.count ?? 0;
 
   // Get sender's display name from room membership
   const senderMembership = await db
@@ -1716,7 +1716,7 @@ export async function notifyRoomMembersOfMessage(
   `)
     .bind(event.room_id, event.sender)
     .first<{ display_name: string | null }>();
-  const senderDisplayName = senderMembership?.display_name || getMxidLocalpart(event.sender);
+  const senderDisplayName = senderMembership?.display_name ?? getMxidLocalpart(event.sender);
 
   // Get room name from state
   const roomNameEvent = await db
@@ -1764,7 +1764,7 @@ export async function notifyRoomMembersOfMessage(
         .bind(event.room_id, member.user_id, event.room_id, member.user_id)
         .first<{ count: number }>();
 
-      const unreadCount = unreadResult?.count || 1;
+      const unreadCount = unreadResult?.count ?? 1;
 
       // Send push notification with sender display name and room name
       await sendPushNotification(

@@ -43,7 +43,7 @@ export async function getTransaction(
   }
 
   return {
-    eventId: result.event_id || undefined,
+    eventId: result.event_id ?? undefined,
     response: result.response ? JSON.parse(result.response) : undefined,
   };
 }
@@ -66,7 +66,7 @@ export async function storeTransaction(
       event_id = COALESCE(excluded.event_id, transaction_ids.event_id),
       response = COALESCE(excluded.response, transaction_ids.response)
   `)
-    .bind(userId, txnId, eventId || null, response ? JSON.stringify(response) : null)
+    .bind(userId, txnId, eventId ?? null, response ? JSON.stringify(response) : null)
     .run();
 }
 
@@ -106,7 +106,7 @@ export async function checkTransactionIdempotency(
   const existing = await getTransaction(db, userId, txnId);
   if (existing) {
     // Return cached response or construct from eventId
-    const response = existing.response || (existing.eventId ? { event_id: existing.eventId } : {});
+    const response = existing.response ?? (existing.eventId ? { event_id: existing.eventId } : {});
     return { cached: true, response };
   }
 

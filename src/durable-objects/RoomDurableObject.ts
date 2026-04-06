@@ -132,13 +132,7 @@ export class RoomDurableObject extends DurableObject<Env> {
 
   // Set a read receipt for a user
   private async handleSetReceipt(request: Request): Promise<Response> {
-    const body = (await request.json()) as {
-      user_id: string;
-      event_id: string;
-      receipt_type: string;
-      thread_id?: string;
-      ts?: number;
-    };
+    const body = await request.json();
 
     const { user_id, event_id, receipt_type, thread_id } = body;
     const ts = typeof body.ts === "number" ? body.ts : Date.now();
@@ -236,11 +230,7 @@ export class RoomDurableObject extends DurableObject<Env> {
 
   // Set typing state for a user
   private async handleSetTyping(request: Request): Promise<Response> {
-    const body = (await request.json()) as {
-      user_id: string;
-      typing: boolean;
-      timeout?: number;
-    };
+    const body = await request.json();
 
     const { user_id, typing, timeout = 30000 } = body;
     await this.loadTypingCache();

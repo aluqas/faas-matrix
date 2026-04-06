@@ -52,7 +52,7 @@ export async function processFederationTransaction(
     const cachedPdus =
       "pdus" in cached && cached["pdus"] && typeof cached["pdus"] === "object"
         ? (cached["pdus"] as Record<string, unknown>)
-        : (cached as Record<string, unknown>);
+        : cached;
     return {
       pdus: cachedPdus,
       acceptedPduCount: 0,
@@ -73,7 +73,7 @@ export async function processFederationTransaction(
   const processNestedTransaction = (nestedInput: FederationTransactionEnvelope) =>
     processFederationTransaction(ports, nestedInput);
 
-  for (const rawPdu of input.body.pdus || []) {
+  for (const rawPdu of input.body.pdus ?? []) {
     const pduResult = await ingestFederationPdu(
       {
         appContext: ports.appContext,
@@ -122,18 +122,18 @@ export async function processFederationTransaction(
     }
 
     result.pdus[pduResult.eventId] = {
-      error: pduResult.reason || "Unknown error",
+      error: pduResult.reason ?? "Unknown error",
     };
     result.rejectedPduCount += 1;
     await ports.runEffect(
       logger.warn("federation.pdu.rejected", {
         event_id: pduResult.eventId,
-        error_message: pduResult.reason || "Unknown error",
+        error_message: pduResult.reason ?? "Unknown error",
       }),
     );
   }
 
-  for (const rawEdu of input.body.edus || []) {
+  for (const rawEdu of input.body.edus ?? []) {
     try {
       const eduResult = await ingestFederationEdu(
         {

@@ -141,7 +141,7 @@ app.get("/_matrix/key/v2/server", async (c) => {
 
   const response = {
     server_name: serverName,
-    valid_until_ts: keys.results[0]?.valid_until || Date.now() + 365 * 24 * 60 * 60 * 1000,
+    valid_until_ts: keys.results[0]?.valid_until ?? Date.now() + 365 * 24 * 60 * 60 * 1000,
     verify_keys: verifyKeys,
     old_verify_keys: {},
   };
@@ -181,7 +181,7 @@ app.get("/_matrix/key/v2/server/:keyId", async (c) => {
 
   const response: ServerKeyResponse = {
     server_name: serverName,
-    valid_until_ts: key.valid_until || Date.now() + 365 * 24 * 60 * 60 * 1000,
+    valid_until_ts: key.valid_until ?? Date.now() + 365 * 24 * 60 * 60 * 1000,
     verify_keys: {
       [key.key_id]: { key: normalizeMatrixBase64(key.public_key) },
     },
@@ -216,7 +216,7 @@ app.get("/_matrix/federation/v1/media/download/:mediaId", async (c) => {
     .first<{ content_type: string; filename: string | null }>();
 
   const headers = new Headers();
-  headers.set("Content-Type", metadata?.content_type || "application/octet-stream");
+  headers.set("Content-Type", metadata?.content_type ?? "application/octet-stream");
   if (metadata?.filename) {
     headers.set("Content-Disposition", `inline; filename="${metadata.filename}"`);
   }
@@ -227,9 +227,9 @@ app.get("/_matrix/federation/v1/media/download/:mediaId", async (c) => {
 
 app.get("/_matrix/federation/v1/media/thumbnail/:mediaId", async (c) => {
   const mediaId = c.req.param("mediaId");
-  const width = Math.min(Number.parseInt(c.req.query("width") || "96", 10), 1920);
-  const height = Math.min(Number.parseInt(c.req.query("height") || "96", 10), 1920);
-  const method = c.req.query("method") || "scale";
+  const width = Math.min(Number.parseInt(c.req.query("width") ?? "96", 10), 1920);
+  const height = Math.min(Number.parseInt(c.req.query("height") ?? "96", 10), 1920);
+  const method = c.req.query("method") ?? "scale";
 
   const metadata = await c.env.DB.prepare(`SELECT content_type FROM media WHERE media_id = ?`)
     .bind(mediaId)
@@ -374,7 +374,7 @@ async function getRoomPublicInfo(db: D1Database, roomId: string): Promise<any> {
     canonical_alias: aliasEvent ? JSON.parse(aliasEvent.content).alias : undefined,
     avatar_url: avatarEvent ? JSON.parse(avatarEvent.content).url : undefined,
     join_rule: joinRuleEvent ? JSON.parse(joinRuleEvent.content).join_rule : "invite",
-    num_joined_members: memberCount?.count || 0,
+    num_joined_members: memberCount?.count ?? 0,
     world_readable: historyVisibility === "world_readable",
     guest_can_join: guestAccess,
     room_type: roomType,
@@ -382,7 +382,7 @@ async function getRoomPublicInfo(db: D1Database, roomId: string): Promise<any> {
 }
 
 app.get("/_matrix/federation/v1/publicRooms", async (c) => {
-  const limit = Math.min(Number.parseInt(c.req.query("limit") || "100", 10), 500);
+  const limit = Math.min(Number.parseInt(c.req.query("limit") ?? "100", 10), 500);
   const since = c.req.query("since");
   void c.req.query("include_all_networks");
 
@@ -411,7 +411,7 @@ app.get("/_matrix/federation/v1/publicRooms", async (c) => {
 
   const response: any = {
     chunk: chunks.filter(Boolean),
-    total_room_count_estimate: totalCount?.count || 0,
+    total_room_count_estimate: totalCount?.count ?? 0,
   };
   if (hasMore) {
     response.next_batch = `offset_${offset + limit}`;
@@ -437,7 +437,7 @@ app.post("/_matrix/federation/v1/publicRooms", async (c) => {
     return Errors.badJson().toResponse();
   }
 
-  const limit = Math.min(body.limit || 100, 500);
+  const limit = Math.min(body.limit ?? 100, 500);
   const since = body.since;
   const searchTerm = body.filter?.generic_search_term?.toLowerCase();
 
@@ -486,7 +486,7 @@ app.post("/_matrix/federation/v1/publicRooms", async (c) => {
 
   const response: any = {
     chunk: chunks.filter(Boolean),
-    total_room_count_estimate: totalCount?.count || 0,
+    total_room_count_estimate: totalCount?.count ?? 0,
   };
   if (hasMore) {
     response.next_batch = `offset_${offset + limit}`;

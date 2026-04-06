@@ -114,7 +114,7 @@ function canonicalizeJson(value: unknown): unknown {
   }
 
   if (isPlainObject(value)) {
-    const sortedEntries = [...Object.entries(value)].sort(([left], [right]) =>
+    const sortedEntries = Object.entries(value).toSorted(([left], [right]) =>
       left.localeCompare(right),
     );
     return Object.fromEntries(sortedEntries.map(([key, entry]) => [key, canonicalizeJson(entry)]));

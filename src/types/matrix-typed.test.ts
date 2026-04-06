@@ -31,9 +31,7 @@ describe("matrix typed generics", () => {
     type AccountDataContent = JsonObject & { event_id?: string };
     type ToDeviceContent = JsonObject & { body: string };
 
-    expectTypeOf<
-      AccountDataEventOf<AccountDataContent>["content"]
-    >().toEqualTypeOf<AccountDataContent>();
+    expectTypeOf<AccountDataEventOf["content"]>().toEqualTypeOf<AccountDataContent>();
     expectTypeOf<ToDeviceEventOf<ToDeviceContent>["content"]>().toEqualTypeOf<ToDeviceContent>();
   });
 });

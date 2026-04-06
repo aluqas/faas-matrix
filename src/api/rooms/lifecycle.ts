@@ -180,7 +180,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/upgrade", requireAuth(), async (c) =>
     room_version: body.new_version,
     predecessor: {
       room_id: oldRoomId,
-      event_id: lastEvent?.event_id || "",
+      event_id: lastEvent?.event_id ?? "",
     },
   };
   await createNewRoomEvent("m.room.create", createContent, "");
@@ -272,7 +272,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/upgrade", requireAuth(), async (c) =>
       replacement_room: newRoomId,
     },
     origin_server_ts: now,
-    depth: (oldPrevEvent?.depth || 0) + 1,
+    depth: (oldPrevEvent?.depth ?? 0) + 1,
     auth_events: oldAuthEvents,
     prev_events: oldPrevEvent ? [oldPrevEvent.event_id] : [],
   });
@@ -301,7 +301,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/upgrade", requireAuth(), async (c) =>
     state_key: "",
     content: newPowerLevels,
     origin_server_ts: now + 1,
-    depth: (oldPrevEvent?.depth || 0) + 2,
+    depth: (oldPrevEvent?.depth ?? 0) + 2,
     auth_events: oldAuthEvents,
     prev_events: [tombstoneEventId],
   });

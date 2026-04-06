@@ -70,7 +70,7 @@ export function assembleSyncResponseEffect(
               userId: input.userId,
               roomIds: [roomId],
               sincePosition: cursor.events,
-              fullState: input.fullState || forceFullStateRooms.has(roomId),
+              fullState: input.fullState ?? forceFullStateRooms.has(roomId),
               roomFilter: filter?.room,
             },
           ),
@@ -172,7 +172,7 @@ export function assembleSyncResponseEffect(
       (topLevel.deviceLists?.changed?.length ?? 0) > 0 ||
       (topLevel.deviceLists?.left?.length ?? 0) > 0;
 
-    const timeout = Math.min(input.timeout || 0, 30000);
+    const timeout = Math.min(input.timeout ?? 0, 30000);
     if (!hasChanges && timeout > 0 && input.since) {
       yield* ports.query.waitForUserEvents(input.userId, Math.min(timeout, 25000));
       return yield* assembleSyncResponseEffect(ports, {

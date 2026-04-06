@@ -145,7 +145,7 @@ export function parsePusherData(value: unknown): PusherData | null {
   return {
     ...(url !== undefined ? { url } : {}),
     ...(format !== undefined ? { format } : {}),
-    ...(defaultPayload !== undefined ? { default_payload: defaultPayload as JsonObject } : {}),
+    ...(defaultPayload !== undefined ? { default_payload: defaultPayload } : {}),
   };
 }
 
@@ -182,7 +182,7 @@ export function parsePusherRequestBody(value: unknown): PusherRequestBody | null
 
   return {
     ...(pushkey !== undefined ? { pushkey } : {}),
-    ...(kind !== undefined ? { kind: kind as string | null } : {}),
+    ...(kind !== undefined ? { kind: kind } : {}),
     ...(appId !== undefined ? { app_id: appId } : {}),
     ...(appDisplayName !== undefined ? { app_display_name: appDisplayName } : {}),
     ...(deviceDisplayName !== undefined ? { device_display_name: deviceDisplayName } : {}),

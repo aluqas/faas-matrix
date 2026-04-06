@@ -127,7 +127,7 @@ export async function listUserDevices(
   );
 
   return rows.map((row) => ({
-    deviceId: row.device_id as FederationStoredDeviceRecord["deviceId"],
+    deviceId: row.device_id,
     displayName: row.display_name,
   }));
 }

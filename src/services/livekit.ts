@@ -74,7 +74,7 @@ export async function generateLiveKitToken(
       canSubscribe: true,
       canPublishData: true,
     },
-    name: participantName || participantIdentity,
+    name: participantName ?? participantIdentity,
   };
 
   const headerB64 = base64UrlEncode(JSON.stringify(header));
