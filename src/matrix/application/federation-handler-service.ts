@@ -12,6 +12,7 @@ import {
 } from "../../services/database";
 import { checkEventAuth } from "../../services/event-auth";
 import type { MatrixSignatures, Membership, PDU } from "../../types";
+import { toEventId, toRoomId, toUserId } from "../../utils/ids";
 import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
 import type { FederationRepository } from "../repositories/interfaces";
 import type { RealtimeCapability } from "../../foundation/runtime-capabilities";
@@ -59,7 +60,7 @@ export interface FederationStateBundle {
   serversInRoom: string[];
 }
 
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
+function parseJson<T>(value: string | null | undefined, fallback?: T): T | undefined {
   if (!value) {
     return fallback;
   }
@@ -72,17 +73,29 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
 }
 
 function rowToPdu(row: StoredEventRow): PDU {
+  const eventId = toEventId(row.event_id);
+  const roomId = toRoomId(row.room_id);
+  const sender = toUserId(row.sender);
+  if (!eventId || !roomId || !sender) {
+    throw new TypeError("Stored event row contains invalid Matrix identifiers");
+  }
   return {
-    event_id: row.event_id,
-    room_id: row.room_id,
-    sender: row.sender,
+    event_id: eventId,
+    room_id: roomId,
+    sender,
     type: row.event_type,
     state_key: row.state_key ?? undefined,
     content: parseJson<Record<string, unknown>>(row.content, {}),
     origin_server_ts: row.origin_server_ts,
     depth: row.depth,
-    auth_events: parseJson<string[]>(row.auth_events, []),
-    prev_events: parseJson<string[]>(row.prev_events, []),
+    auth_events: (parseJson<string[]>(row.auth_events, []) ?? []).flatMap((id) => {
+      const typedId = toEventId(id);
+      return typedId ? [typedId] : [];
+    }),
+    prev_events: (parseJson<string[]>(row.prev_events, []) ?? []).flatMap((id) => {
+      const typedId = toEventId(id);
+      return typedId ? [typedId] : [];
+    }),
     unsigned: parseJson<Record<string, unknown> | undefined>(row.unsigned),
     hashes: parseJson<{ sha256: string } | undefined>(row.hashes),
     signatures: parseJson<MatrixSignatures | undefined>(row.signatures),
@@ -530,7 +543,11 @@ export async function handleFederationTypingEdu(
       return stateMembership?.membership ?? null;
     },
     async isPartialStateRoom(roomId: string) {
-      return (await getPartialStateJoinForRoom(cache, roomId)) !== null;
+      const typedRoomId = toRoomId(roomId);
+      if (!typedRoomId) {
+        return false;
+      }
+      return (await getPartialStateJoinForRoom(cache, typedRoomId)) !== null;
     },
     async setRoomTyping(roomId: string, userId: string, typing: boolean, timeoutMs?: number) {
       await realtime.setRoomTyping?.(roomId, userId, typing, timeoutMs);
@@ -554,7 +571,10 @@ export async function handleFederationReceiptEdu(
       continue;
     }
 
-    const partialStateRoom = (await getPartialStateJoinForRoom(cache, roomId)) !== null;
+    const typedRoomId = toRoomId(roomId);
+    const partialStateRoom = typedRoomId
+      ? (await getPartialStateJoinForRoom(cache, typedRoomId)) !== null
+      : false;
     for (const [receiptType, receiptsByUser] of Object.entries(receiptsByType)) {
       if (!receiptsByUser || typeof receiptsByUser !== "object" || Array.isArray(receiptsByUser)) {
         continue;

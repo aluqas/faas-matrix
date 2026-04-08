@@ -1,78 +1,91 @@
 import { describe, expect, it } from "vitest";
 import type { AppContext } from "../../../../foundation/app-context";
 import type { SyncRepository } from "../../../repositories/interfaces";
+import type {
+  AccountDataEvent,
+  PDU,
+  StrippedStateEvent,
+  ToDeviceEvent,
+  UserId,
+} from "../../../../types";
+import type {
+  ReceiptEvent,
+  UnreadNotificationSummary,
+  FilterDefinition,
+  MembershipRecord,
+} from "../../../repositories/interfaces";
 import { projectTopLevelSync } from "./top-level";
 
 class FakeSyncRepository implements SyncRepository {
-  loadFilter() {
+  async loadFilter(): Promise<FilterDefinition | null> {
     return null;
   }
-  getLatestStreamPosition() {
+  async getLatestStreamPosition(): Promise<number> {
     return 12;
   }
-  getLatestDeviceKeyPosition() {
+  async getLatestDeviceKeyPosition(): Promise<number> {
     return 20;
   }
-  getToDeviceMessages() {
+  async getToDeviceMessages(): Promise<{ events: ToDeviceEvent[]; nextBatch: string }> {
     return {
       events: [{ sender: "@alice:test", type: "m.room_key", content: { key: "k" } }],
       nextBatch: "9",
     };
   }
-  getOneTimeKeyCounts() {
+  async getOneTimeKeyCounts(): Promise<Record<string, number>> {
     return { signed_curve25519: 2 };
   }
-  getUnusedFallbackKeyTypes() {
+  async getUnusedFallbackKeyTypes(): Promise<string[]> {
     return ["signed_curve25519"];
   }
   getDeviceListChanges(
     _userId: string,
     sinceEventPosition: number,
     sinceDeviceKeyPosition: number,
-  ) {
+  ): Promise<{ changed: UserId[]; left: UserId[] }> {
     if (sinceEventPosition === 0 && sinceDeviceKeyPosition === 0) {
-      return { changed: ["@bootstrap:test"], left: [] };
+      return Promise.resolve({ changed: ["@bootstrap:test"], left: [] });
     }
-    return { changed: ["@delta:test"], left: ["@left:test"] };
+    return Promise.resolve({ changed: ["@delta:test"], left: ["@left:test"] });
   }
-  getGlobalAccountData() {
+  async getGlobalAccountData(): Promise<AccountDataEvent[]> {
     return [{ type: "m.direct", content: { "@alice:test": ["!room:test"] } }];
   }
-  getRoomAccountData() {
+  async getRoomAccountData(): Promise<AccountDataEvent[]> {
     return [];
   }
-  getUserRooms() {
+  async getUserRooms(): Promise<string[]> {
     return [];
   }
-  getMembership() {
+  async getMembership(): Promise<MembershipRecord | null> {
     return null;
   }
-  getEventsSince() {
+  async getEventsSince(): Promise<PDU[]> {
     return [];
   }
-  getEvent() {
+  async getEvent(): Promise<PDU | null> {
     return null;
   }
-  getRoomState() {
+  async getRoomState(): Promise<PDU[]> {
     return [];
   }
-  getInviteStrippedState() {
+  async getInviteStrippedState(): Promise<StrippedStateEvent[]> {
     return [];
   }
-  getReceiptsForRoom() {
+  async getReceiptsForRoom(): Promise<ReceiptEvent> {
     return { type: "m.receipt", content: {} };
   }
-  getUnreadNotificationSummary() {
+  async getUnreadNotificationSummary(): Promise<UnreadNotificationSummary> {
     return {
       room: { notification_count: 0, highlight_count: 0 },
       main: { notification_count: 0, highlight_count: 0 },
       threads: {},
     };
   }
-  getTypingUsers() {
+  async getTypingUsers(): Promise<string[]> {
     return [];
   }
-  waitForUserEvents() {
+  async waitForUserEvents(): Promise<{ hasEvents: boolean }> {
     return { hasEvents: false };
   }
 }
@@ -149,7 +162,7 @@ function createAppContext(): AppContext {
     },
     services: {},
     defer() {},
-  } as AppContext;
+  } as unknown as AppContext;
 }
 
 describe("sync top-level contracts", () => {

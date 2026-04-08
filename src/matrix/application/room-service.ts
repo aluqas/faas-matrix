@@ -1,13 +1,24 @@
+import { Effect } from "effect";
+import { parseDeviceKeysPayload } from "../../api/keys-contracts";
 import type { AppContext } from "../../foundation/app-context";
 import { withIdempotency, type IdempotencyStore } from "../../foundation/idempotency";
-import { Errors, MatrixApiError } from "../../utils/errors";
+import { getServersInEncryptedRoomsWithUser, getUserDevices } from "../../services/database";
+import { checkEventAuth } from "../../services/event-auth";
+import {
+  createFederationFanoutPorts,
+  fanoutEventToRemoteServersWithPorts,
+} from "../../services/federation-fanout";
+import { sendFederationInvite } from "../../services/federation-invite";
+import { federationGet, federationPut, getServerSigningKey } from "../../services/federation-keys";
 import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
 import {
   ErrorCodes,
+  type EventId,
   type MatrixSignatures,
   type PDU,
   type RoomJoinWorkflowStatus,
 } from "../../types";
+import { isJsonObject } from "../../types/common";
 import type {
   CreateRoomInput,
   InviteRoomInput,
@@ -17,23 +28,42 @@ import type {
   ModerateRoomInput,
   SendEventInput,
 } from "../../types/rooms";
+import { calculateContentHash, signJson } from "../../utils/crypto";
+import { Errors, MatrixApiError } from "../../utils/errors";
+import { parseUserId, toEventId, toRoomId } from "../../utils/ids";
 import type { EventPipeline } from "../domain/event-pipeline";
 import type { RoomRepository } from "../repositories/interfaces";
+import { DomainError, toMatrixApiError } from "./domain-error";
+import { emitEffectWarning } from "./effect-debug";
+import { runClientEffect } from "./effect-runtime";
+import { publishDeviceListUpdatesForNewlySharedServers } from "./features/device-lists/command";
 import {
-  createInitialRoomEvents,
-  createMembershipEvent,
-  getServerFromRoomId,
-} from "./rooms-support";
-import { sendFederationInvite } from "../../services/federation-invite";
-import { federationGet, federationPut, getServerSigningKey } from "../../services/federation-keys";
+  decideInvitePermission,
+  loadInvitePermissionConfig,
+} from "./features/invite-permissions/policy";
+import { getSharedServersInEncryptedRoomsWithUserIncludingPartialState } from "./features/partial-state/shared-servers";
 import {
-  createFederationFanoutPorts,
-  fanoutEventToRemoteServersWithPorts,
-} from "../../services/federation-fanout";
-import { getServersInEncryptedRoomsWithUser, getUserDevices } from "../../services/database";
-import { calculateContentHash, signJson } from "../../utils/crypto";
-import { parseUserId } from "../../utils/ids";
-import { parseDeviceKeysPayload } from "../../api/keys-contracts";
+  buildModerationAuthorizationContext,
+  buildModerationMembershipEvent,
+} from "./features/rooms/moderation";
+import { getPowerLevelsContent, getUserPowerLevel } from "./features/rooms/power-levels";
+import {
+  assertCreateEventNotReplaceable,
+  deriveV12RoomId,
+  usesHashBasedRoomId,
+} from "./features/rooms/room-version-semantics";
+import {
+  assertOwnedStateEventAllowed,
+  assertRedactionAllowed,
+  buildRoomEvent,
+  hasEquivalentStateEvent,
+} from "./features/rooms/send-event";
+import {
+  ensureFederatedRoomStub,
+  persistFederationMembershipEvent,
+  persistInviteStrippedState,
+} from "./federation-handler-service";
+import { withLogContext, type LogContext } from "./logging";
 import {
   authorizeBan,
   authorizeKick,
@@ -45,45 +75,17 @@ import {
   validateLeavePreconditions,
   type JoinRulesContent,
 } from "./room-membership-policy";
-import { Effect } from "effect";
-import { runClientEffect } from "./effect-runtime";
-import { emitEffectWarning } from "./effect-debug";
-import { withLogContext, type LogContext } from "./logging";
-import { DomainError, toMatrixApiError } from "./domain-error";
 import {
   validateCreateRoomRequest,
   validateInviteRoomRequest,
   validateJoinRoomRequest,
   validateModerationRequest,
 } from "./room-validation";
-import { publishDeviceListUpdatesForNewlySharedServers } from "./features/device-lists/command";
-import { getSharedServersInEncryptedRoomsWithUserIncludingPartialState } from "./features/partial-state/shared-servers";
 import {
-  decideInvitePermission,
-  loadInvitePermissionConfig,
-} from "./features/invite-permissions/policy";
-import {
-  buildModerationAuthorizationContext,
-  buildModerationMembershipEvent,
-} from "./features/rooms/moderation";
-import { getPowerLevelsContent, getUserPowerLevel } from "./features/rooms/power-levels";
-import {
-  assertOwnedStateEventAllowed,
-  assertRedactionAllowed,
-  buildRoomEvent,
-  hasEquivalentStateEvent,
-} from "./features/rooms/send-event";
-import {
-  assertCreateEventNotReplaceable,
-  deriveV12RoomId,
-  usesHashBasedRoomId,
-} from "./features/rooms/room-version-semantics";
-import {
-  ensureFederatedRoomStub,
-  persistFederationMembershipEvent,
-  persistInviteStrippedState,
-} from "./federation-handler-service";
-import { checkEventAuth } from "../../services/event-auth";
+  createInitialRoomEvents,
+  createMembershipEvent,
+  getServerFromRoomId,
+} from "./rooms-support";
 
 export type {
   CreateRoomInput,
@@ -236,7 +238,12 @@ export class MatrixRoomService {
     excludeServers: string[] = [],
   ): Promise<void> {
     const db = this.getFederationDb();
-    const queuePdu = this.appContext.capabilities.federation?.queuePdu;
+    const federation = this.appContext.capabilities.federation;
+    const queuePduMethod = federation?.queuePdu;
+    const queuePdu = queuePduMethod
+      ? (destination: string, targetRoomId: string, pdu: PDU) =>
+          queuePduMethod(destination, targetRoomId, pdu)
+      : undefined;
     if (!db || !queuePdu) {
       return;
     }
@@ -325,13 +332,18 @@ export class MatrixRoomService {
       roomId = await this.appContext.capabilities.id.generateRoomId(serverName);
     }
 
+    const typedRoomId = toRoomId(roomId);
+    if (!typedRoomId) {
+      throw Errors.invalidParam("room_id", "Invalid generated room ID");
+    }
+
     const isPublic = visibility === "public";
-    await this.repository.createRoom(roomId, version, input.userId, isPublic);
+    await this.repository.createRoom(typedRoomId, version, input.userId, isPublic);
 
     const createEventId = await createInitialRoomEvents(
       this.repository,
       serverName,
-      roomId,
+      typedRoomId,
       version,
       input.userId,
       {
@@ -351,8 +363,9 @@ export class MatrixRoomService {
         ...withOptionalValue("invite", invite ? [...invite] : undefined),
         ...withOptionalValue("room_alias_local_part", roomAliasLocalPart),
       },
-      this.appContext.capabilities.id.generateEventId,
-      this.appContext.capabilities.clock.now,
+      (targetServerName, roomVersion) =>
+        this.appContext.capabilities.id.generateEventId(targetServerName, roomVersion),
+      () => this.appContext.capabilities.clock.now(),
     );
 
     await this.repository.upsertRoomAccountData(input.userId, roomId, "m.fully_read", {
@@ -365,16 +378,20 @@ export class MatrixRoomService {
         roomAliasLocalPart,
         this.appContext.capabilities.config.serverName,
       );
-      await this.repository.createRoomAlias(roomAlias, roomId, input.userId);
+      await this.repository.createRoomAlias(roomAlias, typedRoomId, input.userId);
     }
 
-    await this.repository.notifyUsersOfEvent(roomId, roomId, "m.room.create");
+    await this.repository.notifyUsersOfEvent(typedRoomId, typedRoomId, "m.room.create");
 
     if (Array.isArray(invite)) {
       const db = this.appContext.capabilities.sql.connection as D1Database;
       const cache = this.appContext.capabilities.kv.cache as KVNamespace;
       for (const invitee of invite) {
-        const inviteEvent = await this.repository.getStateEvent(roomId, "m.room.member", invitee);
+        const inviteEvent = await this.repository.getStateEvent(
+          typedRoomId,
+          "m.room.member",
+          invitee,
+        );
         if (!inviteEvent) {
           continue;
         }
@@ -456,9 +473,13 @@ export class MatrixRoomService {
     );
 
     if ((!room && (isRemoteRoom || preferredRemoteServer)) || needsRemoteStubJoin) {
+      const validatedRoomId = toRoomId(validated.roomId);
+      if (!validatedRoomId) {
+        throw Errors.invalidParam("roomId", "Invalid room ID");
+      }
       const status: RoomJoinWorkflowStatus =
         await this.appContext.capabilities.workflow.createRoomJoin({
-          roomId: validated.roomId,
+          roomId: validatedRoomId,
           userId: input.userId,
           isRemote: true,
           ...withOptionalValue("remoteServer", preferredRemoteServer),
@@ -566,8 +587,9 @@ export class MatrixRoomService {
           sender: auth.userId,
           membership: "join",
           serverName: this.appContext.capabilities.config.serverName,
-          generateEventId: this.appContext.capabilities.id.generateEventId,
-          now: this.appContext.capabilities.clock.now,
+          generateEventId: (targetServerName, roomVersion) =>
+            this.appContext.capabilities.id.generateEventId(targetServerName, roomVersion),
+          now: () => this.appContext.capabilities.clock.now(),
           ...withOptionalValue("roomVersion", auth.roomVersion),
           ...withOptionalValue("currentMembershipEventId", currentMembership?.eventId),
           ...withOptionalValue("joinRulesEventId", joinRulesEvent?.event_id),
@@ -615,7 +637,12 @@ export class MatrixRoomService {
 
             await this.fanoutEventToFederation(validated.roomId, event);
 
-            const queueEdu = this.appContext.capabilities.federation?.queueEdu;
+            const federation = this.appContext.capabilities.federation;
+            const queueEduMethod = federation?.queueEdu;
+            const queueEdu = queueEduMethod
+              ? (destination: string, eduType: string, content: Record<string, unknown>) =>
+                  queueEduMethod(destination, eduType, content)
+              : undefined;
             if (!queueEdu) {
               return;
             }
@@ -633,7 +660,8 @@ export class MatrixRoomService {
                 getUserDevices: (userId) => getUserDevices(db, userId),
                 getStoredDeviceKeys: (userId, deviceId) =>
                   getStoredDeviceKeysFromKv(deviceKeysKv, userId, deviceId),
-                queueEdu,
+                queueEdu: (destination, eduType, content) =>
+                  queueEdu(destination, eduType, content),
               },
             );
 
@@ -719,13 +747,18 @@ export class MatrixRoomService {
       }
 
       const makeKnock = await makeKnockResponse.json();
-      if (!makeKnock.event) {
+      if (!isJsonObject(makeKnock) || !isJsonObject(makeKnock.event)) {
         throw Errors.unknown("Remote server did not return a knock template");
       }
 
-      const eventId = await this.appContext.capabilities.id.generateEventId(
-        this.appContext.capabilities.config.serverName,
+      const eventId = toEventId(
+        await this.appContext.capabilities.id.generateEventId(
+          this.appContext.capabilities.config.serverName,
+        ),
       );
+      if (!eventId) {
+        throw Errors.unknown("Failed to generate a valid event ID");
+      }
       const event: PDU = {
         event_id: eventId,
         room_id: input.roomId,
@@ -737,9 +770,19 @@ export class MatrixRoomService {
           ...(input.reason !== undefined ? { reason: input.reason } : {}),
         },
         origin_server_ts: this.appContext.capabilities.clock.now(),
-        depth: makeKnock.event.depth ?? 1,
-        auth_events: makeKnock.event.auth_events ?? [],
-        prev_events: makeKnock.event.prev_events ?? [],
+        depth: typeof makeKnock.event.depth === "number" ? makeKnock.event.depth : 1,
+        auth_events: Array.isArray(makeKnock.event.auth_events)
+          ? makeKnock.event.auth_events.flatMap((id) => {
+              const typedId = typeof id === "string" ? toEventId(id) : null;
+              return typedId ? [typedId] : [];
+            })
+          : [],
+        prev_events: Array.isArray(makeKnock.event.prev_events)
+          ? makeKnock.event.prev_events.flatMap((id) => {
+              const typedId = typeof id === "string" ? toEventId(id) : null;
+              return typedId ? [typedId] : [];
+            })
+          : [],
       };
 
       const sendKnockResponse = await federationPut(
@@ -756,14 +799,25 @@ export class MatrixRoomService {
 
       const sendKnock = await sendKnockResponse.json();
 
-      await ensureFederatedRoomStub(db, input.roomId, makeKnock.room_version ?? "10", "");
+      await ensureFederatedRoomStub(
+        db,
+        input.roomId,
+        typeof makeKnock.room_version === "string" ? makeKnock.room_version : "10",
+        "",
+      );
       await persistFederationMembershipEvent(db, {
         roomId: input.roomId,
         event,
         source: "client",
       });
       await this.repository.notifyUsersOfEvent(input.roomId, eventId, "m.room.member");
-      await persistInviteStrippedState(db, input.roomId, sendKnock.knock_room_state ?? []);
+      await persistInviteStrippedState(
+        db,
+        input.roomId,
+        isJsonObject(sendKnock) && Array.isArray(sendKnock.knock_room_state)
+          ? sendKnock.knock_room_state
+          : [],
+      );
 
       await runClientEffect(
         logger.info("room.command.success", {
@@ -785,23 +839,42 @@ export class MatrixRoomService {
       }),
     );
 
-    const eventId = await this.appContext.capabilities.id.generateEventId(
-      this.appContext.capabilities.config.serverName,
+    const eventId = toEventId(
+      await this.appContext.capabilities.id.generateEventId(
+        this.appContext.capabilities.config.serverName,
+      ),
     );
+    if (!eventId) {
+      throw Errors.unknown("Failed to generate a valid event ID");
+    }
     const createEvent = await this.repository.getStateEvent(input.roomId, "m.room.create");
     const powerLevelsEvent = await this.repository.getStateEvent(
       input.roomId,
       "m.room.power_levels",
     );
 
-    const authEvents: string[] = [];
-    if (createEvent) authEvents.push(createEvent.event_id);
-    if (joinRulesEvent) authEvents.push(joinRulesEvent.event_id);
-    if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-    if (currentMembership) authEvents.push(currentMembership.eventId);
+    const authEvents: EventId[] = [];
+    if (createEvent) {
+      const eventId = toEventId(createEvent.event_id);
+      if (eventId) authEvents.push(eventId);
+    }
+    if (joinRulesEvent) {
+      const eventId = toEventId(joinRulesEvent.event_id);
+      if (eventId) authEvents.push(eventId);
+    }
+    if (powerLevelsEvent) {
+      const eventId = toEventId(powerLevelsEvent.event_id);
+      if (eventId) authEvents.push(eventId);
+    }
+    if (currentMembership) {
+      const eventId = toEventId(currentMembership.eventId);
+      if (eventId) authEvents.push(eventId);
+    }
 
     const latestEvents = await this.repository.getLatestRoomEvents(input.roomId, 1);
-    const prevEvents = latestEvents.map((event) => event.event_id);
+    const prevEvents: EventId[] = latestEvents
+      .map((event) => toEventId(event.event_id))
+      .filter((id): id is EventId => id !== null);
 
     const event: PDU = {
       event_id: eventId,
@@ -914,8 +987,9 @@ export class MatrixRoomService {
           sender: auth.userId,
           membership: "leave",
           serverName: this.appContext.capabilities.config.serverName,
-          generateEventId: this.appContext.capabilities.id.generateEventId,
-          now: this.appContext.capabilities.clock.now,
+          generateEventId: (targetServerName, roomVersion) =>
+            this.appContext.capabilities.id.generateEventId(targetServerName, roomVersion),
+          now: () => this.appContext.capabilities.clock.now(),
           ...withOptionalValue("currentMembershipEventId", currentMembership?.eventId),
           ...withOptionalValue("powerLevelsEventId", powerLevelsEvent?.event_id),
           ...withOptionalValue("createEventId", createEvent?.event_id),
@@ -1043,8 +1117,9 @@ export class MatrixRoomService {
           sender: auth.userId,
           membership: "invite",
           serverName: this.appContext.capabilities.config.serverName,
-          generateEventId: this.appContext.capabilities.id.generateEventId,
-          now: this.appContext.capabilities.clock.now,
+          generateEventId: (targetServerName, roomVersion) =>
+            this.appContext.capabilities.id.generateEventId(targetServerName, roomVersion),
+          now: () => this.appContext.capabilities.clock.now(),
           ...withOptionalValue("createEventId", createEvent?.event_id),
           ...withOptionalValue("powerLevelsEventId", powerLevelsEvent?.event_id),
           ...withOptionalValue("currentMembershipEventId", inviterMembership?.eventId),
@@ -1309,8 +1384,9 @@ export class MatrixRoomService {
                 powerLevelsEvent,
                 latestEvents,
                 serverName: this.appContext.capabilities.config.serverName,
-                generateEventId: this.appContext.capabilities.id.generateEventId,
-                now: this.appContext.capabilities.clock.now,
+                generateEventId: (targetServerName, roomVersion) =>
+                  this.appContext.capabilities.id.generateEventId(targetServerName, roomVersion),
+                now: () => this.appContext.capabilities.clock.now(),
               });
             },
             persist: async (_pipelineInput, _auth, event) => {
@@ -1480,8 +1556,9 @@ export class MatrixRoomService {
           membership: input.membership,
           ...withOptionalValue("reason", input.reason),
           serverName: this.appContext.capabilities.config.serverName,
-          generateEventId: this.appContext.capabilities.id.generateEventId,
-          now: this.appContext.capabilities.clock.now,
+          generateEventId: (targetServerName, roomVersion) =>
+            this.appContext.capabilities.id.generateEventId(targetServerName, roomVersion),
+          now: () => this.appContext.capabilities.clock.now(),
           createEvent,
           powerLevelsEvent,
           actorMembership,

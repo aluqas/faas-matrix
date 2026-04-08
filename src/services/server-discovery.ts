@@ -144,7 +144,7 @@ async function tryWellKnown(serverName: string): Promise<ServerDiscoveryResult |
       return null;
     }
 
-    const wellKnown = (await response.json()) as { "m.server"?: string };
+    const wellKnown = await response.json();
     const delegatedServer = wellKnown["m.server"];
 
     if (!delegatedServer || typeof delegatedServer !== "string") {

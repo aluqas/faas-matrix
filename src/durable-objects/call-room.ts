@@ -119,6 +119,20 @@ interface ErrorMessage {
   message: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseInitBody(value: unknown): { roomId: string; callId: string } | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return typeof value.roomId === "string" && typeof value.callId === "string"
+    ? { roomId: value.roomId, callId: value.callId }
+    : null;
+}
+
 export class CallRoomDurableObject implements DurableObject {
   private state: DurableObjectState;
   private env: Env;
@@ -164,7 +178,10 @@ export class CallRoomDurableObject implements DurableObject {
   }
 
   private async handleInit(request: Request): Promise<Response> {
-    const body = await request.json();
+    const body = parseInitBody(await request.json());
+    if (!body) {
+      return new Response("Invalid request body", { status: 400 });
+    }
 
     this.matrixRoomId = body.roomId;
     this.callId = body.callId;
@@ -444,6 +461,7 @@ export class CallRoomDurableObject implements DurableObject {
       },
       `${participant.oderId}|${participant.deviceId}`,
     );
+    return;
   }
 
   private handleGetState(): Response {

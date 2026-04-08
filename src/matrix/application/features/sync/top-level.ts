@@ -1,6 +1,6 @@
-import type { AppContext } from "../../../../foundation/app-context";
-import type { SyncResponse } from "../../../../types";
 import { getUserPushRules } from "../../../../api/push";
+import type { AppContext } from "../../../../foundation/app-context";
+import type { RoomId, SyncResponse, UserId } from "../../../../types";
 import type { SyncRepository } from "../../../repositories/interfaces";
 import {
   applyEventFilter,
@@ -16,9 +16,9 @@ export interface TopLevelSyncPorts {
 }
 
 export interface ProjectTopLevelSyncInput {
-  userId: string;
+  userId: UserId;
   deviceId: string | null;
-  roomIds: string[];
+  roomIds: RoomId[];
   /**
    * When set (e.g. from `/sync` assembler), presence scope uses
    * `visibleJoinedRoomIds` from this context — the canonical visibility boundary.
@@ -110,7 +110,7 @@ export async function projectTopLevelSync(
   return {
     accountData,
     toDeviceEvents,
-    deviceLists,
+    deviceLists: deviceLists as TopLevelSyncResult["deviceLists"],
     presence,
     deviceOneTimeKeysCount,
     deviceUnusedFallbackKeyTypes,

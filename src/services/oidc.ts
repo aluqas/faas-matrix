@@ -1,6 +1,8 @@
 // OIDC (OpenID Connect) service for IdP integration
 // Handles discovery, token exchange, and JWT validation
 
+import { isJsonObject } from "../types/common";
+
 export interface OIDCDiscovery {
   issuer: string;
   authorization_endpoint: string;
@@ -77,7 +79,10 @@ export async function fetchOIDCDiscovery(issuerUrl: string): Promise<OIDCDiscove
     throw new Error(`Failed to fetch OIDC discovery from ${discoveryUrl}: ${response.status}`);
   }
 
-  const discovery = (await response.json()) as OIDCDiscovery;
+  const discovery = await response.json();
+  if (!isJsonObject(discovery)) {
+    throw new Error("Invalid OIDC discovery document: expected object");
+  }
 
   // Validate required fields
   if (
@@ -116,7 +121,10 @@ export async function fetchJWKS(jwksUri: string): Promise<JWKS> {
     throw new Error(`Failed to fetch JWKS from ${jwksUri}: ${response.status}`);
   }
 
-  const jwks = (await response.json()) as JWKS;
+  const jwks = await response.json();
+  if (!isJsonObject(jwks) || !Array.isArray(jwks.keys)) {
+    throw new Error("Invalid JWKS document");
+  }
 
   // Cache the result
   jwksCache.set(jwksUri, {
@@ -179,7 +187,7 @@ export async function exchangeCodeForTokens(
     throw new Error(`Token exchange failed: ${response.status} - ${error}`);
   }
 
-  return (await response.json()) as OIDCTokenResponse;
+  return response.json();
 }
 
 /**

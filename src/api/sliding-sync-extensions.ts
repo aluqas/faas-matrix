@@ -9,7 +9,6 @@
 import type { SlidingSyncExtensionContext, SlidingSyncExtensionOutput } from "../types/sync";
 import type { SlidingSyncExtensionConfig } from "../types/client";
 import type { AccountDataEvent } from "../types";
-import type { RoomId } from "../types/matrix";
 import type { ToDeviceEvent } from "../types/matrix";
 
 import { projectPresenceEvents } from "../matrix/application/features/presence/project";

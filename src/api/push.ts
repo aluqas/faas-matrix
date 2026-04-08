@@ -11,6 +11,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import { isJsonObject, type JsonValue } from "../types/common";
 import { Errors } from "../utils/errors";
 import { extractAccessToken, requireAuth } from "../middleware/auth";
 import { hashToken } from "../utils/crypto";
@@ -58,6 +59,26 @@ function getMxidLocalpart(userId: string): string {
 
 function cloneJsonObject(value: JsonObject | undefined): JsonObject {
   return value ? structuredClone(value) : {};
+}
+
+function toJsonCounts(counts: PushNotificationCounts): JsonObject {
+  return {
+    unread: counts.unread,
+    ...(typeof counts.missed_calls === "number" ? { missed_calls: counts.missed_calls } : {}),
+  };
+}
+
+function parseApnsGatewayResult(
+  value: unknown,
+): { success: boolean; apnsId?: string; error?: string } | null {
+  if (!isJsonObject(value) || typeof value.success !== "boolean") {
+    return null;
+  }
+  return {
+    success: value.success,
+    ...(typeof value.apnsId === "string" ? { apnsId: value.apnsId } : {}),
+    ...(typeof value.error === "string" ? { error: value.error } : {}),
+  };
 }
 
 function getNestedValue(obj: unknown, path: string): unknown {
@@ -301,13 +322,13 @@ function getDefaultRulesForUser(userId: string): {
       ...(rule.conditions ? { conditions: [...rule.conditions] } : {}),
     };
     if (r.rule_id === ".m.rule.invite_for_me" && r.conditions) {
-      r.conditions = r.conditions.map((c) =>
-        c.key === "state_key" ? { ...c, pattern: userId } : { ...c },
+      r.conditions = r.conditions.map(
+        (c): PushCondition => (c.key === "state_key" ? { ...c, pattern: userId } : { ...c }),
       );
     }
     if (r.rule_id === ".m.rule.is_user_mention" && r.conditions) {
-      r.conditions = r.conditions.map((c) =>
-        c.key?.includes("user_ids") ? { ...c, value: userId } : { ...c },
+      r.conditions = r.conditions.map(
+        (c): PushCondition => (c.key?.includes("user_ids") ? { ...c, value: userId } : { ...c }),
       );
     }
     return r;
@@ -1439,7 +1460,7 @@ export async function sendPushNotification(
     // Per Matrix Push Gateway spec, devices[].data should be the pusher data minus URL
     // Sygnal looks for default_payload nested inside data, not at the root
     const pusherDataForGateway: JsonObject = {
-      format: pusherData.format,
+      ...(typeof pusherData.format === "string" ? { format: pusherData.format } : {}),
       default_payload: deviceData,
     };
 
@@ -1451,7 +1472,7 @@ export async function sendPushNotification(
       sender_display_name: senderDisplayName,
       room_name: roomDisplayName,
       prio: "high",
-      counts: counts,
+      counts: toJsonCounts(counts),
       devices: [
         {
           app_id: pusher.app_id,
@@ -1649,7 +1670,10 @@ async function sendDirectAPNs(
       }),
     );
 
-    const result = await response.json();
+    const result = parseApnsGatewayResult(await response.json());
+    if (!result) {
+      return false;
+    }
 
     if (result.success) {
       await runClientEffect(

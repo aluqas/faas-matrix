@@ -4,11 +4,6 @@
 // Relations allow events to reference other events (replies, reactions, threads, edits)
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import type { ThreadSubscriptionState } from "../types/client";
-import type { RelationCursor, RelationEvent } from "../types/events";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
 import { buildSyncToken, parseSyncToken } from "../matrix/application/features/sync/contracts";
 import {
   fetchFederatedEventRelationships,
@@ -17,6 +12,12 @@ import {
   queryEventRelationships,
   type EventRelationshipsRequest,
 } from "../matrix/application/relationship-service";
+import { requireAuth } from "../middleware/auth";
+import type { AppEnv, RoomId, UserId } from "../types";
+import type { ThreadSubscriptionState } from "../types/client";
+import type { RelationCursor, RelationEvent } from "../types/events";
+import { Errors } from "../utils/errors";
+import { toEventId, toRoomId, toUserId } from "../utils/ids";
 
 const app = new Hono<AppEnv>();
 const THREAD_SUBSCRIPTIONS_EVENT_TYPE = "io.element.msc4306.thread_subscriptions";
@@ -34,7 +35,9 @@ function parseThreadSubscriptionState(value: unknown): ThreadSubscriptionState |
       ? { unsubscribed_after: record["unsubscribed_after"] }
       : {}),
     ...(typeof record["automatic_event_id"] === "string"
-      ? { automatic_event_id: record["automatic_event_id"] }
+      ? {
+          automatic_event_id: toEventId(record["automatic_event_id"]) ?? undefined,
+        }
       : {}),
   };
 }
@@ -63,8 +66,8 @@ function parseThreadSubscriptionsContent(
 
 async function getThreadSubscriptionContent(
   db: D1Database,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId,
 ): Promise<Record<string, ThreadSubscriptionState>> {
   const existing = await db
     .prepare(`
@@ -79,8 +82,8 @@ async function getThreadSubscriptionContent(
 
 async function putThreadSubscriptionContent(
   db: D1Database,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId,
   content: Record<string, ThreadSubscriptionState>,
 ): Promise<void> {
   await db
@@ -154,11 +157,16 @@ function parseEventRelationshipsRequest(input: unknown): EventRelationshipsReque
   if (!isRecord(input) || typeof input.event_id !== "string") {
     return null;
   }
+  const eventId = toEventId(input.event_id);
+  const roomId = typeof input.room_id === "string" ? toRoomId(input.room_id) : null;
+  if (!eventId) {
+    return null;
+  }
 
   const direction = input.direction === "up" ? "up" : "down";
   return {
-    eventId: input.event_id,
-    ...(typeof input.room_id === "string" ? { roomId: input.room_id } : {}),
+    eventId,
+    ...(roomId ? { roomId } : {}),
     direction,
     ...(typeof input.include_parent === "boolean" ? { includeParent: input.include_parent } : {}),
     ...(typeof input.recent_first === "boolean" ? { recentFirst: input.recent_first } : {}),
@@ -185,7 +193,7 @@ app.post("/_matrix/client/unstable/event_relationships", requireAuth(), async (c
   }
 
   let result = await queryEventRelationships(c.env.DB, request);
-  const roomId = result?.roomId ?? request.roomId;
+  const roomId = (result?.roomId ?? request.roomId) as RoomId;
   if (!roomId) {
     return Errors.notFound("Event not found").toResponse();
   }
@@ -223,6 +231,10 @@ app.post("/_matrix/client/unstable/event_relationships", requireAuth(), async (c
     const attemptedParents = new Set<string>();
     while (missingParentId && !attemptedParents.has(missingParentId)) {
       attemptedParents.add(missingParentId);
+      const missingParentEventId = toEventId(missingParentId);
+      if (!missingParentEventId) {
+        break;
+      }
       const fetched = await fetchFederatedEventRelationships(
         c.env.DB,
         c.env.CACHE,
@@ -230,7 +242,7 @@ app.post("/_matrix/client/unstable/event_relationships", requireAuth(), async (c
         roomVersion,
         remoteServers[0],
         {
-          eventId: missingParentId,
+          eventId: missingParentEventId,
           roomId,
           direction: "up",
           maxDepth: request.maxDepth,
@@ -623,9 +635,12 @@ app.put(
   "/_matrix/client/unstable/io.element.msc4306/rooms/:roomId/thread/:threadRootId/subscription",
   requireAuth(),
   async (c) => {
-    const userId = c.get("userId");
-    const roomId = decodeURIComponent(c.req.param("roomId"));
-    const threadRootId = decodeURIComponent(c.req.param("threadRootId"));
+    const userId = toUserId(c.get("userId"));
+    const roomId = toRoomId(decodeURIComponent(c.req.param("roomId")));
+    const threadRootId = toEventId(decodeURIComponent(c.req.param("threadRootId")));
+    if (!userId || !roomId || !threadRootId) {
+      return Errors.invalidParam("roomId", "Invalid room, user, or thread ID").toResponse();
+    }
     const db = c.env.DB;
 
     const membership = await db
@@ -665,7 +680,11 @@ app.put(
     const content = await getThreadSubscriptionContent(db, userId, roomId);
 
     if (typeof requestedAutomaticEventId === "string") {
-      if (requestedAutomaticEventId === threadRootId) {
+      const automaticEventId = toEventId(requestedAutomaticEventId);
+      if (!automaticEventId) {
+        return Errors.invalidParam("automatic", "Invalid automatic event ID").toResponse();
+      }
+      if (automaticEventId === threadRootId) {
         return c.json(
           {
             errcode: "IO.ELEMENT.MSC4306.M_NOT_IN_THREAD",
@@ -682,7 +701,7 @@ app.put(
           INNER JOIN event_relations r ON r.event_id = e.event_id
           WHERE e.room_id = ? AND e.event_id = ? AND r.relation_type = 'm.thread' AND r.relates_to_id = ?
         `)
-        .bind(roomId, requestedAutomaticEventId, threadRootId)
+        .bind(roomId, automaticEventId, threadRootId)
         .first<{ stream_ordering: number }>();
 
       if (!automaticEvent) {
@@ -712,7 +731,7 @@ app.put(
       content[threadRootId] = {
         automatic: true,
         subscribed: true,
-        automatic_event_id: requestedAutomaticEventId,
+        automatic_event_id: automaticEventId,
       };
     } else {
       content[threadRootId] = {
@@ -731,9 +750,12 @@ app.get(
   "/_matrix/client/unstable/io.element.msc4306/rooms/:roomId/thread/:threadRootId/subscription",
   requireAuth(),
   async (c) => {
-    const userId = c.get("userId");
-    const roomId = decodeURIComponent(c.req.param("roomId"));
-    const threadRootId = decodeURIComponent(c.req.param("threadRootId"));
+    const userId = toUserId(c.get("userId"));
+    const roomId = toRoomId(decodeURIComponent(c.req.param("roomId")));
+    const threadRootId = toEventId(decodeURIComponent(c.req.param("threadRootId")));
+    if (!userId || !roomId || !threadRootId) {
+      return Errors.invalidParam("roomId", "Invalid room, user, or thread ID").toResponse();
+    }
     const db = c.env.DB;
 
     const threadRoot = await db
@@ -762,7 +784,7 @@ app.delete(
   requireAuth(),
   async (c) => {
     const userId = c.get("userId");
-    const roomId = decodeURIComponent(c.req.param("roomId"));
+    const roomId = decodeURIComponent(c.req.param("roomId")) as unknown as RoomId;
     const threadRootId = decodeURIComponent(c.req.param("threadRootId"));
     const db = c.env.DB;
 

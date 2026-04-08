@@ -1,5 +1,6 @@
 // Matrix ID generation utilities
 
+import { getRoomVersion, type EventIdFormat } from "../services/room-versions";
 import type {
   AccessToken,
   DeviceId,
@@ -12,13 +13,16 @@ import type {
   TransactionId,
   UserId,
 } from "../types";
-import { getRoomVersion, type EventIdFormat } from "../services/room-versions";
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
 
 // Generate a random opaque ID using Web Crypto API
 export function generateOpaqueId(length: number = 18): Promise<string> {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
-  return base64UrlEncode(bytes);
+  return Promise.resolve(base64UrlEncode(bytes));
 }
 
 // Base64 URL-safe encoding
@@ -32,7 +36,7 @@ export function base64UrlDecode(str: string): Uint8Array {
   const base64 = str.replaceAll("-", "+").replaceAll("_", "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = atob(padded);
-  return new Uint8Array([...binary].map((c) => c.codePointAt(0)));
+  return new Uint8Array(Array.from(binary, (c) => c.codePointAt(0) ?? 0));
 }
 
 // Generate a user ID
@@ -41,7 +45,13 @@ export function formatUserId(localpart: string, serverName: ServerName): UserId 
 }
 
 // Parse a user ID into components
-export function parseUserId(userId: UserId): { localpart: string; serverName: ServerName } | null {
+export function parseUserId(
+  userId: string | null | undefined,
+): { localpart: string; serverName: ServerName } | null {
+  if (!isString(userId)) {
+    return null;
+  }
+
   const match = userId.match(/^@([^:]+):(.+)$/);
   if (!match) return null;
   return { localpart: match[1], serverName: match[2] };
@@ -54,7 +64,13 @@ export async function generateRoomId(serverName: ServerName): Promise<RoomId> {
 }
 
 // Parse a room ID
-export function parseRoomId(roomId: RoomId): { opaque: string; serverName: ServerName } | null {
+export function parseRoomId(
+  roomId: string | null | undefined,
+): { opaque: string; serverName: ServerName } | null {
+  if (!isString(roomId)) {
+    return null;
+  }
+
   const match = roomId.match(/^!([^:]+):(.+)$/);
   if (!match) return null;
   return { opaque: match[1], serverName: match[2] };
@@ -96,8 +112,12 @@ export function formatRoomAlias(localpart: string, serverName: ServerName): Room
 
 // Parse a room alias
 export function parseRoomAlias(
-  alias: RoomAlias,
+  alias: string | null | undefined,
 ): { localpart: string; serverName: ServerName } | null {
+  if (!isString(alias)) {
+    return null;
+  }
+
   const match = alias.match(/^#([^:]+):(.+)$/);
   if (!match) return null;
   return { localpart: match[1], serverName: match[2] };
@@ -113,7 +133,7 @@ export async function generateDeviceId(): Promise<DeviceId> {
 export function generateAccessToken(): Promise<AccessToken> {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return `syt_${base64UrlEncode(bytes)}` as AccessToken;
+  return Promise.resolve(`syt_${base64UrlEncode(bytes)}` as AccessToken);
 }
 
 // Generate a transaction ID
@@ -127,14 +147,14 @@ export async function generateTransactionId(): Promise<TransactionId> {
 export function generateLoginToken(): Promise<LoginToken> {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return `mlt_${base64UrlEncode(bytes)}` as LoginToken;
+  return Promise.resolve(`mlt_${base64UrlEncode(bytes)}` as LoginToken);
 }
 
 // Generate a refresh token (for token refresh flow)
 export function generateRefreshToken(): Promise<RefreshToken> {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return `syr_${base64UrlEncode(bytes)}` as RefreshToken;
+  return Promise.resolve(`syr_${base64UrlEncode(bytes)}` as RefreshToken);
 }
 
 // Validate localpart (username)
@@ -169,7 +189,88 @@ export function isLocalServerName(serverName: string, localServer: ServerName): 
 }
 
 // Extract server name from Matrix ID
-export function getServerName(id: string): ServerName | null {
+export function getServerName(id: string | null | undefined): ServerName | null {
+  if (!isString(id)) {
+    return null;
+  }
+
   const match = id.match(/:([^:]+)$/);
   return match ? match[1] : null;
+}
+
+// Type guards for Matrix IDs
+
+/**
+ * Check if a value is a valid EventId.
+ * Supports both v1-2 format ($opaque:domain) and v3+ format ($opaque).
+ */
+export function isEventId(value: unknown): value is EventId {
+  if (!isString(value)) return false;
+  return /^\$[^\s]+$/.test(value);
+}
+
+/**
+ * Check if a value is a valid RoomId.
+ * Format: !opaque:domain
+ */
+export function isRoomId(value: unknown): value is RoomId {
+  if (typeof value !== "string") return false;
+  return /^![^:]+:.+$/.test(value);
+}
+
+/**
+ * Check if a value is a valid UserId.
+ * Format: @localpart:domain
+ */
+export function isUserId(value: unknown): value is UserId {
+  if (typeof value !== "string") return false;
+  return /^@[^:]+:.+$/.test(value);
+}
+
+/**
+ * Check if a value is a valid RoomAlias.
+ * Format: #localpart:domain
+ */
+export function isRoomAlias(value: unknown): value is RoomAlias {
+  if (typeof value !== "string") return false;
+  return /^#[^:]+:.+$/.test(value);
+}
+
+// Validation castings - for safely converting database strings to typed IDs
+// These functions perform runtime validation and return typed IDs or null
+
+/**
+ * Validate and cast a string to UserId.
+ * Used when converting untrusted data from database to typed IDs.
+ * @returns The typed UserId or null if validation fails
+ */
+export function toUserId(value: unknown): UserId | null {
+  return isUserId(value) ? value : null;
+}
+
+/**
+ * Validate and cast a string to RoomId.
+ * Used when converting untrusted data from database to typed IDs.
+ * @returns The typed RoomId or null if validation fails
+ */
+export function toRoomId(value: unknown): RoomId | null {
+  return isRoomId(value) ? value : null;
+}
+
+/**
+ * Validate and cast a string to EventId.
+ * Used when converting untrusted data from database to typed IDs.
+ * @returns The typed EventId or null if validation fails
+ */
+export function toEventId(value: unknown): EventId | null {
+  return isEventId(value) ? value : null;
+}
+
+/**
+ * Validate and cast a string to RoomAlias.
+ * Used when converting untrusted data from database to typed IDs.
+ * @returns The typed RoomAlias or null if validation fails
+ */
+export function toRoomAlias(value: unknown): RoomAlias | null {
+  return isRoomAlias(value) ? value : null;
 }

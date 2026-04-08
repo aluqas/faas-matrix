@@ -21,6 +21,7 @@ import {
   type EventRelationshipsRequest,
 } from "../../relationship-service";
 import { queryProfileResponse } from "../profile/profile-query";
+import type { UserId } from "../../../../types";
 import type { ProfileField } from "../../../../types/profile";
 
 const SERVER_KEY_VALIDITY_FALLBACK_MS = 365 * 24 * 60 * 60 * 1000;
@@ -38,7 +39,7 @@ export interface FederationServerKeysQueryInput {
 }
 
 export interface FederationProfileQueryInput {
-  userId: string;
+  userId: UserId;
   field?: ProfileField;
 }
 
@@ -53,7 +54,7 @@ export type FederationRelationshipsResult = Awaited<
 export interface FederationQueryPorts {
   localServerName: string;
   getProfile(
-    userId: string,
+    userId: UserId,
     field?: ProfileField,
   ): Effect.Effect<FederationProfile | null, InfraError>;
   getRoomByAlias(alias: string): Effect.Effect<string | null, InfraError>;
@@ -222,7 +223,7 @@ export function queryFederationProfileEffect(
   input: FederationProfileQueryInput,
 ): Effect.Effect<FederationProfile, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    const parsed = parseUserId(input.userId as `@${string}:${string}`);
+    const parsed = parseUserId(input.userId);
     if (!parsed || !isSafeFederationServerName(parsed.serverName)) {
       return yield* Effect.fail(Errors.invalidParam("user_id", "Invalid user_id"));
     }

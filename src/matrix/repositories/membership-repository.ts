@@ -3,7 +3,8 @@ import {
   executeKyselyQuery,
   executeKyselyQueryFirst,
 } from "../../services/kysely";
-import type { Membership } from "../../types";
+import type { Membership, RoomId } from "../../types";
+import { toRoomId } from "../../utils/ids";
 
 interface MembershipRow {
   room_id: string;
@@ -65,7 +66,7 @@ export async function getUserRoomIdsWithEffectiveMembership(
   db: D1Database,
   userId: string,
   membership?: Membership,
-): Promise<string[]> {
+): Promise<RoomId[]> {
   let query = `
     WITH membership_sources AS (
       SELECT room_id, membership
@@ -103,7 +104,9 @@ export async function getUserRoomIdsWithEffectiveMembership(
     .prepare(query)
     .bind(...params)
     .all<{ room_id: string }>();
-  return result.results.map((r) => r.room_id);
+  return result.results
+    .map((r) => toRoomId(r.room_id))
+    .filter((roomId): roomId is RoomId => roomId !== null);
 }
 
 export async function getMembershipForUser(
@@ -140,7 +143,7 @@ export async function isUserJoinedToRoom(
   return row !== null;
 }
 
-export async function getJoinedRoomIdsForUser(db: D1Database, userId: string): Promise<string[]> {
+export async function getJoinedRoomIdsForUser(db: D1Database, userId: string): Promise<RoomId[]> {
   const rows = await executeKyselyQuery<{ room_id: string }>(
     db,
     qb
@@ -149,7 +152,9 @@ export async function getJoinedRoomIdsForUser(db: D1Database, userId: string): P
       .where("user_id", "=", userId)
       .where("membership", "=", "join"),
   );
-  return rows.map((row) => row.room_id);
+  return rows
+    .map((row) => toRoomId(row.room_id))
+    .filter((roomId): roomId is RoomId => roomId !== null);
 }
 
 /**
@@ -172,7 +177,7 @@ export async function getJoinedRoomIdsForUser(db: D1Database, userId: string): P
 export function getJoinedRoomIdsIncludingPartialState(
   db: D1Database,
   userId: string,
-): Promise<string[]> {
+): Promise<RoomId[]> {
   return getUserRoomIdsWithEffectiveMembership(db, userId, "join");
 }
 

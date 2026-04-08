@@ -42,6 +42,58 @@ interface CachedCredentials {
   expiresAt: number;
 }
 
+type CachedCredentialsRecord = {
+  username: string;
+  password: string;
+  uris: string[];
+  ttl: number;
+  expiresAt: number;
+};
+
+type RateLimitCacheRecord = {
+  requests: number[];
+};
+
+function parseCachedCredentials(value: unknown): CachedCredentialsRecord | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const data = value as {
+    username?: unknown;
+    password?: unknown;
+    uris?: unknown;
+    ttl?: unknown;
+    expiresAt?: unknown;
+  };
+  return typeof data.username === "string" &&
+    typeof data.password === "string" &&
+    Array.isArray(data.uris) &&
+    data.uris.every((uri): uri is string => typeof uri === "string") &&
+    typeof data.ttl === "number" &&
+    typeof data.expiresAt === "number"
+    ? {
+        username: data.username,
+        password: data.password,
+        uris: data.uris,
+        ttl: data.ttl,
+        expiresAt: data.expiresAt,
+      }
+    : null;
+}
+
+function parseRateLimitCacheRecord(value: unknown): RateLimitCacheRecord | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const data = value as { requests?: unknown };
+  return Array.isArray(data.requests) &&
+    data.requests.every((request): request is number => typeof request === "number")
+    ? { requests: data.requests }
+    : null;
+}
+
 // Matrix TURN server response format
 export interface MatrixTurnResponse {
   username: string;
@@ -191,7 +243,7 @@ async function fetchTurnCredentials(env: Env, ttl: number): Promise<MatrixTurnRe
   // Parse response
   let data: CloudflareTurnResponse;
   try {
-    data = (await response.json()) as CloudflareTurnResponse;
+    data = await response.json();
   } catch {
     throw new TurnError("Invalid JSON response from TURN API", "INVALID_RESPONSE");
   }
@@ -233,7 +285,7 @@ async function getCachedCredentials(
   key: string,
 ): Promise<CachedCredentials | null> {
   try {
-    const cached = (await cache.get(key, "json")) as CachedCredentials | null;
+    const cached = parseCachedCredentials(await cache.get(key, "json"));
 
     if (!cached) {
       return null;
@@ -325,10 +377,10 @@ async function checkUserRateLimit(cache: KVNamespace, userId: string): Promise<R
 
   try {
     // Get current rate limit data
-    const data = (await cache.get(key, "json")) as { requests: number[] } | null;
+    const data = parseRateLimitCacheRecord(await cache.get(key, "json"));
 
     // Filter to only requests within the window
-    const recentRequests = data?.requests?.filter((t) => t > windowStart) ?? [];
+    const recentRequests = data?.requests.filter((t) => t > windowStart) ?? [];
 
     if (recentRequests.length >= USER_RATE_LIMIT_MAX) {
       // Rate limited - calculate when the oldest request will expire

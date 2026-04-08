@@ -14,13 +14,13 @@ export type { JsonObject };
 export type StringMap = Record<string, string>;
 export type JsonObjectMap = Record<string, JsonObject>;
 export type DeviceListRequest = Array<DeviceId>;
-export type DeviceKeyRequestMap = Record<UserId | string, DeviceListRequest>;
+export type DeviceKeyRequestMap = Record<UserId, DeviceListRequest>;
 export type OneTimeKeyClaimDeviceMap = Record<DeviceId, string>;
-export type OneTimeKeyClaimMap = Record<UserId | string, OneTimeKeyClaimDeviceMap>;
-export type UserDeviceKeysMap = Record<UserId | string, Record<DeviceId, DeviceKeysPayload>>;
-export type UserCrossSigningKeyMap = Record<UserId | string, CrossSigningKeyPayload>;
+export type OneTimeKeyClaimMap = Record<UserId, OneTimeKeyClaimDeviceMap>;
+export type UserDeviceKeysMap = Record<UserId, Record<DeviceId, DeviceKeysPayload>>;
+export type UserCrossSigningKeyMap = Record<UserId, CrossSigningKeyPayload>;
 export type DeviceOneTimeKeysMap = Record<DeviceId, JsonObjectMap>;
-export type UserOneTimeKeysMap = Record<UserId | string, DeviceOneTimeKeysMap>;
+export type UserOneTimeKeysMap = Record<UserId, DeviceOneTimeKeysMap>;
 
 export type DeviceKeysPayload = JsonObject & {
   user_id?: UserId;
@@ -83,7 +83,7 @@ export type SignedKeyPayload = JsonObject & {
   signatures?: MatrixSignatures;
 };
 
-export type SignaturesUploadRequest = Record<UserId | string, Record<string, SignedKeyPayload>>;
+export type SignaturesUploadRequest = Record<UserId, Record<string, SignedKeyPayload>>;
 
 export interface TokenSubmitRequest {
   session?: string;
@@ -310,7 +310,7 @@ export interface SearchProfileInfo {
 export interface SearchResultContext {
   events_before: SearchResultEvent[];
   events_after: SearchResultEvent[];
-  profile_info?: Record<UserId | string, SearchProfileInfo>;
+  profile_info?: Record<UserId, SearchProfileInfo>;
   start?: string;
   end?: string;
 }
@@ -337,7 +337,7 @@ export interface ContentReportRecord {
 }
 
 export interface ToDeviceRequest {
-  messages: Record<UserId | string, Record<DeviceId, Record<string, unknown>>>;
+  messages: Record<UserId, Record<DeviceId, Record<string, unknown>>>;
 }
 
 export interface IdPProvider {

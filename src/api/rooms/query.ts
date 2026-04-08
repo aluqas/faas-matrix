@@ -5,6 +5,7 @@ import { Errors } from "../../utils/errors";
 import { requireAuth } from "../../middleware/auth";
 import { runClientEffect } from "../../matrix/application/effect-runtime";
 import type { RoomMessagesRelationFilter } from "../../matrix/application/room-query-service";
+import { toEventId, toRoomId } from "../../utils/ids";
 
 const app = new Hono<AppEnv>();
 
@@ -56,11 +57,15 @@ function handleGetRoomStateEvent(
   c: import("hono").Context<AppEnv>,
   stateKey: string,
 ): Promise<Response> {
+  const roomId = toRoomId(c.req.param("roomId"));
+  if (!roomId) {
+    return Promise.resolve(Errors.invalidParam("roomId", "Invalid room ID").toResponse());
+  }
   return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getStateEvent({
       userId: c.get("userId"),
-      roomId: c.req.param("roomId"),
+      roomId,
       eventType: c.req.param("eventType"),
       stateKey,
       formatEvent: c.req.query("format") === "event",
@@ -69,22 +74,31 @@ function handleGetRoomStateEvent(
 }
 
 function handleGetVisibleRoomEvent(c: import("hono").Context<AppEnv>): Promise<Response> {
+  const roomId = toRoomId(c.req.param("roomId"));
+  const eventId = toEventId(c.req.param("eventId"));
+  if (!roomId || !eventId) {
+    return Promise.resolve(Errors.invalidParam("roomId", "Invalid room or event ID").toResponse());
+  }
   return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getVisibleEvent({
       userId: c.get("userId"),
-      roomId: c.req.param("roomId"),
-      eventId: c.req.param("eventId"),
+      roomId,
+      eventId,
     }),
   );
 }
 
 app.get("/_matrix/client/v3/rooms/:roomId/state", requireAuth(), (c) => {
+  const roomId = toRoomId(c.req.param("roomId"));
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
   return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getCurrentState({
       userId: c.get("userId"),
-      roomId: c.req.param("roomId"),
+      roomId,
     }),
   );
 });
@@ -97,11 +111,15 @@ app.get("/_matrix/client/v3/rooms/:roomId/state/:eventType/", requireAuth(), (c)
 );
 
 app.get("/_matrix/client/v3/rooms/:roomId/members", requireAuth(), (c) => {
+  const roomId = toRoomId(c.req.param("roomId"));
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
   return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getMembers({
       userId: c.get("userId"),
-      roomId: c.req.param("roomId"),
+      roomId,
     }),
   );
 });
@@ -120,11 +138,15 @@ app.get("/_matrix/client/v3/rooms/:roomId/messages", requireAuth(), (c) => {
 
   const limitParam = Number.parseInt(c.req.query("limit") ?? "10", 10);
   const limit = Number.isNaN(limitParam) ? 10 : Math.min(limitParam, 100);
+  const roomId = toRoomId(c.req.param("roomId"));
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
   return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getMessages({
       userId: c.get("userId"),
-      roomId: c.req.param("roomId"),
+      roomId,
       from: c.req.query("from"),
       dir: (c.req.query("dir") ?? "b") as "f" | "b",
       limit,
@@ -148,6 +170,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/timestamp_to_event", requireAuth(), (c
   const tsParam = c.req.query("ts");
   const dirParam = c.req.query("dir");
 
+  const roomId = toRoomId(c.req.param("roomId"));
   if (!tsParam) {
     return Errors.missingParam("ts").toResponse();
   }
@@ -176,11 +199,15 @@ app.get("/_matrix/client/v3/rooms/:roomId/timestamp_to_event", requireAuth(), (c
     );
   }
 
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
+
   return resolveRoomQueryEffect(
     c,
     c.get("appContext").services.roomQueries.getTimestampToEvent({
       userId: c.get("userId"),
-      roomId: c.req.param("roomId"),
+      roomId,
       ts,
       dir: dirParam,
     }),

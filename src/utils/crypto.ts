@@ -39,7 +39,13 @@ export async function hashPassword(password: string): Promise<string> {
 // Verify a password against a hash
 export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
   const parts = storedHash.split("$");
-  if (parts.length !== 5 || parts[1] !== "pbkdf2-sha256") {
+  if (
+    parts.length !== 5 ||
+    parts[1] !== "pbkdf2-sha256" ||
+    parts[2] === undefined ||
+    parts[3] === undefined ||
+    parts[4] === undefined
+  ) {
     return false;
   }
 
@@ -89,7 +95,7 @@ export function encodeUnpaddedBase64(bytes: Uint8Array): string {
 export function decodeUnpaddedBase64(str: string): Uint8Array {
   const padded = str + "=".repeat((4 - (str.length % 4)) % 4);
   const binary = atob(padded);
-  return new Uint8Array([...binary].map((c) => c.codePointAt(0)));
+  return Uint8Array.from(binary, (char) => char.codePointAt(0));
 }
 
 export function decodeMatrixBase64(str: string): Uint8Array {
@@ -305,7 +311,9 @@ export function canonicalJson(obj: unknown): string {
   }
 
   if (typeof obj === "object") {
-    const keys = Object.keys(obj).toSorted();
+    const keys = Object.keys(obj).toSorted((left: string, right: string) =>
+      left.localeCompare(right),
+    );
     const pairs = keys
       .filter((key) => (obj as Record<string, unknown>)[key] !== undefined)
       .map((key) => {

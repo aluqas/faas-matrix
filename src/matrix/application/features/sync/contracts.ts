@@ -3,6 +3,7 @@ import type {
   SyncProjectionSummary,
   SyncTokenPosition,
 } from "../../../../types/sync";
+import type { RoomId } from "../../../../types";
 import type {
   MembershipRoomsResult,
   RoomDeltaResult,
@@ -34,7 +35,7 @@ export type {
  */
 /** Minimal visibility context for sliding-sync, which has no partial-state concept yet. */
 export function buildSlidingSyncVisibilityContext(
-  allJoinedRoomIds: string[],
+  allJoinedRoomIds: RoomId[],
 ): RoomVisibilityContext {
   return {
     visibleJoinedRoomIds: allJoinedRoomIds,
@@ -44,7 +45,7 @@ export function buildSlidingSyncVisibilityContext(
   };
 }
 
-export function parseSyncToken(token: string | undefined): SyncTokenPosition {
+export function parseSyncToken(token?: string): SyncTokenPosition {
   if (!token) {
     return { events: 0, toDevice: 0, deviceKeys: 0 };
   }

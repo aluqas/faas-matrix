@@ -3,7 +3,7 @@
 
 import { Effect } from "effect";
 import { Hono, type Context } from "hono";
-import type { AppEnv } from "../types";
+import type { AppEnv, EventId, RoomId, UserId } from "../types";
 import type {
   RoomResult,
   SlidingRoomFilter,
@@ -33,6 +33,7 @@ import {
   buildSlidingSyncExtensions,
   type SlidingSyncExtensionConfig,
 } from "./sliding-sync-extensions";
+import { toEventId, toRoomId, toUserId } from "../utils/ids";
 
 const app = new Hono<AppEnv>();
 
@@ -40,7 +41,7 @@ const app = new Hono<AppEnv>();
 
 async function loadSlidingSyncVisibilityContext(
   db: D1Database,
-  userId: string,
+  userId: UserId,
 ): Promise<ReturnType<typeof buildSlidingSyncVisibilityContext>> {
   const ids = await getJoinedRoomIdsIncludingPartialState(db, userId);
   return buildSlidingSyncVisibilityContext(ids);
@@ -56,7 +57,7 @@ async function getCurrentStreamPosition(db: D1Database): Promise<number> {
 
 async function loadConnectionState(
   syncDO: DurableObjectNamespace,
-  userId: string,
+  userId: UserId,
   connId: string,
 ): Promise<ConnectionState | null> {
   const doId = syncDO.idFromName(userId);
@@ -82,7 +83,7 @@ async function loadConnectionState(
 
 async function persistConnectionState(
   syncDO: DurableObjectNamespace,
-  userId: string,
+  userId: UserId,
   connId: string,
   state: ConnectionState,
 ): Promise<void> {
@@ -110,7 +111,7 @@ async function persistConnectionState(
 
 async function waitForSlidingSyncEvents(
   syncDO: DurableObjectNamespace,
-  userId: string,
+  userId: UserId,
   timeoutMs: number,
 ): Promise<{ hasEvents: boolean }> {
   const doId = syncDO.idFromName(userId);
@@ -122,10 +123,14 @@ async function waitForSlidingSyncEvents(
       body: JSON.stringify({ timeout: timeoutMs }),
     }),
   );
-  return await response.json();
+  return response.json();
 }
 
-async function getFullyReadMarker(db: D1Database, userId: string, roomId: string): Promise<string> {
+async function getFullyReadMarker(
+  db: D1Database,
+  userId: UserId,
+  roomId: RoomId,
+): Promise<EventId | null> {
   const fullyReadResult = await db
     .prepare(`
       SELECT content FROM account_data
@@ -135,13 +140,13 @@ async function getFullyReadMarker(db: D1Database, userId: string, roomId: string
     .first<{ content: string }>();
 
   if (!fullyReadResult) {
-    return "";
+    return null;
   }
 
   try {
-    return JSON.parse(fullyReadResult.content).event_id ?? "";
+    return toEventId(JSON.parse(fullyReadResult.content).event_id);
   } catch {
-    return "";
+    return null;
   }
 }
 
@@ -149,11 +154,11 @@ async function getFullyReadMarker(db: D1Database, userId: string, roomId: string
 // OPTIMIZED: Uses consolidated query with subqueries to avoid N+1 problem
 async function getUserRooms(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   filters?: SlidingRoomFilter,
   sort?: string[],
 ): Promise<
-  { roomId: string; membership: string; lastActivity: number; name?: string; isDm: boolean }[]
+  { roomId: RoomId; membership: string; lastActivity: number; name?: string; isDm: boolean }[]
 > {
   // Consolidated query with subqueries for room name and member count
   // This eliminates N+1 queries by fetching all data in a single query
@@ -210,7 +215,7 @@ async function getUserRooms(
     .all();
 
   const rooms: {
-    roomId: string;
+    roomId: RoomId;
     membership: string;
     lastActivity: number;
     name?: string;
@@ -218,6 +223,10 @@ async function getUserRooms(
   }[] = [];
 
   for (const row of result.results as any[]) {
+    const roomId = toRoomId(row.room_id);
+    if (!roomId) {
+      continue;
+    }
     const name = row.room_name as string | null | undefined;
     const memberCount = row.member_count as number;
 
@@ -237,7 +246,7 @@ async function getUserRooms(
     }
 
     rooms.push({
-      roomId: row.room_id,
+      roomId,
       membership: row.membership,
       lastActivity: row.last_activity,
       name: name ?? undefined,
@@ -248,12 +257,26 @@ async function getUserRooms(
   return rooms;
 }
 
+function toRoomIds(values: string[]): RoomId[] {
+  return values.map((value) => toRoomId(value)).filter((value): value is RoomId => value !== null);
+}
+
+function toRoomEntries<T>(value: Record<RoomId, T>): Array<[RoomId, T]> {
+  return Object.entries(value)
+    .map(([roomId, entry]) => {
+      const typedRoomId = toRoomId(roomId);
+      return typedRoomId ? ([typedRoomId, entry] as const) : null;
+    })
+    .filter((entry): entry is readonly [RoomId, T] => entry !== null)
+    .map(([roomId, entry]) => [roomId, entry] as [RoomId, T]);
+}
+
 // Get room data for response
 // OPTIMIZED: Uses DB.batch() to fetch all room metadata in a single network call
 async function getRoomData(
   db: D1Database,
-  roomId: string,
-  userId: string,
+  roomId: RoomId,
+  userId: UserId,
   config: {
     requiredState?: [string, string][];
     timelineLimit?: number;
@@ -563,8 +586,8 @@ async function getRoomData(
 // Per Matrix spec, invited rooms only see limited "stripped state"
 async function getInviteRoomData(
   db: D1Database,
-  roomId: string,
-  userId: string,
+  roomId: RoomId,
+  userId: UserId,
 ): Promise<RoomResult> {
   const result: RoomResult = {
     initial: true,
@@ -652,7 +675,10 @@ async function buildMsc3575SlidingSyncResponse(
   c: Context<AppEnv>,
   body: SlidingSyncRequest,
 ): Promise<SlidingSyncResponse | Response> {
-  const userId = c.get("userId");
+  const userId = toUserId(c.get("userId"));
+  if (!userId) {
+    return Errors.invalidParam("userId", "Invalid user ID").toResponse();
+  }
   const db = c.env.DB;
   const syncDO = c.env.SYNC; // Use Durable Object for connection state (not KV - avoids rate limits)
 
@@ -845,12 +871,14 @@ async function buildMsc3575SlidingSyncResponse(
           })
         ) {
           response.rooms[roomInfo.roomId] = roomData;
-          trackSlidingSyncRoomReadState(
-            connectionState,
-            roomInfo.roomId,
-            currentNotificationCount,
-            currentFullyRead,
-          );
+          if (currentFullyRead) {
+            trackSlidingSyncRoomReadState(
+              connectionState,
+              roomInfo.roomId,
+              currentNotificationCount,
+              currentFullyRead,
+            );
+          }
         }
 
         // Mark as sent with stream ordering tracking
@@ -871,7 +899,13 @@ async function buildMsc3575SlidingSyncResponse(
 
   // Process room subscriptions
   if (body.room_subscriptions) {
-    for (const [roomId, subscription] of Object.entries(body.room_subscriptions)) {
+    for (const [roomId, subscription] of toRoomEntries(
+      body.room_subscriptions as Record<RoomId, unknown>,
+    )) {
+      const subscriptionConfig = subscription as {
+        required_state?: [string, string][];
+        timeline_limit?: number;
+      };
       // Check if user has access to this room
       const membershipResult = await db
         .prepare(`
@@ -902,8 +936,8 @@ async function buildMsc3575SlidingSyncResponse(
 
       // For joined rooms, get full room data
       const roomData = await getRoomData(db, roomId, userId, {
-        requiredState: subscription.required_state,
-        timelineLimit: subscription.timeline_limit ?? 10,
+        requiredState: subscriptionConfig.required_state,
+        timelineLimit: subscriptionConfig.timeline_limit ?? 10,
         initial: isInitialRoom,
         sinceStreamOrdering: isInitialRoom ? undefined : roomSincePos,
       });
@@ -936,12 +970,14 @@ async function buildMsc3575SlidingSyncResponse(
         })
       ) {
         response.rooms[roomId] = roomData;
-        trackSlidingSyncRoomReadState(
-          connectionState,
-          roomId,
-          currentNotificationCount,
-          currentFullyRead,
-        );
+        if (currentFullyRead) {
+          trackSlidingSyncRoomReadState(
+            connectionState,
+            roomId,
+            currentNotificationCount,
+            currentFullyRead,
+          );
+        }
       }
 
       const newStreamOrdering = roomData.maxStreamOrdering ?? roomSincePos;
@@ -974,8 +1010,10 @@ async function buildMsc3575SlidingSyncResponse(
         env: c.env,
         sincePos,
         isInitialSync: !posToken,
-        responseRoomIds: Object.keys(response.rooms),
-        subscribedRoomIds: body.room_subscriptions ? Object.keys(body.room_subscriptions) : [],
+        responseRoomIds: toRoomIds(Object.keys(response.rooms)),
+        subscribedRoomIds: body.room_subscriptions
+          ? toRoomIds(Object.keys(body.room_subscriptions))
+          : [],
         visibilityContext,
       },
       body.extensions,
@@ -1041,7 +1079,9 @@ function detectNSERequest(
   }
 
   // Check request shape - NSE typically subscribes to single room
-  const roomSubscriptions = body.room_subscriptions ? Object.keys(body.room_subscriptions) : [];
+  const roomSubscriptions = body.room_subscriptions
+    ? toRoomIds(Object.keys(body.room_subscriptions))
+    : [];
   const lists = body.lists ? Object.keys(body.lists) : [];
 
   if (roomSubscriptions.length === 1 && lists.length === 0) {
@@ -1080,7 +1120,10 @@ async function buildSimplifiedSlidingSyncResponse(
   c: Context<AppEnv>,
   body: SlidingSyncRequest,
 ): Promise<SlidingSyncResponse | Response> {
-  const userId = c.get("userId");
+  const userId = toUserId(c.get("userId"));
+  if (!userId) {
+    return Errors.invalidParam("userId", "Invalid user ID").toResponse();
+  }
   const db = c.env.DB;
   const syncDO = c.env.SYNC; // Use Durable Object for connection state (not KV - avoids rate limits)
 
@@ -1097,7 +1140,9 @@ async function buildSimplifiedSlidingSyncResponse(
       userAgent,
       isLikelyNSE: nseDetection.isLikelyNSE,
       indicators: nseDetection.indicators,
-      roomSubscriptions: body.room_subscriptions ? Object.keys(body.room_subscriptions) : [],
+      roomSubscriptions: body.room_subscriptions
+        ? toRoomIds(Object.keys(body.room_subscriptions))
+        : [],
       extensions: body.extensions ? Object.keys(body.extensions) : [],
       timestamp: new Date().toISOString(),
     });
@@ -1318,12 +1363,14 @@ async function buildSimplifiedSlidingSyncResponse(
         ) {
           hasChanges = true; // Mark that we have actual changes
           response.rooms[roomInfo.roomId] = roomData;
-          trackSlidingSyncRoomReadState(
-            connectionState,
-            roomInfo.roomId,
-            currentNotificationCount,
-            currentFullyRead,
-          );
+          if (currentFullyRead) {
+            trackSlidingSyncRoomReadState(
+              connectionState,
+              roomInfo.roomId,
+              currentNotificationCount,
+              currentFullyRead,
+            );
+          }
         }
 
         // Update room state tracking
@@ -1347,7 +1394,11 @@ async function buildSimplifiedSlidingSyncResponse(
 
   // Process room subscriptions
   if (body.room_subscriptions) {
-    for (const [roomId, subscription] of Object.entries(body.room_subscriptions)) {
+    for (const [roomId, subscription] of toRoomEntries(body.room_subscriptions)) {
+      const subscriptionConfig = subscription as {
+        required_state?: [string, string][];
+        timeline_limit?: number;
+      };
       const membershipResult = await db
         .prepare(`
         SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?
@@ -1376,8 +1427,8 @@ async function buildSimplifiedSlidingSyncResponse(
 
       // For joined rooms, get full room data
       const roomData = await getRoomData(db, roomId, userId, {
-        requiredState: subscription.required_state,
-        timelineLimit: subscription.timeline_limit ?? 10,
+        requiredState: subscriptionConfig.required_state,
+        timelineLimit: subscriptionConfig.timeline_limit ?? 10,
         initial: isInitialRoom,
         sinceStreamOrdering: isInitialRoom ? undefined : roomSincePos,
       });
@@ -1416,12 +1467,14 @@ async function buildSimplifiedSlidingSyncResponse(
           explicitSubscription: true,
         })
       ) {
-        trackSlidingSyncRoomReadState(
-          connectionState,
-          roomId,
-          currentNotificationCount,
-          currentFullyRead,
-        );
+        if (currentFullyRead) {
+          trackSlidingSyncRoomReadState(
+            connectionState,
+            roomId,
+            currentNotificationCount,
+            currentFullyRead,
+          );
+        }
       }
 
       const newStreamOrdering = roomData.maxStreamOrdering ?? roomSincePos;
@@ -1448,8 +1501,10 @@ async function buildSimplifiedSlidingSyncResponse(
 
     const visibilityContext = await loadSlidingSyncVisibilityContext(db, userId);
 
-    const currentResponseRoomIds = Object.keys(response.rooms);
-    const subscribedRoomIds = body.room_subscriptions ? Object.keys(body.room_subscriptions) : [];
+    const currentResponseRoomIds = toRoomIds(Object.keys(response.rooms));
+    const subscribedRoomIds = body.room_subscriptions
+      ? toRoomIds(Object.keys(body.room_subscriptions))
+      : [];
 
     // MSC4186 compatibility: typing is included even when not explicitly requested
     // if rooms are in the response (Element X relies on this behaviour).
@@ -1509,7 +1564,9 @@ async function buildSimplifiedSlidingSyncResponse(
     const receiptsByRoom = await getReceiptsForRooms(c.env, userRoomIds, userId);
 
     response.extensions.receipts = { rooms: {} };
-    for (const [roomId, content] of Object.entries(receiptsByRoom)) {
+    for (const [roomId, content] of toRoomEntries(
+      receiptsByRoom as Record<RoomId, Record<string, unknown>>,
+    )) {
       response.extensions.receipts.rooms![roomId] = {
         type: "m.receipt",
         content,

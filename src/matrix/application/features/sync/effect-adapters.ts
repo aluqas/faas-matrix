@@ -10,6 +10,7 @@ import {
   getPartialStateCompletionStatus,
   getPartialStateStatus,
 } from "../partial-state/tracker";
+import { toRoomId, toUserId } from "../../../../utils/ids";
 import type { PartialStatePort, SyncQueryPort } from "./effect-ports";
 import { toInfraError } from "./effect-ports";
 
@@ -121,23 +122,47 @@ export function createEffectPartialStatePort(
   return {
     getPartialStateStatus: (userId, roomId) =>
       Effect.tryPromise({
-        try: async () =>
-          (await getPartialStateStatus(cache, userId, roomId)) ??
-          getPersistedPartialStateStatus(db, userId, roomId),
+        try: async () => {
+          const typedUserId = toUserId(userId);
+          const typedRoomId = toRoomId(roomId);
+          if (!typedUserId || !typedRoomId) {
+            return null;
+          }
+          return (
+            (await getPartialStateStatus(cache, typedUserId, typedRoomId)) ??
+            getPersistedPartialStateStatus(db, typedUserId, typedRoomId)
+          );
+        },
         catch: (cause) => toInfraError("Failed to load partial-state status", cause),
       }),
     getPartialStateCompletionStatus: (userId, roomId) =>
       Effect.tryPromise({
-        try: async () =>
-          (await getPartialStateCompletionStatus(cache, userId, roomId)) ??
-          getPersistedPartialStateCompletionStatus(db, userId, roomId),
+        try: async () => {
+          const typedUserId = toUserId(userId);
+          const typedRoomId = toRoomId(roomId);
+          if (!typedUserId || !typedRoomId) {
+            return null;
+          }
+          return (
+            (await getPartialStateCompletionStatus(cache, typedUserId, typedRoomId)) ??
+            getPersistedPartialStateCompletionStatus(db, typedUserId, typedRoomId)
+          );
+        },
         catch: (cause) => toInfraError("Failed to load partial-state completion status", cause),
       }),
     takePartialStateCompletionStatus: (userId, roomId) =>
       Effect.tryPromise({
-        try: async () =>
-          (await consumePartialStateCompletionStatus(cache, userId, roomId)) ??
-          takePersistedPartialStateCompletionStatus(db, userId, roomId),
+        try: async () => {
+          const typedUserId = toUserId(userId);
+          const typedRoomId = toRoomId(roomId);
+          if (!typedUserId || !typedRoomId) {
+            return null;
+          }
+          return (
+            (await consumePartialStateCompletionStatus(cache, typedUserId, typedRoomId)) ??
+            takePersistedPartialStateCompletionStatus(db, typedUserId, typedRoomId)
+          );
+        },
         catch: (cause) => toInfraError("Failed to consume partial-state completion status", cause),
       }),
   };

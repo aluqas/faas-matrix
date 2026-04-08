@@ -1,7 +1,8 @@
 import { Hono } from "hono";
-import type { AppEnv, PDU } from "../../types";
+import type { AppEnv, EventId, PDU } from "../../types";
 import { Errors } from "../../utils/errors";
 import { calculateReferenceHashEventId } from "../../utils/crypto";
+import { toEventId, toRoomId } from "../../utils/ids";
 import { getAuthChain } from "../../services/database";
 import { EventQueryService } from "../../matrix/application/event-query-service";
 import { getPartialStateJoinForRoom } from "../../matrix/application/features/partial-state/tracker";
@@ -37,7 +38,10 @@ app.get("/_matrix/federation/v1/event/:eventId", async (c) => {
 });
 
 app.get("/_matrix/federation/v1/state/:roomId", async (c) => {
-  const roomId = c.req.param("roomId");
+  const roomId = toRoomId(c.req.param("roomId"));
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
   void c.req.query("event_id");
 
   const stateEvents = await c.env.DB.prepare(
@@ -84,8 +88,11 @@ app.get("/_matrix/federation/v1/state/:roomId", async (c) => {
 });
 
 app.get("/_matrix/federation/v1/state_ids/:roomId", async (c) => {
-  const roomId = c.req.param("roomId");
+  const roomId = toRoomId(c.req.param("roomId"));
   const eventId = c.req.query("event_id");
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
 
   const partialStateJoin = await getPartialStateJoinForRoom(c.env.CACHE, roomId);
   if (eventId && partialStateJoin) {
@@ -134,8 +141,11 @@ app.get("/_matrix/federation/v1/state_ids/:roomId", async (c) => {
 });
 
 app.get("/_matrix/federation/v1/event_auth/:roomId/:eventId", async (c) => {
-  const roomId = c.req.param("roomId");
-  const eventId = c.req.param("eventId");
+  const roomId = toRoomId(c.req.param("roomId"));
+  const eventId = toEventId(c.req.param("eventId"));
+  if (!roomId || !eventId) {
+    return Errors.invalidParam("roomId", "Invalid room or event ID").toResponse();
+  }
 
   const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
     .bind(roomId)
@@ -181,8 +191,12 @@ app.get("/_matrix/federation/v1/event_auth/:roomId/:eventId", async (c) => {
       continue;
     }
 
-    const authEvents = JSON.parse(authEvent.auth_events) as string[];
-    const prevEvents = JSON.parse(authEvent.prev_events) as string[];
+    const authEvents = (JSON.parse(authEvent.auth_events) as string[])
+      .map((value) => toEventId(value))
+      .filter((value): value is EventId => value !== null);
+    const prevEvents = (JSON.parse(authEvent.prev_events) as string[])
+      .map((value) => toEventId(value))
+      .filter((value): value is EventId => value !== null);
     const pdu: PDU = {
       ...toFederationPduFromRow(authEvent),
       auth_events: authEvents,
@@ -215,7 +229,9 @@ app.get("/_matrix/federation/v1/event_auth/:roomId/:eventId", async (c) => {
   await logFederationRouteWarning(c, "event_auth", {
     roomId,
     eventId,
-    requestedAuthEvents: JSON.parse(event.auth_events) as string[],
+    requestedAuthEvents: (JSON.parse(event.auth_events) as string[])
+      .map((value) => toEventId(value))
+      .filter((value): value is EventId => value !== null),
     returnedAuthChain: authChainSummaries,
     missingAuthEvents,
   });
@@ -224,7 +240,10 @@ app.get("/_matrix/federation/v1/event_auth/:roomId/:eventId", async (c) => {
 });
 
 app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
-  const roomId = c.req.param("roomId");
+  const roomId = toRoomId(c.req.param("roomId"));
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
   const limit = Math.min(Number.parseInt(c.req.query("limit") ?? "100", 10), 1000);
   const vParam = c.req.query("v");
 
@@ -235,7 +254,12 @@ app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
     return Errors.notFound("Room not found").toResponse();
   }
 
-  const startEventIds = vParam ? vParam.split(",") : [];
+  const startEventIds = vParam
+    ? vParam
+        .split(",")
+        .map((value) => toEventId(value))
+        .filter((value): value is EventId => value !== null)
+    : [];
   let events: FederationEventRow[];
   if (startEventIds.length > 0) {
     const startEvents = await c.env.DB.prepare(
@@ -282,7 +306,10 @@ app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
 });
 
 app.post("/_matrix/federation/v1/get_missing_events/:roomId", async (c) => {
-  const roomId = c.req.param("roomId");
+  const roomId = toRoomId(c.req.param("roomId"));
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
   const origin = c.get("federationOrigin" as any) as string | undefined;
 
   let body: {
@@ -306,8 +333,12 @@ app.post("/_matrix/federation/v1/get_missing_events/:roomId", async (c) => {
 
   const events = await queries.getMissingEvents(c.env.DB, {
     roomId,
-    earliestEvents: body.earliest_events ?? [],
-    latestEvents: body.latest_events ?? [],
+    earliestEvents: (body.earliest_events ?? [])
+      .map((value) => toEventId(value))
+      .filter((value): value is EventId => value !== null),
+    latestEvents: (body.latest_events ?? [])
+      .map((value) => toEventId(value))
+      .filter((value): value is EventId => value !== null),
     limit: Math.min(body.limit ?? 10, 100),
     minDepth: body.min_depth ?? 0,
     roomVersion: room.room_version,
@@ -318,7 +349,10 @@ app.post("/_matrix/federation/v1/get_missing_events/:roomId", async (c) => {
 });
 
 app.get("/_matrix/federation/v1/timestamp_to_event/:roomId", async (c) => {
-  const roomId = c.req.param("roomId");
+  const roomId = toRoomId(c.req.param("roomId"));
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
   const ts = Number.parseInt(c.req.query("ts") ?? "0", 10);
   const dir = c.req.query("dir") === "b" ? "b" : "f";
 

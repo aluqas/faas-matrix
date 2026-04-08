@@ -36,6 +36,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function parseLoginTokenData(value: unknown): { user_id: string; expires_at: number } | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  return typeof value.user_id === "string" && typeof value.expires_at === "number"
+    ? { user_id: value.user_id, expires_at: value.expires_at }
+    : null;
+}
+
+function parseRefreshTokenData(
+  value: unknown,
+): { userId: string; deviceId: string; accessTokenId: string } | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  return typeof value.userId === "string" &&
+    typeof value.deviceId === "string" &&
+    typeof value.accessTokenId === "string"
+    ? {
+        userId: value.userId,
+        deviceId: value.deviceId,
+        accessTokenId: value.accessTokenId,
+      }
+    : null;
+}
+
 function methodNotAllowed() {
   return new Response(
     JSON.stringify({
@@ -136,7 +162,9 @@ app.post("/_matrix/client/v3/login", async (c) => {
 
     // Look up the token in KV
     const tokenHash = await hashToken(token);
-    const tokenData = await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json");
+    const tokenData = parseLoginTokenData(
+      await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json"),
+    );
 
     if (!tokenData) {
       return Errors.forbidden("Invalid or expired login token").toResponse();
@@ -303,7 +331,9 @@ app.post("/_matrix/client/v3/refresh", async (c) => {
   const refreshTokenHash = await hashToken(refreshToken);
 
   // Look up in KV
-  const tokenData = await c.env.SESSIONS.get(`refresh:${refreshTokenHash}`, "json");
+  const tokenData = parseRefreshTokenData(
+    await c.env.SESSIONS.get(`refresh:${refreshTokenHash}`, "json"),
+  );
 
   if (!tokenData) {
     return Errors.unknownToken("Invalid or expired refresh token").toResponse();

@@ -42,7 +42,7 @@ bun run dev              # Local dev server (wrangler dev)
 bun run deploy           # Deploy to Cloudflare
 bun run spec:extract     # Refresh Markdown and OpenAPI spec coverage inventories from local matrix-spec clone
 bun run spec:coverage    # Run Markdown and OpenAPI coverage checks against docs/matrix/speccheck-matrix-v2.md
-bun run typecheck        # TypeScript type checking (tsc --noEmit)
+bun run check        # TypeScript type checking (tsc --noEmit)
 bun run lint             # oxlint on src/
 bun run test             # Vitest
 bun run db:migrate       # Run D1 migrations (remote)

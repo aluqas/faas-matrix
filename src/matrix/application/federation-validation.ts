@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import type { MatrixSignatures, PDU } from "../../types";
+import type { EventId, MatrixSignatures, PDU, RoomId, UserId } from "../../types";
 import { ErrorCodes } from "../../types";
 import {
   FederationInviteEnvelopeSchema,
@@ -8,28 +8,29 @@ import {
   type FederationPduEnvelope,
 } from "../../types/schema";
 import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
+import { toEventId, toRoomId, toUserId } from "../../utils/ids";
 import { DomainError } from "./domain-error";
 import { requireRoomVersionPolicy } from "./room-version-policy";
 
 export interface FederationEventValidationResult {
-  roomId: string;
-  eventId: string;
+  roomId: RoomId;
+  eventId: EventId;
   event: PDU;
 }
 
 export interface FederationInviteValidationResult extends FederationEventValidationResult {
   roomVersion: string;
   inviteRoomState: unknown[];
-  invitedUserId: string;
+  invitedUserId: UserId;
 }
 
 export interface FederationThirdPartyInviteValidationResult {
-  roomId: string;
-  sender: string;
-  stateKey: string;
-  eventId?: string;
+  roomId: RoomId;
+  sender: UserId;
+  stateKey: UserId;
+  eventId?: EventId;
   signed: {
-    mxid: string;
+    mxid: UserId;
     token: string;
     signatures: MatrixSignatures;
   };
@@ -83,10 +84,16 @@ function decodeSchema<A>(
 }
 
 function toPdu(envelope: FederationPduEnvelope, roomId: string, eventId: string): PDU {
+  const resolvedEventId = toEventId(envelope.event_id ?? eventId);
+  const resolvedRoomId = toRoomId(envelope.room_id ?? roomId);
+  const resolvedSender = toUserId(envelope.sender);
+  if (!resolvedEventId || !resolvedRoomId || !resolvedSender) {
+    throw invalidParam("Invalid Matrix identifiers in federation event");
+  }
   return {
-    event_id: envelope.event_id ?? eventId,
-    room_id: envelope.room_id ?? roomId,
-    sender: envelope.sender,
+    event_id: resolvedEventId,
+    room_id: resolvedRoomId,
+    sender: resolvedSender,
     type: envelope.type,
     origin: envelope.origin,
     membership: envelope.membership,
@@ -121,8 +128,8 @@ function validateEventIdentity(
 
 function validateMembershipEventRequest(input: {
   body: unknown;
-  roomId: string;
-  eventId: string;
+  roomId: RoomId;
+  eventId: EventId;
   expectedMembership: "join" | "leave" | "knock";
   context: string;
   mismatchMessage: string;
@@ -150,8 +157,8 @@ function validateMembershipEventRequest(input: {
 
 export function validateSendJoinRequest(input: {
   body: unknown;
-  roomId: string;
-  eventId: string;
+  roomId: RoomId;
+  eventId: EventId;
 }): Effect.Effect<FederationEventValidationResult, DomainError> {
   return validateMembershipEventRequest({
     ...input,
@@ -163,8 +170,8 @@ export function validateSendJoinRequest(input: {
 
 export function validateSendLeaveRequest(input: {
   body: unknown;
-  roomId: string;
-  eventId: string;
+  roomId: RoomId;
+  eventId: EventId;
 }): Effect.Effect<FederationEventValidationResult, DomainError> {
   return validateMembershipEventRequest({
     ...input,
@@ -176,8 +183,8 @@ export function validateSendLeaveRequest(input: {
 
 export function validateSendKnockRequest(input: {
   body: unknown;
-  roomId: string;
-  eventId: string;
+  roomId: RoomId;
+  eventId: EventId;
 }): Effect.Effect<FederationEventValidationResult, DomainError> {
   return validateMembershipEventRequest({
     ...input,
@@ -189,7 +196,7 @@ export function validateSendKnockRequest(input: {
 
 export function validateInviteRequest(input: {
   body: unknown;
-  eventId: string;
+  eventId: EventId;
   serverName: string;
   requireRoomVersion: boolean;
 }): Effect.Effect<FederationInviteValidationResult, DomainError> {
@@ -229,10 +236,11 @@ export function validateInviteRequest(input: {
       if (event.type !== "m.room.member" || event.content.membership !== "invite") {
         return Effect.fail(invalidParam("Event is not an invite event"));
       }
-      if (!event.state_key || !event.state_key.includes(":")) {
+      const invitedUserId = event.state_key ? toUserId(event.state_key) : null;
+      if (!invitedUserId) {
         return Effect.fail(invalidParam("Invalid state_key for invite"));
       }
-      const invitedServer = extractServerNameFromMatrixId(event.state_key);
+      const invitedServer = extractServerNameFromMatrixId(invitedUserId);
       if (invitedServer !== input.serverName) {
         return Effect.fail(forbidden("User is not local to this server"));
       }
@@ -242,7 +250,7 @@ export function validateInviteRequest(input: {
         roomVersion,
         event,
         inviteRoomState: Array.from(envelope.invite_room_state ?? []),
-        invitedUserId: event.state_key,
+        invitedUserId,
       });
     }),
   );
@@ -250,7 +258,7 @@ export function validateInviteRequest(input: {
 
 export function validateThirdPartyInviteExchangeRequest(input: {
   body: unknown;
-  roomId: string;
+  roomId: RoomId;
 }): Effect.Effect<FederationThirdPartyInviteValidationResult, DomainError> {
   return decodeSchema(
     FederationThirdPartyInviteExchangeSchema,

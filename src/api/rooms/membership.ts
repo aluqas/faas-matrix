@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import type { AppEnv } from "../../types";
 import { parseOptionalJsonObjectBody, resolveRoomIdOrAlias, toRouteErrorResponse } from "./shared";
 import { requireAuth } from "../../middleware/auth";
+import { Errors } from "../../utils/errors";
+import { toRoomId } from "../../utils/ids";
 
 const app = new Hono<AppEnv>();
 
@@ -18,9 +20,13 @@ async function parseKnockBody(c: import("hono").Context<AppEnv>) {
 app.post("/_matrix/client/v3/rooms/:roomId/join", requireAuth(), async (c) => {
   try {
     const body = await parseOptionalJsonObjectBody(c);
+    const roomId = toRoomId(c.req.param("roomId"));
+    if (!roomId) {
+      return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+    }
     const response = await c.get("appContext").services.rooms.joinRoom({
       userId: c.get("userId"),
-      roomId: c.req.param("roomId"),
+      roomId,
       ...(body !== undefined ? { body } : {}),
     });
     return c.json(response);
@@ -35,9 +41,13 @@ app.post("/_matrix/client/v3/rooms/:roomId/join", requireAuth(), async (c) => {
 
 app.post("/_matrix/client/v3/rooms/:roomId/leave", requireAuth(), async (c) => {
   try {
+    const roomId = toRoomId(c.req.param("roomId"));
+    if (!roomId) {
+      return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+    }
     await c.get("appContext").services.rooms.leaveRoom({
       userId: c.get("userId"),
-      roomId: c.req.param("roomId"),
+      roomId,
     });
     return c.json({});
   } catch (error) {
@@ -51,7 +61,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/leave", requireAuth(), async (c) => {
 
 async function handleKnock(
   c: import("hono").Context<AppEnv>,
-  roomId: string,
+  roomId: import("../../types").RoomId,
   reason?: string,
   serverNames?: string[],
 ): Promise<Response> {
@@ -74,7 +84,11 @@ async function handleKnock(
 
 app.post("/_matrix/client/v3/rooms/:roomId/knock", requireAuth(), async (c) => {
   const body = await parseKnockBody(c);
-  return handleKnock(c, c.req.param("roomId"), body.reason);
+  const roomId = toRoomId(c.req.param("roomId"));
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
+  return handleKnock(c, roomId, body.reason);
 });
 
 app.post("/_matrix/client/v3/knock/:roomIdOrAlias", requireAuth(), async (c) => {

@@ -9,6 +9,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv, Env } from "../types";
+import { isJsonObject } from "../types/common";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
@@ -16,6 +17,48 @@ import { getRoomState } from "../services/database";
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
 
 const app = new Hono<AppEnv>();
+
+type ReceiptContent = Record<
+  string,
+  Record<string, Record<string, { ts: number; thread_id?: string }>>
+>;
+
+function parseReceiptContent(value: unknown): ReceiptContent {
+  if (!isJsonObject(value)) {
+    return {};
+  }
+
+  const parsed: ReceiptContent = {};
+  for (const [eventId, receiptTypes] of Object.entries(value)) {
+    if (!isJsonObject(receiptTypes)) {
+      continue;
+    }
+    const parsedTypes: ReceiptContent[string] = {};
+
+    for (const [receiptType, users] of Object.entries(receiptTypes)) {
+      if (!isJsonObject(users)) {
+        continue;
+      }
+      const parsedUsers: ReceiptContent[string][string] = {};
+
+      for (const [userId, receipt] of Object.entries(users)) {
+        if (!isJsonObject(receipt) || typeof receipt.ts !== "number") {
+          continue;
+        }
+        parsedUsers[userId] =
+          typeof receipt.thread_id === "string"
+            ? { ts: receipt.ts, thread_id: receipt.thread_id }
+            : { ts: receipt.ts };
+      }
+
+      parsedTypes[receiptType] = parsedUsers;
+    }
+
+    parsed[eventId] = parsedTypes;
+  }
+
+  return parsed;
+}
 
 // ============================================
 // Helper to get Room DO stub
@@ -317,12 +360,13 @@ export async function getReceiptsForRoom(
   );
 
   const data = await response.json();
+  const receipts = isJsonObject(data) ? parseReceiptContent(data.receipts) : {};
 
   // Filter private receipts - m.read.private should only be visible to the owner
   if (requestingUserId) {
-    const filteredReceipts: typeof data.receipts = {};
+    const filteredReceipts: ReceiptContent = {};
 
-    for (const [eventId, receiptTypes] of Object.entries(data.receipts)) {
+    for (const [eventId, receiptTypes] of Object.entries(receipts)) {
       filteredReceipts[eventId] = {};
 
       for (const [receiptType, users] of Object.entries(receiptTypes)) {
@@ -353,7 +397,7 @@ export async function getReceiptsForRoom(
 
   return {
     type: "m.receipt",
-    content: data.receipts,
+    content: receipts,
   };
 }
 

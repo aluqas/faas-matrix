@@ -1,7 +1,19 @@
 // Database service layer for D1
 
-import type { User, Device, Room, PDU, Membership, Env, StrippedStateEvent } from "../types";
 import { getUserRoomIdsWithEffectiveMembership } from "../matrix/repositories/membership-repository";
+import type {
+  Device,
+  Env,
+  EventId,
+  Membership,
+  PDU,
+  Room,
+  RoomId,
+  StrippedStateEvent,
+  User,
+  UserId,
+} from "../types";
+import { toEventId, toRoomId, toUserId } from "../utils/ids";
 import { fanoutEventToRemoteServers } from "./federation-fanout";
 import { createFederationOutboundPort } from "./federation-outbound";
 
@@ -38,14 +50,37 @@ function parseJsonWithFallback<T>(value: string | null | undefined, fallback: T)
 }
 
 function toStoredPdu(row: StoredEventRow): PDU {
+  const event_id = toEventId(row.event_id);
+  const room_id = toRoomId(row.room_id);
+  const sender = toUserId(row.sender);
+
+  // These validations are critical for data integrity - database must provide valid IDs
+  if (!event_id) throw new Error(`Invalid event_id format: ${row.event_id}`);
+  if (!room_id) throw new Error(`Invalid room_id format: ${row.room_id}`);
+  if (!sender) throw new Error(`Invalid sender format: ${row.sender}`);
+
+  const auth_events = parseJsonWithFallback<string[]>(row.auth_events, [])
+    .map((id) => toEventId(id))
+    .filter((id): id is EventId => id !== null);
+
+  const prev_events = parseJsonWithFallback<string[]>(row.prev_events, [])
+    .map((id) => toEventId(id))
+    .filter((id): id is EventId => id !== null);
+
   return {
-    event_id: row.event_id,
-    room_id: row.room_id,
-    sender: row.sender,
+    event_id,
+    room_id,
+    sender,
     type: row.event_type,
     ...withOptionalValue("origin", row.event_origin ?? undefined),
     ...withOptionalValue("membership", (row.event_membership as Membership | null) ?? undefined),
-    ...(row.prev_state ? { prev_state: parseJsonWithFallback<string[]>(row.prev_state, []) } : {}),
+    ...(row.prev_state
+      ? {
+          prev_state: parseJsonWithFallback<string[]>(row.prev_state, [])
+            .map((id) => toEventId(id))
+            .filter((id): id is EventId => id !== null),
+        }
+      : {}),
     ...(row.state_key !== null ? { state_key: row.state_key } : {}),
     content: parseJsonWithFallback<Record<string, unknown>>(row.content, {}),
     origin_server_ts: row.origin_server_ts,
@@ -53,8 +88,8 @@ function toStoredPdu(row: StoredEventRow): PDU {
       ? { unsigned: parseJsonWithFallback<Record<string, unknown>>(row.unsigned, {}) }
       : {}),
     depth: row.depth,
-    auth_events: parseJsonWithFallback<string[]>(row.auth_events, []),
-    prev_events: parseJsonWithFallback<string[]>(row.prev_events, []),
+    auth_events,
+    prev_events,
     ...(row.hashes ? { hashes: parseJsonWithFallback(row.hashes, { sha256: "" }) } : {}),
     ...(row.signatures
       ? {
@@ -177,8 +212,11 @@ export async function getUserById(db: D1Database, userId: string): Promise<User 
 
   if (!result) return null;
 
+  const user_id = toUserId(result.user_id);
+  if (!user_id) throw new Error(`Invalid user_id format in database: ${result.user_id}`);
+
   return {
-    user_id: result.user_id,
+    user_id,
     localpart: result.localpart,
     ...withOptionalValue("display_name", result.display_name ?? undefined),
     ...withOptionalValue("avatar_url", result.avatar_url ?? undefined),
@@ -209,8 +247,11 @@ export async function getUserByLocalpart(db: D1Database, localpart: string): Pro
 
   if (!result) return null;
 
+  const user_id = toUserId(result.user_id);
+  if (!user_id) throw new Error(`Invalid user_id format in database: ${result.user_id}`);
+
   return {
-    user_id: result.user_id,
+    user_id,
     localpart: result.localpart,
     ...withOptionalValue("display_name", result.display_name ?? undefined),
     ...withOptionalValue("avatar_url", result.avatar_url ?? undefined),
@@ -288,9 +329,12 @@ export async function getDevice(
 
   if (!result) return null;
 
+  const user_id = toUserId(result.user_id);
+  if (!user_id) throw new Error(`Invalid user_id format in database: ${result.user_id}`);
+
   return {
     device_id: result.device_id,
-    user_id: result.user_id,
+    user_id,
     ...withOptionalValue("display_name", result.display_name ?? undefined),
     ...withOptionalValue("last_seen_ts", result.last_seen_ts ?? undefined),
     ...withOptionalValue("last_seen_ip", result.last_seen_ip ?? undefined),
@@ -312,13 +356,22 @@ export async function getUserDevices(db: D1Database, userId: string): Promise<De
       last_seen_ip: string | null;
     }>();
 
-  return result.results.map((r) => ({
-    device_id: r.device_id,
-    user_id: r.user_id,
-    ...withOptionalValue("display_name", r.display_name ?? undefined),
-    ...withOptionalValue("last_seen_ts", r.last_seen_ts ?? undefined),
-    ...withOptionalValue("last_seen_ip", r.last_seen_ip ?? undefined),
-  }));
+  return result.results
+    .map((r) => {
+      const typedUserId = toUserId(r.user_id);
+      if (!typedUserId) {
+        throw new Error(`Invalid user_id format in database: ${r.user_id}`);
+      }
+
+      return {
+        device_id: r.device_id,
+        user_id: typedUserId,
+        ...withOptionalValue("display_name", r.display_name ?? undefined),
+        ...withOptionalValue("last_seen_ts", r.last_seen_ts ?? undefined),
+        ...withOptionalValue("last_seen_ip", r.last_seen_ip ?? undefined),
+      };
+    })
+    .filter((device): device is Device => device.user_id !== undefined);
 }
 
 const LOCAL_NOTIFICATION_SETTINGS_PREFIX = "org.matrix.msc3890.local_notification_settings.";
@@ -445,7 +498,7 @@ export async function createAccessToken(
 export async function getUserByTokenHash(
   db: D1Database,
   tokenHash: string,
-): Promise<{ userId: string; deviceId: string | null } | null> {
+): Promise<{ userId: UserId; deviceId: string | null } | null> {
   const result = await db
     .prepare(`SELECT user_id, device_id FROM access_tokens WHERE token_hash = ?`)
     .bind(tokenHash)
@@ -453,8 +506,11 @@ export async function getUserByTokenHash(
 
   if (!result) return null;
 
+  const userId = toUserId(result.user_id);
+  if (!userId) throw new Error(`Invalid user_id format in database: ${result.user_id}`);
+
   return {
-    userId: result.user_id,
+    userId,
     deviceId: result.device_id,
   };
 }
@@ -462,7 +518,7 @@ export async function getUserByTokenHash(
 export async function getAccessTokenRecordByHash(
   db: D1Database,
   tokenHash: string,
-): Promise<{ tokenId: string; userId: string; deviceId: string | null } | null> {
+): Promise<{ tokenId: string; userId: UserId; deviceId: string | null } | null> {
   const result = await db
     .prepare(`SELECT token_id, user_id, device_id FROM access_tokens WHERE token_hash = ?`)
     .bind(tokenHash)
@@ -470,9 +526,12 @@ export async function getAccessTokenRecordByHash(
 
   if (!result) return null;
 
+  const userId = toUserId(result.user_id);
+  if (!userId) throw new Error(`Invalid user_id format in database: ${result.user_id}`);
+
   return {
     tokenId: result.token_id,
-    userId: result.user_id,
+    userId,
     deviceId: result.device_id,
   };
 }
@@ -519,13 +578,21 @@ export async function getRoom(db: D1Database, roomId: string): Promise<Room | nu
 
   if (!result) return null;
 
+  const room_id = toRoomId(result.room_id);
+  if (!room_id) throw new Error(`Invalid room_id format in database: ${result.room_id}`);
+
+  const creator_id = result.creator_id ? toUserId(result.creator_id) : undefined;
+  if (result.creator_id && !creator_id) {
+    throw new Error(`Invalid creator_id format in database: ${result.creator_id}`);
+  }
+
   return {
-    room_id: result.room_id,
+    room_id,
     room_version: result.room_version,
     is_public: result.is_public === 1,
-    ...withOptionalValue("creator_id", result.creator_id ?? undefined),
+    ...withOptionalValue("creator_id", creator_id),
     created_at: result.created_at,
-  };
+  } as Room;
 }
 
 // Event operations
@@ -863,12 +930,19 @@ export async function getInviteStrippedState(
     )
     .bind(roomId)
     .all<{ event_type: string; state_key: string; content: string; sender: string }>();
-  return result.results.map((r) => ({
-    type: r.event_type,
-    state_key: r.state_key,
-    content: parseJsonWithFallback<Record<string, unknown>>(r.content, {}),
-    sender: r.sender,
-  }));
+  return result.results.map((r) => {
+    const sender = toUserId(r.sender);
+    if (!sender) {
+      throw new Error(`Invalid sender format in database: ${r.sender}`);
+    }
+
+    return {
+      type: r.event_type,
+      state_key: r.state_key,
+      content: parseJsonWithFallback<Record<string, unknown>>(r.content, {}),
+      sender,
+    };
+  });
 }
 
 /**
@@ -879,7 +953,7 @@ export function getUserRooms(
   db: D1Database,
   userId: string,
   membership?: Membership,
-): Promise<string[]> {
+): Promise<RoomId[]> {
   return getUserRoomIdsWithEffectiveMembership(db, userId, membership);
 }
 

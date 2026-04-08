@@ -1,4 +1,5 @@
 import { ErrorCodes, type PDU } from "../types";
+import { isJsonObject } from "../types/common";
 import { MatrixApiError } from "../utils/errors";
 import { federationPut } from "./federation-keys";
 import { getRoom, getRoomState } from "./database";
@@ -84,6 +85,9 @@ export async function sendFederationInvite(
   let message = `Remote server rejected invite with HTTP ${response.status}`;
   try {
     const body = await response.json();
+    if (!isJsonObject(body)) {
+      throw new Error("Malformed response body");
+    }
     if (typeof body.errcode === "string") {
       errcode = body.errcode;
     }

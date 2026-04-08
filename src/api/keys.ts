@@ -18,7 +18,7 @@ import { requireAuth } from "../middleware/auth";
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
 import { federationPost } from "../services/federation-keys";
 import { verifyPassword } from "../utils/crypto";
-import { generateOpaqueId } from "../utils/ids";
+import { generateOpaqueId, toUserId } from "../utils/ids";
 import { recordDeviceKeyChange } from "../services/device-key-changes";
 import { getPasswordHash } from "../services/database";
 import { runClientEffect } from "../matrix/application/effect-runtime";
@@ -596,11 +596,15 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
     const remoteRequestsByServer: Record<string, DeviceKeyRequestMap> = {};
 
     for (const [userId, devices] of Object.entries(requestedKeys)) {
-      deviceKeys[userId] = {};
-      const userServerName = extractServerNameFromMatrixId(userId);
+      const typedUserId = toUserId(userId);
+      if (!typedUserId) {
+        continue;
+      }
+      deviceKeys[typedUserId] = {};
+      const userServerName = extractServerNameFromMatrixId(typedUserId);
       if (userServerName && userServerName !== localServerName) {
         remoteRequestsByServer[userServerName] = remoteRequestsByServer[userServerName] || {};
-        remoteRequestsByServer[userServerName][userId] = devices;
+        remoteRequestsByServer[userServerName][typedUserId] = devices;
         continue;
       }
 
@@ -610,20 +614,28 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
 
       if (requestedDevices === null || requestedDevices.length === 0) {
         // Get all devices for this user from Durable Object
-        const allDeviceKeys = await getAllDeviceKeysFromDO(c.env, userId);
+        const allDeviceKeys = await getAllDeviceKeysFromDO(c.env, typedUserId);
         for (const [deviceId, keys] of Object.entries(allDeviceKeys)) {
           if (keys) {
             // Merge DB signatures into the device keys
-            deviceKeys[userId][deviceId] = await mergeSignaturesForDevice(userId, deviceId, keys);
+            deviceKeys[typedUserId][deviceId] = await mergeSignaturesForDevice(
+              typedUserId,
+              deviceId,
+              keys,
+            );
           }
         }
       } else {
         // Get specific devices from Durable Object
         for (const deviceId of requestedDevices) {
-          const keys = await getDeviceKeyFromDO(c.env, userId, deviceId);
+          const keys = await getDeviceKeyFromDO(c.env, typedUserId, deviceId);
           if (keys) {
             // Merge DB signatures into the device keys
-            deviceKeys[userId][deviceId] = await mergeSignaturesForDevice(userId, deviceId, keys);
+            deviceKeys[typedUserId][deviceId] = await mergeSignaturesForDevice(
+              typedUserId,
+              deviceId,
+              keys,
+            );
           }
         }
       }
@@ -632,17 +644,17 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
       // Per Cloudflare blog: D1 has eventual consistency across read replicas.
       // Durable Objects provide single-threaded, atomic storage - critical for
       // E2EE bootstrap where client uploads then immediately queries keys.
-      const csKeys = await getCrossSigningKeysFromDO(c.env, userId);
+      const csKeys = await getCrossSigningKeysFromDO(c.env, typedUserId);
 
       if (csKeys.master) {
-        masterKeys[userId] = csKeys.master;
+        masterKeys[typedUserId] = csKeys.master;
       }
       if (csKeys.self_signing) {
-        selfSigningKeys[userId] = csKeys.self_signing;
+        selfSigningKeys[typedUserId] = csKeys.self_signing;
       }
       // Only return user_signing key if querying own keys
-      if (csKeys.user_signing && userId === requesterUserId) {
-        userSigningKeys[userId] = csKeys.user_signing;
+      if (csKeys.user_signing && typedUserId === requesterUserId) {
+        userSigningKeys[typedUserId] = csKeys.user_signing;
       }
     }
 
@@ -663,8 +675,12 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
       }
 
       for (const [userId, remoteDeviceMap] of Object.entries(response.device_keys)) {
-        deviceKeys[userId] = {
-          ...deviceKeys[userId],
+        const typedUserId = toUserId(userId);
+        if (!typedUserId) {
+          continue;
+        }
+        deviceKeys[typedUserId] = {
+          ...deviceKeys[typedUserId],
           ...remoteDeviceMap,
         };
       }
@@ -719,12 +735,16 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
 
   if (requestedKeys) {
     for (const [userId, devices] of Object.entries(requestedKeys)) {
-      oneTimeKeys[userId] = {};
+      const typedUserId = toUserId(userId);
+      if (!typedUserId) {
+        continue;
+      }
+      oneTimeKeys[typedUserId] = {};
 
       for (const [deviceId, algorithm] of Object.entries(devices)) {
         // Try to claim a one-time key from KV first
         const existingKeys = parseStoredOneTimeKeyBuckets(
-          await c.env.ONE_TIME_KEYS.get(`otk:${userId}:${deviceId}`, "json"),
+          await c.env.ONE_TIME_KEYS.get(`otk:${typedUserId}:${deviceId}`, "json"),
         );
 
         let foundKey = false;
@@ -743,7 +763,7 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
 
             // Save back to KV
             await c.env.ONE_TIME_KEYS.put(
-              `otk:${userId}:${deviceId}`,
+              `otk:${typedUserId}:${deviceId}`,
               JSON.stringify(existingKeys),
             );
 
@@ -753,10 +773,10 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
               UPDATE one_time_keys SET claimed = 1, claimed_at = ?
               WHERE user_id = ? AND device_id = ? AND key_id = ?
             `)
-              .bind(Date.now(), userId, deviceId, key.keyId)
+              .bind(Date.now(), typedUserId, deviceId, key.keyId)
               .run();
 
-            oneTimeKeys[userId][deviceId] = {
+            oneTimeKeys[typedUserId][deviceId] = {
               [key.keyId]: key.keyData,
             };
             foundKey = true;
@@ -771,7 +791,7 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
             WHERE user_id = ? AND device_id = ? AND algorithm = ? AND claimed = 0
             LIMIT 1
           `)
-            .bind(userId, deviceId, algorithm)
+            .bind(typedUserId, deviceId, algorithm)
             .first<{
               id: number;
               key_id: string;
@@ -787,7 +807,7 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
               .bind(Date.now(), otk.id)
               .run();
 
-            oneTimeKeys[userId][deviceId] = {
+            oneTimeKeys[typedUserId][deviceId] = {
               [otk.key_id]: parseJsonObjectString(otk.key_data) ?? {},
             };
             foundKey = true;
@@ -801,7 +821,7 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
             SELECT key_id, key_data, used FROM fallback_keys
             WHERE user_id = ? AND device_id = ? AND algorithm = ?
           `)
-            .bind(userId, deviceId, algorithm)
+            .bind(typedUserId, deviceId, algorithm)
             .first<{
               key_id: string;
               key_data: string;
@@ -814,11 +834,11 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
               .prepare(`
               UPDATE fallback_keys SET used = 1 WHERE user_id = ? AND device_id = ? AND algorithm = ?
             `)
-              .bind(userId, deviceId, algorithm)
+              .bind(typedUserId, deviceId, algorithm)
               .run();
 
             const keyData = parseJsonObjectString(fallback.key_data) ?? {};
-            oneTimeKeys[userId][deviceId] = {
+            oneTimeKeys[typedUserId][deviceId] = {
               [fallback.key_id]: {
                 ...keyData,
                 fallback: true,
@@ -1512,10 +1532,10 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   // SSSS immediately after uploading cross-signing keys during the bootstrap flow.
   // The "confirm your identity" screen in Element X is EXPECTED for new users -
   // it prompts them to set up recovery/SSSS.
-  const ssssDefault = (await c.env.ACCOUNT_DATA.get(
+  const ssssDefault = await c.env.ACCOUNT_DATA.get(
     `global:${userId}:m.secret_storage.default_key`,
     "json",
-  )) as { key?: string } | null;
+  );
 
   let hasValidSSS = !!(ssssDefault && ssssDefault.key);
   if (!hasValidSSS) {

@@ -4,6 +4,7 @@
 
 import type { Context, Next } from "hono";
 import type { AppEnv } from "../types";
+import { isJsonObject } from "../types/common";
 
 // Rate limit configurations for different endpoint types
 const RATE_LIMITS: Record<string, { requests: number; windowMs: number }> = {
@@ -95,30 +96,33 @@ export async function rateLimitMiddleware(c: Context<AppEnv>, next: Next) {
       }),
     );
 
-    const result = (await response.json()) as {
-      allowed: boolean;
-      remaining: number;
-      retryAfterMs?: number;
-      resetAt?: number;
-    };
+    const result = await response.json();
+    if (!isJsonObject(result)) {
+      await next();
+      return;
+    }
+    const remaining = typeof result.remaining === "number" ? result.remaining : 0;
+    const resetAt = typeof result.resetAt === "number" ? result.resetAt : undefined;
+    const allowed = result.allowed === true;
+    const retryAfterMs = typeof result.retryAfterMs === "number" ? result.retryAfterMs : undefined;
 
     // Set rate limit headers
     c.header("X-RateLimit-Limit", String(config.requests));
-    c.header("X-RateLimit-Remaining", String(result.remaining));
-    if (result.resetAt) {
-      c.header("X-RateLimit-Reset", String(Math.ceil(result.resetAt / 1000)));
+    c.header("X-RateLimit-Remaining", String(remaining));
+    if (resetAt) {
+      c.header("X-RateLimit-Reset", String(Math.ceil(resetAt / 1000)));
     }
 
-    if (!result.allowed) {
+    if (!allowed) {
       // Rate limited
-      const retryAfter = Math.ceil((result.retryAfterMs ?? config.windowMs) / 1000);
+      const retryAfter = Math.ceil((retryAfterMs ?? config.windowMs) / 1000);
       c.header("Retry-After", String(retryAfter));
 
       return c.json(
         {
           errcode: "M_LIMIT_EXCEEDED",
           error: "Too many requests",
-          retry_after_ms: result.retryAfterMs ?? config.windowMs,
+          retry_after_ms: retryAfterMs ?? config.windowMs,
         },
         429,
       );
@@ -156,21 +160,24 @@ export function strictRateLimit(requests: number, windowMs: number) {
         }),
       );
 
-      const result = (await response.json()) as {
-        allowed: boolean;
-        remaining: number;
-        retryAfterMs?: number;
-      };
+      const result = await response.json();
+      if (!isJsonObject(result)) {
+        await next();
+        return;
+      }
+      const allowed = result.allowed === true;
+      const retryAfterMs =
+        typeof result.retryAfterMs === "number" ? result.retryAfterMs : undefined;
 
-      if (!result.allowed) {
-        const retryAfter = Math.ceil((result.retryAfterMs ?? windowMs) / 1000);
+      if (!allowed) {
+        const retryAfter = Math.ceil((retryAfterMs ?? windowMs) / 1000);
         c.header("Retry-After", String(retryAfter));
 
         return c.json(
           {
             errcode: "M_LIMIT_EXCEEDED",
             error: "Too many requests",
-            retry_after_ms: result.retryAfterMs ?? windowMs,
+            retry_after_ms: retryAfterMs ?? windowMs,
           },
           429,
         );

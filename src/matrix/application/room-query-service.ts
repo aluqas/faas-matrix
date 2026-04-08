@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { AppContext } from "../../foundation/app-context";
-import { ErrorCodes, type Membership, type PDU } from "../../types";
+import { ErrorCodes, type Membership, type PDU, type RoomId, type UserId } from "../../types";
+import { toEventId, toUserId } from "../../utils/ids";
 import type {
   GetRoomMembersInput,
   GetRoomMessagesInput,
@@ -29,7 +30,7 @@ import { getPartialStateDeferredAuthReason } from "./features/federation/partial
 
 type MembershipRecord = {
   membership: Membership;
-  eventId: string;
+  eventId: PDU["event_id"];
 };
 
 export type {
@@ -47,15 +48,45 @@ export type {
 const eventQueries = new EventQueryService();
 
 const defaultDependencies: RoomQueryDependencies = {
-  getMembership,
+  getMembership: async (db, roomId, userId) => {
+    const membership = await getMembership(db, roomId, userId);
+    const eventId = membership ? toEventId(membership.eventId) : null;
+    return membership && eventId
+      ? {
+          membership: membership.membership,
+          eventId,
+        }
+      : null;
+  },
   getRoomState,
   getStateEvent,
-  getRoomMembers,
+  getRoomMembers: async (db: D1Database, roomId: RoomId, membership?: Membership) =>
+    (await getRoomMembers(db, roomId, membership)).flatMap((member) => {
+      const userId = toUserId(member.userId);
+      return userId
+        ? [
+            {
+              userId,
+              membership: member.membership,
+              ...(member.displayName !== undefined ? { displayName: member.displayName } : {}),
+              ...(member.avatarUrl !== undefined ? { avatarUrl: member.avatarUrl } : {}),
+            },
+          ]
+        : [];
+    }),
   getRoomEvents,
   getVisibleEventForUser: (db, roomId, eventId, userId) =>
     eventQueries.getVisibleEventForUser(db, roomId, eventId, userId),
-  findClosestEventByTimestamp: (db, roomId, ts, dir) =>
-    eventQueries.findClosestEventByTimestamp(db, roomId, ts, dir),
+  findClosestEventByTimestamp: async (db, roomId, ts, dir) => {
+    const event = await eventQueries.findClosestEventByTimestamp(db, roomId, ts, dir);
+    const eventId = event ? toEventId(event.event_id) : null;
+    return event && eventId
+      ? {
+          event_id: eventId,
+          origin_server_ts: event.origin_server_ts,
+        }
+      : null;
+  },
   getPartialStateJoin: getPartialStateStatus,
   getPartialStateJoinCompletion: getPartialStateCompletionStatus,
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -135,7 +166,7 @@ export class MatrixRoomQueryService {
     });
   }
 
-  private membershipEffect(roomId: string, userId: string) {
+  private membershipEffect(roomId: RoomId, userId: UserId) {
     const db = this.getDb();
     return this.fromPromise("Failed to load room membership", () =>
       this.dependencies.getMembership(db, roomId, userId),
@@ -143,8 +174,8 @@ export class MatrixRoomQueryService {
   }
 
   private requireMembershipEffect(
-    roomId: string,
-    userId: string,
+    roomId: RoomId,
+    userId: UserId,
     allowedMemberships: readonly Membership[],
     message = "Not a member of this room",
   ): Effect.Effect<MembershipRecord, DomainError | InfraError> {
@@ -160,8 +191,8 @@ export class MatrixRoomQueryService {
   }
 
   private waitForPartialStateJoinCompletionEffect(
-    userId: string,
-    roomId: string,
+    userId: UserId,
+    roomId: RoomId,
     timeoutMs = 2000,
   ): Effect.Effect<void, InfraError> {
     const cache = this.getCache();

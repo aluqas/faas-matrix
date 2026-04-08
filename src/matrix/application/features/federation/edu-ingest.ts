@@ -19,6 +19,7 @@ import {
   type EduIngestInput,
   type EduIngestResult,
 } from "./contracts";
+import { toRoomId } from "../../../../utils/ids";
 
 export interface EduIngestPorts {
   appContext: AppContext;
@@ -67,7 +68,10 @@ export async function ingestFederationEdu(
     edu.content && typeof edu.content === "object" && !Array.isArray(edu.content)
       ? edu.content
       : {};
-  const roomIds = getRoomScopedEduRoomIds(eduType, content);
+  const roomIds = getRoomScopedEduRoomIds(eduType, content).flatMap((roomId) => {
+    const typedRoomId = toRoomId(roomId);
+    return typedRoomId ? [typedRoomId] : [];
+  });
 
   for (const roomId of roomIds) {
     const room = await ports.repository.getRoom(roomId);

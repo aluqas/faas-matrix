@@ -1,3 +1,4 @@
+import type { EventId, RoomId, UserId } from "../../../../types/matrix";
 import type { PartialStateJoinMarker, PartialStateStatus } from "../../../../types/partial-state";
 
 export type { PartialStateJoinMarker, PartialStateStatus };
@@ -59,9 +60,9 @@ function parsePartialStateStatus(
   }
 
   return {
-    roomId,
-    userId,
-    eventId,
+    roomId: roomId as unknown as RoomId,
+    userId: userId as unknown as UserId,
+    eventId: eventId as unknown as EventId,
     startedAt,
     phase:
       raw["phase"] === "catchup_published" || raw["phase"] === "complete"
@@ -110,8 +111,8 @@ export async function upsertPartialStateStatus(
 
 export async function getPartialStateStatus(
   cache: KVNamespace | undefined,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId,
 ): Promise<PartialStateStatus | null> {
   if (!cache) {
     return null;
@@ -123,8 +124,8 @@ export async function getPartialStateStatus(
 
 export async function getPartialStateCompletionStatus(
   cache: KVNamespace | undefined,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId,
 ): Promise<PartialStateStatus | null> {
   if (!cache) {
     return null;
@@ -136,8 +137,8 @@ export async function getPartialStateCompletionStatus(
 
 export async function consumePartialStateCompletionStatus(
   cache: KVNamespace | undefined,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId,
 ): Promise<PartialStateStatus | null> {
   if (!cache) {
     return null;
@@ -191,8 +192,8 @@ export async function markPartialStateCatchupPublished(
 
 export async function getPartialStateJoin(
   cache: KVNamespace | undefined,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId,
 ): Promise<PartialStateJoinMarker | null> {
   if (!cache) {
     return null;
@@ -204,8 +205,8 @@ export async function getPartialStateJoin(
 
 export async function clearPartialStateJoin(
   cache: KVNamespace | undefined,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId,
 ): Promise<void> {
   if (!cache) {
     return;
@@ -241,8 +242,8 @@ export async function markPartialStateJoinCompleted(
 
 export async function takePartialStateJoinCompletion(
   cache: KVNamespace | undefined,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId,
 ): Promise<PartialStateJoinMarker | null> {
   if (!cache) {
     return null;
@@ -258,8 +259,8 @@ export async function takePartialStateJoinCompletion(
 
 export async function getPartialStateJoinCompletion(
   cache: KVNamespace | undefined,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId,
 ): Promise<PartialStateJoinMarker | null> {
   if (!cache) {
     return null;
@@ -271,7 +272,7 @@ export async function getPartialStateJoinCompletion(
 
 export async function getPartialStateJoinForRoom(
   cache: KVNamespace | undefined,
-  roomId: string,
+  roomId: RoomId,
 ): Promise<PartialStateJoinMarker | null> {
   if (!cache) {
     return null;
@@ -284,7 +285,7 @@ export async function getPartialStateJoinForRoom(
 
 export async function listPartialStateJoinsForUser(
   cache: KVNamespace | undefined,
-  userId: string,
+  userId: UserId,
 ): Promise<PartialStateJoinMarker[]> {
   if (!cache || typeof cache.list !== "function") {
     return [];
@@ -316,7 +317,7 @@ export async function listPartialStateJoinsForUser(
 
 export async function listPartialStateJoinCompletionsForUser(
   cache: KVNamespace | undefined,
-  userId: string,
+  userId: UserId,
 ): Promise<PartialStateJoinMarker[]> {
   if (!cache || typeof cache.list !== "function") {
     return [];
@@ -348,7 +349,7 @@ export async function listPartialStateJoinCompletionsForUser(
 
 export async function listPartialStateStatusesForUser(
   cache: KVNamespace | undefined,
-  userId: string,
+  userId: UserId,
 ): Promise<PartialStateStatus[]> {
   if (!cache || typeof cache.list !== "function") {
     return [];
@@ -377,7 +378,7 @@ export async function listPartialStateStatusesForUser(
 
 export async function listPartialStateCompletionStatusesForUser(
   cache: KVNamespace | undefined,
-  userId: string,
+  userId: UserId,
 ): Promise<PartialStateStatus[]> {
   if (!cache || typeof cache.list !== "function") {
     return [];

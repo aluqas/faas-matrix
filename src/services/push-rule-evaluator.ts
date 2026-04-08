@@ -5,8 +5,21 @@
 import { runClientEffect } from "../matrix/application/effect-runtime";
 import { withLogContext } from "../matrix/application/logging";
 import { evaluatePushRules } from "../api/push";
+import type { JsonObject } from "../types/common";
+import { toRoomId, toUserId } from "../utils/ids";
 
 export { evaluatePushRules };
+
+function parseJsonObject(value: string): JsonObject {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as JsonObject)
+      : {};
+  } catch {
+    return {};
+  }
+}
 
 interface UnreadEvent {
   event_id: string;
@@ -235,11 +248,11 @@ export async function countUnreadNotificationSummaryWithRules(
   );
 
   for (const event of candidates) {
-    let parsedContent: Record<string, unknown>;
-    try {
-      parsedContent = typeof event.content === "string" ? JSON.parse(event.content) : event.content;
-    } catch {
-      parsedContent = {};
+    const parsedContent = parseJsonObject(event.content);
+    const sender = toUserId(event.sender);
+    const evaluatedRoomId = toRoomId(event.room_id);
+    if (!sender || !evaluatedRoomId) {
+      continue;
     }
 
     const result = await evaluatePushRules(
@@ -248,8 +261,8 @@ export async function countUnreadNotificationSummaryWithRules(
       {
         type: event.event_type,
         content: parsedContent,
-        sender: event.sender,
-        room_id: event.room_id,
+        sender,
+        room_id: evaluatedRoomId,
         state_key: event.state_key,
       },
       memberCount?.count ?? 1,
@@ -377,11 +390,11 @@ export async function countNotificationsWithRules(
   let highlightCount = 0;
 
   for (const event of unreadEvents) {
-    let parsedContent: Record<string, unknown>;
-    try {
-      parsedContent = typeof event.content === "string" ? JSON.parse(event.content) : event.content;
-    } catch {
-      parsedContent = {};
+    const parsedContent = parseJsonObject(event.content);
+    const sender = toUserId(event.sender);
+    const evaluatedRoomId = toRoomId(event.room_id);
+    if (!sender || !evaluatedRoomId) {
+      continue;
     }
 
     const result = await evaluatePushRules(
@@ -390,8 +403,8 @@ export async function countNotificationsWithRules(
       {
         type: event.event_type,
         content: parsedContent,
-        sender: event.sender,
-        room_id: event.room_id,
+        sender,
+        room_id: evaluatedRoomId,
         state_key: event.state_key,
       },
       memberCount?.count ?? 1,

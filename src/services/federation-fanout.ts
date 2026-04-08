@@ -1,6 +1,7 @@
 import { Effect } from "effect";
-import type { PDU } from "../types";
+import type { EventId, PDU, RoomId } from "../types";
 import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
+import { toEventId, toRoomId, toUserId } from "../utils/ids";
 import { createServerAclPolicy } from "../matrix/application/features/server-acl/policy";
 import { emitEffectWarningEffect } from "../matrix/application/effect-debug";
 import type { FederationOutboundPort } from "./federation-outbound";
@@ -78,16 +79,20 @@ async function shouldFanoutEvent(
 
   const aclPolicy = createServerAclPolicy([
     {
-      event_id: aclEvent.event_id,
-      room_id: aclEvent.room_id,
-      sender: aclEvent.sender,
+      event_id: toEventId(aclEvent.event_id) ?? event.event_id,
+      room_id: toRoomId(aclEvent.room_id) ?? (roomId as RoomId),
+      sender: toUserId(aclEvent.sender) ?? event.sender,
       type: aclEvent.event_type,
       state_key: aclEvent.state_key ?? undefined,
       content: JSON.parse(aclEvent.content),
       origin_server_ts: aclEvent.origin_server_ts,
       depth: aclEvent.depth,
-      auth_events: JSON.parse(aclEvent.auth_events),
-      prev_events: JSON.parse(aclEvent.prev_events),
+      auth_events: (JSON.parse(aclEvent.auth_events) as string[])
+        .map((value) => toEventId(value))
+        .filter((value): value is EventId => value !== null),
+      prev_events: (JSON.parse(aclEvent.prev_events) as string[])
+        .map((value) => toEventId(value))
+        .filter((value): value is EventId => value !== null),
     },
   ]);
 

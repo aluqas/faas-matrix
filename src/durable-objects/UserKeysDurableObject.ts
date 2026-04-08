@@ -5,7 +5,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../types";
-import type { JsonObject } from "../types/common";
+import { isJsonObject, type JsonObject } from "../types/common";
 
 interface CrossSigningKeys {
   master?: any;
@@ -21,6 +21,21 @@ interface DeviceSignature {
   signature: string;
 }
 
+function isDeviceSignature(value: unknown): value is DeviceSignature {
+  return (
+    isJsonObject(value) &&
+    typeof value.signer_user_id === "string" &&
+    typeof value.signer_key_id === "string" &&
+    typeof value.target_user_id === "string" &&
+    typeof value.target_key_id === "string" &&
+    typeof value.signature === "string"
+  );
+}
+
+function isCrossSigningKeys(value: unknown): value is Partial<CrossSigningKeys> {
+  return isJsonObject(value);
+}
+
 export class UserKeysDurableObject extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -34,12 +49,22 @@ export class UserKeysDurableObject extends DurableObject<Env> {
       }
 
       if (path === "/account-data/put" && request.method === "POST") {
-        const body = (await request.json()) as { event_type: string; content: JsonObject };
+        const body = await request.json();
+        if (
+          !isJsonObject(body) ||
+          typeof body.event_type !== "string" ||
+          !isJsonObject(body.content)
+        ) {
+          return new Response("Bad request", { status: 400 });
+        }
         return await this.putAccountData(body.event_type, body.content);
       }
 
       if (path === "/account-data/delete" && request.method === "POST") {
-        const body = (await request.json()) as { event_type: string };
+        const body = await request.json();
+        if (!isJsonObject(body) || typeof body.event_type !== "string") {
+          return new Response("Bad request", { status: 400 });
+        }
         return await this.deleteAccountData(body.event_type);
       }
 
@@ -50,7 +75,10 @@ export class UserKeysDurableObject extends DurableObject<Env> {
       }
 
       if (path === "/device-keys/put" && request.method === "POST") {
-        const body = (await request.json()) as { device_id: string; keys: any };
+        const body = await request.json();
+        if (!isJsonObject(body) || typeof body.device_id !== "string" || !isJsonObject(body.keys)) {
+          return new Response("Bad request", { status: 400 });
+        }
         return await this.putDeviceKeys(body.device_id, body.keys);
       }
 
@@ -64,7 +92,10 @@ export class UserKeysDurableObject extends DurableObject<Env> {
       }
 
       if (path === "/cross-signing/put" && request.method === "POST") {
-        const body = (await request.json()) as Partial<CrossSigningKeys>;
+        const body = await request.json();
+        if (!isCrossSigningKeys(body)) {
+          return new Response("Bad request", { status: 400 });
+        }
         return await this.putCrossSigningKeys(body);
       }
 
@@ -78,7 +109,10 @@ export class UserKeysDurableObject extends DurableObject<Env> {
       }
 
       if (path === "/signatures/put" && request.method === "POST") {
-        const sig = (await request.json()) as DeviceSignature;
+        const sig = await request.json();
+        if (!isDeviceSignature(sig)) {
+          return new Response("Bad request", { status: 400 });
+        }
         return await this.putSignature(sig);
       }
 

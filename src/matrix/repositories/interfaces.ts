@@ -4,6 +4,7 @@ import type {
   Membership,
   PDU,
   Room,
+  RoomId,
   StrippedStateEvent,
   ToDeviceEvent,
 } from "../../types";
@@ -137,7 +138,7 @@ export interface SyncRepository {
   ): Promise<{ changed: string[]; left: string[] }>;
   getGlobalAccountData(userId: string, since?: number): Promise<AccountDataEvent[]>;
   getRoomAccountData(userId: string, roomId: string, since?: number): Promise<AccountDataEvent[]>;
-  getUserRooms(userId: string, membership?: Membership): Promise<string[]>;
+  getUserRooms(userId: string, membership?: Membership): Promise<RoomId[]>;
   getMembership(roomId: string, userId: string): Promise<MembershipRecord | null>;
   getEventsSince(roomId: string, sincePosition: number): Promise<PDU[]>;
   getEvent(eventId: string): Promise<PDU | null>;

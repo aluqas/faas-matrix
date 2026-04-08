@@ -1,3 +1,4 @@
+import type { EventId, RoomId } from "../../../../types/matrix";
 import type { ConnectionState } from "./effect-ports";
 
 export interface SlidingSyncRoomInclusionInput {
@@ -36,15 +37,15 @@ export function didSlidingSyncListChange(
 }
 
 export function readMarkerChanged(
-  previousFullyRead: string | undefined,
-  currentFullyRead: string,
+  previousFullyRead: EventId | null | undefined,
+  currentFullyRead: EventId | null,
 ): boolean {
-  return currentFullyRead !== "" && currentFullyRead !== (previousFullyRead ?? "");
+  return currentFullyRead !== null && currentFullyRead !== (previousFullyRead ?? null);
 }
 
 export function firstTimeRead(
   state: ConnectionState,
-  roomId: string,
+  roomId: RoomId,
   notificationCount: number,
 ): boolean {
   return notificationCount === 0 && !state.roomSentAsRead?.[roomId];
@@ -52,9 +53,9 @@ export function firstTimeRead(
 
 export function trackSlidingSyncRoomReadState(
   state: ConnectionState,
-  roomId: string,
+  roomId: RoomId,
   notificationCount: number,
-  fullyReadEventId: string,
+  fullyReadEventId: EventId,
 ): void {
   state.roomNotificationCounts = state.roomNotificationCounts ?? {};
   state.roomNotificationCounts[roomId] = notificationCount;

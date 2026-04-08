@@ -177,7 +177,8 @@ export function requireFederationAuth() {
       // Set origin in context for use by handlers
       c.set("federationOrigin" as any, authParams.origin);
 
-      return await next();
+      await next();
+      return;
     } catch (error) {
       console.error(`Federation auth error for ${authParams.origin}:`, error);
       return c.json(

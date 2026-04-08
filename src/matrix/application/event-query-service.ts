@@ -3,7 +3,7 @@ import {
   getRedactionAllowedKeys,
   getRoomVersion,
 } from "../../services/room-versions";
-import type { MatrixSignatures, PDU } from "../../types";
+import type { EventId, MatrixSignatures, PDU, RoomId, UserId } from "../../types";
 import type { PublicRoomSummary } from "../../types/client";
 import type { MissingEventsQuery, TimestampDirection } from "../../types/events";
 
@@ -67,17 +67,21 @@ function safeJsonParse<T>(value: string | null | undefined): T | null {
 
 function toPdu(row: EventRow): PDU {
   return {
-    event_id: row.event_id as EventId,
-    room_id: row.room_id as RoomId,
-    sender: row.sender as UserId,
+    event_id: row.event_id as unknown as EventId,
+    room_id: row.room_id as unknown as RoomId,
+    sender: row.sender as unknown as UserId,
     type: row.event_type,
     state_key: row.state_key ?? undefined,
     content: safeJsonParse<Record<string, unknown>>(row.content) ?? {},
     unsigned: safeJsonParse<Record<string, unknown>>(row.unsigned ?? undefined) ?? undefined,
     origin_server_ts: row.origin_server_ts,
     depth: row.depth,
-    auth_events: (safeJsonParse<string[]>(row.auth_events) ?? []) as EventId[],
-    prev_events: (safeJsonParse<string[]>(row.prev_events) ?? []) as EventId[],
+    auth_events: (safeJsonParse<string[]>(row.auth_events) ?? []).map(
+      (e) => e as unknown as EventId,
+    ),
+    prev_events: (safeJsonParse<string[]>(row.prev_events) ?? []).map(
+      (e) => e as unknown as EventId,
+    ),
     hashes: safeJsonParse<{ sha256: string }>(row.hashes ?? undefined) ?? undefined,
     signatures: safeJsonParse<MatrixSignatures>(row.signatures ?? undefined) ?? undefined,
   };
@@ -123,7 +127,7 @@ function getHistoryVisibilityAtEvent(
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as EventId,
+          event_id: row.event_id as unknown as EventId,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
@@ -150,7 +154,7 @@ function getHistoryVisibilityBeforeEvent(
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as EventId,
+          event_id: row.event_id as unknown as EventId,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
@@ -182,7 +186,7 @@ function getMembershipAtOrBeforeEvent(
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as EventId,
+          event_id: row.event_id as unknown as EventId,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
@@ -213,7 +217,7 @@ function getMembershipBeforeEvent(
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as EventId,
+          event_id: row.event_id as unknown as EventId,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
@@ -238,7 +242,7 @@ function joinedAfterEvent(event: PDU, membershipRows: MembershipRow[], userId: s
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as EventId,
+          event_id: row.event_id as unknown as EventId,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
@@ -323,7 +327,6 @@ function isServerAllowedToSeeEventAtHistoryVisibility(
   const relevantMembershipRows = membershipRows.filter((row) =>
     row.state_key.endsWith(`:${requestingServer}`),
   );
-  const membershipBeforeEvent = new Map<string, string>();
   const joinedAfterEvent = new Set<string>();
 
   for (const row of relevantMembershipRows) {
@@ -335,20 +338,23 @@ function isServerAllowedToSeeEventAtHistoryVisibility(
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as EventId,
+          event_id: row.event_id as unknown as EventId,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
         event,
       ) <= 0
     ) {
+      if (membership === "join") {
+        joinedAfterEvent.add(row.state_key);
+      }
     }
 
     if (membership === "invite" && historyVisibility === "invited") {
       return true;
     }
 
-    if (historyVisibility === "shared" && joinedAfterEvent.has(userId)) {
+    if (historyVisibility === "shared" && joinedAfterEvent.has(row.state_key)) {
       return true;
     }
   }
@@ -556,7 +562,7 @@ export class EventQueryService {
       }
     }
 
-    const sortedEvents = events.toSorted(compareEventOrder);
+    const sortedEvents = [...events].toSorted(compareEventOrder);
 
     if (!query.requestingServer) {
       return sortedEvents;
@@ -592,7 +598,7 @@ export class EventQueryService {
       .bind(query.roomId, `%:${query.requestingServer}`)
       .all<MembershipRow>();
 
-    return sortedEvents.flatMap((event) => {
+    return sortedEvents.flatMap((event: PDU) => {
       if (event.type === "m.room.history_visibility" && event.state_key !== undefined) {
         const eventVisibility =
           typeof event.content.history_visibility === "string"

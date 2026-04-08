@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import type { FilterDefinition } from "../../../repositories/interfaces";
+import type { RoomId } from "../../../../types/matrix";
 import { InfraError } from "../../domain-error";
 import type { PartialStatePort } from "./effect-ports";
 import type { RoomVisibilityContext } from "./contracts";
@@ -20,15 +21,15 @@ export function buildRoomVisibilityContextEffect(
   partialState: PartialStatePort,
   input: {
     userId: string;
-    visibleJoinedRoomIds: readonly string[];
+    visibleJoinedRoomIds: readonly RoomId[];
     filter: FilterDefinition | null;
   },
 ): Effect.Effect<RoomVisibilityContext, InfraError> {
   return Effect.gen(function* () {
     const exposePartial = lazyLoadAllowsPartialStateRooms(input.filter);
-    const forceFullStateRooms = new Set<string>();
-    const hiddenPartialStateRooms = new Set<string>();
-    const visiblePartialStateRooms = new Set<string>();
+    const forceFullStateRooms = new Set<RoomId>();
+    const hiddenPartialStateRooms = new Set<RoomId>();
+    const visiblePartialStateRooms = new Set<RoomId>();
 
     for (const roomId of input.visibleJoinedRoomIds) {
       const partialStateStatus = yield* partialState.getPartialStateStatus(input.userId, roomId);

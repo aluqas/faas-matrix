@@ -1,5 +1,13 @@
 import { getRoomVersion } from "../../services/room-versions";
-import type { Membership, PDU, RoomCreateContent, RoomMemberContent } from "../../types";
+import type {
+  EventId,
+  Membership,
+  PDU,
+  RoomCreateContent,
+  RoomId,
+  RoomMemberContent,
+  UserId,
+} from "../../types";
 import { calculateContentHash, calculateReferenceHashEventId } from "../../utils/crypto";
 import type { RoomRepository } from "../repositories/interfaces";
 
@@ -73,9 +81,9 @@ export function getServerFromRoomId(roomId: string): string | null {
 export async function createInitialRoomEvents(
   repository: RoomRepository,
   serverName: string,
-  roomId: string,
+  roomId: RoomId,
   roomVersion: string,
-  creatorId: string,
+  creatorId: UserId,
   options: {
     name?: string;
     topic?: string;
@@ -116,16 +124,26 @@ export async function createInitialRoomEvents(
       ...baseEvent,
       hashes: { sha256: hash },
     };
-    const eventId =
+    const eventId = (
       (roomVersion ? getRoomVersion(roomVersion) : null)?.eventIdFormat === "v1"
         ? await generateEventId(serverName, roomVersion)
         : await calculateReferenceHashEventId(
             eventWithHash as unknown as Record<string, unknown>,
             roomVersion,
-          );
+          )
+    ) as EventId;
     const event: PDU = {
       event_id: eventId,
-      ...eventWithHash,
+      room_id: roomId,
+      sender: creatorId,
+      type,
+      state_key: stateKey,
+      content,
+      origin_server_ts: createdAt,
+      depth: baseEvent.depth,
+      auth_events: [...authEvents] as EventId[],
+      prev_events: [...prevEvents] as EventId[],
+      hashes: { sha256: hash },
     };
 
     await repository.storeEvent(event);
@@ -254,6 +272,7 @@ export async function createMembershipEvent(options: CreateMembershipEventOption
   if (options.joinRulesEventId) authEvents.push(options.joinRulesEventId);
   if (options.powerLevelsEventId) authEvents.push(options.powerLevelsEventId);
   if (options.currentMembershipEventId) authEvents.push(options.currentMembershipEventId);
+  const originServerTs = options.now();
 
   const baseEvent = {
     room_id: options.roomId,
@@ -261,7 +280,7 @@ export async function createMembershipEvent(options: CreateMembershipEventOption
     type: "m.room.member",
     state_key: options.userId,
     content: { ...options.content, membership: options.membership },
-    origin_server_ts: options.now(),
+    origin_server_ts: originServerTs,
     depth: options.depth,
     auth_events: authEvents,
     prev_events: options.prevEventIds,
@@ -272,16 +291,27 @@ export async function createMembershipEvent(options: CreateMembershipEventOption
     ...baseEvent,
     hashes: { sha256: hash },
   };
-  const eventId =
+  const eventId = (
     (options.roomVersion ? getRoomVersion(options.roomVersion) : null)?.eventIdFormat === "v1"
       ? await options.generateEventId(options.serverName, options.roomVersion)
       : await calculateReferenceHashEventId(
           eventWithHash as unknown as Record<string, unknown>,
           options.roomVersion,
-        );
+        )
+  ) as EventId;
 
   return {
     event_id: eventId,
-    ...eventWithHash,
+    room_id: options.roomId as RoomId,
+    sender: options.sender as UserId,
+    type: "m.room.member",
+    state_key: options.userId as UserId,
+    content: { ...options.content, membership: options.membership },
+    origin_server_ts: originServerTs,
+    depth: options.depth,
+    auth_events: authEvents.map((id) => id as EventId),
+    prev_events: options.prevEventIds.map((id) => id as EventId),
+    unsigned: options.unsigned ?? undefined,
+    hashes: { sha256: hash },
   };
 }

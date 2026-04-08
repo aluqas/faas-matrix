@@ -1,15 +1,15 @@
-import type { JoinedRoom } from "../../../../types";
+import type { JoinedRoom, RoomId, UserId } from "../../../../types";
 import type { SyncRepository } from "../../../repositories/interfaces";
-import { projectJoinedRoom, shouldIncludeRoom } from "../../sync-projection";
 import type { JoinedRoomProjectionQuery } from "../../sync-projection";
+import { projectJoinedRoom, shouldIncludeRoom } from "../../sync-projection";
 
 export interface RoomDeltaProjectionPorts {
   repository: SyncRepository;
 }
 
 export interface ProjectRoomDeltaInput {
-  userId: string;
-  roomIds: string[];
+  userId: UserId;
+  roomIds: RoomId[];
   sincePosition: number;
   fullState?: boolean;
   roomFilter?: JoinedRoomProjectionQuery["roomFilter"];

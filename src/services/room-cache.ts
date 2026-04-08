@@ -35,7 +35,7 @@ export async function getRoomMetadata(
 
   // Try cache first
   try {
-    const cached = (await cache.get(cacheKey, "json")) as RoomMetadata | null;
+    const cached = await cache.get(cacheKey, "json");
     if (cached && Date.now() - cached.cachedAt < CACHE_TTL_SECONDS * 1000) {
       return cached;
     }
@@ -82,7 +82,7 @@ export async function getBatchRoomMetadata(
   const cachePromises = roomIds.map(async (roomId) => {
     const cacheKey = `${CACHE_KEY_PREFIX}${roomId}`;
     try {
-      const cached = (await cache.get(cacheKey, "json")) as RoomMetadata | null;
+      const cached = await cache.get(cacheKey, "json");
       if (cached && Date.now() - cached.cachedAt < CACHE_TTL_SECONDS * 1000) {
         return { roomId, metadata: cached };
       }

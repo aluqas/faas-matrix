@@ -76,7 +76,7 @@ export class AdminDurableObject extends DurableObject<Env> {
     }
 
     if (request.method === "PUT") {
-      const body = (await request.json()) as Partial<ServerConfig>;
+      const body = await request.json();
       const config = await this.updateConfig(body);
 
       // Broadcast config change to connected admins

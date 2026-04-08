@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import type { AppEnv, PDU, RoomCreateContent } from "../../types";
+import type { AppEnv, EventId, PDU, RoomCreateContent } from "../../types";
 import { ErrorCodes } from "../../types";
 import { Errors, MatrixApiError } from "../../utils/errors";
 import { requireAuth } from "../../middleware/auth";
-import { generateEventId, generateRoomId } from "../../utils/ids";
+import { generateEventId, generateRoomId, toEventId, toRoomId } from "../../utils/ids";
 import {
   createRoom,
   getMembership,
@@ -45,7 +45,10 @@ app.get("/_matrix/client/v3/joined_rooms", requireAuth(), async (c) => {
 
 app.post("/_matrix/client/v3/rooms/:roomId/forget", requireAuth(), async (c) => {
   const userId = c.get("userId");
-  const roomId = c.req.param("roomId");
+  const roomId = toRoomId(c.req.param("roomId"));
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
   const membership = await getMembership(c.env.DB, roomId, userId);
 
   if (membership && membership.membership === "join") {
@@ -80,7 +83,10 @@ app.post("/_matrix/client/v3/rooms/:roomId/forget", requireAuth(), async (c) => 
 
 app.post("/_matrix/client/v3/rooms/:roomId/upgrade", requireAuth(), async (c) => {
   const userId = c.get("userId");
-  const oldRoomId = c.req.param("roomId");
+  const oldRoomId = toRoomId(c.req.param("roomId"));
+  if (!oldRoomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
   const db = c.env.DB;
   const serverName = c.env.SERVER_NAME;
 
@@ -143,8 +149,8 @@ app.post("/_matrix/client/v3/rooms/:roomId/upgrade", requireAuth(), async (c) =>
   await createRoom(db, newRoomId, body.new_version, userId, false);
 
   let depth = 0;
-  const authEvents: string[] = [];
-  const prevEvents: string[] = [];
+  const authEvents: EventId[] = [];
+  const prevEvents: EventId[] = [];
 
   async function createNewRoomEvent(
     type: string,
@@ -180,7 +186,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/upgrade", requireAuth(), async (c) =>
     room_version: body.new_version,
     predecessor: {
       room_id: oldRoomId,
-      event_id: lastEvent?.event_id ?? "",
+      event_id: toEventId(lastEvent?.event_id) ?? (await generateEventId(serverName)),
     },
   };
   await createNewRoomEvent("m.room.create", createContent, "");
@@ -258,7 +264,8 @@ app.post("/_matrix/client/v3/rooms/:roomId/upgrade", requireAuth(), async (c) =>
       ["m.room.create", "m.room.power_levels", "m.room.member"].includes(event.type),
     )
     .filter((event) => event.state_key === "" || event.state_key === userId)
-    .map((event) => event.event_id);
+    .map((event) => toEventId(event.event_id))
+    .filter((event): event is EventId => event !== null);
 
   const tombstoneEventId = await generateEventId(serverName);
   await storeEvent(db, {
@@ -274,7 +281,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/upgrade", requireAuth(), async (c) =>
     origin_server_ts: now,
     depth: (oldPrevEvent?.depth ?? 0) + 1,
     auth_events: oldAuthEvents,
-    prev_events: oldPrevEvent ? [oldPrevEvent.event_id] : [],
+    prev_events: oldPrevEvent ? [toEventId(oldPrevEvent.event_id) ?? tombstoneEventId] : [],
   });
 
   const newPowerLevels = powerLevels

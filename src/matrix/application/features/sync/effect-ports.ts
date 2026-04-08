@@ -3,6 +3,7 @@ import type {
   AccountDataEvent,
   Membership,
   PDU,
+  RoomId,
   StrippedStateEvent,
   ToDeviceEvent,
 } from "../../../../types";
@@ -49,7 +50,7 @@ export interface SyncQueryPort {
     roomId: string,
     since?: number,
   ): Effect.Effect<AccountDataEvent[], InfraError>;
-  getUserRooms(userId: string, membership?: Membership): Effect.Effect<string[], InfraError>;
+  getUserRooms(userId: string, membership?: Membership): Effect.Effect<RoomId[], InfraError>;
   getMembership(roomId: string, userId: string): Effect.Effect<MembershipRecord | null, InfraError>;
   getEventsSince(roomId: string, sincePosition: number): Effect.Effect<PDU[], InfraError>;
   getEvent(eventId: string): Effect.Effect<PDU | null, InfraError>;

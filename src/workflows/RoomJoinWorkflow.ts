@@ -7,8 +7,10 @@
 // - Step persistence for resume on failure
 
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:workers";
-import type { Env, PDU } from "../types";
-import { generateEventId } from "../utils/ids";
+import type { Env, EventId, PDU, RoomId, UserId } from "../types";
+import { generateEventId, toEventId } from "../utils/ids";
+import { isJsonObject } from "../types/common";
+import type { PartialStateJoinMarker, PartialStateStatus } from "../types/partial-state";
 import { calculateContentHash, calculateReferenceHashEventId } from "../utils/crypto";
 import { federationGet, federationPut } from "../services/federation-keys";
 import { getRoomVersion } from "../services/room-versions";
@@ -59,7 +61,7 @@ export type JoinParams = RoomJoinWorkflowParams;
 export type JoinResult = RoomJoinWorkflowResult;
 type JoinWorkflowUnsigned = {
   prev_content: JsonObject;
-  prev_sender?: string;
+  prev_sender?: UserId;
 };
 type JoinWorkflowEvent = Omit<PDU, "content" | "unsigned"> & {
   content: JsonObject;
@@ -87,16 +89,6 @@ function hasEncryptionStateEvent(events: JsonObject[] | undefined): boolean {
       event["type"] === "m.room.encryption",
   );
 }
-
-type RemoteStateIdsResponse = {
-  pdu_ids: string[];
-  auth_chain_ids: string[];
-};
-
-type RemoteStateResponse = {
-  pdus: unknown[];
-  auth_chain: unknown[];
-};
 
 type RemoteJoinStepSuccess<T> = {
   success: true;
@@ -132,6 +124,34 @@ class RemoteJoinHttpError extends Error {
     this.errcode = options.errcode;
     this.retryable = options.status === 429 || options.status >= 500;
   }
+}
+
+const WORKFLOW_FAILURE_EVENT_ID = "$workflow-failure" as EventId;
+
+function parseStateIdsResponse(
+  value: unknown,
+): { pdu_ids: string[]; auth_chain_ids: string[] } | null {
+  if (!isJsonObject(value)) {
+    return null;
+  }
+  return {
+    pdu_ids: Array.isArray(value.pdu_ids)
+      ? value.pdu_ids.filter((eventId): eventId is string => typeof eventId === "string")
+      : [],
+    auth_chain_ids: Array.isArray(value.auth_chain_ids)
+      ? value.auth_chain_ids.filter((eventId): eventId is string => typeof eventId === "string")
+      : [],
+  };
+}
+
+function parseStatePayload(value: unknown): { pdus: unknown[]; auth_chain: unknown[] } | null {
+  if (!isJsonObject(value)) {
+    return null;
+  }
+  return {
+    pdus: Array.isArray(value.pdus) ? value.pdus : [],
+    auth_chain: Array.isArray(value.auth_chain) ? value.auth_chain : [],
+  };
 }
 
 function parseMatrixErrorPayload(value: string): {
@@ -277,7 +297,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
         if (!makeJoinResult.success) {
           return {
-            eventId: "",
+            eventId: WORKFLOW_FAILURE_EVENT_ID,
             roomId,
             success: false,
             ...makeJoinResult.failure,
@@ -305,7 +325,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       );
 
       // Step 3: For remote joins, send signed event to remote server and process room state
-      let partialStateEventId: string | undefined;
+      let partialStateEventId: EventId | undefined;
       let remoteSendJoinResponse: RemoteSendJoinResponse | undefined;
       if (isRemote && successfulRemoteServer && joinEventData) {
         const sendJoinResult = parseWorkflowJson<
@@ -342,7 +362,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
         if (!sendJoinResult.success) {
           return {
-            eventId: "",
+            eventId: WORKFLOW_FAILURE_EVENT_ID,
             roomId,
             success: false,
             ...sendJoinResult.failure,
@@ -372,11 +392,12 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
             throw new Error("partial send_join response missing prev_event boundary");
           }
 
+          const eventId = partialStateEventId;
           await step.do("mark-partial-state", async () => {
-            const marker = {
+            const marker: PartialStateJoinMarker = {
               roomId,
               userId,
-              eventId: partialStateEventId!,
+              eventId,
               startedAt: Date.now(),
               encrypted: partialStateRoomIsEncrypted,
               ...withDefined("remoteServer", successfulRemoteServer),
@@ -469,11 +490,12 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       });
 
       if (partialStateEventId) {
+        const eventId = partialStateEventId;
         await step.do("mark-partial-state-catchup-published", async () => {
-          const status = {
+          const status: PartialStateStatus = {
             roomId,
             userId,
-            eventId: partialStateEventId,
+            eventId,
             startedAt: Date.now(),
             phase: "catchup_published" as const,
             catchupPublishedAt: Date.now(),
@@ -489,10 +511,10 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
         await step.do("finalize-partial-state", async () => {
           await reevaluateDeferredPartialStateAuthEvents(this.env.DB, roomId);
-          const completedStatus = {
+          const completedStatus: PartialStateStatus = {
             roomId,
             userId,
-            eventId: partialStateEventId,
+            eventId,
             startedAt: Date.now(),
             phase: "complete" as const,
             completedAt: Date.now(),
@@ -506,7 +528,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
           await markPartialStateJoinCompleted(this.env.CACHE, {
             roomId,
             userId,
-            eventId: partialStateEventId,
+            eventId,
             startedAt: Date.now(),
             encrypted:
               hasEncryptionStateEvent(remoteSendJoinResponse?.state) ||
@@ -549,7 +571,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
     } catch (error) {
       await runWorkflowEffect(logger.error("room_join.workflow.error", error));
       return {
-        eventId: "",
+        eventId: WORKFLOW_FAILURE_EVENT_ID,
         roomId,
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -602,8 +624,8 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
   // Create a join event (either from remote template or local state)
   private async createJoinEvent(params: {
-    roomId: string;
-    userId: string;
+    roomId: RoomId;
+    userId: UserId;
     displayName?: string;
     avatarUrl?: string;
     reason?: string;
@@ -611,11 +633,11 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
   }): Promise<JoinWorkflowEvent> {
     const { roomId, userId, displayName, avatarUrl, reason, remoteEventTemplate } = params;
 
-    let authEvents: string[] = [];
-    let prevEvents: string[] = [];
+    let authEvents: EventId[] = [];
+    let prevEvents: EventId[] = [];
     let depth = 1;
     let prevContent: JsonObject | undefined;
-    let prevSender: string | undefined;
+    let prevSender: UserId | undefined;
 
     const currentMembershipEvent = await getStateEvent(
       this.env.DB,
@@ -633,8 +655,14 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
     if (remoteEventTemplate?.event) {
       // Use template from remote server
-      authEvents = remoteEventTemplate.event.auth_events ?? [];
-      prevEvents = remoteEventTemplate.event.prev_events ?? [];
+      authEvents = (remoteEventTemplate.event.auth_events ?? []).flatMap((eventId) => {
+        const typedEventId = toEventId(eventId);
+        return typedEventId ? [typedEventId] : [];
+      });
+      prevEvents = (remoteEventTemplate.event.prev_events ?? []).flatMap((eventId) => {
+        const typedEventId = toEventId(eventId);
+        return typedEventId ? [typedEventId] : [];
+      });
       depth = remoteEventTemplate.event.depth ?? 1;
     } else {
       // Get local room state
@@ -646,7 +674,12 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       if (createEvent) authEvents.push(createEvent.event_id);
       if (joinRulesEvent) authEvents.push(joinRulesEvent.event_id);
       if (powerLevelsEvent) authEvents.push(powerLevelsEvent.event_id);
-      if (currentMembership) authEvents.push(currentMembership.eventId);
+      if (currentMembership) {
+        const currentMembershipEventId = toEventId(currentMembership.eventId);
+        if (currentMembershipEventId) {
+          authEvents.push(currentMembershipEventId);
+        }
+      }
 
       const { events: latestEvents } = await getRoomEvents(this.env.DB, roomId, undefined, 1);
       prevEvents = latestEvents.map((e) => e.event_id);
@@ -668,7 +701,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       memberContent["reason"] = reason;
     }
 
-    const baseEvent = {
+    const baseEvent: Omit<JoinWorkflowEvent, "event_id"> = {
       room_id: roomId,
       sender: userId,
       type: "m.room.member",
@@ -694,18 +727,19 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       ...baseEvent,
       hashes: { sha256: hash },
     };
-    const eventId =
+    const eventId = toEventId(
       (roomVersion ? getRoomVersion(roomVersion) : null)?.eventIdFormat === "v1"
         ? await generateEventId(this.env.SERVER_NAME, roomVersion)
         : await calculateReferenceHashEventId(
             eventWithHash as unknown as Record<string, unknown>,
             roomVersion,
-          );
+          ),
+    );
+    if (!eventId) {
+      throw new Error("Failed to generate a valid join event ID");
+    }
 
-    const event: JoinWorkflowEvent = {
-      event_id: eventId,
-      ...eventWithHash,
-    };
+    const event: JoinWorkflowEvent = { ...eventWithHash, event_id: eventId };
 
     return event;
   }
@@ -793,8 +827,8 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       throw new Error(`state_ids failed: ${stateIdsResponse.status} ${error}`);
     }
 
-    const stateIds = (await stateIdsResponse.json()) as RemoteStateIdsResponse;
-    if (!Array.isArray(stateIds.pdu_ids) || !Array.isArray(stateIds.auth_chain_ids)) {
+    const stateIds = parseStateIdsResponse(await stateIdsResponse.json());
+    if (!stateIds) {
       throw new TypeError("state_ids returned invalid response");
     }
 
@@ -811,12 +845,15 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
       throw new Error(`state failed: ${stateResponse.status} ${error}`);
     }
 
-    const statePayload = (await stateResponse.json()) as RemoteStateResponse;
+    const statePayload = parseStatePayload(await stateResponse.json());
+    if (!statePayload) {
+      throw new TypeError("state returned invalid response");
+    }
     await persistFederationStateSnapshot(this.env.DB, {
       roomId,
       roomVersion,
-      stateEvents: Array.isArray(statePayload.pdus) ? statePayload.pdus : [],
-      authChain: Array.isArray(statePayload.auth_chain) ? statePayload.auth_chain : [],
+      stateEvents: statePayload.pdus,
+      authChain: statePayload.auth_chain,
       source: "workflow",
     });
   }

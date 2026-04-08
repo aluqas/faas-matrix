@@ -5,6 +5,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import { isJsonObject } from "../types/common";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { parseRoomAlias } from "../utils/ids";
@@ -63,10 +64,10 @@ app.get("/_matrix/client/v3/directory/room/:roomAlias", async (c) => {
     return Errors.notFound("Room alias not found").toResponse();
   }
 
-  const body = (await response.json()) as {
-    room_id?: unknown;
-    servers?: unknown;
-  };
+  const body = await response.json();
+  if (!isJsonObject(body)) {
+    return Errors.notFound("Room alias not found").toResponse();
+  }
   if (typeof body.room_id !== "string") {
     return Errors.notFound("Room alias not found").toResponse();
   }

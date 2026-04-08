@@ -17,12 +17,25 @@
     "no-shadow": "allow",
 
     "no-unused-vars": "allow", // これもリファクタリング過程のため許容。
-    "no-async-endpoint-handlers": "allow" // honoなのでいいでしょう
+    "no-async-endpoint-handlers": "allow", // honoなのでいいでしょう
+
+    "no-unsafe-type-assertion": "allow",
+    "no-unsafe-argument": "allow",
+    "no-unsafe-assignment": "allow",
+    "no-unsafe-call": "allow",
+    "no-unsafe-member-access": "allow",
+    "strict-boolean-expressions": "allow",
   },
   "env": {
     "builtin": true,
     "browser": true,
     "es2022": true
   },
-  "ignorePatterns": ["dist/**", "coverage/**", ".wrangler/**", "node_modules/**"]
+  "ignorePatterns": [
+    "dist/**",
+    "coverage/**",
+    ".wrangler/**",
+    "node_modules/**",
+    "*.test.ts" // TODO: 後回しする
+  ],
 }

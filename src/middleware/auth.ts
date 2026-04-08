@@ -1,14 +1,14 @@
 // Authentication middleware
 
 import { createMiddleware } from "hono/factory";
-import type { AppEnv } from "../types";
-import { Errors } from "../utils/errors";
-import { hashToken } from "../utils/crypto";
-import { getUserByTokenHash } from "../services/database";
 import { getAppServiceByToken } from "../services/appservice";
+import { getUserByTokenHash } from "../services/database";
+import type { AppEnv, UserId } from "../types";
+import { hashToken } from "../utils/crypto";
+import { Errors } from "../utils/errors";
 
 export type AuthContext = {
-  userId: string;
+  userId: UserId;
   deviceId: string | null;
   accessToken: string;
 };

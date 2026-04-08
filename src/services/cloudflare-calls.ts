@@ -112,7 +112,7 @@ async function callsRequest<T>(env: Env, method: string, path: string, body?: un
     throw new CloudflareCallsError(errorMessage, "API_ERROR", response.status);
   }
 
-  return response.json() as Promise<T>;
+  return response.json();
 }
 
 /**

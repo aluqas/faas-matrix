@@ -7,6 +7,25 @@ import { hashToken } from "../utils/crypto";
 
 const app = new Hono<AppEnv>();
 
+type QrLoginTokenData = {
+  user_id: string;
+  expires_at: number;
+};
+
+function parseQrLoginTokenData(value: unknown): QrLoginTokenData | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const data = value as { user_id?: unknown; expires_at?: unknown };
+  return typeof data.user_id === "string" && typeof data.expires_at === "number"
+    ? {
+        user_id: data.user_id,
+        expires_at: data.expires_at,
+      }
+    : null;
+}
+
 // Generate the landing page HTML
 function generateQrLandingPage(
   serverName: string,
@@ -399,7 +418,9 @@ h1{color:#ef4444;}</style></head>
 
   // Look up the token
   const tokenHash = await hashToken(token);
-  const tokenData = await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json");
+  const tokenData = parseQrLoginTokenData(
+    await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json"),
+  );
 
   if (!tokenData) {
     return c.html(
@@ -443,7 +464,9 @@ app.get("/login/qr/:token/check", async (c) => {
   }
 
   const tokenHash = await hashToken(token);
-  const tokenData = await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json");
+  const tokenData = parseQrLoginTokenData(
+    await c.env.SESSIONS.get(`login_token:${tokenHash}`, "json"),
+  );
 
   if (!tokenData) {
     return c.json({ valid: false, error: "Token not found or expired" }, 404);

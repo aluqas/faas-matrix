@@ -18,6 +18,25 @@ import federationE2eeRoutes from "./federation/e2ee";
 
 const app = new Hono<AppEnv>();
 
+type OpenIdTokenData = {
+  user_id: string;
+  expires_at: number;
+};
+
+function parseOpenIdTokenData(value: unknown): OpenIdTokenData | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const data = value as { user_id?: unknown; expires_at?: unknown };
+  return typeof data.user_id === "string" && typeof data.expires_at === "number"
+    ? {
+        user_id: data.user_id,
+        expires_at: data.expires_at,
+      }
+    : null;
+}
+
 function canonicalJsonResponse(body: Record<string, unknown>): Response {
   return new Response(canonicalJson(body), {
     status: 200,
@@ -504,10 +523,7 @@ app.get("/_matrix/federation/v1/openid/userinfo", async (c) => {
     return Errors.missingParam("access_token").toResponse();
   }
 
-  const tokenData = (await c.env.SESSIONS.get(`openid:${accessToken}`, "json")) as {
-    user_id: string;
-    expires_at: number;
-  } | null;
+  const tokenData = parseOpenIdTokenData(await c.env.SESSIONS.get(`openid:${accessToken}`, "json"));
   if (!tokenData) {
     return c.json(
       {

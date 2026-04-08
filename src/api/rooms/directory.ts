@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../../types";
+import { isJsonObject } from "../../types/common";
 import { Errors } from "../../utils/errors";
 import { requireAuth } from "../../middleware/auth";
 import { federationGet } from "../../services/federation-keys";
@@ -21,6 +22,7 @@ import {
   resolveRoomIdOrAlias,
   toRouteErrorResponse,
 } from "./shared";
+import { toRoomId } from "../../utils/ids";
 
 const app = new Hono<AppEnv>();
 
@@ -93,7 +95,10 @@ app.get("/_matrix/client/v3/directory/room/:roomAlias", async (c) => {
     return Errors.notFound("Room alias not found").toResponse();
   }
 
-  const body = (await response.json()) as { room_id?: unknown; servers?: unknown };
+  const body = await response.json();
+  if (!isJsonObject(body)) {
+    return Errors.notFound("Room alias not found").toResponse();
+  }
   if (typeof body.room_id !== "string") {
     return Errors.notFound("Room alias not found").toResponse();
   }
@@ -114,6 +119,9 @@ app.put("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async (c)
   try {
     body = await c.req.json();
   } catch {
+    return Errors.badJson().toResponse();
+  }
+  if (!isJsonObject(body)) {
     return Errors.badJson().toResponse();
   }
 
@@ -185,10 +193,14 @@ app.delete("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async 
       ? await canUserSendStateEvent(c.env.DB, aliasRecord.room_id, userId, "m.room.canonical_alias")
       : true)
   ) {
+    const roomId = toRoomId(aliasRecord.room_id);
+    if (!roomId) {
+      return Errors.invalidParam("room_id", "Invalid room ID").toResponse();
+    }
     const txnId = await c.get("appContext").capabilities.id.generateOpaqueId();
     await c.get("appContext").services.rooms.sendEvent({
       userId,
-      roomId: aliasRecord.room_id,
+      roomId,
       eventType: "m.room.canonical_alias",
       stateKey: "",
       txnId,

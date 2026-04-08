@@ -79,7 +79,7 @@ export class PushDurableObject extends DurableObject<Env> {
   // Send a single APNs notification
   private async handleSend(request: Request): Promise<Response> {
     try {
-      const notification = (await request.json()) as APNsNotification;
+      const notification = await request.json();
       const result = await this.sendAPNs(notification);
       return new Response(JSON.stringify(result), {
         headers: { "Content-Type": "application/json" },
@@ -102,7 +102,7 @@ export class PushDurableObject extends DurableObject<Env> {
   // Send batch of notifications
   private async handleSendBatch(request: Request): Promise<Response> {
     try {
-      const { notifications } = (await request.json()) as { notifications: APNsNotification[] };
+      const { notifications } = await request.json();
       const results = await Promise.all(notifications.map((n) => this.sendAPNs(n)));
       return new Response(JSON.stringify({ results }), {
         headers: { "Content-Type": "application/json" },

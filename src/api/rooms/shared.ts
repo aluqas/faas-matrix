@@ -1,8 +1,9 @@
 import type { Context } from "hono";
-import type { AppEnv } from "../../types";
+import type { AppEnv, RoomId } from "../../types";
+import { isJsonObject } from "../../types/common";
 import { ErrorCodes } from "../../types";
 import { Errors, MatrixApiError } from "../../utils/errors";
-import { parseRoomAlias } from "../../utils/ids";
+import { parseRoomAlias, toRoomId } from "../../utils/ids";
 import { federationGet } from "../../services/federation-keys";
 import { getMembership, getRoomByAlias, getStateEvent } from "../../services/database";
 
@@ -95,14 +96,22 @@ export async function resolveRoomIdOrAlias(
   c: Context<AppEnv>,
   roomIdOrAlias: string,
   serverHints: string[],
-): Promise<{ roomId: string; remoteServers: string[] }> {
+): Promise<{ roomId: RoomId; remoteServers: string[] }> {
   if (!roomIdOrAlias.startsWith("#")) {
-    return { roomId: roomIdOrAlias, remoteServers: serverHints };
+    const roomId = toRoomId(roomIdOrAlias);
+    if (!roomId) {
+      throw Errors.invalidParam("room_id", "Invalid room ID");
+    }
+    return { roomId, remoteServers: serverHints };
   }
 
   const localRoomId = await getRoomByAlias(c.env.DB, roomIdOrAlias);
   if (localRoomId) {
-    return { roomId: localRoomId, remoteServers: serverHints };
+    const roomId = toRoomId(localRoomId);
+    if (!roomId) {
+      throw Errors.notFound("Room alias not found");
+    }
+    return { roomId, remoteServers: serverHints };
   }
 
   const parsedAlias = parseRoomAlias(roomIdOrAlias);
@@ -124,8 +133,15 @@ export async function resolveRoomIdOrAlias(
       continue;
     }
 
-    const body = (await response.json()) as { room_id?: unknown; servers?: unknown };
+    const body = await response.json();
+    if (!isJsonObject(body)) {
+      continue;
+    }
     if (typeof body.room_id !== "string") {
+      continue;
+    }
+    const roomId = toRoomId(body.room_id);
+    if (!roomId) {
       continue;
     }
 
@@ -134,7 +150,7 @@ export async function resolveRoomIdOrAlias(
       : [];
 
     return {
-      roomId: body.room_id,
+      roomId,
       remoteServers: Array.from(new Set([...candidateServers, ...responseServers])),
     };
   }

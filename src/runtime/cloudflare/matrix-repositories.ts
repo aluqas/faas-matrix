@@ -478,7 +478,7 @@ export class CloudflareSyncRepository implements SyncRepository {
         body: JSON.stringify({ timeout: timeoutMs }),
       }),
     );
-    return response.json() as Promise<{ hasEvents: boolean }>;
+    return response.json();
   }
 }
 

@@ -8,6 +8,8 @@ import {
   getPartialStateCompletionStatus,
   getPartialStateStatus,
 } from "../../matrix/application/features/partial-state/tracker";
+import { toEventId, toRoomId, toUserId } from "../../utils/ids";
+import type { RoomId, UserId } from "../../types";
 
 const app = new Hono<AppEnv>();
 const PARTIAL_STATE_WAIT_TIMEOUT_MS = 2000;
@@ -26,8 +28,8 @@ function formatContextEvent(event: StoredContextEvent) {
 
 async function waitForPartialStateJoinCompletion(
   cache: KVNamespace | undefined,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId,
   timeoutMs = PARTIAL_STATE_WAIT_TIMEOUT_MS,
 ): Promise<void> {
   if (!cache) {
@@ -49,9 +51,12 @@ async function waitForPartialStateJoinCompletion(
 }
 
 app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), async (c) => {
-  const userId = c.get("userId");
-  const roomId = c.req.param("roomId");
-  const eventId = c.req.param("eventId");
+  const userId = toUserId(c.get("userId"));
+  const roomId = toRoomId(c.req.param("roomId"));
+  const eventId = toEventId(c.req.param("eventId"));
+  if (!userId || !roomId || !eventId) {
+    return Errors.invalidParam("roomId", "Invalid room or event ID").toResponse();
+  }
   const limit = Math.min(Number.parseInt(c.req.query("limit") ?? "10", 10), 100);
   const userAgent = c.req.header("User-Agent");
   const isLikelyNSE = limit <= 5;
@@ -141,8 +146,11 @@ app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), asyn
 });
 
 async function getJoinedMembers(c: import("hono").Context<AppEnv>): Promise<Response> {
-  const userId = c.get("userId");
-  const roomId = c.req.param("roomId");
+  const userId = toUserId(c.get("userId"));
+  const roomId = toRoomId(c.req.param("roomId"));
+  if (!userId || !roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
 
   await waitForPartialStateJoinCompletion(c.env.CACHE, userId, roomId);
 

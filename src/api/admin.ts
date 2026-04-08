@@ -52,7 +52,7 @@ app.get("/admin/api/stats", requireAuth(), requireAdmin, async (c) => {
   }
 
   const response = await adminDO.fetch(url.toString());
-  const stats = (await response.json()) as Record<string, unknown>;
+  const stats = await response.json();
 
   // Add server info
   return c.json({
@@ -1415,7 +1415,7 @@ app.post("/admin/api/server-notice", requireAuth(), requireAdmin, async (c) => {
 app.get("/admin/api/registration", requireAuth(), requireAdmin, async (c) => {
   const adminDO = getAdminDO(c.env);
   const response = await adminDO.fetch("http://internal/config");
-  const config = (await response.json()) as { registration_enabled: boolean };
+  const config = await response.json();
 
   return c.json({
     enabled: config.registration_enabled,

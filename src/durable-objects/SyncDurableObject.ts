@@ -3,6 +3,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../types";
+import { isJsonObject } from "../types/common";
 
 interface SyncSession {
   userId: string;
@@ -39,6 +40,26 @@ interface SlidingSyncConnectionState {
   roomFullyReadMarkers?: Record<string, string>;
   initialSyncComplete?: boolean;
   roomSentAsRead?: Record<string, boolean>;
+}
+
+function isPendingEvent(value: unknown): value is PendingEvent {
+  return (
+    isJsonObject(value) &&
+    typeof value.event_id === "string" &&
+    typeof value.room_id === "string" &&
+    typeof value.type === "string" &&
+    typeof value.timestamp === "number"
+  );
+}
+
+function isSlidingSyncConnectionState(value: unknown): value is SlidingSyncConnectionState {
+  return (
+    isJsonObject(value) &&
+    typeof value.pos === "number" &&
+    typeof value.lastAccess === "number" &&
+    isJsonObject(value.roomStates) &&
+    isJsonObject(value.listStates)
+  );
 }
 
 export class SyncDurableObject extends DurableObject<Env> {
@@ -125,7 +146,13 @@ export class SyncDurableObject extends DurableObject<Env> {
     }
 
     try {
-      const state = (await request.json()) as SlidingSyncConnectionState;
+      const state = await request.json();
+      if (!isSlidingSyncConnectionState(state)) {
+        return new Response(JSON.stringify({ error: "Invalid sliding sync state" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       const key = `sliding_sync:${connId}`;
 
       // Update in-memory cache
@@ -195,7 +222,10 @@ export class SyncDurableObject extends DurableObject<Env> {
   }
 
   private async handleNotify(request: Request): Promise<Response> {
-    const data = (await request.json()) as PendingEvent;
+    const data = await request.json();
+    if (!isPendingEvent(data)) {
+      return new Response("Invalid event", { status: 400 });
+    }
     console.log(
       "[SyncDO] /notify received for event:",
       data.event_id,
@@ -242,8 +272,11 @@ export class SyncDurableObject extends DurableObject<Env> {
   // Wait for events (used by long-polling sliding sync)
   private async handleWaitForEvents(request: Request): Promise<Response> {
     try {
-      const body = (await request.json()) as { timeout?: number };
-      const timeout = Math.min(body.timeout ?? 25000, 25000); // Cap at 25s
+      const body = await request.json();
+      const timeout =
+        isJsonObject(body) && typeof body.timeout === "number"
+          ? Math.min(body.timeout, 25000)
+          : 25000;
 
       console.log(
         "[SyncDO] /wait-for-events started, timeout:",
@@ -321,11 +354,11 @@ export class SyncDurableObject extends DurableObject<Env> {
 
   webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const session = ws.deserializeAttachment() as SyncSession | null;
-    if (!session) return;
+    if (!session) return Promise.resolve();
 
     try {
       const data = typeof message === "string" ? JSON.parse(message) : null;
-      if (!data) return;
+      if (!data) return Promise.resolve();
 
       switch (data.type) {
         case "ack":
@@ -344,6 +377,7 @@ export class SyncDurableObject extends DurableObject<Env> {
     } catch (error) {
       console.error("Error handling sync message:", error);
     }
+    return Promise.resolve();
   }
 
   webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
@@ -352,6 +386,7 @@ export class SyncDurableObject extends DurableObject<Env> {
       this.sessions.delete(ws);
     }
     ws.close(code, reason);
+    return Promise.resolve();
   }
 
   webSocketError(ws: WebSocket, error: unknown): Promise<void> {
@@ -360,6 +395,7 @@ export class SyncDurableObject extends DurableObject<Env> {
     if (session) {
       this.sessions.delete(ws);
     }
+    return Promise.resolve();
   }
 
   // Cleanup old events (run periodically via alarm)

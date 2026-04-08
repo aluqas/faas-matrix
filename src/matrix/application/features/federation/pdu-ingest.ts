@@ -1,36 +1,39 @@
 import { Effect } from "effect";
-import type { AppContext } from "../../../../foundation/app-context";
 import type { SignedTransport } from "../../../../fedcore/contracts";
-import { verifyRemoteSignature } from "../../../../services/federation-keys";
-import { federationGet, federationPost } from "../../../../services/federation-keys";
+import type { AppContext } from "../../../../foundation/app-context";
 import { storeEvent } from "../../../../services/database";
-import { resolveState } from "../../../../services/state-resolution";
+import { checkEventAuth } from "../../../../services/event-auth";
+import { fanoutEventToRemoteServers } from "../../../../services/federation-fanout";
+import {
+  federationGet,
+  federationPost,
+  verifyRemoteSignature,
+} from "../../../../services/federation-keys";
 import { getDefaultRoomVersion, getRoomVersion } from "../../../../services/room-versions";
-import type { PDU, RoomMemberContent } from "../../../../types";
+import { resolveState } from "../../../../services/state-resolution";
+import type { EventId, PDU, RoomMemberContent } from "../../../../types";
+import { isJsonObject, type JsonObject } from "../../../../types/common";
 import {
   calculateContentHash,
   calculateReferenceHashEventId,
   calculateReferenceHashEventIdStandard,
   verifyContentHash,
 } from "../../../../utils/crypto";
+import { toEventId, toRoomId } from "../../../../utils/ids";
 import { extractServerNameFromMatrixId } from "../../../../utils/matrix-ids";
-import { fanoutEventToRemoteServers } from "../../../../services/federation-fanout";
 import type { FederationRepository } from "../../../repositories/interfaces";
-import { createServerAclPolicy } from "../server-acl/policy";
 import { emitEffectWarningEffect } from "../../effect-debug";
 import { withLogContext } from "../../logging";
 import {
   MembershipTransitionService,
   resolveMembershipAuthState,
 } from "../../membership-transition-service";
-import { checkEventAuth } from "../../../../services/event-auth";
-import { getPartialStateJoinForRoom } from "../partial-state/tracker";
 import {
   findInvalidCanonicalJsonNumberPath,
   roomVersionRequiresIntegerJsonNumbers,
 } from "../../pdu-validator";
-import { markPartialStateDeferredMembershipEvent } from "./partial-state-membership";
-import { markPartialStateDeferredAuthEvent } from "./partial-state-membership";
+import { getPartialStateJoinForRoom } from "../partial-state/tracker";
+import { createServerAclPolicy } from "../server-acl/policy";
 import {
   extractRawFederationPduFields,
   toRawFederationPdu,
@@ -39,10 +42,47 @@ import {
   type PduIngestInput,
   type PduIngestResult,
 } from "./contracts";
+import {
+  markPartialStateDeferredAuthEvent,
+  markPartialStateDeferredMembershipEvent,
+} from "./partial-state-membership";
 
 type StructuredLogger = ReturnType<typeof withLogContext>;
 
 const membershipTransitions = new MembershipTransitionService();
+
+function parseStateIdsResponse(
+  value: unknown,
+): { pdu_ids: string[]; auth_chain_ids: string[] } | null {
+  if (!isJsonObject(value)) {
+    return null;
+  }
+  return {
+    pdu_ids: Array.isArray(value.pdu_ids)
+      ? value.pdu_ids.filter((eventId): eventId is string => typeof eventId === "string")
+      : [],
+    auth_chain_ids: Array.isArray(value.auth_chain_ids)
+      ? value.auth_chain_ids.filter((eventId): eventId is string => typeof eventId === "string")
+      : [],
+  };
+}
+
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseFederationEventArray(
+  value: unknown,
+  key: "events" | "auth_chain" | "auth_events",
+): Record<string, unknown>[] {
+  if (!isUnknownRecord(value)) {
+    return [];
+  }
+  const raw = value[key];
+  return Array.isArray(raw)
+    ? raw.filter((event): event is Record<string, unknown> => isUnknownRecord(event))
+    : [];
+}
 
 export interface PduIngestPorts {
   appContext: AppContext;
@@ -158,10 +198,10 @@ async function fetchStateSnapshotForMissingPrevEvent(
     return true;
   }
 
-  const stateIds = (await stateIdsResponse.json()) as {
-    pdu_ids?: unknown[];
-    auth_chain_ids?: unknown[];
-  };
+  const stateIds = parseStateIdsResponse(await stateIdsResponse.json());
+  if (!stateIds) {
+    return false;
+  }
   const snapshotEventIds = Array.from(
     new Set(
       [
@@ -267,15 +307,11 @@ async function fetchMissingAuthEventsIfNeeded(
     return;
   }
 
-  const data = (await response.json()) as {
-    auth_chain?: unknown[];
-    auth_events?: unknown[];
-  };
-  const rawAuthEvents = (Array.isArray(data.auth_chain) ? data.auth_chain : data.auth_events) ?? [];
-  const authPdus = rawAuthEvents.filter(
-    (event): event is Record<string, unknown> =>
-      event !== null && typeof event === "object" && !Array.isArray(event),
-  );
+  const data = await response.json();
+  const authPdus = parseFederationEventArray(data, "auth_chain");
+  if (authPdus.length === 0) {
+    authPdus.push(...parseFederationEventArray(data, "auth_events"));
+  }
 
   if (authPdus.length === 0) {
     return;
@@ -317,7 +353,7 @@ async function fetchMissingPrevEventsIfNeeded(
 
   const partialStateJoin = await getPartialStateJoinForRoom(
     ports.appContext.capabilities.kv.cache as KVNamespace | undefined,
-    roomId,
+    toRoomId(roomId)!,
   );
   if (partialStateJoin) {
     return false;
@@ -412,13 +448,8 @@ async function fetchMissingPrevEventsIfNeeded(
     return false;
   }
 
-  const data = (await response.json()) as { events?: unknown[] };
-  const rawEvents = Array.isArray(data.events)
-    ? data.events.filter(
-        (event): event is Record<string, unknown> =>
-          event !== null && typeof event === "object" && !Array.isArray(event),
-      )
-    : [];
+  const data = await response.json();
+  const rawEvents = parseFederationEventArray(data, "events");
 
   if (rawEvents.length === 0) {
     return false;
@@ -567,9 +598,10 @@ export async function ingestFederationPdu(
   } = extractRawFederationPduFields(pdu);
 
   if (!roomId || !sender || !eventType || !content) {
+    const fallbackEventId = toEventId(incomingEventId) ?? ("$unknown" as EventId);
     return {
       kind: "rejected",
-      eventId: incomingEventId ?? "unknown",
+      eventId: fallbackEventId,
       reason: "Invalid PDU structure",
       requiresRefanout: false,
     };
@@ -582,16 +614,19 @@ export async function ingestFederationPdu(
       ? content["room_version"]
       : getDefaultRoomVersion());
   const eventIdFormat = getRoomVersion(roomVersion)?.eventIdFormat ?? "v4";
-  const urlsafeEventId =
+
+  const incomingEventIdValidated = toEventId(incomingEventId);
+  const urlsafeEventId: EventId | null =
     eventIdFormat === "v1"
-      ? (incomingEventId ?? null)
-      : await calculateReferenceHashEventId(input.rawPdu, roomVersion);
-  const standardEventId =
+      ? (incomingEventIdValidated ?? null)
+      : ((await calculateReferenceHashEventId(input.rawPdu, roomVersion)) as EventId);
+  const standardEventId: EventId | null =
     eventIdFormat === "v1"
-      ? (incomingEventId ?? null)
-      : await calculateReferenceHashEventIdStandard(input.rawPdu, roomVersion);
-  const normalizedEventId = eventIdFormat === "v1" ? (incomingEventId ?? null) : urlsafeEventId;
-  const eventId = normalizedEventId ?? incomingEventId ?? "unknown";
+      ? (incomingEventIdValidated ?? null)
+      : ((await calculateReferenceHashEventIdStandard(input.rawPdu, roomVersion)) as EventId);
+  const normalizedEventId: EventId | null =
+    eventIdFormat === "v1" ? (incomingEventIdValidated ?? null) : urlsafeEventId;
+  const eventId: EventId = normalizedEventId ?? incomingEventIdValidated ?? ("$unknown" as EventId);
   if (!normalizedEventId) {
     return {
       kind: "rejected",

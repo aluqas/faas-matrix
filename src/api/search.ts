@@ -5,17 +5,19 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { JsonObject } from "../types/common";
 import type { SearchRequest, SearchResultEntry } from "../types/client";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
+import { toEventId, toRoomId, toUserId } from "../utils/ids";
 
 const app = new Hono<AppEnv>();
 
-function parseEventContent(value: string): Record<string, unknown> {
+function parseEventContent(value: string): JsonObject {
   try {
     const parsed = JSON.parse(value);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
+      ? (parsed as JsonObject)
       : {};
   } catch {
     return {};
@@ -81,7 +83,11 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
     .bind(userId)
     .all<{ room_id: string }>();
 
-  const userRoomIds = new Set(userRooms.results.map((r) => r.room_id));
+  const userRoomIds = new Set(
+    userRooms.results
+      .map((r) => toRoomId(r.room_id))
+      .filter((roomId): roomId is NonNullable<ReturnType<typeof toRoomId>> => roomId !== null),
+  );
 
   // Apply room filters
   let searchRoomIds = Array.from(userRoomIds);
@@ -226,14 +232,20 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
   const formattedResults: SearchResultEntry[] = [];
 
   for (const event of searchResults) {
+    const eventId = toEventId(event.event_id);
+    const roomId = toRoomId(event.room_id);
+    const sender = toUserId(event.sender);
+    if (!eventId || !roomId || !sender) {
+      continue;
+    }
     const result: SearchResultEntry = {
-      event_id: event.event_id,
+      event_id: eventId,
       rank: Math.abs(event.rank || 0),
       result: {
-        event_id: event.event_id,
+        event_id: eventId,
         type: event.event_type,
-        room_id: event.room_id,
-        sender: event.sender,
+        room_id: roomId,
+        sender,
         origin_server_ts: event.origin_server_ts,
         content: parseEventContent(event.content),
       },
@@ -281,22 +293,42 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
         }>();
 
       result.context = {
-        events_before: eventsBefore.results.map((e) => ({
-          event_id: e.event_id,
-          type: e.event_type,
-          sender: e.sender,
-          origin_server_ts: e.origin_server_ts,
-          content: parseEventContent(e.content),
-          room_id: event.room_id,
-        })),
-        events_after: eventsAfter.results.map((e) => ({
-          event_id: e.event_id,
-          type: e.event_type,
-          sender: e.sender,
-          origin_server_ts: e.origin_server_ts,
-          content: parseEventContent(e.content),
-          room_id: event.room_id,
-        })),
+        events_before: eventsBefore.results
+          .map((e) => {
+            const eventId = toEventId(e.event_id);
+            const senderId = toUserId(e.sender);
+            if (!eventId || !senderId) {
+              return null;
+            }
+
+            return {
+              event_id: eventId,
+              type: e.event_type,
+              sender: senderId,
+              origin_server_ts: e.origin_server_ts,
+              content: parseEventContent(e.content),
+              room_id: roomId,
+            };
+          })
+          .filter((entry): entry is SearchResultEntry["result"] => entry !== null),
+        events_after: eventsAfter.results
+          .map((e) => {
+            const eventId = toEventId(e.event_id);
+            const senderId = toUserId(e.sender);
+            if (!eventId || !senderId) {
+              return null;
+            }
+
+            return {
+              event_id: eventId,
+              type: e.event_type,
+              sender: senderId,
+              origin_server_ts: e.origin_server_ts,
+              content: parseEventContent(e.content),
+              room_id: roomId,
+            };
+          })
+          .filter((entry): entry is SearchResultEntry["result"] => entry !== null),
       };
 
       // Add profile info if requested

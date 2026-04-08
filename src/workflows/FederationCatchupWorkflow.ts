@@ -5,6 +5,7 @@
 
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import type { Env } from "../types";
+import { isJsonObject } from "../types/common";
 
 export interface CatchupParams {
   serverName: string;
@@ -70,8 +71,11 @@ export class FederationCatchupWorkflow extends WorkflowEntrypoint<Env, CatchupPa
 
           if (!resp.ok) return 0;
 
-          const data = (await resp.json()) as { events?: unknown[] };
-          return data.events?.length ?? 0;
+          const data = await resp.json();
+          if (!isJsonObject(data) || !Array.isArray(data.events)) {
+            return 0;
+          }
+          return data.events.length;
         } catch {
           return 0;
         }

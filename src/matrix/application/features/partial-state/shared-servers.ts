@@ -4,6 +4,7 @@ import {
   getServersInRoomsWithUser,
   getServersInRoomsWithUserExcludingRooms,
 } from "../../../../services/database";
+import { toEventId, toRoomId, toUserId } from "../../../../utils/ids";
 import type { PartialStateJoinMarker, PartialStateStatus } from "./tracker";
 import {
   listPartialStateCompletionStatusesForUser,
@@ -31,10 +32,18 @@ function parseMarkerContent(
       return null;
     }
 
+    const validatedRoomId = toRoomId(roomId);
+    const validatedUserId = toUserId(userId);
+    const validatedEventId = toEventId(eventId);
+
+    if (!validatedRoomId || !validatedUserId || !validatedEventId) {
+      return null;
+    }
+
     return {
-      roomId,
-      userId,
-      eventId,
+      roomId: validatedRoomId,
+      userId: validatedUserId,
+      eventId: validatedEventId,
       startedAt,
       phase:
         record["phase"] === "catchup_published" || record["phase"] === "complete"
@@ -295,15 +304,19 @@ export async function getSharedServersInRoomsWithUserIncludingPartialState(
   cache: KVNamespace | undefined,
   userId: string,
 ): Promise<string[]> {
+  const validatedUserId = toUserId(userId);
+  if (!validatedUserId) {
+    return [];
+  }
   const [sharedServers, persistedJoins, kvJoins, completedJoins] = await Promise.all([
-    getServersInRoomsWithUser(db, userId),
-    listPersistedPartialStateJoins(db, userId),
-    listPartialStateStatusesForUser(cache, userId),
-    listPartialStateCompletionStatusesForUser(cache, userId),
+    getServersInRoomsWithUser(db, validatedUserId),
+    listPersistedPartialStateJoins(db, validatedUserId),
+    listPartialStateStatusesForUser(cache, validatedUserId),
+    listPartialStateCompletionStatusesForUser(cache, validatedUserId),
   ]);
   const [joinedPersistedJoins, joinedKvJoins] = await Promise.all([
-    filterMarkersToJoinedMembership(db, userId, persistedJoins),
-    filterMarkersToJoinedMembership(db, userId, kvJoins),
+    filterMarkersToJoinedMembership(db, validatedUserId, persistedJoins),
+    filterMarkersToJoinedMembership(db, validatedUserId, kvJoins),
   ]);
 
   return resolveSharedServersWithPartialState({
@@ -319,14 +332,18 @@ export async function getSharedServersInRoomsWithUserExcludingPartialState(
   cache: KVNamespace | undefined,
   userId: string,
 ): Promise<string[]> {
+  const validatedUserId = toUserId(userId);
+  if (!validatedUserId) {
+    return [];
+  }
   const [persistedJoins, kvJoins, completedJoins] = await Promise.all([
-    listPersistedPartialStateJoins(db, userId),
-    listPartialStateStatusesForUser(cache, userId),
-    listPartialStateCompletionStatusesForUser(cache, userId),
+    listPersistedPartialStateJoins(db, validatedUserId),
+    listPartialStateStatusesForUser(cache, validatedUserId),
+    listPartialStateCompletionStatusesForUser(cache, validatedUserId),
   ]);
   const [joinedPersistedJoins, joinedKvJoins] = await Promise.all([
-    filterMarkersToJoinedMembership(db, userId, persistedJoins),
-    filterMarkersToJoinedMembership(db, userId, kvJoins),
+    filterMarkersToJoinedMembership(db, validatedUserId, persistedJoins),
+    filterMarkersToJoinedMembership(db, validatedUserId, kvJoins),
   ]);
   const activePartialStateRoomIds = resolveActivePartialStateRoomIds({
     persistedJoins: joinedPersistedJoins,
@@ -334,7 +351,7 @@ export async function getSharedServersInRoomsWithUserExcludingPartialState(
     completedJoins,
   });
 
-  return getServersInRoomsWithUserExcludingRooms(db, userId, activePartialStateRoomIds);
+  return getServersInRoomsWithUserExcludingRooms(db, validatedUserId, activePartialStateRoomIds);
 }
 
 export async function getSharedServersInEncryptedRoomsWithUserExcludingPartialState(
@@ -342,14 +359,18 @@ export async function getSharedServersInEncryptedRoomsWithUserExcludingPartialSt
   cache: KVNamespace | undefined,
   userId: string,
 ): Promise<string[]> {
+  const validatedUserId = toUserId(userId);
+  if (!validatedUserId) {
+    return [];
+  }
   const [persistedJoins, kvJoins, completedJoins] = await Promise.all([
-    listPersistedPartialStateJoins(db, userId),
-    listPartialStateStatusesForUser(cache, userId),
-    listPartialStateCompletionStatusesForUser(cache, userId),
+    listPersistedPartialStateJoins(db, validatedUserId),
+    listPartialStateStatusesForUser(cache, validatedUserId),
+    listPartialStateCompletionStatusesForUser(cache, validatedUserId),
   ]);
   const [joinedPersistedJoins, joinedKvJoins] = await Promise.all([
-    filterMarkersToJoinedMembership(db, userId, persistedJoins),
-    filterMarkersToJoinedMembership(db, userId, kvJoins),
+    filterMarkersToJoinedMembership(db, validatedUserId, persistedJoins),
+    filterMarkersToJoinedMembership(db, validatedUserId, kvJoins),
   ]);
   const activePartialStateRoomIds = resolveActivePartialStateRoomIds({
     persistedJoins: joinedPersistedJoins,
@@ -357,7 +378,11 @@ export async function getSharedServersInEncryptedRoomsWithUserExcludingPartialSt
     completedJoins,
   });
 
-  return getServersInEncryptedRoomsWithUserExcludingRooms(db, userId, activePartialStateRoomIds);
+  return getServersInEncryptedRoomsWithUserExcludingRooms(
+    db,
+    validatedUserId,
+    activePartialStateRoomIds,
+  );
 }
 
 export async function getSharedServersInEncryptedRoomsWithUserIncludingPartialState(
@@ -365,15 +390,19 @@ export async function getSharedServersInEncryptedRoomsWithUserIncludingPartialSt
   cache: KVNamespace | undefined,
   userId: string,
 ): Promise<string[]> {
+  const validatedUserId = toUserId(userId);
+  if (!validatedUserId) {
+    return [];
+  }
   const [sharedServers, persistedJoins, kvJoins, completedJoins] = await Promise.all([
-    getServersInEncryptedRoomsWithUser(db, userId),
-    listPersistedPartialStateJoins(db, userId),
-    listPartialStateStatusesForUser(cache, userId),
-    listPartialStateCompletionStatusesForUser(cache, userId),
+    getServersInEncryptedRoomsWithUser(db, validatedUserId),
+    listPersistedPartialStateJoins(db, validatedUserId),
+    listPartialStateStatusesForUser(cache, validatedUserId),
+    listPartialStateCompletionStatusesForUser(cache, validatedUserId),
   ]);
   const [joinedPersistedJoins, joinedKvJoins] = await Promise.all([
-    filterMarkersToJoinedMembership(db, userId, persistedJoins),
-    filterMarkersToJoinedMembership(db, userId, kvJoins),
+    filterMarkersToJoinedMembership(db, validatedUserId, persistedJoins),
+    filterMarkersToJoinedMembership(db, validatedUserId, kvJoins),
   ]);
 
   return resolveEncryptedSharedServersWithPartialState({

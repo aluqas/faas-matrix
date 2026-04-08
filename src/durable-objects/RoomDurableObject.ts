@@ -2,6 +2,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../types";
+import { isJsonObject } from "../types/common";
 
 interface RoomSession {
   id: string;
@@ -19,6 +20,31 @@ interface ReceiptData {
   receipt_type: string;
   ts: number;
   thread_id?: string;
+}
+
+function isReceiptBody(value: unknown): value is {
+  user_id: string;
+  event_id: string;
+  receipt_type: string;
+  thread_id?: string;
+  ts?: number;
+} {
+  return (
+    isJsonObject(value) &&
+    typeof value.user_id === "string" &&
+    typeof value.event_id === "string" &&
+    typeof value.receipt_type === "string"
+  );
+}
+
+function isTypingBody(value: unknown): value is {
+  user_id: string;
+  typing: boolean;
+  timeout?: number;
+} {
+  return (
+    isJsonObject(value) && typeof value.user_id === "string" && typeof value.typing === "boolean"
+  );
 }
 
 export class RoomDurableObject extends DurableObject<Env> {
@@ -133,6 +159,9 @@ export class RoomDurableObject extends DurableObject<Env> {
   // Set a read receipt for a user
   private async handleSetReceipt(request: Request): Promise<Response> {
     const body = await request.json();
+    if (!isReceiptBody(body)) {
+      return new Response("Bad request", { status: 400 });
+    }
 
     const { user_id, event_id, receipt_type, thread_id } = body;
     const ts = typeof body.ts === "number" ? body.ts : Date.now();
@@ -231,6 +260,9 @@ export class RoomDurableObject extends DurableObject<Env> {
   // Set typing state for a user
   private async handleSetTyping(request: Request): Promise<Response> {
     const body = await request.json();
+    if (!isTypingBody(body)) {
+      return new Response("Bad request", { status: 400 });
+    }
 
     const { user_id, typing, timeout = 30000 } = body;
     await this.loadTypingCache();
@@ -293,7 +325,7 @@ export class RoomDurableObject extends DurableObject<Env> {
   private handleWebSocket(request: Request): Promise<Response> {
     const upgradeHeader = request.headers.get("Upgrade");
     if (!upgradeHeader || upgradeHeader !== "websocket") {
-      return new Response("Expected websocket upgrade", { status: 426 });
+      return Promise.resolve(new Response("Expected websocket upgrade", { status: 426 }));
     }
 
     // Get session info from query params
@@ -303,7 +335,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     const roomId = url.searchParams.get("room_id");
 
     if (!userId || !roomId) {
-      return new Response("Missing user_id or room_id", { status: 400 });
+      return Promise.resolve(new Response("Missing user_id or room_id", { status: 400 }));
     }
 
     this.roomId = roomId;
@@ -327,10 +359,12 @@ export class RoomDurableObject extends DurableObject<Env> {
 
     this.sessions.set(server, session);
 
-    return new Response(null, {
-      status: 101,
-      webSocket: client,
-    });
+    return Promise.resolve(
+      new Response(null, {
+        status: 101,
+        webSocket: client,
+      }),
+    );
   }
 
   private async handleBroadcast(request: Request): Promise<Response> {
@@ -361,15 +395,17 @@ export class RoomDurableObject extends DurableObject<Env> {
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        room_id: this.roomId,
-        connected_users: [...new Set(users)],
-        connection_count: webSockets.length,
-      }),
-      {
-        headers: { "Content-Type": "application/json" },
-      },
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          room_id: this.roomId,
+          connected_users: [...new Set(users)],
+          connection_count: webSockets.length,
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
   }
 
@@ -405,6 +441,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     } catch (error) {
       console.error("Error handling WebSocket message:", error);
     }
+    return;
   }
 
   webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
@@ -431,6 +468,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     }
 
     ws.close(code, reason);
+    return Promise.resolve();
   }
 
   webSocketError(ws: WebSocket, error: unknown): Promise<void> {
@@ -439,6 +477,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     if (session) {
       this.sessions.delete(ws);
     }
+    return Promise.resolve();
   }
 
   private broadcastTyping(userId: string, isTyping: boolean): Promise<void> {
@@ -460,6 +499,7 @@ export class RoomDurableObject extends DurableObject<Env> {
         }
       }
     }
+    return Promise.resolve();
   }
 
   private async handleReadReceipt(

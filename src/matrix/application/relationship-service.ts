@@ -1,9 +1,11 @@
 import { getDefaultRoomVersion } from "../../services/room-versions";
 import { getAuthChain, getEvent, storeEvent } from "../../services/database";
 import { federationPost } from "../../services/federation-keys";
+import { isJsonObject } from "../../types/common";
 import type { MatrixSignatures, PDU } from "../../types";
 import type { EventRelationshipsRequest } from "../../types/events";
 import { encodeUnpaddedBase64 } from "../../utils/crypto";
+import { toEventId, toRoomId, toUserId } from "../../utils/ids";
 import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
 import { tryValidateIncomingPdu } from "./pdu-validator";
 export type EventRelationshipsDirection = "up" | "down";
@@ -148,20 +150,33 @@ async function loadChildEvents(
   return Promise.all(
     rows.results.map((row) =>
       augmentEvent(db, {
-        event_id: row.event_id,
-        room_id: row.room_id,
-        sender: row.sender,
+        event_id: toEventId(row.event_id)!,
+        room_id: toRoomId(row.room_id)!,
+        sender: toUserId(row.sender)!,
         type: row.event_type,
         ...(row.state_key !== null ? { state_key: row.state_key } : {}),
         content: JSON.parse(row.content) as Record<string, unknown>,
         origin_server_ts: row.origin_server_ts,
         depth: row.depth,
-        auth_events: JSON.parse(row.auth_events) as string[],
-        prev_events: JSON.parse(row.prev_events) as string[],
+        auth_events: (JSON.parse(row.auth_events) as string[]).flatMap((eventId) => {
+          const typedEventId = toEventId(eventId);
+          return typedEventId ? [typedEventId] : [];
+        }),
+        prev_events: (JSON.parse(row.prev_events) as string[]).flatMap((eventId) => {
+          const typedEventId = toEventId(eventId);
+          return typedEventId ? [typedEventId] : [];
+        }),
         ...(row.unsigned ? { unsigned: JSON.parse(row.unsigned) as Record<string, unknown> } : {}),
         ...(row.event_origin ? { origin: row.event_origin } : {}),
         ...(row.event_membership ? { membership: row.event_membership as PDU["membership"] } : {}),
-        ...(row.prev_state ? { prev_state: JSON.parse(row.prev_state) as string[] } : {}),
+        ...(row.prev_state
+          ? {
+              prev_state: (JSON.parse(row.prev_state) as string[]).flatMap((eventId) => {
+                const typedEventId = toEventId(eventId);
+                return typedEventId ? [typedEventId] : [];
+              }),
+            }
+          : {}),
         ...(row.hashes ? { hashes: JSON.parse(row.hashes) as { sha256: string } } : {}),
         ...(row.signatures ? { signatures: JSON.parse(row.signatures) as MatrixSignatures } : {}),
       }),
@@ -274,6 +289,9 @@ export async function fetchFederatedEventRelationships(
   }
 
   const payload = await response.json();
+  if (!isJsonObject(payload)) {
+    return false;
+  }
   await persistFederatedRelationshipResponse(db, roomVersion, payload);
   return true;
 }

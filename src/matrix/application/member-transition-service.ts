@@ -6,6 +6,7 @@ import {
   updateMembership,
 } from "../../services/database";
 import type { Membership, PDU } from "../../types";
+import { toEventId, toRoomId, toUserId } from "../../utils/ids";
 import type { MembershipRecord } from "../repositories/interfaces";
 
 export type MembershipTransitionSource = "client" | "federation" | "workflow";
@@ -96,18 +97,31 @@ function toAuthStateFromInviteStrippedState(
   roomId: string,
   strippedState: StrippedStateEvent[],
 ): PDU[] {
-  return strippedState.map((event, index) => ({
-    event_id: `$invite-stripped-${index}`,
-    room_id: roomId,
-    sender: event.sender,
-    type: event.type,
-    state_key: event.state_key,
-    content: event.content,
-    origin_server_ts: 0,
-    depth: 0,
-    auth_events: [],
-    prev_events: [],
-  }));
+  const typedRoomId = toRoomId(roomId);
+  if (!typedRoomId) {
+    return [];
+  }
+  return strippedState.flatMap((event, index) => {
+    const eventId = toEventId(`$invite-stripped-${index}`);
+    const sender = toUserId(event.sender);
+    if (!eventId || !sender) {
+      return [];
+    }
+    return [
+      {
+        event_id: eventId,
+        room_id: typedRoomId,
+        sender,
+        type: event.type,
+        state_key: event.state_key,
+        content: event.content,
+        origin_server_ts: 0,
+        depth: 0,
+        auth_events: [],
+        prev_events: [],
+      },
+    ];
+  });
 }
 
 export function resolveMembershipAuthState(

@@ -2,6 +2,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../types";
+import { isJsonObject } from "../types/common";
 import { federationPut } from "../services/federation-keys";
 
 interface FederationTarget {
@@ -25,6 +26,33 @@ interface OutboundEdu {
   destination: string;
   content: any;
   created_at: number;
+}
+
+function isOutboundEventPayload(
+  value: unknown,
+): value is Pick<OutboundEvent, "event_id" | "room_id" | "destination" | "pdu"> {
+  return (
+    isJsonObject(value) &&
+    typeof value.event_id === "string" &&
+    typeof value.room_id === "string" &&
+    typeof value.destination === "string" &&
+    "pdu" in value
+  );
+}
+
+function isInboundFederationBody(value: unknown): value is { pdus?: Array<{ event_id?: string }> } {
+  return isJsonObject(value);
+}
+
+function isOutboundEduPayload(
+  value: unknown,
+): value is Pick<OutboundEdu, "edu_type" | "destination" | "content"> {
+  return (
+    isJsonObject(value) &&
+    typeof value.edu_type === "string" &&
+    typeof value.destination === "string" &&
+    "content" in value
+  );
 }
 
 export class FederationDurableObject extends DurableObject<Env> {
@@ -61,12 +89,10 @@ export class FederationDurableObject extends DurableObject<Env> {
 
   // Queue an event for federation to a remote server
   private async handleSend(request: Request): Promise<Response> {
-    const data = (await request.json()) as {
-      destination: string;
-      event_id: string;
-      room_id: string;
-      pdu: any;
-    };
+    const data = await request.json();
+    if (!isOutboundEventPayload(data)) {
+      return new Response("Bad request", { status: 400 });
+    }
 
     const outboundEvent: OutboundEvent = {
       event_id: data.event_id,
@@ -103,14 +129,17 @@ export class FederationDurableObject extends DurableObject<Env> {
     // Verify request signature (simplified)
     // In production, verify against the server's signing keys
 
-    const data = (await request.json()) as {
-      pdus: any[];
-      edus?: any[];
-    };
+    const data = await request.json();
+    if (!isInboundFederationBody(data)) {
+      return new Response("Bad request", { status: 400 });
+    }
 
     // Process incoming PDUs
     const processedPdus: string[] = [];
-    for (const pdu of data.pdus || []) {
+    for (const pdu of data.pdus ?? []) {
+      if (!pdu || typeof pdu.event_id !== "string") {
+        continue;
+      }
       // Store the event
       await this.ctx.storage.put(`received:${pdu.event_id}`, {
         pdu,
@@ -145,9 +174,7 @@ export class FederationDurableObject extends DurableObject<Env> {
     const serverName = url.searchParams.get("server");
 
     if (serverName) {
-      const target = (await this.ctx.storage.get(`server:${serverName}`)) as
-        | FederationTarget
-        | undefined;
+      const target = await this.ctx.storage.get(`server:${serverName}`);
       return new Response(JSON.stringify(target ?? { serverName, status: "unknown" }), {
         headers: { "Content-Type": "application/json" },
       });
@@ -227,11 +254,10 @@ export class FederationDurableObject extends DurableObject<Env> {
 
   // Queue an EDU for federation to a remote server
   private async handleSendEdu(request: Request): Promise<Response> {
-    const data = (await request.json()) as {
-      destination: string;
-      edu_type: string;
-      content: any;
-    };
+    const data = await request.json();
+    if (!isOutboundEduPayload(data)) {
+      return new Response("Bad request", { status: 400 });
+    }
 
     const edu: OutboundEdu = {
       edu_type: data.edu_type,
@@ -349,9 +375,7 @@ export class FederationDurableObject extends DurableObject<Env> {
   }
 
   private async scheduleRetry(destination: string, events: OutboundEvent[]): Promise<void> {
-    const target = (await this.ctx.storage.get(`server:${destination}`)) as
-      | FederationTarget
-      | undefined;
+    const target = await this.ctx.storage.get(`server:${destination}`);
     const retryCount = (target?.retryCount ?? 0) + 1;
 
     // Exponential backoff tuned for interactive protocol delivery.

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { Effect } from "effect";
 import type { AppEnv } from "../../types";
 import { Errors, MatrixApiError } from "../../utils/errors";
+import { toEventId, toRoomId, toUserId } from "../../utils/ids";
 import { DomainError, toMatrixApiError } from "../../matrix/application/domain-error";
 import { runFederationEffect } from "../../matrix/application/effect-runtime";
 import { type EventRelationshipsRequest } from "../../matrix/application/relationship-service";
@@ -76,10 +77,15 @@ function parseFederationEventRelationshipsRequest(
   if (!isRecord(input) || typeof input.event_id !== "string") {
     return null;
   }
+  const eventId = toEventId(input.event_id);
+  const roomId = typeof input.room_id === "string" ? toRoomId(input.room_id) : null;
+  if (!eventId) {
+    return null;
+  }
 
   return {
-    eventId: input.event_id,
-    ...(typeof input.room_id === "string" ? { roomId: input.room_id } : {}),
+    eventId,
+    ...(roomId ? { roomId } : {}),
     direction: input.direction === "up" ? "up" : "down",
     ...(typeof input.include_parent === "boolean" ? { includeParent: input.include_parent } : {}),
     ...(typeof input.recent_first === "boolean" ? { recentFirst: input.recent_first } : {}),
@@ -156,11 +162,22 @@ app.get("/_matrix/federation/v1/query/directory", (c) => {
 });
 
 app.get("/_matrix/federation/v1/query/profile", (c) => {
-  const userId = c.req.query("user_id");
-  const field = c.req.query("field");
+  const rawUserId = c.req.query("user_id");
+  const rawField = c.req.query("field");
 
-  if (!userId) {
+  if (!rawUserId) {
     return Errors.missingParam("user_id").toResponse();
+  }
+  const userId = toUserId(rawUserId);
+  if (!userId) {
+    return Errors.invalidParam("user_id", "Invalid user ID").toResponse();
+  }
+  const field =
+    rawField === undefined || rawField === "displayname" || rawField === "avatar_url"
+      ? rawField
+      : null;
+  if (field === null) {
+    return Errors.invalidParam("field", "Invalid profile field").toResponse();
   }
 
   return respondWithFederationEffect(

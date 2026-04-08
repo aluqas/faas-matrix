@@ -6,10 +6,10 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import type { AppEnv } from "../types";
+import { isJsonObject } from "../types/common";
 import type {
-  FederationSpaceHierarchyResponse,
   PublicRoomSummary,
-  FederationSpaceHierarchyRoom,
+  SpaceHierarchyChildEdge,
   SpaceHierarchyChildStateEvent,
   SpaceHierarchyRoom,
   SpaceHierarchySnapshot,
@@ -22,6 +22,7 @@ import {
   type SpaceChildEdge,
 } from "../matrix/application/event-query-service";
 import { federationGet } from "../services/federation-keys";
+import { toRoomId, toUserId } from "../utils/ids";
 
 const app = new Hono<AppEnv>();
 const queries = new EventQueryService();
@@ -35,14 +36,35 @@ function filterHierarchyEdges(edges: SpaceChildEdge[], suggestedOnly: boolean): 
   }).children;
 }
 
+function toHierarchyChildEdges(edges: SpaceChildEdge[]): SpaceHierarchyChildEdge[] {
+  return edges.flatMap((edge) => {
+    const roomId = toRoomId(edge.roomId);
+    return roomId ? [{ roomId, content: edge.content }] : [];
+  });
+}
+
+function getFallbackSpaceSender(roomId: string): ReturnType<typeof toUserId> {
+  const [, serverName] = roomId.split(":");
+  return serverName ? toUserId(`@unknown:${serverName}`) : null;
+}
+
 function toChildrenState(edges: SpaceChildEdge[]): SpaceHierarchyChildStateEvent[] {
-  return edges.map((edge) => ({
-    type: "m.space.child",
-    state_key: edge.roomId,
-    content: edge.content,
-    sender: "",
-    origin_server_ts: 0,
-  }));
+  return edges.flatMap((edge) => {
+    const stateKey = toRoomId(edge.roomId);
+    const sender = getFallbackSpaceSender(edge.roomId);
+    if (!stateKey || !sender) {
+      return [];
+    }
+    return [
+      {
+        type: "m.space.child" as const,
+        state_key: stateKey,
+        content: edge.content,
+        sender,
+        origin_server_ts: 0,
+      },
+    ];
+  });
 }
 
 function toSpaceChild(room: PublicRoomSummary, childEdges: SpaceChildEdge[]): SpaceHierarchyRoom {
@@ -65,29 +87,43 @@ function parseViaServers(content: Record<string, unknown>): string[] {
   return via.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
 }
 
-function parseFederationRoom(
-  room: FederationSpaceHierarchyRoom | null | undefined,
-): SpaceHierarchyRoom | null {
-  if (!room || typeof room.room_id !== "string") {
+function parseFederationRoom(room: unknown): SpaceHierarchyRoom | null {
+  if (!isJsonObject(room) || typeof room.room_id !== "string") {
+    return null;
+  }
+  const roomId = toRoomId(room.room_id);
+  if (!roomId) {
     return null;
   }
 
   const children_state = (Array.isArray(room.children_state) ? room.children_state : []).flatMap(
     (event) => {
+      if (!isJsonObject(event)) {
+        return [];
+      }
+
       if (
-        event?.type !== "m.space.child" ||
+        event.type !== "m.space.child" ||
         typeof event.state_key !== "string" ||
         !isObject(event.content)
       ) {
         return [];
       }
 
+      const stateKey = toRoomId(event.state_key);
+      const sender =
+        (typeof event.sender === "string" ? toUserId(event.sender) : null) ??
+        getFallbackSpaceSender(event.state_key);
+      if (!stateKey || !sender) {
+        return [];
+      }
+
       return [
         {
           type: "m.space.child" as const,
-          state_key: event.state_key,
+          state_key: stateKey,
           content: event.content,
-          sender: typeof event.sender === "string" ? event.sender : "",
+          sender,
           origin_server_ts: typeof event.origin_server_ts === "number" ? event.origin_server_ts : 0,
         },
       ];
@@ -95,7 +131,7 @@ function parseFederationRoom(
   );
 
   return {
-    room_id: room.room_id,
+    room_id: roomId,
     ...(typeof room.room_type === "string" ? { room_type: room.room_type } : {}),
     ...(typeof room.name === "string" ? { name: room.name } : {}),
     ...(typeof room.topic === "string" ? { topic: room.topic } : {}),
@@ -129,7 +165,7 @@ async function loadLocalSnapshot(
   );
   return {
     room: toSpaceChild(room, childEdges),
-    childEdges,
+    childEdges: toHierarchyChildEdges(childEdges),
   };
 }
 
@@ -161,7 +197,10 @@ async function fetchRemoteSnapshot(
       }
 
       const body = await response.json();
-      const room = parseFederationRoom(body.room);
+      if (!isJsonObject(body)) {
+        continue;
+      }
+      const room = parseFederationRoom(isJsonObject(body.room) ? body.room : null);
       if (!room) {
         continue;
       }
@@ -179,7 +218,7 @@ async function fetchRemoteSnapshot(
           ...room,
           children_state: toChildrenState(childEdges),
         },
-        childEdges,
+        childEdges: toHierarchyChildEdges(childEdges),
       };
     } catch {
       continue;
