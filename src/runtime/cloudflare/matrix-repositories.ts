@@ -621,7 +621,15 @@ export class CloudflareFederationRepository implements FederationRepository {
       `INSERT OR REPLACE INTO processed_edus (edu_id, edu_type, origin, processed_at, content)
        VALUES (?, ?, ?, ?, ?)`,
     )
-      .bind(String(content["edu_id"] ?? ""), eduType, origin, Date.now(), JSON.stringify(content))
+      .bind(
+        typeof content["edu_id"] === "string" || typeof content["edu_id"] === "number"
+          ? String(content["edu_id"])
+          : "",
+        eduType,
+        origin,
+        Date.now(),
+        JSON.stringify(content),
+      )
       .run();
   }
 

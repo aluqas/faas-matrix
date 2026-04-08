@@ -45,16 +45,16 @@ function verifyOpenIDToken(
       console.log("Token from different server:", token.matrix_server_name);
       // For federated calls, we'd need to verify with the remote server
       // For now, we only accept tokens from our own server
-      return null;
+      return Promise.resolve(null);
     }
 
     // For our own tokens, we trust them if they came from our server
     // In production, you'd want to validate the token signature or check against storage
     // For simplicity, we'll accept tokens that match our server name
-    return { sub: token.access_token };
+    return Promise.resolve({ sub: token.access_token });
   } catch (error) {
     console.error("Error verifying OpenID token:", error);
-    return null;
+    return Promise.resolve(null);
   }
 }
 

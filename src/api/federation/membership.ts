@@ -212,11 +212,17 @@ app.get("/_matrix/federation/v1/make_join/:roomId/:userId", async (c) => {
   });
 });
 
-async function handleSendJoin(c: any, version: "v1" | "v2"): Promise<Response> {
-  const roomId = c.req.param("roomId");
-  const eventId = c.req.param("eventId");
+async function handleSendJoin(
+  c: import("hono").Context<AppEnv>,
+  version: "v1" | "v2",
+): Promise<Response> {
+  const roomId = toRoomId(c.req.param("roomId"));
+  const eventId = toEventId(c.req.param("eventId"));
+  if (!roomId || !eventId) {
+    return Errors.invalidParam("roomId", "Invalid room or event ID").toResponse();
+  }
   const omitMembers = c.req.query("omit_members") === "true";
-  const origin = c.get("federationOrigin" as any) as string | undefined;
+  const origin = c.get("federationOrigin" as never) as string | undefined;
   const partialStateResponse = await ensureRoomNotPartiallyJoined(c, roomId);
   if (partialStateResponse) {
     return partialStateResponse;
@@ -234,7 +240,7 @@ async function handleSendJoin(c: any, version: "v1" | "v2"): Promise<Response> {
 
     const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
       .bind(roomId)
-      .first();
+      .first<{ room_id: string; room_version: string }>();
     if (!room) {
       return Errors.notFound("Room not found").toResponse();
     }
@@ -409,7 +415,7 @@ app.get("/_matrix/federation/v1/make_leave/:roomId/:userId", async (c) => {
 });
 
 async function persistFederationLeave(
-  c: any,
+  c: import("hono").Context<AppEnv>,
   roomId: RoomId,
   event: PDU,
   roomVersion: string,
@@ -464,10 +470,13 @@ async function persistFederationLeave(
   return leavePdu;
 }
 
-async function handleSendLeave(c: any, version: "v1" | "v2"): Promise<Response> {
+async function handleSendLeave(
+  c: import("hono").Context<AppEnv>,
+  version: "v1" | "v2",
+): Promise<Response> {
   const roomId = toRoomId(c.req.param("roomId"));
   const eventId = toEventId(c.req.param("eventId"));
-  const origin = c.get("federationOrigin" as any) as string | undefined;
+  const origin = c.get("federationOrigin" as never) as string | undefined;
   if (!roomId || !eventId) {
     return Errors.invalidParam("roomId", "Invalid room or event ID").toResponse();
   }
@@ -481,7 +490,7 @@ async function handleSendLeave(c: any, version: "v1" | "v2"): Promise<Response> 
 
   const room = await c.env.DB.prepare(`SELECT room_id, room_version FROM rooms WHERE room_id = ?`)
     .bind(roomId)
-    .first();
+    .first<{ room_id: string; room_version: string }>();
   if (!room) {
     return Errors.notFound("Room not found").toResponse();
   }
@@ -503,7 +512,10 @@ async function handleSendLeave(c: any, version: "v1" | "v2"): Promise<Response> 
 app.put("/_matrix/federation/v1/send_leave/:roomId/:eventId", (c) => handleSendLeave(c, "v1"));
 app.put("/_matrix/federation/v2/send_leave/:roomId/:eventId", (c) => handleSendLeave(c, "v2"));
 
-async function handleFederationInvite(c: any, version: "v1" | "v2"): Promise<Response> {
+async function handleFederationInvite(
+  c: import("hono").Context<AppEnv>,
+  version: "v1" | "v2",
+): Promise<Response> {
   const roomId = toRoomId(c.req.param("roomId"));
   const eventId = toEventId(c.req.param("eventId"));
   if (!roomId || !eventId) {
@@ -547,8 +559,8 @@ async function handleFederationInvite(c: any, version: "v1" | "v2"): Promise<Res
     const decision = decideInvitePermission(
       invitePermissionConfig,
       sender,
-      typeof c.get("federationOrigin") === "string"
-        ? (c.get("federationOrigin") as string)
+      typeof c.get("federationOrigin" as never) === "string"
+        ? (c.get("federationOrigin" as never) as string)
         : undefined,
     );
     if (decision.action === "block") {

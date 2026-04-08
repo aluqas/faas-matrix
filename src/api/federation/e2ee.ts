@@ -43,7 +43,7 @@ async function respondWithFederationEffect<A>(
   }
 }
 
-async function decodeJsonBody(c: import("hono").Context<AppEnv>): Promise<unknown | Response> {
+async function decodeJsonBody(c: import("hono").Context<AppEnv>): Promise<unknown> {
   try {
     return await c.req.json();
   } catch {

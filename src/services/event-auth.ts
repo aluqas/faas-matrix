@@ -60,7 +60,8 @@ function getPowerLevels(state: RoomStateMap): RoomPowerLevelsContent {
 
 /** Get user's power level from power levels content */
 function getUserPowerLevel(powerLevels: RoomPowerLevelsContent, userId: string): number {
-  return powerLevels.users?.[userId] ?? powerLevels.users_default ?? 0;
+  const explicitLevels = powerLevels.users as Record<string, number> | undefined;
+  return explicitLevels?.[userId] ?? powerLevels.users_default ?? 0;
 }
 
 /** Get the required power level for an event */
@@ -340,7 +341,7 @@ function checkMemberEvent(
     }
 
     default:
-      return { allowed: false, error: `Unknown membership: ${membership}` };
+      return { allowed: false, error: `Unknown membership: ${String(membership)}` };
   }
 }
 
@@ -431,7 +432,8 @@ function checkPowerLevelChange(
         };
       }
       // Check if the sender is changing someone else's power level
-      const oldLevel = currentPl.users?.[userId] ?? currentPl.users_default ?? 0;
+      const previousLevels = currentPl.users as Record<string, number> | undefined;
+      const oldLevel = previousLevels?.[userId] ?? currentPl.users_default ?? 0;
       if (oldLevel !== level && userId !== event.sender) {
         // To change another user's PL, sender must have higher PL than the old value
         if (senderPower <= oldLevel) {

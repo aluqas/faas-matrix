@@ -100,7 +100,7 @@ export class SyncDurableObject extends DurableObject<Env> {
       return this.handleWaitForEvents(request);
     }
 
-    return new Response("Not found", { status: 404 });
+    return Promise.resolve(new Response("Not found", { status: 404 }));
   }
 
   // Get sliding sync connection state for a user/connection

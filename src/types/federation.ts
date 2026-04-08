@@ -1,12 +1,4 @@
-import type {
-  EventId,
-  EventType,
-  RoomId,
-  RoomVersionId,
-  ServerName,
-  StateKey,
-  UserId,
-} from "./matrix";
+import type { EventId, EventType, RoomId, ServerName, StateKey, UserId } from "./matrix";
 
 export interface RawFederationPdu extends Record<string, unknown> {
   event_id?: EventId;

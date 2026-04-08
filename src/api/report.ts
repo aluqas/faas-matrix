@@ -288,7 +288,7 @@ app.get("/_matrix/client/v3/admin/reports", requireAuth(), async (c) => {
   };
 
   if (hasMore && results.length > 0) {
-    response.next_token = String(results.at(-1).id);
+    response.next_token = String(results.at(-1)!.id);
   }
 
   return c.json(response);

@@ -1,5 +1,4 @@
-import type { PresenceState } from "../../../../types";
-import type { SyncEventFilter } from "../../sync-projection";
+import type { PresenceEvent, PresenceState } from "../../../../types";
 import { applyEventFilter } from "../../sync-projection";
 import type {
   PresenceProjectionPort,
@@ -61,9 +60,9 @@ export async function projectPresenceEvents(
 
   return {
     events: applyEventFilter(
-      Object.entries(presenceByUser).map(([sender, content]) => ({
+      Object.entries(presenceByUser).map(([sender, content]): PresenceEvent => ({
         type: "m.presence" as const,
-        sender,
+        sender: sender as `@${string}:${string}`,
         content: {
           presence: content.presence,
           ...(content.status_msg !== undefined ? { status_msg: content.status_msg } : {}),

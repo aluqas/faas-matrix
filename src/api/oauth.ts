@@ -41,7 +41,7 @@ function base64UrlDecode(str: string): Uint8Array {
   const base64 = str.replaceAll("-", "+").replaceAll("_", "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = atob(padded);
-  return Uint8Array.from(binary, (c) => c.codePointAt(0));
+  return Uint8Array.from(binary, (c) => c.codePointAt(0) ?? 0);
 }
 
 // Verify PKCE code challenge

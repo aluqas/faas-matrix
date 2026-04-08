@@ -27,6 +27,28 @@ interface CloudflareDNSResponse {
   }>;
 }
 
+function isCloudflareDNSResponse(value: unknown): value is CloudflareDNSResponse {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    typeof (value as { Status?: unknown }).Status === "number"
+  );
+}
+
+function isWellKnownResponse(value: unknown): value is { "m.server"?: string } {
+  return value !== null && typeof value === "object";
+}
+
+function isServerDiscoveryResult(value: unknown): value is ServerDiscoveryResult {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    typeof (value as { host?: unknown }).host === "string" &&
+    typeof (value as { port?: unknown }).port === "number" &&
+    typeof (value as { tlsHostname?: unknown }).tlsHostname === "string"
+  );
+}
+
 // Cache key prefix for server discovery
 const DISCOVERY_CACHE_PREFIX = "discovery:";
 const DISCOVERY_CACHE_TTL = 3600; // 1 hour
@@ -43,7 +65,10 @@ export async function discoverServer(
   if (cache) {
     const cached = await cache.get(`${DISCOVERY_CACHE_PREFIX}${serverName}`);
     if (cached) {
-      return JSON.parse(cached);
+      const parsed = JSON.parse(cached) as unknown;
+      if (isServerDiscoveryResult(parsed)) {
+        return parsed;
+      }
     }
   }
 
@@ -145,6 +170,9 @@ async function tryWellKnown(serverName: string): Promise<ServerDiscoveryResult |
     }
 
     const wellKnown = await response.json();
+    if (!isWellKnownResponse(wellKnown)) {
+      return null;
+    }
     const delegatedServer = wellKnown["m.server"];
 
     if (!delegatedServer || typeof delegatedServer !== "string") {
@@ -242,7 +270,10 @@ async function lookupSRVRecords(serverName: string, recordName: string): Promise
       return [];
     }
 
-    const dnsResponse: CloudflareDNSResponse = await response.json();
+    const dnsResponse = await response.json();
+    if (!isCloudflareDNSResponse(dnsResponse)) {
+      return [];
+    }
 
     if (dnsResponse.Status !== 0 || !dnsResponse.Answer) {
       return [];
@@ -299,11 +330,11 @@ function selectSRVRecord(records: SRVRecord[]): SRVRecord {
   }
 
   // Sort by priority (ascending)
-  const sorted = [...records].toSorted((a, b) => a.priority - b.priority);
+  const sorted = [...records].toSorted((a: SRVRecord, b: SRVRecord) => a.priority - b.priority);
 
   // Get all records with the lowest priority
   const lowestPriority = sorted[0].priority;
-  const lowestPriorityRecords = sorted.filter((r) => r.priority === lowestPriority);
+  const lowestPriorityRecords = sorted.filter((r: SRVRecord) => r.priority === lowestPriority);
 
   if (lowestPriorityRecords.length === 1) {
     return lowestPriorityRecords[0];
@@ -311,7 +342,10 @@ function selectSRVRecord(records: SRVRecord[]): SRVRecord {
 
   // Weight-based selection among same-priority records
   // Sum of all weights
-  const totalWeight = lowestPriorityRecords.reduce((sum, r) => sum + r.weight, 0);
+  const totalWeight = lowestPriorityRecords.reduce(
+    (sum: number, r: SRVRecord) => sum + r.weight,
+    0,
+  );
 
   if (totalWeight === 0) {
     // All weights are 0, pick randomly

@@ -12,7 +12,7 @@ import {
 import { getDefaultRoomVersion, getRoomVersion } from "../../../../services/room-versions";
 import { resolveState } from "../../../../services/state-resolution";
 import type { EventId, PDU, RoomMemberContent } from "../../../../types";
-import { isJsonObject, type JsonObject } from "../../../../types/common";
+import { isJsonObject } from "../../../../types/common";
 import {
   calculateContentHash,
   calculateReferenceHashEventId,
@@ -1013,7 +1013,11 @@ export async function ingestFederationPdu(
     const db = isD1Database(ports.appContext.capabilities.sql.connection)
       ? ports.appContext.capabilities.sql.connection
       : undefined;
-    const queuePdu = ports.appContext.capabilities.federation?.queuePdu;
+    const federationCap = ports.appContext.capabilities.federation;
+    const queuePdu =
+      federationCap?.queuePdu !== undefined
+        ? (dest: string, rid: string, p: PDU) => federationCap.queuePdu!(dest, rid, p)
+        : undefined;
     if (db && queuePdu && !deferredPartialStateAuthReason) {
       await fanoutEventToRemoteServers(
         {

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv, Membership } from "../../types";
 import { Errors } from "../../utils/errors";
+import { toEventId, toRoomId } from "../../utils/ids";
 import { requireAuth } from "../../middleware/auth";
 import { invalidateRoomCache } from "../../services/room-cache";
 import { getEvent, getMembership, updateMembership } from "../../services/database";
@@ -27,8 +28,11 @@ async function putRoomStateEvent(
   stateKey: string,
 ): Promise<Response> {
   const userId = c.get("userId");
-  const roomId = c.req.param("roomId");
+  const roomId = toRoomId(c.req.param("roomId"));
   const eventType = c.req.param("eventType");
+  if (!roomId) {
+    return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+  }
 
   const membership = await getMembership(c.env.DB, roomId, userId);
   if (!membership || membership.membership !== "join") {
@@ -92,9 +96,12 @@ app.put("/_matrix/client/v3/rooms/:roomId/state/:eventType/", requireAuth(), (c)
 
 app.put("/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId", requireAuth(), async (c) => {
   const userId = c.get("userId");
-  const roomId = c.req.param("roomId");
-  const targetEventId = c.req.param("eventId");
+  const roomId = toRoomId(c.req.param("roomId"));
+  const targetEventId = toEventId(c.req.param("eventId"));
   const txnId = c.req.param("txnId");
+  if (!roomId || !targetEventId) {
+    return Errors.invalidParam("roomId", "Invalid room or event ID").toResponse();
+  }
 
   const targetEvent = await getEvent(c.env.DB, targetEventId);
   if (targetEvent && targetEvent.room_id !== roomId) {

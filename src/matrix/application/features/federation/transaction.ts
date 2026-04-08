@@ -80,7 +80,7 @@ export async function processFederationTransaction(
         repository: ports.repository,
         signedTransport: ports.signedTransport,
         processTransaction: processNestedTransaction,
-        runEffect: ports.runEffect,
+        runEffect: (effect) => ports.runEffect(effect),
       },
       {
         origin: input.origin,
@@ -139,7 +139,7 @@ export async function processFederationTransaction(
         {
           appContext: ports.appContext,
           repository: ports.repository,
-          runEffect: ports.runEffect,
+          runEffect: (effect) => ports.runEffect(effect),
         },
         { origin: input.origin, rawEdu },
       );

@@ -53,6 +53,24 @@ interface JWTCache {
   expiresAt: number;
 }
 
+function isAPNsNotification(value: unknown): value is APNsNotification {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v["pushkey"] === "string" && typeof v["topic"] === "string" && v["payload"] !== undefined
+  );
+}
+
+function isAPNsNotificationBatch(value: unknown): value is { notifications: APNsNotification[] } {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const v = value as Record<string, unknown>;
+  return Array.isArray(v["notifications"]);
+}
+
 export class PushDurableObject extends DurableObject<Env> {
   private jwtCache: JWTCache | null = null;
   private pendingPushes: Map<string, PendingPush> = new Map();
@@ -70,16 +88,26 @@ export class PushDurableObject extends DurableObject<Env> {
     }
 
     if (path === "/status" && request.method === "GET") {
-      return this.handleStatus();
+      return Promise.resolve(this.handleStatus());
     }
 
-    return new Response("Not found", { status: 404 });
+    return Promise.resolve(new Response("Not found", { status: 404 }));
   }
 
   // Send a single APNs notification
   private async handleSend(request: Request): Promise<Response> {
     try {
-      const notification = await request.json();
+      const body = await request.json();
+      if (!isAPNsNotification(body)) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Invalid notification shape" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+      const notification = body;
       const result = await this.sendAPNs(notification);
       return new Response(JSON.stringify(result), {
         headers: { "Content-Type": "application/json" },
@@ -102,8 +130,17 @@ export class PushDurableObject extends DurableObject<Env> {
   // Send batch of notifications
   private async handleSendBatch(request: Request): Promise<Response> {
     try {
-      const { notifications } = await request.json();
-      const results = await Promise.all(notifications.map((n) => this.sendAPNs(n)));
+      const body = await request.json();
+      if (!isAPNsNotificationBatch(body)) {
+        return new Response(JSON.stringify({ success: false, error: "Invalid batch shape" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      const { notifications } = body;
+      const results = await Promise.all(
+        notifications.map((n: APNsNotification) => this.sendAPNs(n)),
+      );
       return new Response(JSON.stringify({ results }), {
         headers: { "Content-Type": "application/json" },
       });
@@ -123,7 +160,7 @@ export class PushDurableObject extends DurableObject<Env> {
   }
 
   // Get status of push delivery
-  private handleStatus(): Promise<Response> {
+  private handleStatus(): Response {
     const pending = Array.from(this.pendingPushes.values());
     return new Response(
       JSON.stringify({
@@ -276,7 +313,7 @@ export class PushDurableObject extends DurableObject<Env> {
       .replaceAll("-----END EC PRIVATE KEY-----", "")
       .replaceAll(/\s/g, "");
 
-    const binaryKey = Uint8Array.from(atob(pemContents), (c) => c.codePointAt(0));
+    const binaryKey = Uint8Array.from(atob(pemContents), (c) => c.codePointAt(0) ?? 0);
 
     return crypto.subtle.importKey(
       "pkcs8",

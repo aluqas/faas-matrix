@@ -66,7 +66,7 @@ function parsePushAction(value: unknown): PushAction | null {
   return {
     set_tweak: setTweak,
     ...(record["value"] !== undefined ? { value: record["value"] } : {}),
-  };
+  } as PushAction;
 }
 
 export function parsePushActions(value: unknown): PushAction[] | null {
@@ -108,7 +108,7 @@ function parsePushCondition(value: unknown): PushCondition | null {
     ...(pattern !== undefined ? { pattern } : {}),
     ...(isValue !== undefined ? { is: isValue } : {}),
     ...(record["value"] !== undefined ? { value: record["value"] } : {}),
-  };
+  } as PushCondition;
 }
 
 export function parsePushConditions(value: unknown): PushCondition[] | null {

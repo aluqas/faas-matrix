@@ -1,3 +1,4 @@
+import type { JsonValue } from "../types/common";
 import type {
   CrossSigningKeyPayload,
   CrossSigningKeysStore,
@@ -114,10 +115,12 @@ function canonicalizeJson(value: unknown): unknown {
   }
 
   if (isPlainObject(value)) {
-    const sortedEntries = Object.entries(value).toSorted(([left], [right]) =>
-      left.localeCompare(right),
+    const sortedEntries = Object.entries(value).toSorted(
+      ([left]: [string, JsonValue], [right]: [string, JsonValue]) => left.localeCompare(right),
     );
-    return Object.fromEntries(sortedEntries.map(([key, entry]) => [key, canonicalizeJson(entry)]));
+    return Object.fromEntries(
+      sortedEntries.map(([key, entry]: [string, JsonValue]) => [key, canonicalizeJson(entry)]),
+    );
   }
 
   return value;

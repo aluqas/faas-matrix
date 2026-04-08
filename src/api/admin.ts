@@ -14,6 +14,20 @@ import { fetchOIDCDiscovery } from "../services/oidc";
 
 const app = new Hono<AppEnv>();
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseStatsResponse(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function parseAdminConfig(value: unknown): { registration_enabled: boolean } | null {
+  return isRecord(value) && typeof value.registration_enabled === "boolean"
+    ? { registration_enabled: value.registration_enabled }
+    : null;
+}
+
 // Admin authentication middleware
 const requireAdmin = createMiddleware<AppEnv>(async (c, next) => {
   const userId = c.get("userId");
@@ -52,7 +66,7 @@ app.get("/admin/api/stats", requireAuth(), requireAdmin, async (c) => {
   }
 
   const response = await adminDO.fetch(url.toString());
-  const stats = await response.json();
+  const stats = parseStatsResponse(await response.json());
 
   // Add server info
   return c.json({
@@ -1415,10 +1429,10 @@ app.post("/admin/api/server-notice", requireAuth(), requireAdmin, async (c) => {
 app.get("/admin/api/registration", requireAuth(), requireAdmin, async (c) => {
   const adminDO = getAdminDO(c.env);
   const response = await adminDO.fetch("http://internal/config");
-  const config = await response.json();
+  const config = parseAdminConfig(await response.json());
 
   return c.json({
-    enabled: config.registration_enabled,
+    enabled: config?.registration_enabled ?? false,
   });
 });
 
@@ -1583,7 +1597,7 @@ app.post("/admin/api/idp/providers", requireAuth(), requireAdmin, async (c) => {
     return c.json(
       {
         errcode: "M_INVALID_PARAM",
-        error: `Failed to fetch OIDC discovery from issuer: ${err}`,
+        error: `Failed to fetch OIDC discovery from issuer: ${String(err)}`,
       },
       400,
     );
@@ -1705,7 +1719,7 @@ app.put("/admin/api/idp/providers/:id", requireAuth(), requireAdmin, async (c) =
       return c.json(
         {
           errcode: "M_INVALID_PARAM",
-          error: `Failed to fetch OIDC discovery from issuer: ${err}`,
+          error: `Failed to fetch OIDC discovery from issuer: ${String(err)}`,
         },
         400,
       );

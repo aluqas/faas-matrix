@@ -22,6 +22,39 @@ export interface RoomMetadata {
 const CACHE_TTL_SECONDS = 60 * 5; // 5 minutes
 const CACHE_KEY_PREFIX = "room-meta:";
 
+function parseRoomMetadata(value: unknown): RoomMetadata | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const data = value as {
+    name?: unknown;
+    avatar?: unknown;
+    topic?: unknown;
+    canonicalAlias?: unknown;
+    joinedCount?: unknown;
+    invitedCount?: unknown;
+    isDm?: unknown;
+    cachedAt?: unknown;
+  };
+
+  return typeof data.joinedCount === "number" &&
+    typeof data.invitedCount === "number" &&
+    typeof data.isDm === "boolean" &&
+    typeof data.cachedAt === "number"
+    ? {
+        ...(typeof data.name === "string" ? { name: data.name } : {}),
+        ...(typeof data.avatar === "string" ? { avatar: data.avatar } : {}),
+        ...(typeof data.topic === "string" ? { topic: data.topic } : {}),
+        ...(typeof data.canonicalAlias === "string" ? { canonicalAlias: data.canonicalAlias } : {}),
+        joinedCount: data.joinedCount,
+        invitedCount: data.invitedCount,
+        isDm: data.isDm,
+        cachedAt: data.cachedAt,
+      }
+    : null;
+}
+
 /**
  * Get room metadata from cache or database
  * Returns cached data if fresh, otherwise fetches from DB and caches
@@ -35,7 +68,7 @@ export async function getRoomMetadata(
 
   // Try cache first
   try {
-    const cached = await cache.get(cacheKey, "json");
+    const cached = parseRoomMetadata(await cache.get(cacheKey, "json"));
     if (cached && Date.now() - cached.cachedAt < CACHE_TTL_SECONDS * 1000) {
       return cached;
     }
@@ -82,7 +115,7 @@ export async function getBatchRoomMetadata(
   const cachePromises = roomIds.map(async (roomId) => {
     const cacheKey = `${CACHE_KEY_PREFIX}${roomId}`;
     try {
-      const cached = await cache.get(cacheKey, "json");
+      const cached = parseRoomMetadata(await cache.get(cacheKey, "json"));
       if (cached && Date.now() - cached.cachedAt < CACHE_TTL_SECONDS * 1000) {
         return { roomId, metadata: cached };
       }

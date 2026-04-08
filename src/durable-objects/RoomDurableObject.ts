@@ -153,7 +153,7 @@ export class RoomDurableObject extends DurableObject<Env> {
       }
     }
 
-    return new Response("Not found", { status: 404 });
+    return Promise.resolve(new Response("Not found", { status: 404 }));
   }
 
   // Set a read receipt for a user

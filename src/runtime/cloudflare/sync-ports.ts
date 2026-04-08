@@ -2,7 +2,6 @@ import { Effect } from "effect";
 import type { Env } from "../../types";
 import { CloudflareSyncRepository } from "./matrix-repositories";
 import type {
-  ConnectionState,
   PartialStatePort,
   SlidingSyncStatePort,
   SyncQueryPort,

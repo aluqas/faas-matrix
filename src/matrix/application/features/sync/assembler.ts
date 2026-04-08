@@ -124,7 +124,7 @@ export function assembleSyncResponseEffect(
       delete response.rooms!.leave;
     } else {
       for (const roomId of Object.keys(response.rooms!.leave)) {
-        delete response.rooms!.join?.[roomId];
+        delete response.rooms!.join?.[roomId as `!${string}:${string}`];
       }
     }
 

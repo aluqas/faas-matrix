@@ -11,7 +11,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
-import { isJsonObject, type JsonValue } from "../types/common";
+import { isJsonObject } from "../types/common";
 import { Errors } from "../utils/errors";
 import { extractAccessToken, requireAuth } from "../middleware/auth";
 import { hashToken } from "../utils/crypto";
@@ -323,7 +323,8 @@ function getDefaultRulesForUser(userId: string): {
     };
     if (r.rule_id === ".m.rule.invite_for_me" && r.conditions) {
       r.conditions = r.conditions.map(
-        (c): PushCondition => (c.key === "state_key" ? { ...c, pattern: userId } : { ...c }),
+        (c): PushCondition =>
+          (c.key === "state_key" ? { ...c, pattern: userId } : { ...c }) as PushCondition,
       );
     }
     if (r.rule_id === ".m.rule.is_user_mention" && r.conditions) {
@@ -1227,7 +1228,11 @@ function matchesCondition(
         pattern.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll("\\*", ".*"),
         "i",
       );
-      return regex.test(String(value));
+      const stringValue =
+        typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+          ? String(value)
+          : (JSON.stringify(value) ?? "");
+      return regex.test(stringValue);
     }
 
     case "room_member_count": {

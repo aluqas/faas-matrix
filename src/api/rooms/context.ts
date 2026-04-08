@@ -140,7 +140,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), asyn
         : undefined,
     end:
       eventsAfter.results.length > 0
-        ? String(eventsAfter.results.at(-1).origin_server_ts)
+        ? String(eventsAfter.results.at(-1)!.origin_server_ts)
         : undefined,
   });
 });

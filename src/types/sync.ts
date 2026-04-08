@@ -2,7 +2,6 @@ import type {
   AccountDataEvent,
   DeviceId,
   EventId,
-  EventType,
   EphemeralEvent,
   MatrixEvent,
   RoomId,

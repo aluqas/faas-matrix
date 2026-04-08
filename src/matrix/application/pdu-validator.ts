@@ -48,7 +48,7 @@ export function findInvalidCanonicalJsonNumberPath(
 
 function toIncomingPdu(event: IncomingPdu, eventId: string): PDU {
   return {
-    event_id: eventId,
+    event_id: eventId as `$${string}`,
     room_id: event.room_id,
     sender: event.sender,
     type: event.type ?? event.event_type ?? "",

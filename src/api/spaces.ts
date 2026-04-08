@@ -138,9 +138,9 @@ function parseFederationRoom(room: unknown): SpaceHierarchyRoom | null {
     ...(typeof room.canonical_alias === "string" ? { canonical_alias: room.canonical_alias } : {}),
     ...(typeof room.avatar_url === "string" ? { avatar_url: room.avatar_url } : {}),
     ...(typeof room.join_rule === "string" ? { join_rule: room.join_rule } : {}),
-    num_joined_members: room.num_joined_members,
-    world_readable: room.world_readable,
-    guest_can_join: room.guest_can_join,
+    num_joined_members: typeof room.num_joined_members === "number" ? room.num_joined_members : 0,
+    world_readable: room.world_readable === true,
+    guest_can_join: room.guest_can_join === true,
     children_state,
   };
 }

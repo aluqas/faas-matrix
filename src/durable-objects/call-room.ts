@@ -166,7 +166,7 @@ export class CallRoomDurableObject implements DurableObject {
 
     // Get call state
     if (url.pathname === "/state" && request.method === "GET") {
-      return this.handleGetState();
+      return Promise.resolve(this.handleGetState());
     }
 
     // End call
@@ -174,7 +174,7 @@ export class CallRoomDurableObject implements DurableObject {
       return this.handleEndCall();
     }
 
-    return new Response("Not Found", { status: 404 });
+    return Promise.resolve(new Response("Not Found", { status: 404 }));
   }
 
   private async handleInit(request: Request): Promise<Response> {
@@ -199,7 +199,7 @@ export class CallRoomDurableObject implements DurableObject {
     // Verify WebSocket upgrade
     const upgradeHeader = request.headers.get("Upgrade");
     if (!upgradeHeader || upgradeHeader !== "websocket") {
-      return new Response("Expected WebSocket", { status: 426 });
+      return Promise.resolve(new Response("Expected WebSocket", { status: 426 }));
     }
 
     const pair = new WebSocketPair();
@@ -208,10 +208,12 @@ export class CallRoomDurableObject implements DurableObject {
     // Accept the WebSocket
     this.state.acceptWebSocket(server);
 
-    return new Response(null, {
-      status: 101,
-      webSocket: client,
-    });
+    return Promise.resolve(
+      new Response(null, {
+        status: 101,
+        webSocket: client,
+      }),
+    );
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
@@ -243,7 +245,7 @@ export class CallRoomDurableObject implements DurableObject {
           await this.handleLeave(ws);
           break;
         case "mute":
-          await this.handleMute(ws, msg as unknown as MuteMessage);
+          this.handleMute(ws, msg as unknown as MuteMessage);
           break;
         default:
           this.sendError(ws, "UNKNOWN_MESSAGE", `Unknown message type: ${msg.type}`);
@@ -435,7 +437,7 @@ export class CallRoomDurableObject implements DurableObject {
     }
   }
 
-  private handleMute(ws: WebSocket, msg: MuteMessage): Promise<void> {
+  private handleMute(ws: WebSocket, msg: MuteMessage): void {
     const participant = this.getParticipantBySocket(ws);
     if (!participant) {
       this.sendError(ws, "NOT_JOINED", "Must join before muting");
@@ -461,7 +463,6 @@ export class CallRoomDurableObject implements DurableObject {
       },
       `${participant.oderId}|${participant.deviceId}`,
     );
-    return;
   }
 
   private handleGetState(): Response {

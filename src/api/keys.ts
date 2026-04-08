@@ -1537,7 +1537,7 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
     "json",
   );
 
-  let hasValidSSS = !!(ssssDefault && ssssDefault.key);
+  let hasValidSSS = !!(ssssDefault && (ssssDefault as Record<string, unknown>)["key"]);
   if (!hasValidSSS) {
     // Also check D1 as fallback
     const d1Ssss = await db

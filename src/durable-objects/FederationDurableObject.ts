@@ -28,6 +28,16 @@ interface OutboundEdu {
   created_at: number;
 }
 
+function isFederationTarget(value: unknown): value is FederationTarget {
+  return (
+    isJsonObject(value) &&
+    typeof value.serverName === "string" &&
+    typeof value.lastContact === "number" &&
+    typeof value.retryCount === "number" &&
+    (typeof value.nextRetry === "number" || value.nextRetry === null)
+  );
+}
+
 function isOutboundEventPayload(
   value: unknown,
 ): value is Pick<OutboundEvent, "event_id" | "room_id" | "destination" | "pdu"> {
@@ -84,7 +94,7 @@ export class FederationDurableObject extends DurableObject<Env> {
       return this.handleRecover();
     }
 
-    return new Response("Not found", { status: 404 });
+    return Promise.resolve(new Response("Not found", { status: 404 }));
   }
 
   // Queue an event for federation to a remote server
@@ -376,7 +386,8 @@ export class FederationDurableObject extends DurableObject<Env> {
 
   private async scheduleRetry(destination: string, events: OutboundEvent[]): Promise<void> {
     const target = await this.ctx.storage.get(`server:${destination}`);
-    const retryCount = (target?.retryCount ?? 0) + 1;
+    const parsedTarget = isFederationTarget(target) ? target : null;
+    const retryCount = (parsedTarget?.retryCount ?? 0) + 1;
 
     // Exponential backoff tuned for interactive protocol delivery.
     const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 30000);
@@ -385,7 +396,7 @@ export class FederationDurableObject extends DurableObject<Env> {
     // Update server status
     const newTarget: FederationTarget = {
       serverName: destination,
-      lastContact: target?.lastContact ?? 0,
+      lastContact: parsedTarget?.lastContact ?? 0,
       retryCount,
       nextRetry,
     };

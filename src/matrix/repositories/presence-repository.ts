@@ -81,7 +81,14 @@ export async function findPresenceByUserId(
   if (cache) {
     const cached = await cache.get(`presence:${userId}`, "json");
     if (cached) {
-      return toPresenceRecord({ user_id: userId, ...cached, currently_active: null }, now);
+      return toPresenceRecord(
+        {
+          user_id: userId,
+          ...(cached as Omit<PresenceRow, "user_id" | "currently_active">),
+          currently_active: null,
+        },
+        now,
+      );
     }
   }
 
@@ -107,7 +114,14 @@ export async function findPresenceByUserIds(
     for (const uid of userIds) {
       const cached = await cache.get(`presence:${uid}`, "json");
       if (cached) {
-        byUser[uid] = toPresenceRecord({ user_id: uid, ...cached, currently_active: null }, now);
+        byUser[uid] = toPresenceRecord(
+          {
+            user_id: uid,
+            ...(cached as Omit<PresenceRow, "user_id" | "currently_active">),
+            currently_active: null,
+          },
+          now,
+        );
       } else {
         uncachedIds.push(uid);
       }

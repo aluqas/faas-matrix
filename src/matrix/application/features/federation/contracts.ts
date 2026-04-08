@@ -43,7 +43,7 @@ export function toRawFederationPdu(input: Record<string, unknown>): RawFederatio
     ...(typeof input["type"] === "string" ? { type: input["type"] } : {}),
     ...(typeof input["state_key"] === "string" ? { state_key: input["state_key"] } : {}),
     ...(isRecord(input["content"]) ? { content: input["content"] } : {}),
-  };
+  } as RawFederationPdu;
 }
 
 export function extractRawFederationPduFields(pdu: RawFederationPdu): RawFederationPduFields {

@@ -64,7 +64,7 @@ export class AdminDurableObject extends DurableObject<Env> {
       case "/invalidate-cache":
         return this.handleInvalidateCache();
       default:
-        return new Response("Not found", { status: 404 });
+        return Promise.resolve(new Response("Not found", { status: 404 }));
     }
   }
 
@@ -77,10 +77,10 @@ export class AdminDurableObject extends DurableObject<Env> {
 
     if (request.method === "PUT") {
       const body = await request.json();
-      const config = await this.updateConfig(body);
+      const config = await this.updateConfig(body as Partial<ServerConfig>);
 
       // Broadcast config change to connected admins
-      await this.broadcastToAdmins({
+      this.broadcastToAdmins({
         type: "config_changed",
         config,
       });
@@ -236,11 +236,11 @@ export class AdminDurableObject extends DurableObject<Env> {
   // Broadcast message to all connected admin WebSockets
   private async handleBroadcast(request: Request): Promise<Response> {
     const message = await request.json();
-    await this.broadcastToAdmins(message);
+    this.broadcastToAdmins(message);
     return new Response("OK");
   }
 
-  private broadcastToAdmins(message: unknown): Promise<void> {
+  private broadcastToAdmins(message: unknown): void {
     const messageStr = JSON.stringify(message);
     const webSockets = this.ctx.getWebSockets("admin");
 
@@ -291,7 +291,7 @@ export class AdminDurableObject extends DurableObject<Env> {
     // WebSocket is already closed, no action needed
   }
 
-  webSocketError(_ws: WebSocket, error: unknown): Promise<void> {
+  webSocketError(_ws: WebSocket, error: unknown): void {
     console.error("Admin WebSocket error:", error);
   }
 
@@ -306,7 +306,7 @@ export class AdminDurableObject extends DurableObject<Env> {
     });
 
     // Broadcast updated stats to connected admins
-    await this.broadcastToAdmins({ type: "stats", data: this.statsCache });
+    this.broadcastToAdmins({ type: "stats", data: this.statsCache });
 
     // Schedule next refresh in 1 minute
     await this.ctx.storage.setAlarm(Date.now() + 60000);

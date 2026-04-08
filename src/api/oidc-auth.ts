@@ -37,7 +37,7 @@ function getEncryptionKey(
 
   if (version === ENCRYPTION_VERSION_SECURE && env.OIDC_ENCRYPTION_KEY) {
     // Use the secure key (base64-encoded 32 bytes)
-    const keyBytes = Uint8Array.from(atob(env.OIDC_ENCRYPTION_KEY), (c) => c.codePointAt(0));
+    const keyBytes = Uint8Array.from(atob(env.OIDC_ENCRYPTION_KEY), (c) => c.codePointAt(0) ?? 0);
     if (keyBytes.length !== 32) {
       throw new Error("OIDC_ENCRYPTION_KEY must be 32 bytes (base64 encoded)");
     }
@@ -90,7 +90,7 @@ async function decryptSecret(
   encryptedSecret: string,
   env: { SERVER_NAME: string; OIDC_ENCRYPTION_KEY?: string },
 ): Promise<string> {
-  const combined = Uint8Array.from(atob(encryptedSecret), (c) => c.codePointAt(0));
+  const combined = Uint8Array.from(atob(encryptedSecret), (c) => c.codePointAt(0) ?? 0);
 
   // Check if this is a versioned secret (starts with 0x01 or 0x02)
   let version: number;

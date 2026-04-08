@@ -12,13 +12,13 @@ export class CloudflareBackedAdminService implements AdminService {
     const capability = this.appContext.capabilities;
     const namespace = capability.rateLimit.namespace;
     void namespace;
-    return {
+    return Promise.resolve({
       server: {
         name: capability.config.serverName,
         version: capability.config.serverVersion,
       },
       refresh,
-    };
+    });
   }
 
   async invalidateStatsCache(): Promise<void> {}

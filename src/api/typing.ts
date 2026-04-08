@@ -23,6 +23,17 @@ const app = new Hono<AppEnv>();
 const DEFAULT_TYPING_TIMEOUT = 30000; // 30 seconds
 const MAX_TYPING_TIMEOUT = 120000; // 2 minutes
 
+function parseTypingUsersResponse(value: unknown): string[] {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  const data = value as { user_ids?: unknown };
+  return Array.isArray(data.user_ids)
+    ? data.user_ids.filter((userId): userId is string => typeof userId === "string")
+    : [];
+}
+
 // ============================================
 // Helper to get Room DO stub
 // ============================================
@@ -169,8 +180,7 @@ export async function getTypingUsers(env: Env, roomId: string): Promise<string[]
     }),
   );
 
-  const data = await response.json();
-  return data.user_ids;
+  return parseTypingUsersResponse(await response.json());
 }
 
 // Get typing status for multiple rooms (for sync) - uses Room Durable Objects

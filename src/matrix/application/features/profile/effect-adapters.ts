@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { AppEnv, JsonObject, ProfileResponseBody, UserId } from "../../../../types";
+import type { AppEnv, JsonObject, UserId } from "../../../../types";
 import { InfraError } from "../../domain-error";
 import {
   getLocalProfileRecord,

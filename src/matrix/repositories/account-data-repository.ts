@@ -5,11 +5,7 @@ import {
   executeKyselyRun,
 } from "../../services/kysely";
 import type { Generated } from "kysely";
-import type {
-  AccountDataEventType,
-  AccountDataSyncEvent,
-  StoredAccountDataRecord,
-} from "../../types/account-data";
+import type { AccountDataSyncEvent, StoredAccountDataRecord } from "../../types/account-data";
 import { parseStoredAccountDataContent } from "../../types/account-data";
 
 interface AccountDataRow {

@@ -124,7 +124,7 @@ export async function buildRoomEvent(input: {
         );
 
   return {
-    event_id: eventId,
+    event_id: eventId as `$${string}`,
     ...eventWithHash,
-  };
+  } as unknown as PDU;
 }

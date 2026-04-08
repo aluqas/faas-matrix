@@ -50,7 +50,7 @@ export async function verifyPassword(password: string, storedHash: string): Prom
   }
 
   const iterations = parseInt(parts[2], 10);
-  const salt = Uint8Array.from(atob(parts[3]), (c) => c.codePointAt(0));
+  const salt = Uint8Array.from(atob(parts[3]), (c) => c.codePointAt(0) ?? 0);
   const expectedHash = parts[4];
 
   const encoder = new TextEncoder();
@@ -95,7 +95,7 @@ export function encodeUnpaddedBase64(bytes: Uint8Array): string {
 export function decodeUnpaddedBase64(str: string): Uint8Array {
   const padded = str + "=".repeat((4 - (str.length % 4)) % 4);
   const binary = atob(padded);
-  return Uint8Array.from(binary, (char) => char.codePointAt(0));
+  return Uint8Array.from(binary, (char) => char.codePointAt(0) ?? 0);
 }
 
 export function decodeMatrixBase64(str: string): Uint8Array {

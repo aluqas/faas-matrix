@@ -85,7 +85,7 @@ function rowToPdu(row: StoredEventRow): PDU {
     sender,
     type: row.event_type,
     state_key: row.state_key ?? undefined,
-    content: parseJson<Record<string, unknown>>(row.content, {}),
+    content: parseJson<Record<string, unknown>>(row.content, {}) ?? {},
     origin_server_ts: row.origin_server_ts,
     depth: row.depth,
     auth_events: (parseJson<string[]>(row.auth_events, []) ?? []).flatMap((id) => {

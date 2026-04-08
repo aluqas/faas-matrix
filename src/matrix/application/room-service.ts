@@ -239,11 +239,11 @@ export class MatrixRoomService {
   ): Promise<void> {
     const db = this.getFederationDb();
     const federation = this.appContext.capabilities.federation;
-    const queuePduMethod = federation?.queuePdu;
-    const queuePdu = queuePduMethod
-      ? (destination: string, targetRoomId: string, pdu: PDU) =>
-          queuePduMethod(destination, targetRoomId, pdu)
-      : undefined;
+    const queuePdu =
+      federation?.queuePdu !== undefined
+        ? (destination: string, targetRoomId: string, pdu: PDU) =>
+            federation.queuePdu!(destination, targetRoomId, pdu)
+        : undefined;
     if (!db || !queuePdu) {
       return;
     }
@@ -638,11 +638,11 @@ export class MatrixRoomService {
             await this.fanoutEventToFederation(validated.roomId, event);
 
             const federation = this.appContext.capabilities.federation;
-            const queueEduMethod = federation?.queueEdu;
-            const queueEdu = queueEduMethod
-              ? (destination: string, eduType: string, content: Record<string, unknown>) =>
-                  queueEduMethod(destination, eduType, content)
-              : undefined;
+            const queueEdu =
+              federation?.queueEdu !== undefined
+                ? (destination: string, eduType: string, content: Record<string, unknown>) =>
+                    federation.queueEdu!(destination, eduType, content)
+                : undefined;
             if (!queueEdu) {
               return;
             }

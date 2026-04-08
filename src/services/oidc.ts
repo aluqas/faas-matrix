@@ -95,12 +95,13 @@ export async function fetchOIDCDiscovery(issuerUrl: string): Promise<OIDCDiscove
   }
 
   // Cache the result
+  const typedDiscovery = discovery as unknown as OIDCDiscovery;
   discoveryCache.set(normalizedIssuer, {
-    data: discovery,
+    data: typedDiscovery,
     expiresAt: Date.now() + CACHE_TTL,
   });
 
-  return discovery;
+  return typedDiscovery;
 }
 
 /**
@@ -127,12 +128,13 @@ export async function fetchJWKS(jwksUri: string): Promise<JWKS> {
   }
 
   // Cache the result
+  const typedJwks = jwks as unknown as JWKS;
   jwksCache.set(jwksUri, {
-    data: jwks,
+    data: typedJwks,
     expiresAt: Date.now() + CACHE_TTL,
   });
 
-  return jwks;
+  return typedJwks;
 }
 
 /**
@@ -260,7 +262,7 @@ async function verifyJWTSignature(token: string, jwks: JWKS): Promise<boolean> {
   // Decode signature from base64url
   const signatureBytes = Uint8Array.from(
     atob(signature.replaceAll("-", "+").replaceAll("_", "/")),
-    (c) => c.codePointAt(0),
+    (c) => c.codePointAt(0) ?? 0,
   );
 
   const algorithm = header.alg;

@@ -20,9 +20,11 @@ export function generateVerificationToken(): string {
  */
 export function generateSessionId(): Promise<string> {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return Promise.resolve(
+    Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(""),
+  );
 }
 
 /**

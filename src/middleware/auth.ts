@@ -3,14 +3,15 @@
 import { createMiddleware } from "hono/factory";
 import { getAppServiceByToken } from "../services/appservice";
 import { getUserByTokenHash } from "../services/database";
-import type { AppEnv, UserId } from "../types";
+import type { AccessToken, AppEnv, UserId } from "../types";
 import { hashToken } from "../utils/crypto";
 import { Errors } from "../utils/errors";
+import { toUserId } from "../utils/ids";
 
 export type AuthContext = {
   userId: UserId;
   deviceId: string | null;
-  accessToken: string;
+  accessToken: AccessToken;
 };
 
 // Extract access token from request
@@ -49,7 +50,7 @@ export async function validateAccessToken(
   return {
     userId: result.userId,
     deviceId: result.deviceId,
-    accessToken: token,
+    accessToken: token as AccessToken,
   };
 }
 
@@ -83,11 +84,12 @@ export function requireAuth() {
           const url = new URL(c.req.url);
           const asUserId = url.searchParams.get("user_id");
           const serverName = c.env.SERVER_NAME;
-          const senderUserId = asUserId ?? `@${appservice.sender_localpart}:${serverName}`;
+          const senderUserIdStr = asUserId ?? `@${appservice.sender_localpart}:${serverName}`;
+          const senderUserId = toUserId(senderUserIdStr) ?? (senderUserIdStr as UserId);
           auth = {
             userId: senderUserId,
             deviceId: null,
-            accessToken: token,
+            accessToken: token as AccessToken,
           };
         }
       } catch {

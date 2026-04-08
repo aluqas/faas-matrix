@@ -544,7 +544,7 @@ export async function projectMembershipRooms(
       continue;
     }
 
-    result.leaveRooms[roomId] = toLeftRoom(leaveEvent);
+    result.leaveRooms[roomId as `!${string}:${string}`] = toLeftRoom(leaveEvent);
   }
 
   return result;
