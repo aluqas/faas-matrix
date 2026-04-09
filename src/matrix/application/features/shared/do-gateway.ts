@@ -26,6 +26,20 @@ async function assertOk(response: Response, operation: string): Promise<void> {
   throw new Error(`${operation} failed: ${response.status} - ${errorText}`);
 }
 
+async function fetchDurableObjectResponse<TBinding extends string>(
+  env: DurableObjectEnv<TBinding>,
+  binding: TBinding,
+  name: string,
+  request: Request,
+  operation: string,
+): Promise<Response> {
+  try {
+    return await getDurableObjectStub(env, binding, name).fetch(request);
+  } catch (error) {
+    throw new Error(`${operation} transport failed`, { cause: error });
+  }
+}
+
 export async function fetchDurableObjectJson<TBinding extends string>(
   env: DurableObjectEnv<TBinding>,
   binding: TBinding,
@@ -33,7 +47,13 @@ export async function fetchDurableObjectJson<TBinding extends string>(
   url: string,
   operation: string,
 ): Promise<unknown> {
-  const response = await getDurableObjectStub(env, binding, name).fetch(new Request(url));
+  const response = await fetchDurableObjectResponse(
+    env,
+    binding,
+    name,
+    new Request(url),
+    operation,
+  );
   await assertOk(response, operation);
   return parseJsonResponse(response, operation);
 }
@@ -46,12 +66,16 @@ export async function postDurableObjectJson<TBinding extends string>(
   body: unknown,
   operation: string,
 ): Promise<unknown> {
-  const response = await getDurableObjectStub(env, binding, name).fetch(
+  const response = await fetchDurableObjectResponse(
+    env,
+    binding,
+    name,
     new Request(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+    operation,
   );
   await assertOk(response, operation);
   return parseJsonResponse(response, operation);
@@ -65,12 +89,16 @@ export async function postDurableObjectVoid<TBinding extends string>(
   body: unknown,
   operation: string,
 ): Promise<void> {
-  const response = await getDurableObjectStub(env, binding, name).fetch(
+  const response = await fetchDurableObjectResponse(
+    env,
+    binding,
+    name,
     new Request(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+    operation,
   );
   await assertOk(response, operation);
 }

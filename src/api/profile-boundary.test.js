@@ -9,7 +9,9 @@ describe("profile route boundary", () => {
     expect(source).not.toMatch(/\bCACHE\.get\(/);
     expect(source).not.toMatch(/\bCACHE\.put\(/);
     expect(source).not.toMatch(/\bJSON\.parse\(/);
+    expect(source).not.toMatch(/\btoFieldResponse\(/);
     expect(source).toMatch(/decodeProfileFieldUpdateInput/);
+    expect(source).toMatch(/encodeProfileFieldResponse/);
     expect(source).toMatch(/queryProfileEffect/);
     expect(source).toMatch(/putCustomProfileKeyEffect/);
   });

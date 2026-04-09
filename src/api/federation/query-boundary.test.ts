@@ -9,6 +9,8 @@ describe("federation query route boundary", () => {
     expect(source).not.toMatch(/\btoUserId\(/);
     expect(source).not.toMatch(/\btoRoomId\(/);
     expect(source).not.toMatch(/\bparseFederationEventRelationshipsRequest\(/);
+    expect(source).toMatch(/encodeFederationServerKeysResponse/);
+    expect(source).toMatch(/encodeFederationProfileResponse/);
     expect(source).toMatch(/decodeFederationServerKeysBatchQueryInput/);
     expect(source).toMatch(/decodeFederationServerKeysQueryInput/);
     expect(source).toMatch(/decodeFederationDirectoryQueryInput/);

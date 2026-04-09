@@ -15,6 +15,11 @@ import {
   decodeFederationKeysQueryInput,
   decodeFederationUserDevicesInput,
 } from "../../matrix/application/features/federation/e2ee-decode";
+import {
+  encodeFederationKeysClaimResponse,
+  encodeFederationKeysQueryResponse,
+  encodeFederationUserDevicesResponse,
+} from "../../matrix/application/features/federation/e2ee-encoder";
 
 const app = new Hono<AppEnv>();
 
@@ -70,7 +75,7 @@ app.post("/_matrix/federation/v1/user/keys/query", async (c) => {
     decodeFederationKeysQueryInput(body).pipe(
       Effect.flatMap((input) => queryFederationDeviceKeysEffect(getFederationE2EEPorts(c), input)),
     ),
-    (response) => c.json(response),
+    (response) => c.json(encodeFederationKeysQueryResponse(response)),
   );
 });
 
@@ -84,7 +89,7 @@ app.post("/_matrix/federation/v1/user/keys/claim", async (c) => {
     decodeFederationKeysClaimInput(body).pipe(
       Effect.flatMap((input) => claimFederationOneTimeKeysEffect(getFederationE2EEPorts(c), input)),
     ),
-    (response) => c.json(response),
+    (response) => c.json(encodeFederationKeysClaimResponse(response)),
   );
 });
 
@@ -93,7 +98,7 @@ app.get("/_matrix/federation/v1/user/devices/:userId", (c) => {
     decodeFederationUserDevicesInput(c.req.param("userId")).pipe(
       Effect.flatMap((input) => queryFederationUserDevicesEffect(getFederationE2EEPorts(c), input)),
     ),
-    (response) => c.json(response),
+    (response) => c.json(encodeFederationUserDevicesResponse(response)),
   );
 });
 

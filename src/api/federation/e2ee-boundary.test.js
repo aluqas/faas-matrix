@@ -7,6 +7,8 @@ describe("federation e2ee route boundary", () => {
     expect(source).not.toMatch(/\bDB\.prepare\(/);
     expect(source).not.toMatch(/\bONE_TIME_KEYS\.(get|put)\(/);
     expect(source).not.toMatch(/\bJSON\.parse\(/);
+    expect(source).toMatch(/encodeFederationKeysQueryResponse/);
+    expect(source).toMatch(/encodeFederationKeysClaimResponse/);
     expect(source).toMatch(/decodeFederationKeysQueryInput/);
     expect(source).toMatch(/decodeFederationKeysClaimInput/);
     expect(source).toMatch(/queryFederationDeviceKeysEffect/);

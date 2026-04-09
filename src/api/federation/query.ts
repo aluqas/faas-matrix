@@ -19,6 +19,10 @@ import {
   decodeFederationServerKeysBatchQueryInput,
   decodeFederationServerKeysQueryInput,
 } from "../../matrix/application/features/federation/query-decode";
+import {
+  encodeFederationProfileResponse,
+  encodeFederationServerKeysResponse,
+} from "../../matrix/application/features/federation/query-encoder";
 
 const app = new Hono<AppEnv>();
 
@@ -85,7 +89,7 @@ app.post("/_matrix/key/v2/query", async (c) => {
     decodeFederationServerKeysBatchQueryInput(body).pipe(
       Effect.flatMap((input) => queryFederationServerKeysBatchEffect(getFederationQueryPorts(c), input)),
     ),
-    (results) => c.json({ server_keys: results }),
+    (results) => c.json(encodeFederationServerKeysResponse(results)),
   );
 });
 
@@ -99,7 +103,7 @@ app.get("/_matrix/key/v2/query/:serverName", (c) => {
     }).pipe(
       Effect.flatMap((input) => queryFederationServerKeysEffect(getFederationQueryPorts(c), input)),
     ),
-    (keyResponses) => c.json({ server_keys: keyResponses }),
+    (keyResponses) => c.json(encodeFederationServerKeysResponse(keyResponses)),
   );
 });
 
@@ -112,7 +116,7 @@ app.get("/_matrix/key/v2/query/:serverName/:keyId", (c) => {
     }).pipe(
       Effect.flatMap((input) => queryFederationServerKeysEffect(getFederationQueryPorts(c), input)),
     ),
-    (keyResponses) => c.json({ server_keys: keyResponses }),
+    (keyResponses) => c.json(encodeFederationServerKeysResponse(keyResponses)),
   );
 });
 
@@ -128,23 +132,17 @@ app.get("/_matrix/federation/v1/query/directory", (c) => {
 });
 
 app.get("/_matrix/federation/v1/query/profile", (c) => {
+  const field = c.req.query("field");
+  const encodedField = field === "displayname" || field === "avatar_url" ? field : undefined;
+
   return respondWithFederationEffect(
     decodeFederationProfileQueryInput({
       userId: c.req.query("user_id"),
-      field: c.req.query("field"),
+      field,
     }).pipe(
       Effect.flatMap((input) => queryFederationProfileEffect(getFederationQueryPorts(c), input)),
     ),
-    (profile) => {
-      const field = c.req.query("field");
-      if (field === "displayname") {
-        return c.json({ displayname: profile.displayname });
-      }
-      if (field === "avatar_url") {
-        return c.json({ avatar_url: profile.avatar_url });
-      }
-      return c.json(profile);
-    },
+    (profile) => c.json(encodeFederationProfileResponse(profile, encodedField)),
   );
 });
 

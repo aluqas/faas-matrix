@@ -120,7 +120,16 @@ export async function loadStoredOneTimeKeyBuckets(
   deviceId: string,
 ): Promise<StoredOneTimeKeyBuckets | null> {
   const stored = await getKvJsonValue(env, "ONE_TIME_KEYS", `otk:${userId}:${deviceId}`);
-  return stored === null ? null : parseStoredOneTimeKeyBuckets(stored);
+  if (stored === null) {
+    return null;
+  }
+
+  const parsed = parseStoredOneTimeKeyBuckets(stored);
+  if (!parsed) {
+    throw new Error("KV one-time-keys get returned invalid payload");
+  }
+
+  return parsed;
 }
 
 export function saveStoredOneTimeKeyBuckets(

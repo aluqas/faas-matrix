@@ -14,14 +14,19 @@ export async function fetchFederationJson(
   path: string,
   signingKey: SigningKey,
 ): Promise<unknown> {
-  const response = await makeFederationRequest(
-    "GET",
-    serverName,
-    path,
-    env.SERVER_NAME,
-    signingKey,
-    env.CACHE,
-  );
+  let response: Response;
+  try {
+    response = await makeFederationRequest(
+      "GET",
+      serverName,
+      path,
+      env.SERVER_NAME,
+      signingKey,
+      env.CACHE,
+    );
+  } catch (error) {
+    throw new Error(`Federation GET failed for ${serverName}${path}`, { cause: error });
+  }
 
   if (!response.ok) {
     return null;
@@ -50,5 +55,7 @@ export function fetchNotarizedServerKeysResponse(
     env.SERVER_NAME,
     notaryKey.keyId,
     notaryKey.privateKeyJwk,
-  );
+  ).catch((error) => {
+    throw new Error(`Federation notary fetch failed for ${serverName}`, { cause: error });
+  });
 }

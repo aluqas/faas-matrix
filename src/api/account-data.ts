@@ -25,6 +25,10 @@ import {
   createAccountDataQueryPorts,
 } from "../matrix/application/features/account-data/effect-adapters";
 import {
+  encodeAccountDataContentResponse,
+  encodeEmptyAccountDataResponse,
+} from "../matrix/application/features/account-data/encoder";
+import {
   queryGlobalAccountDataEffect,
   queryRoomAccountDataEffect,
 } from "../matrix/application/features/account-data/query";
@@ -65,7 +69,7 @@ app.get("/_matrix/client/v3/user/:userId/account_data/:type", requireAuth(), (c)
         queryGlobalAccountDataEffect(createAccountDataQueryPorts(c.env), input),
       ),
     ),
-    (content) => c.json(content),
+    (content) => c.json(encodeAccountDataContentResponse(content)),
   );
 });
 
@@ -87,7 +91,7 @@ app.put("/_matrix/client/v3/user/:userId/account_data/:type", requireAuth(), asy
         upsertGlobalAccountDataEffect(createAccountDataCommandPorts(c.env), input),
       ),
     ),
-    () => c.json({}),
+    () => c.json(encodeEmptyAccountDataResponse()),
   );
 });
 
@@ -106,7 +110,7 @@ app.delete(
           deleteGlobalAccountDataEffect(createAccountDataCommandPorts(c.env), input),
         ),
       ),
-      () => c.json({}),
+      () => c.json(encodeEmptyAccountDataResponse()),
     );
   },
 );
@@ -128,7 +132,7 @@ app.get("/_matrix/client/v3/user/:userId/rooms/:roomId/account_data/:type", requ
         queryRoomAccountDataEffect(createAccountDataQueryPorts(c.env), input),
       ),
     ),
-    (content) => c.json(content),
+    (content) => c.json(encodeAccountDataContentResponse(content)),
   );
 });
 
@@ -154,7 +158,7 @@ app.put(
           upsertRoomAccountDataEffect(createAccountDataCommandPorts(c.env), input),
         ),
       ),
-      () => c.json({}),
+      () => c.json(encodeEmptyAccountDataResponse()),
     );
   },
 );
@@ -175,7 +179,7 @@ app.delete(
           deleteRoomAccountDataEffect(createAccountDataCommandPorts(c.env), input),
         ),
       ),
-      () => c.json({}),
+      () => c.json(encodeEmptyAccountDataResponse()),
     );
   },
 );

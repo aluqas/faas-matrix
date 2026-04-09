@@ -38,11 +38,20 @@ import {
   storeDeviceKeysToDO,
 } from "../matrix/application/features/federation/e2ee-gateway";
 import {
-  claimFallbackKey,
-  claimUnclaimedOneTimeKey,
+  claimOneTimeKeyFromStoreChain,
+  toClaimedOneTimeKeyEntry,
+} from "../matrix/application/features/federation/e2ee-claim-store";
+import {
+  encodeClientKeysChangesResponse,
+  encodeClientKeysClaimResponse,
+  encodeClientKeysQueryResponse,
+  encodeClientKeysSignaturesUploadResponse,
+  encodeClientKeysUploadResponse,
+  encodeEmptyKeysResponse,
+} from "../matrix/application/features/federation/e2ee-encoder";
+import {
   hasCrossSigningKeysBackup,
   listCrossSigningSignaturesForKey,
-  markStoredOneTimeKeyClaimed,
   recordDeviceKeyChangeWithKysely,
   storeCrossSigningKeysBackup,
   upsertCrossSigningSignature,
@@ -306,9 +315,7 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
       }
 
       const bucket = existingKeys[algorithm] ?? [];
-      if (!existingKeys[algorithm]) {
-        existingKeys[algorithm] = bucket;
-      }
+      existingKeys[algorithm] ??= bucket;
 
       // Check if key already exists
       const existingIndex = bucket.findIndex((storedKey) => storedKey.keyId === keyId);
@@ -351,9 +358,7 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
     }),
   );
 
-  return c.json({
-    one_time_key_counts: oneTimeKeyCounts,
-  });
+  return c.json(encodeClientKeysUploadResponse(oneTimeKeyCounts));
 });
 
 // POST /_matrix/client/v3/keys/query - Query device keys for users
@@ -516,18 +521,19 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
     }),
   );
 
-  return c.json({
-    device_keys: deviceKeys,
-    master_keys: masterKeys,
-    self_signing_keys: selfSigningKeys,
-    user_signing_keys: userSigningKeys,
-    failures,
-  });
+  return c.json(
+    encodeClientKeysQueryResponse({
+      deviceKeys,
+      masterKeys,
+      selfSigningKeys,
+      userSigningKeys,
+      failures,
+    }),
+  );
 });
 
 // POST /_matrix/client/v3/keys/claim - Claim one-time keys for establishing sessions
 app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
-  const db = c.env.DB;
   const logger = createKeysLogger("claim", { user_id: c.get("userId") });
 
   let body: unknown;
@@ -562,66 +568,16 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
       oneTimeKeys[typedUserId] = {};
 
       for (const [deviceId, algorithm] of Object.entries(devices)) {
-        // Try to claim a one-time key from KV first
-        const existingKeys = await loadStoredOneTimeKeyBuckets(c.env, typedUserId, deviceId);
+        const claimedKey = await claimOneTimeKeyFromStoreChain(
+          c.env,
+          typedUserId,
+          deviceId,
+          algorithm,
+          Date.now(),
+        );
 
-        let foundKey = false;
-
-        const bucket = existingKeys?.[algorithm];
-        if (bucket) {
-          // Find first unclaimed key
-          const keyIndex = bucket.findIndex((storedKey) => !storedKey.claimed);
-          if (keyIndex >= 0) {
-            const key = bucket[keyIndex];
-            if (!key) {
-              continue;
-            }
-            // Mark as claimed
-            bucket[keyIndex] = { ...key, claimed: true };
-
-            // Save back to KV
-            await saveStoredOneTimeKeyBuckets(c.env, typedUserId, deviceId, existingKeys);
-
-            // Also mark in D1
-            await markStoredOneTimeKeyClaimed(db, typedUserId, deviceId, key.keyId, Date.now());
-
-            oneTimeKeys[typedUserId][deviceId] = {
-              [key.keyId]: key.keyData,
-            };
-            foundKey = true;
-          }
-        }
-
-        if (!foundKey) {
-          // Fallback to D1 for legacy keys
-          const otk = await claimUnclaimedOneTimeKey(
-            db,
-            typedUserId,
-            deviceId,
-            algorithm,
-            Date.now(),
-          );
-
-          if (otk) {
-            oneTimeKeys[typedUserId][deviceId] = {
-              [otk.keyId]: otk.keyData,
-            };
-            foundKey = true;
-          }
-        }
-
-        if (!foundKey) {
-          // Try fallback key
-          const fallback = await claimFallbackKey(db, typedUserId, deviceId, algorithm);
-
-          if (fallback) {
-            oneTimeKeys[typedUserId][deviceId] = {
-              [fallback.keyId]: {
-                ...fallback.keyData,
-                fallback: true,
-              },
-            };
-          }
+        if (claimedKey) {
+          oneTimeKeys[typedUserId][deviceId] = toClaimedOneTimeKeyEntry(claimedKey);
         }
       }
     }
@@ -634,10 +590,7 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
     }),
   );
 
-  return c.json({
-    one_time_keys: oneTimeKeys,
-    failures,
-  });
+  return c.json(encodeClientKeysClaimResponse(oneTimeKeys, failures));
 });
 
 // GET /_matrix/client/v3/keys/changes - Get users whose keys have changed
@@ -696,10 +649,7 @@ app.get("/_matrix/client/v3/keys/changes", requireAuth(), async (c) => {
     }
   }
 
-  return c.json({
-    changed: [...changed],
-    left: [...left],
-  });
+  return c.json(encodeClientKeysChangesResponse(changed, left));
 });
 
 // ============================================
@@ -1103,7 +1053,7 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   // Write to KV as cache (eventually consistent, for performance)
   await cacheCrossSigningKeys(c.env, userId, csKeys);
 
-  return c.json({});
+  return c.json(encodeEmptyKeysResponse());
 });
 
 // POST /_matrix/client/v3/keys/signatures/upload - Upload signatures for keys
@@ -1223,7 +1173,7 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
       failure_count: Object.keys(failures).length,
     }),
   );
-  return c.json({ failures });
+  return c.json(encodeClientKeysSignaturesUploadResponse(failures));
 });
 
 // ============================================

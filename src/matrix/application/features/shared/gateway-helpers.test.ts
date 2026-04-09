@@ -69,6 +69,19 @@ describe("shared gateway helpers", () => {
         "device-keys put",
       ),
     ).rejects.toThrow("device-keys put failed: 503 - boom");
+
+    const throwingEnv = createDurableObjectEnv(async () => {
+      throw new Error("socket closed");
+    });
+    await expect(
+      fetchDurableObjectJson(
+        throwingEnv,
+        "USER_KEYS",
+        "@alice:test",
+        "http://internal/device-keys/get",
+        "device-keys get",
+      ),
+    ).rejects.toThrow("device-keys get transport failed");
   });
 
   it("reads, writes, and deletes KV text/json values", async () => {
@@ -82,5 +95,31 @@ describe("shared gateway helpers", () => {
 
     await deleteKvValue(env, "CACHE", "plain");
     expect(await getKvTextValue(env, "CACHE", "plain")).toBeNull();
+  });
+
+  it("wraps KV failures with operation context", async () => {
+    const env = {
+      CACHE: {
+        get: async () => {
+          throw new Error("kv down");
+        },
+        put: async () => {
+          throw new Error("kv down");
+        },
+        delete: async () => {
+          throw new Error("kv down");
+        },
+      } as unknown as KVNamespace,
+    };
+
+    await expect(getKvTextValue(env, "CACHE", "plain")).rejects.toThrow(
+      "CACHE KV get failed for plain",
+    );
+    await expect(putKvTextValue(env, "CACHE", "plain", "value")).rejects.toThrow(
+      "CACHE KV put failed for plain",
+    );
+    await expect(deleteKvValue(env, "CACHE", "plain")).rejects.toThrow(
+      "CACHE KV delete failed for plain",
+    );
   });
 });

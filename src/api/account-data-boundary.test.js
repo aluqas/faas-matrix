@@ -8,6 +8,7 @@ describe("account-data route boundary", () => {
     expect(source).not.toMatch(/\bACCOUNT_DATA\.(get|put|delete)\(/);
     expect(source).not.toMatch(/\bnotifySyncUser\(/);
     expect(source).not.toMatch(/\bJSON\.parse\(/);
+    expect(source).toMatch(/encodeAccountDataContentResponse/);
     expect(source).toMatch(/decodeGetGlobalAccountDataInput/);
     expect(source).toMatch(/queryGlobalAccountDataEffect/);
     expect(source).toMatch(/upsertGlobalAccountDataEffect/);

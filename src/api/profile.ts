@@ -2,7 +2,7 @@
 
 import { Effect } from "effect";
 import { Hono } from "hono";
-import type { AppEnv, ProfileField, ProfileResponseBody } from "../types";
+import type { AppEnv } from "../types";
 import { Errors, MatrixApiError } from "../utils/errors";
 import { requireAuth, optionalAuth } from "../middleware/auth";
 import { runClientEffect } from "../matrix/application/effect-runtime";
@@ -22,6 +22,11 @@ import {
   createProfileCommandPorts,
   createProfileQueryPorts,
 } from "../matrix/application/features/profile/effect-adapters";
+import {
+  encodeEmptyProfileResponse,
+  encodeProfileFieldResponse,
+  encodeProfileResponseBody,
+} from "../matrix/application/features/profile/encoder";
 import {
   queryCustomProfileKeyEffect,
   queryProfileEffect,
@@ -51,19 +56,13 @@ async function decodeJsonBody(c: import("hono").Context<AppEnv>): Promise<unknow
   }
 }
 
-function toFieldResponse(field: ProfileField, profile: ProfileResponseBody) {
-  return field === "displayname"
-    ? { displayname: profile.displayname }
-    : { avatar_url: profile.avatar_url };
-}
-
 // GET /_matrix/client/v3/profile/:userId - Get user profile
 app.get("/_matrix/client/v3/profile/:userId", optionalAuth(), (c) => {
   return respondWithClientEffect(
-    decodeProfileUserId(decodeURIComponent(c.req.param("userId"))).pipe(
+      decodeProfileUserId(decodeURIComponent(c.req.param("userId"))).pipe(
       Effect.flatMap((userId) => queryProfileEffect(createProfileQueryPorts(c.env), { userId })),
     ),
-    (profile) => c.json(profile),
+    (profile) => c.json(encodeProfileResponseBody(profile)),
   );
 });
 
@@ -78,7 +77,7 @@ app.get("/_matrix/client/v3/profile/:userId/displayname", optionalAuth(), (c) =>
         }),
       ),
     ),
-    (profile) => c.json(toFieldResponse("displayname", profile)),
+    (profile) => c.json(encodeProfileFieldResponse("displayname", profile)),
   );
 });
 
@@ -98,7 +97,7 @@ app.put("/_matrix/client/v3/profile/:userId/displayname", requireAuth(), async (
     }).pipe(
       Effect.flatMap((input) => updateProfileFieldEffect(createProfileCommandPorts(c.env), input)),
     ),
-    () => c.json({}),
+    () => c.json(encodeEmptyProfileResponse()),
   );
 });
 
@@ -113,7 +112,7 @@ app.get("/_matrix/client/v3/profile/:userId/avatar_url", optionalAuth(), (c) => 
         }),
       ),
     ),
-    (profile) => c.json(toFieldResponse("avatar_url", profile)),
+    (profile) => c.json(encodeProfileFieldResponse("avatar_url", profile)),
   );
 });
 
@@ -133,7 +132,7 @@ app.put("/_matrix/client/v3/profile/:userId/avatar_url", requireAuth(), async (c
     }).pipe(
       Effect.flatMap((input) => updateProfileFieldEffect(createProfileCommandPorts(c.env), input)),
     ),
-    () => c.json({}),
+    () => c.json(encodeEmptyProfileResponse()),
   );
 });
 
@@ -170,7 +169,7 @@ app.put("/_matrix/client/v3/profile/:userId/:keyName", requireAuth(), async (c) 
     }).pipe(
       Effect.flatMap((input) => putCustomProfileKeyEffect(createProfileCommandPorts(c.env), input)),
     ),
-    () => c.json({}),
+    () => c.json(encodeEmptyProfileResponse()),
   );
 });
 
@@ -186,7 +185,7 @@ app.delete("/_matrix/client/v3/profile/:userId/:keyName", requireAuth(), (c) => 
         deleteCustomProfileKeyEffect(createProfileCommandPorts(c.env), input),
       ),
     ),
-    () => c.json({}),
+    () => c.json(encodeEmptyProfileResponse()),
   );
 });
 

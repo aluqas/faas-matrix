@@ -55,6 +55,30 @@ describe("account-data command effect", () => {
     expect(recorder).toEqual(["put-global:m.direct", "notify:global:m.direct"]);
   });
 
+  it("does not notify when storing global account data fails", async () => {
+    const recorder: string[] = [];
+    await expect(
+      runClientEffect(
+        putGlobalAccountDataEffect(
+          {
+            ...createPorts(recorder),
+            accountDataWriter: {
+              ...createPorts(recorder).accountDataWriter,
+              putGlobalAccountData: () => Effect.fail(new InfraError("write failed")),
+            },
+          },
+          {
+            authUserId: "@alice:test",
+            targetUserId: "@alice:test",
+            eventType: "m.direct",
+            content: { "@alice:test": ["!room:test"] },
+          },
+        ),
+      ),
+    ).rejects.toBeDefined();
+    expect(recorder).toEqual([]);
+  });
+
   it("deletes and notifies global account data", async () => {
     const recorder: string[] = [];
     await runClientEffect(

@@ -105,12 +105,48 @@ function asCompiledQuery<T>(query: RawBuilder<T>): CompiledQuery {
   };
 }
 
-function parseJsonObjectString(value: string): FederationClaimedOneTimeKeyRecord["keyData"] | null {
+function parseJsonObjectString(value: string): FederationClaimedOneTimeKeyRecord["keyData"] {
+  let parsedJson: unknown;
   try {
-    return parseJsonObject(JSON.parse(value) as unknown);
-  } catch {
-    return null;
+    parsedJson = JSON.parse(value) as unknown;
+  } catch (error) {
+    throw new Error("Stored E2EE JSON payload is not valid JSON", { cause: error });
   }
+
+  const parsed = parseJsonObject(parsedJson);
+  if (!parsed) {
+    throw new Error("Stored E2EE JSON payload is not a valid object");
+  }
+
+  return parsed;
+}
+
+export function toFederationDeviceSignatureRecord(
+  row: Pick<CrossSigningSignatureRow, "signer_user_id" | "signer_key_id" | "signature">,
+): FederationDeviceSignatureRecord {
+  return {
+    signerUserId: row.signer_user_id as FederationDeviceSignatureRecord["signerUserId"],
+    signerKeyId: row.signer_key_id,
+    signature: row.signature,
+  };
+}
+
+export function toFederationStoredDeviceRecord(
+  row: Pick<DeviceRow, "device_id" | "display_name">,
+): FederationStoredDeviceRecord {
+  return {
+    deviceId: row.device_id,
+    displayName: row.display_name,
+  };
+}
+
+export function toFederationClaimedOneTimeKeyRecord(
+  row: Pick<OneTimeKeyRow, "key_id" | "key_data"> | Pick<FallbackKeyRow, "key_id" | "key_data">,
+): FederationClaimedOneTimeKeyRecord {
+  return {
+    keyId: row.key_id,
+    keyData: parseJsonObjectString(row.key_data),
+  };
 }
 
 export async function localUserExists(db: D1Database, userId: string): Promise<boolean> {
@@ -137,11 +173,7 @@ export async function listCrossSigningSignaturesForKey(
       .where("key_id", "=", keyId),
   );
 
-  return rows.map((row) => ({
-    signerUserId: row.signer_user_id as FederationDeviceSignatureRecord["signerUserId"],
-    signerKeyId: row.signer_key_id,
-    signature: row.signature,
-  }));
+  return rows.map((row) => toFederationDeviceSignatureRecord(row));
 }
 
 export async function listUserDevices(
@@ -153,10 +185,7 @@ export async function listUserDevices(
     qb.selectFrom("devices").select(["device_id", "display_name"]).where("user_id", "=", userId),
   );
 
-  return rows.map((row) => ({
-    deviceId: row.device_id,
-    displayName: row.display_name,
-  }));
+  return rows.map((row) => toFederationStoredDeviceRecord(row));
 }
 
 export async function getDeviceKeyStreamId(db: D1Database, userId: string): Promise<number> {
@@ -488,15 +517,7 @@ export async function claimUnclaimedOneTimeKey(
     return null;
   }
 
-  const keyData = parseJsonObjectString(row.key_data);
-  if (!keyData) {
-    return null;
-  }
-
-  return {
-    keyId: row.key_id,
-    keyData,
-  };
+  return toFederationClaimedOneTimeKeyRecord(row);
 }
 
 export async function claimFallbackKey(
@@ -522,13 +543,5 @@ export async function claimFallbackKey(
     return null;
   }
 
-  const keyData = parseJsonObjectString(row.key_data);
-  if (!keyData) {
-    return null;
-  }
-
-  return {
-    keyId: row.key_id,
-    keyData,
-  };
+  return toFederationClaimedOneTimeKeyRecord(row);
 }
