@@ -6,7 +6,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
-import type { PresenceState } from "../types";
+import type { PresenceState, UserId } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
@@ -20,6 +20,8 @@ import {
   upsertPresence,
   writePresenceToCache,
 } from "../matrix/repositories/presence-repository";
+import { toUserId } from "../utils/ids";
+import { parseJsonObjectBody, requireEnumValue } from "./shared-validation";
 
 const app = new Hono<AppEnv>();
 
@@ -42,26 +44,20 @@ app.put("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
     return Errors.forbidden("Cannot set presence for other users").toResponse();
   }
 
-  let body: { presence: string; status_msg?: string };
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+  const body = await parseJsonObjectBody(c.req.raw);
+  if (body instanceof Error) {
+    return body.toResponse();
   }
 
-  const { presence, status_msg } = body;
-
-  // Validate presence state
-  const validStates = ["online", "offline", "unavailable"];
-  if (!presence || !validStates.includes(presence)) {
-    return c.json(
-      {
-        errcode: "M_INVALID_PARAM",
-        error: `Invalid presence state: ${presence}. Must be one of: ${validStates.join(", ")}`,
-      },
-      400,
-    );
+  const presence = requireEnumValue(body.presence, "presence", [
+    "online",
+    "offline",
+    "unavailable",
+  ] as const);
+  if (presence instanceof Error) {
+    return presence.toResponse();
   }
+  const status_msg = typeof body.status_msg === "string" ? body.status_msg : undefined;
 
   try {
     await executePresenceCommand(
@@ -107,8 +103,12 @@ app.put("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
 
 // GET /_matrix/client/v3/presence/:userId/status - Get presence status
 app.get("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) => {
-  const targetUserId = c.req.param("userId");
+  const targetUserId = toUserId(c.req.param("userId"));
   const db = c.env.DB;
+
+  if (!targetUserId) {
+    return Errors.invalidParam("userId", "Invalid user ID").toResponse();
+  }
 
   // Check if target user exists
   const user = await db
@@ -143,12 +143,12 @@ app.get("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
 // ============================================
 
 // Get presence for multiple users (for sync)
-export function getPresenceForUsers(db: D1Database, userIds: string[], cache?: KVNamespace) {
+export function getPresenceForUsers(db: D1Database, userIds: UserId[], cache?: KVNamespace) {
   return findPresenceByUserIds(db, userIds, cache);
 }
 
 // Update last active timestamp (call this on API activity)
-export async function updateLastActive(db: D1Database, userId: string): Promise<void> {
+export async function updateLastActive(db: D1Database, userId: UserId): Promise<void> {
   await dbTouchLastActive(db, userId);
 }
 

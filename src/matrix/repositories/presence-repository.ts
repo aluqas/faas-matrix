@@ -1,4 +1,5 @@
-import type { PresenceState } from "../../types";
+import type { PresenceState, RoomId, UserId } from "../../types";
+import { toUserId } from "../../utils/ids";
 import {
   createKyselyBuilder,
   executeKyselyQuery,
@@ -43,7 +44,7 @@ function toPresenceRecord(row: PresenceRow, now: number): PresenceRecord {
 
 export async function upsertPresence(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   presence: string,
   statusMessage: string | null,
   lastActiveTs: number,
@@ -73,7 +74,7 @@ export async function upsertPresence(
 
 export async function findPresenceByUserId(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   cache?: KVNamespace,
 ): Promise<PresenceRecord | null> {
   const now = Date.now();
@@ -101,14 +102,14 @@ export async function findPresenceByUserId(
 
 export async function findPresenceByUserIds(
   db: D1Database,
-  userIds: string[],
+  userIds: UserId[],
   cache?: KVNamespace,
-): Promise<Record<string, PresenceRecord>> {
+): Promise<Record<UserId, PresenceRecord>> {
   if (userIds.length === 0) return {};
 
   const now = Date.now();
-  const byUser: Record<string, PresenceRecord> = {};
-  const uncachedIds: string[] = [];
+  const byUser: Partial<Record<UserId, PresenceRecord>> = {};
+  const uncachedIds: UserId[] = [];
 
   if (cache) {
     for (const uid of userIds) {
@@ -136,27 +137,28 @@ export async function findPresenceByUserIds(
       qb.selectFrom("presence").selectAll().where("user_id", "in", uncachedIds),
     );
     for (const row of rows) {
-      byUser[row.user_id] = toPresenceRecord(row, now);
+      const typedUserId = toUserId(row.user_id);
+      if (typedUserId) {
+        byUser[typedUserId] = toPresenceRecord(row, now);
+      }
     }
   }
 
   for (const uid of userIds) {
-    if (!byUser[uid]) {
-      byUser[uid] = {
-        presence: "offline",
-        statusMsg: undefined,
-        lastActiveAgo: 0,
-        currentlyActive: false,
-      };
-    }
+    byUser[uid] ??= {
+      presence: "offline",
+      statusMsg: undefined,
+      lastActiveAgo: 0,
+      currentlyActive: false,
+    };
   }
 
-  return byUser;
+  return byUser as Record<UserId, PresenceRecord>;
 }
 
 export async function touchLastActive(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   lastActiveTs: number = Date.now(),
 ): Promise<void> {
   await executeKyselyRun(
@@ -167,9 +169,9 @@ export async function touchLastActive(
 
 export async function listVisibleUsers(
   db: D1Database,
-  userId: string,
-  roomIds: string[],
-): Promise<string[]> {
+  userId: UserId,
+  roomIds: RoomId[],
+): Promise<UserId[]> {
   if (roomIds.length === 0) return [];
 
   const placeholders = roomIds.map(() => "?").join(",");
@@ -186,12 +188,14 @@ export async function listVisibleUsers(
     .bind(...roomIds, userId)
     .all<{ user_id: string }>();
 
-  return result.results.map((row) => row.user_id);
+  return result.results
+    .map((row) => toUserId(row.user_id))
+    .filter((value): value is UserId => value !== null);
 }
 
 export async function writePresenceToCache(
   cache: KVNamespace,
-  userId: string,
+  userId: UserId,
   presence: string,
   statusMessage: string | null,
   lastActiveTs: number,

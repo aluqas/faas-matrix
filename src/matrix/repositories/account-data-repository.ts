@@ -5,6 +5,7 @@ import {
   executeKyselyRun,
 } from "../../services/kysely";
 import type { Generated } from "kysely";
+import type { RoomId, UserId } from "../../types";
 import type { AccountDataSyncEvent, StoredAccountDataRecord } from "../../types/account-data";
 import { parseStoredAccountDataContent } from "../../types/account-data";
 
@@ -79,8 +80,8 @@ async function getNextAccountDataStreamPosition(db: D1Database): Promise<number>
 
 export async function recordAccountDataChange(
   db: D1Database,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId | "",
   eventType: string,
 ): Promise<void> {
   const streamPosition = await getNextAccountDataStreamPosition(db);
@@ -97,8 +98,8 @@ export async function recordAccountDataChange(
 
 export async function upsertAccountDataRecord(
   db: D1Database,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId | "",
   eventType: string,
   content: string,
 ): Promise<void> {
@@ -124,8 +125,8 @@ export async function upsertAccountDataRecord(
 
 export async function markAccountDataDeleted(
   db: D1Database,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId | "",
   eventType: string,
 ): Promise<void> {
   await executeKyselyRun(
@@ -150,8 +151,8 @@ export async function markAccountDataDeleted(
 
 export async function findAccountDataRecord(
   db: D1Database,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId | "",
   eventType: string,
 ): Promise<StoredAccountDataRecord | null> {
   const row = await executeKyselyQueryFirst<AccountDataRow>(
@@ -168,7 +169,7 @@ export async function findAccountDataRecord(
 
 export async function getGlobalAccountData(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   since?: number,
 ): Promise<AccountDataSyncEvent[]> {
   if (since !== undefined) {
@@ -205,8 +206,8 @@ export async function getGlobalAccountData(
 
 export async function getRoomAccountData(
   db: D1Database,
-  userId: string,
-  roomId: string,
+  userId: UserId,
+  roomId: RoomId,
   since?: number,
 ): Promise<AccountDataSyncEvent[]> {
   if (since !== undefined) {
@@ -243,12 +244,12 @@ export async function getRoomAccountData(
 
 export async function getAllRoomAccountData(
   db: D1Database,
-  userId: string,
-  roomIds: string[],
+  userId: UserId,
+  roomIds: RoomId[],
   since?: number,
-): Promise<Record<string, AccountDataSyncEvent[]>> {
+): Promise<Record<RoomId, AccountDataSyncEvent[]>> {
   if (roomIds.length === 0) {
-    return {};
+    return {} as Record<RoomId, AccountDataSyncEvent[]>;
   }
 
   const rows =
@@ -279,9 +280,9 @@ export async function getAllRoomAccountData(
             .where("deleted", "=", 0),
         );
 
-  const byRoom: Record<string, AccountDataSyncEvent[]> = {};
+  const byRoom = {} as Record<RoomId, AccountDataSyncEvent[]>;
   for (const row of rows) {
-    (byRoom[row.room_id] ??= []).push(toAccountDataSyncEvent(row));
+    (byRoom[row.room_id as RoomId] ??= []).push(toAccountDataSyncEvent(row));
   }
   return byRoom;
 }

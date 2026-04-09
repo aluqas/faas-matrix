@@ -1,11 +1,14 @@
 import { Effect } from "effect";
 import type {
   AccountDataEvent,
+  DeviceId,
+  EventId,
   Membership,
   PDU,
   RoomId,
   StrippedStateEvent,
   ToDeviceEvent,
+  UserId,
 } from "../../../../types";
 import type { ConnectionState } from "../../../../types/sync";
 import type {
@@ -21,49 +24,52 @@ export type { ConnectionState };
 
 export interface SyncQueryPort {
   loadFilter(
-    userId: string,
+    userId: UserId,
     filterParam?: string,
   ): Effect.Effect<FilterDefinition | null, InfraError>;
   getLatestStreamPosition(): Effect.Effect<number, InfraError>;
   getLatestDeviceKeyPosition(): Effect.Effect<number, InfraError>;
   getToDeviceMessages(
-    userId: string,
-    deviceId: string,
+    userId: UserId,
+    deviceId: DeviceId,
     since: string,
   ): Effect.Effect<{ events: ToDeviceEvent[]; nextBatch: string }, InfraError>;
   getOneTimeKeyCounts(
-    userId: string,
-    deviceId: string,
+    userId: UserId,
+    deviceId: DeviceId,
   ): Effect.Effect<Record<string, number>, InfraError>;
-  getUnusedFallbackKeyTypes(userId: string, deviceId: string): Effect.Effect<string[], InfraError>;
+  getUnusedFallbackKeyTypes(
+    userId: UserId,
+    deviceId: DeviceId,
+  ): Effect.Effect<string[], InfraError>;
   getDeviceListChanges(
-    userId: string,
+    userId: UserId,
     sinceEventPosition: number,
     sinceDeviceKeyPosition: number,
   ): Effect.Effect<{ changed: string[]; left: string[] }, InfraError>;
   getGlobalAccountData(
-    userId: string,
+    userId: UserId,
     since?: number,
   ): Effect.Effect<AccountDataEvent[], InfraError>;
   getRoomAccountData(
-    userId: string,
-    roomId: string,
+    userId: UserId,
+    roomId: RoomId,
     since?: number,
   ): Effect.Effect<AccountDataEvent[], InfraError>;
-  getUserRooms(userId: string, membership?: Membership): Effect.Effect<RoomId[], InfraError>;
-  getMembership(roomId: string, userId: string): Effect.Effect<MembershipRecord | null, InfraError>;
-  getEventsSince(roomId: string, sincePosition: number): Effect.Effect<PDU[], InfraError>;
-  getEvent(eventId: string): Effect.Effect<PDU | null, InfraError>;
-  getRoomState(roomId: string): Effect.Effect<PDU[], InfraError>;
-  getInviteStrippedState(roomId: string): Effect.Effect<StrippedStateEvent[], InfraError>;
-  getReceiptsForRoom(roomId: string, userId: string): Effect.Effect<ReceiptEvent, InfraError>;
+  getUserRooms(userId: UserId, membership?: Membership): Effect.Effect<RoomId[], InfraError>;
+  getMembership(roomId: RoomId, userId: UserId): Effect.Effect<MembershipRecord | null, InfraError>;
+  getEventsSince(roomId: RoomId, sincePosition: number): Effect.Effect<PDU[], InfraError>;
+  getEvent(eventId: EventId): Effect.Effect<PDU | null, InfraError>;
+  getRoomState(roomId: RoomId): Effect.Effect<PDU[], InfraError>;
+  getInviteStrippedState(roomId: RoomId): Effect.Effect<StrippedStateEvent[], InfraError>;
+  getReceiptsForRoom(roomId: RoomId, userId: UserId): Effect.Effect<ReceiptEvent, InfraError>;
   getUnreadNotificationSummary(
-    roomId: string,
-    userId: string,
+    roomId: RoomId,
+    userId: UserId,
   ): Effect.Effect<UnreadNotificationSummary, InfraError>;
-  getTypingUsers(roomId: string): Effect.Effect<string[], InfraError>;
+  getTypingUsers(roomId: RoomId): Effect.Effect<UserId[], InfraError>;
   waitForUserEvents(
-    userId: string,
+    userId: UserId,
     timeoutMs: number,
   ): Effect.Effect<{ hasEvents: boolean }, InfraError>;
 }

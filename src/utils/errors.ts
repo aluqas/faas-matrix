@@ -75,6 +75,14 @@ export const Errors = {
     return new MatrixApiError(ErrorCodes.M_UNRECOGNIZED, message, 400);
   },
 
+  unrecognizedRoute(message: string = "Unrecognized request"): MatrixApiError {
+    return new MatrixApiError(ErrorCodes.M_UNRECOGNIZED, message, 404);
+  },
+
+  methodNotAllowed(message: string = "Method not allowed"): MatrixApiError {
+    return new MatrixApiError(ErrorCodes.M_UNRECOGNIZED, message, 405);
+  },
+
   unauthorized(message: string = "Unauthorized"): MatrixApiError {
     return new MatrixApiError(ErrorCodes.M_UNAUTHORIZED, message, 401);
   },
@@ -125,6 +133,14 @@ export const Errors = {
 
   tooLarge(message: string = "Request too large"): MatrixApiError {
     return new MatrixApiError(ErrorCodes.M_TOO_LARGE, message, 413);
+  },
+
+  gatewayTimeout(message: string = "Gateway Timeout"): MatrixApiError {
+    return new MatrixApiError(ErrorCodes.M_UNKNOWN, message, 504);
+  },
+
+  notYetUploaded(message: string = "Media has not been uploaded yet"): MatrixApiError {
+    return new MatrixApiError(ErrorCodes.M_NOT_YET_UPLOADED, message, 504);
   },
 
   inviteBlocked(message: string = "Invites from this user or server are blocked"): MatrixApiError {

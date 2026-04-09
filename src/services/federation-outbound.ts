@@ -1,12 +1,12 @@
-import type { Env, PDU } from "../types";
+import type { Env, EventId, PDU, RoomId } from "../types";
 
 export const FEDERATION_OUTBOUND_DO_NAME = "outbound";
 
 export interface FederationOutboundPort {
   enqueuePdu(input: {
     destination: string;
-    eventId: string;
-    roomId: string;
+    eventId: EventId;
+    roomId: RoomId;
     pdu: Record<string, unknown>;
   }): Promise<void>;
   enqueueEdu(input: {
@@ -57,7 +57,7 @@ export function createFederationOutboundPort(env: Pick<Env, "FEDERATION">): Fede
 export async function enqueueFederationPdu(
   env: Pick<Env, "FEDERATION">,
   destination: string,
-  roomId: string,
+  roomId: RoomId,
   event: PDU,
 ): Promise<void> {
   await createFederationOutboundPort(env).enqueuePdu({

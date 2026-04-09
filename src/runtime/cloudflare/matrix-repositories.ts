@@ -30,7 +30,7 @@ import { getReceiptsForRoom } from "../../api/receipts";
 import { getToDeviceMessages } from "../../api/to-device";
 import { getTypingUsers } from "../../api/typing";
 import { countUnreadNotificationSummaryWithRules } from "../../services/push-rule-evaluator";
-import type { Env, EventId, PDU, Room, RoomId, ToDeviceEvent, UserId } from "../../types";
+import type { DeviceId, Env, EventId, PDU, Room, RoomId, ToDeviceEvent, UserId } from "../../types";
 import type { AccountDataContent } from "../../types/account-data";
 import type {
   FederationProcessedPdu,
@@ -105,8 +105,8 @@ export class CloudflareRoomRepository implements RoomRepository {
   }
 
   async upsertRoomAccountData(
-    userId: string,
-    roomId: string,
+    userId: UserId,
+    roomId: RoomId,
     eventType: string,
     content: Record<string, unknown>,
   ): Promise<void> {
@@ -182,7 +182,7 @@ export class CloudflareRoomRepository implements RoomRepository {
 export class CloudflareSyncRepository implements SyncRepository {
   constructor(private readonly env: Env) {}
 
-  async loadFilter(userId: string, filterParam?: string): Promise<FilterDefinition | null> {
+  async loadFilter(userId: UserId, filterParam?: string): Promise<FilterDefinition | null> {
     if (!filterParam) return null;
     if (filterParam.startsWith("{")) {
       try {
@@ -214,8 +214,8 @@ export class CloudflareSyncRepository implements SyncRepository {
   }
 
   getToDeviceMessages(
-    userId: string,
-    deviceId: string,
+    userId: UserId,
+    deviceId: DeviceId,
     since: string,
   ): Promise<{ events: ToDeviceEvent[]; nextBatch: string }> {
     return getToDeviceMessages(this.env.DB, userId, deviceId, since) as Promise<{
@@ -224,7 +224,7 @@ export class CloudflareSyncRepository implements SyncRepository {
     }>;
   }
 
-  async getOneTimeKeyCounts(userId: string, deviceId: string): Promise<Record<string, number>> {
+  async getOneTimeKeyCounts(userId: UserId, deviceId: DeviceId): Promise<Record<string, number>> {
     const counts = await this.env.DB.prepare(`
       SELECT algorithm, COUNT(*) as count
       FROM one_time_keys
@@ -241,7 +241,7 @@ export class CloudflareSyncRepository implements SyncRepository {
     return result;
   }
 
-  async getUnusedFallbackKeyTypes(userId: string, deviceId: string): Promise<string[]> {
+  async getUnusedFallbackKeyTypes(userId: UserId, deviceId: DeviceId): Promise<string[]> {
     const keys = await this.env.DB.prepare(`
       SELECT DISTINCT algorithm
       FROM fallback_keys
@@ -253,7 +253,7 @@ export class CloudflareSyncRepository implements SyncRepository {
   }
 
   async getDeviceListChanges(
-    userId: string,
+    userId: UserId,
     sinceEventPosition: number,
     sinceDeviceKeyPosition: number,
   ): Promise<{ changed: UserId[]; left: UserId[] }> {
@@ -429,11 +429,11 @@ export class CloudflareSyncRepository implements SyncRepository {
     };
   }
 
-  getGlobalAccountData(userId: string, since?: number) {
+  getGlobalAccountData(userId: UserId, since?: number) {
     return getGlobalAccountData(this.env.DB, userId, since);
   }
 
-  getRoomAccountData(userId: string, roomId: string, since?: number) {
+  getRoomAccountData(userId: UserId, roomId: RoomId, since?: number) {
     return getRoomAccountData(this.env.DB, userId, roomId, since);
   }
 
@@ -470,7 +470,7 @@ export class CloudflareSyncRepository implements SyncRepository {
     return countUnreadNotificationSummaryWithRules(this.env.DB, userId, roomId, receipts.content);
   }
 
-  getTypingUsers(roomId: RoomId): Promise<string[]> {
+  getTypingUsers(roomId: RoomId): Promise<UserId[]> {
     return getTypingUsers(this.env, roomId);
   }
 
@@ -520,7 +520,7 @@ export class CloudflareFederationRepository implements FederationRepository {
       .run();
   }
 
-  async getProcessedPdu(eventId: string): Promise<FederationProcessedPdu | null> {
+  async getProcessedPdu(eventId: EventId): Promise<FederationProcessedPdu | null> {
     const result = await this.env.DB.prepare(
       `SELECT accepted, rejection_reason FROM processed_pdus WHERE event_id = ?`,
     )
@@ -535,9 +535,9 @@ export class CloudflareFederationRepository implements FederationRepository {
   }
 
   async recordProcessedPdu(
-    eventId: string,
+    eventId: EventId,
     origin: string,
-    roomId: string,
+    roomId: RoomId,
     accepted: boolean,
     rejectionReason?: string,
   ): Promise<void> {
@@ -659,8 +659,8 @@ export class CloudflareFederationRepository implements FederationRepository {
   }
 
   async upsertRemoteDeviceList(
-    userId: string,
-    deviceId: string,
+    userId: UserId,
+    deviceId: DeviceId,
     streamId: number,
     keys: Record<string, unknown> | null,
     displayName?: string,

@@ -243,7 +243,7 @@ export class MatrixRoomService {
     const federation = this.appContext.capabilities.federation;
     const queuePdu =
       federation?.queuePdu !== undefined
-        ? (destination: string, targetRoomId: string, pdu: PDU) =>
+        ? (destination: string, targetRoomId: PDU["room_id"], pdu: PDU) =>
             federation.queuePdu!(destination, targetRoomId, pdu)
         : undefined;
     if (!db || !queuePdu) {
@@ -370,7 +370,7 @@ export class MatrixRoomService {
       () => this.appContext.capabilities.clock.now(),
     );
 
-    await this.repository.upsertRoomAccountData(input.userId, roomId, "m.fully_read", {
+    await this.repository.upsertRoomAccountData(input.userId, typedRoomId, "m.fully_read", {
       event_id: createEventId,
     });
 
@@ -383,7 +383,11 @@ export class MatrixRoomService {
       await this.repository.createRoomAlias(roomAlias, typedRoomId, input.userId);
     }
 
-    await this.repository.notifyUsersOfEvent(typedRoomId, toEventId(createEventId)!, "m.room.create");
+    await this.repository.notifyUsersOfEvent(
+      typedRoomId,
+      toEventId(createEventId)!,
+      "m.room.create",
+    );
 
     if (Array.isArray(invite)) {
       const db = this.appContext.capabilities.sql.connection as D1Database;

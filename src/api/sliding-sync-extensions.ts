@@ -8,7 +8,7 @@
 
 import type { SlidingSyncExtensionContext, SlidingSyncExtensionOutput } from "../types/sync";
 import type { SlidingSyncExtensionConfig } from "../types/client";
-import type { AccountDataEvent } from "../types";
+import type { AccountDataEvent, RoomId } from "../types";
 import type { ToDeviceEvent } from "../types/matrix";
 
 import { projectPresenceEvents } from "../matrix/application/features/presence/project";
@@ -201,10 +201,10 @@ export async function buildSlidingSyncExtensions(
  * behaviour where extension connections carry no room window of their own.
  */
 export function resolveEphemeralRoomIds(
-  responseRoomIds: string[],
-  subscribedRoomIds: string[],
-  allJoinedRoomIds: string[],
-): string[] {
+  responseRoomIds: RoomId[],
+  subscribedRoomIds: RoomId[],
+  allJoinedRoomIds: RoomId[],
+): RoomId[] {
   const combined = [...new Set([...responseRoomIds, ...subscribedRoomIds])];
   return combined.length === 0 ? allJoinedRoomIds : combined;
 }

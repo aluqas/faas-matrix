@@ -3,8 +3,8 @@ import {
   executeKyselyQuery,
   executeKyselyQueryFirst,
 } from "../../services/kysely";
-import type { Membership, RoomId } from "../../types";
-import { toRoomId } from "../../utils/ids";
+import type { EventId, Membership, RoomId, UserId } from "../../types";
+import { toEventId, toRoomId } from "../../utils/ids";
 
 interface MembershipRow {
   room_id: string;
@@ -21,7 +21,7 @@ interface MembershipDatabase {
 
 export interface MembershipRecord {
   membership: Membership;
-  eventId: string;
+  eventId: EventId;
 }
 
 const qb = createKyselyBuilder<MembershipDatabase>();
@@ -64,7 +64,7 @@ export const EFFECTIVE_MEMBERSHIPS_AND_JOINED_MEMBERS_CTE = `
  */
 export async function getUserRoomIdsWithEffectiveMembership(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   membership?: Membership,
 ): Promise<RoomId[]> {
   let query = `
@@ -111,8 +111,8 @@ export async function getUserRoomIdsWithEffectiveMembership(
 
 export async function getMembershipForUser(
   db: D1Database,
-  roomId: string,
-  userId: string,
+  roomId: RoomId,
+  userId: UserId,
 ): Promise<MembershipRecord | null> {
   const row = await executeKyselyQueryFirst<{ membership: string; event_id: string }>(
     db,
@@ -123,13 +123,17 @@ export async function getMembershipForUser(
       .where("user_id", "=", userId),
   );
   if (!row) return null;
-  return { membership: row.membership as Membership, eventId: row.event_id };
+  const eventId = toEventId(row.event_id);
+  if (!eventId) {
+    throw new Error(`Invalid event_id format in room_memberships: ${row.event_id}`);
+  }
+  return { membership: row.membership as Membership, eventId };
 }
 
 export async function isUserJoinedToRoom(
   db: D1Database,
-  roomId: string,
-  userId: string,
+  roomId: RoomId,
+  userId: UserId,
 ): Promise<boolean> {
   const row = await executeKyselyQueryFirst<{ room_id: string }>(
     db,
@@ -143,7 +147,7 @@ export async function isUserJoinedToRoom(
   return row !== null;
 }
 
-export async function getJoinedRoomIdsForUser(db: D1Database, userId: string): Promise<RoomId[]> {
+export async function getJoinedRoomIdsForUser(db: D1Database, userId: UserId): Promise<RoomId[]> {
   const rows = await executeKyselyQuery<{ room_id: string }>(
     db,
     qb
@@ -176,7 +180,7 @@ export async function getJoinedRoomIdsForUser(db: D1Database, userId: string): P
  */
 export function getJoinedRoomIdsIncludingPartialState(
   db: D1Database,
-  userId: string,
+  userId: UserId,
 ): Promise<RoomId[]> {
   return getUserRoomIdsWithEffectiveMembership(db, userId, "join");
 }
@@ -187,7 +191,7 @@ export function getJoinedRoomIdsIncludingPartialState(
  */
 export async function getEffectiveJoinedMemberCount(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
 ): Promise<number> {
   const result = await db
     .prepare(

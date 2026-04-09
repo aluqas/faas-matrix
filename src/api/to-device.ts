@@ -11,6 +11,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import type { ToDeviceRequest } from "../types/client";
+import type { DeviceId, UserId } from "../types/matrix";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { dispatchToDeviceMessages } from "../matrix/application/features/to-device/command";
@@ -160,8 +161,8 @@ app.put("/_matrix/client/v3/sendToDevice/:eventType/:txnId", requireAuth(), asyn
 
 export function getToDeviceMessages(
   db: D1Database,
-  userId: string,
-  deviceId: string,
+  userId: UserId,
+  deviceId: DeviceId,
   since?: string,
   limit: number = 100,
 ): Promise<ToDeviceBatch> {

@@ -7,7 +7,7 @@
 // - Step persistence for resume on failure
 
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:workers";
-import type { Env, EventId, PDU, RoomId, UserId } from "../types";
+import type { DeviceId, Env, EventId, PDU, RoomId, ServerName, UserId } from "../types";
 import { generateEventId, toEventId, toUserId } from "../utils/ids";
 import { isJsonObject } from "../types/common";
 import type { PartialStateJoinMarker, PartialStateStatus } from "../types/partial-state";
@@ -186,7 +186,7 @@ function toWorkflowFailure(
   };
 }
 
-async function getStoredDeviceKeysFromKv(kv: KVNamespace, userId: string, deviceId: string) {
+async function getStoredDeviceKeysFromKv(kv: KVNamespace, userId: UserId, deviceId: DeviceId) {
   return parseDeviceKeysPayload(await kv.get(`device:${userId}:${deviceId}`, "json"));
 }
 
@@ -473,7 +473,12 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
                 return getUserDevices(this.env.DB, typedUserId);
               },
               getStoredDeviceKeys: (deviceUserId, deviceId) =>
-                getStoredDeviceKeysFromKv(this.env.DEVICE_KEYS, deviceUserId, deviceId),
+                (() => {
+                  const typedUserId = toUserId(deviceUserId);
+                  return typedUserId
+                    ? getStoredDeviceKeysFromKv(this.env.DEVICE_KEYS, typedUserId, deviceId)
+                    : Promise.resolve(null);
+                })(),
               queueEdu: (destination, eduType, content) =>
                 queueFederationEdu(this.env, destination, eduType, content),
             },
@@ -552,7 +557,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
         const memberList = await getRoomMembers(this.env.DB, roomId);
         // Exclude the joining user from notifications
         return memberList.filter((m) => m.userId !== userId).map((m) => ({ userId: m.userId }));
-      })) as Array<{ userId: string }>;
+      })) as Array<{ userId: UserId }>;
 
       // Step 6: Notify members in batches of 50
       const BATCH_SIZE = 50;
@@ -587,9 +592,9 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
   // Make a make_join request to a remote server
   private async makeJoinRequest(
-    remoteServer: string,
-    roomId: string,
-    userId: string,
+    remoteServer: ServerName,
+    roomId: RoomId,
+    userId: UserId,
   ): Promise<RemoteJoinTemplate> {
     const logger = withLogContext({
       component: "room-join-workflow",
@@ -752,8 +757,8 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
   // Send a send_join request to a remote server
   private async sendJoinRequest(
-    remoteServer: string,
-    roomId: string,
+    remoteServer: ServerName,
+    roomId: RoomId,
     joinEvent: JoinWorkflowEvent,
   ): Promise<RemoteSendJoinResponse> {
     const logger = withLogContext({
@@ -815,9 +820,9 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
   }
 
   private async fetchAndPersistPartialState(
-    remoteServer: string,
-    roomId: string,
-    eventId: string,
+    remoteServer: ServerName,
+    roomId: RoomId,
+    eventId: EventId,
     roomVersion: string,
   ): Promise<void> {
     const stateIdsResponse = await federationGet(
@@ -866,7 +871,7 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
   // Notify a batch of members about the join
   private async notifyMemberBatch(
-    members: Array<{ userId: string }>,
+    members: Array<{ userId: UserId }>,
     joinEvent: JoinWorkflowEvent,
   ): Promise<void> {
     const logger = withLogContext({

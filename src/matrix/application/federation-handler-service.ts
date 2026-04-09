@@ -321,7 +321,13 @@ export async function reevaluateDeferredPartialStateAuthEvents(
     if (authResult.allowed) {
       await clearDeferredAuthMarkerForEvent(db, toEventId(event.event_id)!);
       if (event.state_key !== undefined && currentStateEventId !== event.event_id) {
-        await setRoomStateEvent(db, typedRoomId, event.type, event.state_key, toEventId(event.event_id)!);
+        await setRoomStateEvent(
+          db,
+          typedRoomId,
+          event.type,
+          event.state_key,
+          toEventId(event.event_id)!,
+        );
       }
     } else {
       await rejectProcessedPdu(
@@ -333,7 +339,13 @@ export async function reevaluateDeferredPartialStateAuthEvents(
         if (currentStateEventId === event.event_id) {
           const previousEventId = getPartialStateDeferredPreviousEventId(event);
           if (previousEventId) {
-            await setRoomStateEvent(db, typedRoomId, event.type, event.state_key, toEventId(previousEventId)!);
+            await setRoomStateEvent(
+              db,
+              typedRoomId,
+              event.type,
+              event.state_key,
+              toEventId(previousEventId)!,
+            );
           } else {
             await deleteRoomStateEvent(db, typedRoomId, event.type, event.state_key);
           }
@@ -488,7 +500,7 @@ export async function handleFederationDeviceListEdu(
   repository: Pick<FederationRepository, "upsertRemoteDeviceList">,
   content: Record<string, unknown>,
 ): Promise<void> {
-  const deviceUserId = typeof content.user_id === "string" ? content.user_id : undefined;
+  const deviceUserId = typeof content.user_id === "string" ? toUserId(content.user_id) : undefined;
   const deviceId = typeof content.device_id === "string" ? content.device_id : undefined;
   if (!deviceUserId || !deviceId) {
     return;
@@ -551,7 +563,12 @@ export async function handleFederationTypingEdu(
       return (await getPartialStateJoinForRoom(cache, typedRoomId)) !== null;
     },
     async setRoomTyping(roomId: string, userId: string, typing: boolean, timeoutMs?: number) {
-      await realtime.setRoomTyping?.(roomId, userId, typing, timeoutMs);
+      const typedRoomId = toRoomId(roomId);
+      const typedUserId = toUserId(userId);
+      if (!typedRoomId || !typedUserId) {
+        return;
+      }
+      await realtime.setRoomTyping?.(typedRoomId, typedUserId, typing, timeoutMs);
     },
   });
 }
@@ -617,10 +634,15 @@ export async function handleFederationReceiptEdu(
             ? (receiptRecord["data"] as Record<string, unknown>)
             : {};
         const ts = typeof data["ts"] === "number" ? data["ts"] : undefined;
+        const typedUserId = toUserId(userId);
+        const typedEventId = toEventId(eventId);
+        if (!typedRoomId || !typedUserId || !typedEventId) {
+          continue;
+        }
         await realtime.setRoomReceipt(
-          roomId,
-          userId,
-          eventId,
+          typedRoomId,
+          typedUserId,
+          typedEventId,
           receiptType,
           typeof data["thread_id"] === "string" ? data["thread_id"] : undefined,
           ts,

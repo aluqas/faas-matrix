@@ -214,7 +214,7 @@ async function fetchStateSnapshotForMissingPrevEvent(
   const missingSnapshotEventIds: string[] = [];
   for (const eventId of snapshotEventIds) {
     const existing = await ports.repository.getEvent(toEventId(eventId)!);
-    const processed = await ports.repository.getProcessedPdu(eventId);
+    const processed = await ports.repository.getProcessedPdu(toEventId(eventId)!);
     if (!existing && !processed) {
       missingSnapshotEventIds.push(eventId);
     }
@@ -463,7 +463,7 @@ async function fetchMissingPrevEventsIfNeeded(
   });
 
   for (const fetchedEventId of Object.keys(missingEventsResult.pdus)) {
-    const processed = await ports.repository.getProcessedPdu(fetchedEventId);
+    const processed = await ports.repository.getProcessedPdu(toEventId(fetchedEventId)!);
     if (processed && !processed.accepted) {
       return true;
     }
@@ -1016,7 +1016,7 @@ export async function ingestFederationPdu(
     const federationCap = ports.appContext.capabilities.federation;
     const queuePdu =
       federationCap?.queuePdu !== undefined
-        ? (dest: string, rid: string, p: PDU) => federationCap.queuePdu!(dest, rid, p)
+        ? (dest: string, rid: PDU["room_id"], p: PDU) => federationCap.queuePdu!(dest, rid, p)
         : undefined;
     if (db && queuePdu && !deferredPartialStateAuthReason) {
       await fanoutEventToRemoteServers(

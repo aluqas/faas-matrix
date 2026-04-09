@@ -2,6 +2,7 @@
 
 import { getUserRoomIdsWithEffectiveMembership } from "../matrix/repositories/membership-repository";
 import type {
+  DeviceId,
   Device,
   Env,
   EventId,
@@ -295,7 +296,7 @@ export async function updateUserProfile(
 export async function createDevice(
   db: D1Database,
   userId: UserId,
-  deviceId: string,
+  deviceId: DeviceId,
   displayName?: string,
 ): Promise<void> {
   await db
@@ -310,7 +311,7 @@ export async function createDevice(
 export async function getDevice(
   db: D1Database,
   userId: UserId,
-  deviceId: string,
+  deviceId: DeviceId,
 ): Promise<Device | null> {
   const result = await db
     .prepare(
@@ -462,7 +463,7 @@ export async function deleteAllUserDevices(db: D1Database, userId: UserId): Prom
 export async function deleteOtherUserDevices(
   db: D1Database,
   userId: UserId,
-  keepDeviceId: string,
+  keepDeviceId: DeviceId,
 ): Promise<void> {
   const devices = await db
     .prepare(`
@@ -484,7 +485,7 @@ export async function createAccessToken(
   tokenId: string,
   tokenHash: string,
   userId: UserId,
-  deviceId: string | null,
+  deviceId: DeviceId | null,
 ): Promise<void> {
   await db
     .prepare(
@@ -498,7 +499,7 @@ export async function createAccessToken(
 export async function getUserByTokenHash(
   db: D1Database,
   tokenHash: string,
-): Promise<{ userId: UserId; deviceId: string | null } | null> {
+): Promise<{ userId: UserId; deviceId: DeviceId | null } | null> {
   const result = await db
     .prepare(`SELECT user_id, device_id FROM access_tokens WHERE token_hash = ?`)
     .bind(tokenHash)
@@ -518,7 +519,7 @@ export async function getUserByTokenHash(
 export async function getAccessTokenRecordByHash(
   db: D1Database,
   tokenHash: string,
-): Promise<{ tokenId: string; userId: UserId; deviceId: string | null } | null> {
+): Promise<{ tokenId: string; userId: UserId; deviceId: DeviceId | null } | null> {
   const result = await db
     .prepare(`SELECT token_id, user_id, device_id FROM access_tokens WHERE token_hash = ?`)
     .bind(tokenHash)
@@ -872,7 +873,7 @@ export async function getMembership(
   db: D1Database,
   roomId: RoomId,
   userId: UserId,
-): Promise<{ membership: Membership; eventId: string; streamOrdering?: number } | null> {
+): Promise<{ membership: Membership; eventId: EventId; streamOrdering?: number } | null> {
   const result = await db
     .prepare(
       `
@@ -913,9 +914,14 @@ export async function getMembership(
 
   if (!result) return null;
 
+  const eventId = toEventId(result.event_id);
+  if (!eventId) {
+    throw new Error(`Invalid event_id format in database: ${result.event_id}`);
+  }
+
   return {
     membership: result.membership,
-    eventId: result.event_id,
+    eventId,
     ...(result.stream_ordering !== null ? { streamOrdering: result.stream_ordering } : {}),
   };
 }

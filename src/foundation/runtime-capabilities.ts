@@ -1,4 +1,12 @@
-import type { PDU, RoomJoinWorkflowParams, RoomJoinWorkflowStatus } from "../types";
+import type {
+  EventId,
+  EventType,
+  PDU,
+  RoomId,
+  RoomJoinWorkflowParams,
+  RoomJoinWorkflowStatus,
+  UserId,
+} from "../types";
 
 export interface SqlCapability<TConnection = unknown> {
   connection: TConnection;
@@ -31,27 +39,27 @@ export interface RateLimitCapability<TNamespace = unknown> {
 }
 
 export interface RealtimeCapability {
-  notifyRoomEvent(roomId: string, eventId: string, eventType: string): Promise<void>;
+  notifyRoomEvent(roomId: RoomId, eventId: EventId, eventType: EventType): Promise<void>;
   setRoomTyping?(
-    roomId: string,
-    userId: string,
+    roomId: RoomId,
+    userId: UserId,
     typing: boolean,
     timeoutMs?: number,
   ): Promise<void>;
   setRoomReceipt?(
-    roomId: string,
-    userId: string,
-    eventId: string,
+    roomId: RoomId,
+    userId: UserId,
+    eventId: EventId,
     receiptType: string,
     threadId?: string,
     ts?: number,
   ): Promise<void>;
-  waitForUserEvents(userId: string, timeoutMs: number): Promise<{ hasEvents: boolean }>;
+  waitForUserEvents(userId: UserId, timeoutMs: number): Promise<{ hasEvents: boolean }>;
 }
 
 export interface FederationCapability {
   queueEdu?(destination: string, eduType: string, content: Record<string, unknown>): Promise<void>;
-  queuePdu?(destination: string, roomId: string, pdu: PDU): Promise<void>;
+  queuePdu?(destination: string, roomId: RoomId, pdu: PDU): Promise<void>;
 }
 
 export interface MetricsCapability {

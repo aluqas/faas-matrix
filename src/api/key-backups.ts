@@ -17,8 +17,14 @@ import type {
 } from "../types/client";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
+import { parseJsonObjectBody, requireEnumValue } from "./shared-validation";
 
 const app = new Hono<AppEnv>();
+
+const KEY_BACKUP_ALGORITHMS = [
+  "m.megolm_backup.v1.curve25519-aes-sha2",
+  "org.matrix.msc3270.v1.aes-hmac-sha2",
+] as const;
 
 // ============================================
 // Types
@@ -43,30 +49,19 @@ app.post("/_matrix/client/v3/room_keys/version", requireAuth(), async (c) => {
   const userId = c.get("userId");
   const db = c.env.DB;
 
-  let body: CreateBackupRequest;
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+  const parsedBody = await parseJsonObjectBody(c.req.raw);
+  if (parsedBody instanceof Error) {
+    return parsedBody.toResponse();
   }
+  const body = parsedBody as unknown as CreateBackupRequest;
 
   if (!body.algorithm || !body.auth_data) {
     return Errors.missingParam("algorithm and auth_data required").toResponse();
   }
 
-  // Validate algorithm
-  const validAlgorithms = [
-    "m.megolm_backup.v1.curve25519-aes-sha2",
-    "org.matrix.msc3270.v1.aes-hmac-sha2",
-  ];
-  if (!validAlgorithms.includes(body.algorithm)) {
-    return c.json(
-      {
-        errcode: "M_INVALID_PARAM",
-        error: `Invalid algorithm. Must be one of: ${validAlgorithms.join(", ")}`,
-      },
-      400,
-    );
+  const algorithm = requireEnumValue(body.algorithm, "algorithm", KEY_BACKUP_ALGORITHMS);
+  if (algorithm instanceof Error) {
+    return algorithm.toResponse();
   }
 
   const etag = generateEtag();
@@ -76,7 +71,7 @@ app.post("/_matrix/client/v3/room_keys/version", requireAuth(), async (c) => {
     INSERT INTO key_backup_versions (user_id, algorithm, auth_data, etag, count)
     VALUES (?, ?, ?, ?, 0)
   `)
-    .bind(userId, body.algorithm, JSON.stringify(body.auth_data), etag)
+    .bind(userId, algorithm, JSON.stringify(body.auth_data), etag)
     .run();
 
   const version = result.meta.last_row_id;
@@ -107,13 +102,7 @@ app.get("/_matrix/client/v3/room_keys/version", requireAuth(), async (c) => {
     }>();
 
   if (!backup) {
-    return c.json(
-      {
-        errcode: "M_NOT_FOUND",
-        error: "No backup found",
-      },
-      404,
-    );
+    return Errors.notFound("No backup found").toResponse();
   }
 
   return c.json({
@@ -147,13 +136,7 @@ app.get("/_matrix/client/v3/room_keys/version/:version", requireAuth(), async (c
     }>();
 
   if (!backup) {
-    return c.json(
-      {
-        errcode: "M_NOT_FOUND",
-        error: "Backup version not found",
-      },
-      404,
-    );
+    return Errors.notFound("Backup version not found").toResponse();
   }
 
   return c.json({
@@ -171,12 +154,11 @@ app.put("/_matrix/client/v3/room_keys/version/:version", requireAuth(), async (c
   const version = c.req.param("version");
   const db = c.env.DB;
 
-  let body: { algorithm?: string; auth_data?: BackupAlgorithmData };
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+  const parsedBody = await parseJsonObjectBody(c.req.raw);
+  if (parsedBody instanceof Error) {
+    return parsedBody.toResponse();
   }
+  const body = parsedBody as unknown as { algorithm?: string; auth_data?: BackupAlgorithmData };
 
   // Check backup exists
   const backup = await db
@@ -188,13 +170,7 @@ app.put("/_matrix/client/v3/room_keys/version/:version", requireAuth(), async (c
     .first();
 
   if (!backup) {
-    return c.json(
-      {
-        errcode: "M_NOT_FOUND",
-        error: "Backup version not found",
-      },
-      404,
-    );
+    return Errors.notFound("Backup version not found").toResponse();
   }
 
   // Update auth_data if provided
@@ -229,13 +205,7 @@ app.delete("/_matrix/client/v3/room_keys/version/:version", requireAuth(), async
     .run();
 
   if (result.meta.changes === 0) {
-    return c.json(
-      {
-        errcode: "M_NOT_FOUND",
-        error: "Backup version not found",
-      },
-      404,
-    );
+    return Errors.notFound("Backup version not found").toResponse();
   }
 
   // Also delete all keys for this version
@@ -264,12 +234,11 @@ app.put("/_matrix/client/v3/room_keys/keys", requireAuth(), async (c) => {
     return Errors.missingParam("version").toResponse();
   }
 
-  let body: KeysBackupRequest;
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+  const parsedBody = await parseJsonObjectBody(c.req.raw);
+  if (parsedBody instanceof Error) {
+    return parsedBody.toResponse();
   }
+  const body = parsedBody as unknown as KeysBackupRequest;
 
   // Check backup version exists
   const backup = await db
@@ -281,13 +250,7 @@ app.put("/_matrix/client/v3/room_keys/keys", requireAuth(), async (c) => {
     .first<{ version: number; etag: string }>();
 
   if (!backup) {
-    return c.json(
-      {
-        errcode: "M_NOT_FOUND",
-        error: "Backup version not found",
-      },
-      404,
-    );
+    return Errors.notFound("Backup version not found").toResponse();
   }
 
   let count = 0;
@@ -359,12 +322,11 @@ app.put("/_matrix/client/v3/room_keys/keys/:roomId", requireAuth(), async (c) =>
     return Errors.missingParam("version").toResponse();
   }
 
-  let body: RoomKeyBackup;
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+  const parsedBody = await parseJsonObjectBody(c.req.raw);
+  if (parsedBody instanceof Error) {
+    return parsedBody.toResponse();
   }
+  const body = parsedBody as unknown as RoomKeyBackup;
 
   // Check backup version exists
   const backup = await db
@@ -376,13 +338,7 @@ app.put("/_matrix/client/v3/room_keys/keys/:roomId", requireAuth(), async (c) =>
     .first();
 
   if (!backup) {
-    return c.json(
-      {
-        errcode: "M_NOT_FOUND",
-        error: "Backup version not found",
-      },
-      404,
-    );
+    return Errors.notFound("Backup version not found").toResponse();
   }
 
   // Process sessions
@@ -449,12 +405,11 @@ app.put("/_matrix/client/v3/room_keys/keys/:roomId/:sessionId", requireAuth(), a
     return Errors.missingParam("version").toResponse();
   }
 
-  let body: KeyBackupData;
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+  const parsedBody = await parseJsonObjectBody(c.req.raw);
+  if (parsedBody instanceof Error) {
+    return parsedBody.toResponse();
   }
+  const body = parsedBody as unknown as KeyBackupData;
 
   // Check backup version exists
   const backup = await db
@@ -466,13 +421,7 @@ app.put("/_matrix/client/v3/room_keys/keys/:roomId/:sessionId", requireAuth(), a
     .first();
 
   if (!backup) {
-    return c.json(
-      {
-        errcode: "M_NOT_FOUND",
-        error: "Backup version not found",
-      },
-      404,
-    );
+    return Errors.notFound("Backup version not found").toResponse();
   }
 
   // Upsert the key

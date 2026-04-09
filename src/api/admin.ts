@@ -1933,7 +1933,8 @@ app.get("/admin/api/users/:userId/keys", requireAuth(), requireAdmin, async (c) 
       (s) => s.key_id === deviceId && s.signer_key_id === selfSigningKeyId,
     );
     const deviceKey = deviceKeys[deviceId];
-    const signatureMap = deviceKey && isJsonObject(deviceKey["signatures"]) ? deviceKey["signatures"] : null;
+    const signatureMap =
+      deviceKey && isJsonObject(deviceKey["signatures"]) ? deviceKey["signatures"] : null;
     const userSignatureMap =
       signatureMap && isJsonObject(signatureMap[userId]) ? signatureMap[userId] : null;
     const hasSignatureInDeviceKey =

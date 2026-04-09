@@ -1,4 +1,4 @@
-import type { PresenceEvent, PresenceState } from "../../../../types";
+import type { PresenceEvent, PresenceState, UserId } from "../../../../types";
 import { applyEventFilter } from "../../sync-projection";
 import type {
   PresenceProjectionPort,
@@ -12,11 +12,11 @@ import {
 
 export async function getPresenceForUsers(
   db: D1Database,
-  userIds: string[],
+  userIds: UserId[],
   cache?: KVNamespace,
 ): Promise<
   Record<
-    string,
+    UserId,
     {
       presence: PresenceState;
       status_msg?: string | undefined;
@@ -63,7 +63,7 @@ export async function projectPresenceEvents(
       Object.entries(presenceByUser).map(
         ([sender, content]): PresenceEvent => ({
           type: "m.presence" as const,
-          sender: sender as `@${string}:${string}`,
+          sender: sender as UserId,
           content: {
             presence: content.presence,
             ...(content.status_msg !== undefined ? { status_msg: content.status_msg } : {}),

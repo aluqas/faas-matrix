@@ -5,7 +5,9 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import type { GetTokenRequest, GetTokenResponse, OpenIDToken } from "../types/client";
+import { Errors } from "../utils/errors";
 import { generateLiveKitToken, getLiveKitConfig } from "../services/livekit";
+import { parseJsonObjectBody } from "./shared-validation";
 
 const app = new Hono<AppEnv>();
 
@@ -65,6 +67,18 @@ function roomIdToLiveKitName(roomId: string): string {
   return roomId.replaceAll(/[^a-zA-Z0-9-_]/g, "_");
 }
 
+function extractRtcTokenRequest(body: Record<string, unknown>): GetTokenRequest | null {
+  if (
+    !body.openid_token ||
+    typeof body.openid_token !== "object" ||
+    Array.isArray(body.openid_token)
+  ) {
+    return null;
+  }
+
+  return body as unknown as GetTokenRequest;
+}
+
 // POST /livekit/get_token - Get a LiveKit JWT token
 // This is the endpoint that Element X calls to get call credentials
 app.post("/livekit/get_token", async (c) => {
@@ -73,11 +87,16 @@ app.post("/livekit/get_token", async (c) => {
     return c.json({ errcode: "M_UNKNOWN", error: "LiveKit not configured" }, 500);
   }
 
-  let body: GetTokenRequest;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ errcode: "M_BAD_JSON", error: "Invalid JSON body" }, 400);
+  const parsedBody = await parseJsonObjectBody(c.req.raw);
+  if (parsedBody instanceof Error) {
+    return parsedBody.toResponse();
+  }
+  const body = extractRtcTokenRequest(parsedBody);
+  if (!body) {
+    return Errors.invalidParam(
+      "openid_token",
+      "Missing required fields: room and openid_token",
+    ).toResponse();
   }
 
   // Handle both old format (room_id, member) and Element X format (room, device_id)
@@ -85,10 +104,7 @@ app.post("/livekit/get_token", async (c) => {
 
   // Validate required fields
   if (!roomId || !body.openid_token) {
-    return c.json(
-      { errcode: "M_BAD_JSON", error: "Missing required fields: room and openid_token" },
-      400,
-    );
+    return Errors.missingParam("room and openid_token").toResponse();
   }
 
   // Verify the OpenID token (simplified for now)
@@ -168,14 +184,17 @@ app.post("/livekit/get_token/sfu/get", async (c) => {
     return c.json({ errcode: "M_UNKNOWN", error: "LiveKit not configured" }, 500);
   }
 
-  let body: GetTokenRequest;
-  try {
-    const rawBody = await c.req.text();
-    console.log("[LiveKit] Raw body length:", rawBody.length, "preview:", rawBody.slice(0, 200));
-    body = JSON.parse(rawBody);
-  } catch (e) {
-    console.log("[LiveKit] JSON parse error:", e);
-    return c.json({ errcode: "M_BAD_JSON", error: "Invalid JSON body" }, 400);
+  const parsedBody = await parseJsonObjectBody(c.req.raw);
+  if (parsedBody instanceof Error) {
+    console.log("[LiveKit] JSON parse error");
+    return parsedBody.toResponse();
+  }
+  const body = extractRtcTokenRequest(parsedBody);
+  if (!body) {
+    return Errors.invalidParam(
+      "openid_token",
+      "Missing required fields: room and openid_token",
+    ).toResponse();
   }
 
   // Handle both old format (room_id, member) and Element X format (room, device_id)
@@ -191,10 +210,7 @@ app.post("/livekit/get_token/sfu/get", async (c) => {
       "openid_token:",
       !!body.openid_token,
     );
-    return c.json(
-      { errcode: "M_BAD_JSON", error: "Missing required fields: room and openid_token" },
-      400,
-    );
+    return Errors.missingParam("room and openid_token").toResponse();
   }
 
   // Verify the OpenID token (simplified for now)
@@ -259,13 +275,13 @@ app.options("/livekit/get_token/sfu/get", () => {
 // Return 405 Method Not Allowed for non-POST/OPTIONS methods
 // Element X checks endpoint availability with GET and expects 405 (not 404)
 app.all("/livekit/get_token", (c) => {
-  return c.text("Method Not Allowed", 405, {
+  return c.json(Errors.methodNotAllowed().toJSON(), 405, {
     Allow: "POST, OPTIONS",
   });
 });
 
 app.all("/livekit/get_token/sfu/get", (c) => {
-  return c.text("Method Not Allowed", 405, {
+  return c.json(Errors.methodNotAllowed().toJSON(), 405, {
     Allow: "POST, OPTIONS",
   });
 });

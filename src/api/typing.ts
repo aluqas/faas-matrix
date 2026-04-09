@@ -5,9 +5,9 @@
 // They are ephemeral - stored in Room Durable Objects (not D1).
 
 import { Hono } from "hono";
-import type { AppEnv, Env } from "../types";
+import type { AppEnv, Env, RoomId, UserId } from "../types";
 import { Errors } from "../utils/errors";
-import { toRoomId } from "../utils/ids";
+import { toRoomId, toUserId } from "../utils/ids";
 import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
 import { requireAuth } from "../middleware/auth";
 import { getRoomState } from "../services/database";
@@ -24,14 +24,16 @@ const app = new Hono<AppEnv>();
 const DEFAULT_TYPING_TIMEOUT = 30000; // 30 seconds
 const MAX_TYPING_TIMEOUT = 120000; // 2 minutes
 
-function parseTypingUsersResponse(value: unknown): string[] {
+function parseTypingUsersResponse(value: unknown): UserId[] {
   if (!value || typeof value !== "object") {
     return [];
   }
 
   const data = value as { user_ids?: unknown };
   return Array.isArray(data.user_ids)
-    ? data.user_ids.filter((userId): userId is string => typeof userId === "string")
+    ? data.user_ids
+        .map((userId) => toUserId(userId))
+        .filter((userId): userId is UserId => userId !== null)
     : [];
 }
 
@@ -173,7 +175,7 @@ app.put("/_matrix/client/v3/rooms/:roomId/typing/:userId", requireAuth(), async 
 // ============================================
 
 // Get typing users for a room (for sync) - uses Room Durable Object
-export async function getTypingUsers(env: Env, roomId: string): Promise<string[]> {
+export async function getTypingUsers(env: Env, roomId: RoomId): Promise<UserId[]> {
   const roomDO = getRoomDO(env, roomId);
   const response = await roomDO.fetch(
     new Request("https://room/typing", {
@@ -187,11 +189,11 @@ export async function getTypingUsers(env: Env, roomId: string): Promise<string[]
 // Get typing status for multiple rooms (for sync) - uses Room Durable Objects
 export async function getTypingForRooms(
   env: Env,
-  roomIds: string[],
-): Promise<Record<string, string[]>> {
+  roomIds: RoomId[],
+): Promise<Record<RoomId, UserId[]>> {
   if (roomIds.length === 0) return {};
 
-  const byRoom: Record<string, string[]> = {};
+  const byRoom: Partial<Record<RoomId, UserId[]>> = {};
 
   // Fetch typing state from each Room DO in parallel
   const results = await Promise.all(
@@ -211,7 +213,7 @@ export async function getTypingForRooms(
     }
   }
 
-  return byRoom;
+  return byRoom as Record<RoomId, UserId[]>;
 }
 
 export default app;

@@ -9,6 +9,7 @@ import { validateUrlForPreview } from "../utils/url-validator";
 import { federationGet } from "../services/federation-keys";
 
 const app = new Hono<AppEnv>();
+app.notFound(() => Errors.unrecognizedRoute().toResponse());
 
 // Maximum upload size (50MB)
 const MAX_UPLOAD_SIZE = 50 * 1024 * 1024;
@@ -72,6 +73,101 @@ async function fetchRemoteMedia(
   return new Response(response.body, { status: response.status, headers });
 }
 
+async function createMediaPlaceholder(c: import("hono").Context<AppEnv>): Promise<Response> {
+  const userId = c.get("userId");
+
+  const mediaId = await generateOpaqueId(24);
+  const mxcUri = `mxc://${c.env.SERVER_NAME}/${mediaId}`;
+
+  await c.env.DB.prepare(
+    `INSERT INTO media (media_id, user_id, content_type, content_length, created_at)
+     VALUES (?, ?, 'application/octet-stream', 0, ?)`,
+  )
+    .bind(mediaId, userId, Date.now())
+    .run();
+
+  return c.json({
+    content_uri: mxcUri,
+    unused_expires_at: Date.now() + 24 * 60 * 60 * 1000,
+  });
+}
+
+type LocalMediaMetadata = {
+  content_type: string;
+  filename: string | null;
+  content_length: number;
+};
+
+function getLocalMediaMetadata(
+  c: import("hono").Context<AppEnv>,
+  mediaId: string,
+): Promise<LocalMediaMetadata | null> {
+  return c.env.DB.prepare(
+    `SELECT content_type, filename, content_length FROM media WHERE media_id = ?`,
+  )
+    .bind(mediaId)
+    .first<LocalMediaMetadata>();
+}
+
+function placeholderMediaNotUploadedResponse(): Response {
+  return Errors.notYetUploaded("Media has not been uploaded yet").toResponse();
+}
+
+async function uploadMediaToPlaceholder(c: import("hono").Context<AppEnv>): Promise<Response> {
+  const userId = c.get("userId");
+  const serverName = c.req.param("serverName");
+  const mediaId = c.req.param("mediaId");
+
+  if (serverName !== c.env.SERVER_NAME) {
+    return Errors.forbidden("Cannot upload to remote server").toResponse();
+  }
+
+  const existing = await c.env.DB.prepare(
+    `SELECT user_id, content_length FROM media WHERE media_id = ?`,
+  )
+    .bind(mediaId)
+    .first<{ user_id: string; content_length: number }>();
+
+  if (!existing) {
+    return Errors.notFound("Media not found").toResponse();
+  }
+
+  if (existing.user_id !== userId) {
+    return Errors.forbidden("Not authorized to upload to this media").toResponse();
+  }
+
+  if (existing.content_length > 0) {
+    return c.json(
+      {
+        errcode: "M_CANNOT_OVERWRITE_MEDIA",
+        error: "Media already uploaded",
+      },
+      409,
+    );
+  }
+
+  const contentType = c.req.header("Content-Type") ?? "application/octet-stream";
+  const filename = c.req.query("filename");
+  const body = await c.req.arrayBuffer();
+
+  await c.env.MEDIA.put(mediaId, body, {
+    httpMetadata: { contentType },
+    customMetadata: {
+      userId,
+      filename: filename ?? "",
+      uploadedAt: Date.now().toString(),
+    },
+  });
+
+  await c.env.DB.prepare(
+    `UPDATE media SET content_type = ?, content_length = ?, filename = ? WHERE media_id = ?`,
+  )
+    .bind(contentType, body.byteLength, filename ?? null, mediaId)
+    .run();
+
+  return c.json({});
+}
+
 // POST /_matrix/media/v3/upload - Upload media
 app.post("/_matrix/media/v3/upload", requireAuth(), async (c) => {
   const userId = c.get("userId");
@@ -117,6 +213,9 @@ app.post("/_matrix/media/v3/upload", requireAuth(), async (c) => {
     content_uri: mxcUri,
   });
 });
+app.on(["PUT", "PATCH", "DELETE"], "/_matrix/media/v3/upload", () =>
+  Errors.methodNotAllowed().toResponse(),
+);
 
 // GET /_matrix/media/v3/download/:serverName/:mediaId - Download media
 app.get("/_matrix/media/v3/download/:serverName/:mediaId", async (c) => {
@@ -135,15 +234,15 @@ app.get("/_matrix/media/v3/download/:serverName/:mediaId", async (c) => {
   // Get from R2
   const object = await c.env.MEDIA.get(mediaId);
   if (!object) {
+    const metadata = await getLocalMediaMetadata(c, mediaId);
+    if (metadata?.content_length === 0) {
+      return placeholderMediaNotUploadedResponse();
+    }
     return Errors.notFound("Media not found").toResponse();
   }
 
   // Get metadata
-  const metadata = await c.env.DB.prepare(
-    `SELECT content_type, filename FROM media WHERE media_id = ?`,
-  )
-    .bind(mediaId)
-    .first<{ content_type: string; filename: string | null }>();
+  const metadata = await getLocalMediaMetadata(c, mediaId);
 
   const headers = new Headers();
   headers.set("Content-Type", metadata?.content_type ?? "application/octet-stream");
@@ -174,13 +273,15 @@ app.get("/_matrix/media/v3/download/:serverName/:mediaId/:filename", async (c) =
   // Get from R2
   const object = await c.env.MEDIA.get(mediaId);
   if (!object) {
+    const metadata = await getLocalMediaMetadata(c, mediaId);
+    if (metadata?.content_length === 0) {
+      return placeholderMediaNotUploadedResponse();
+    }
     return Errors.notFound("Media not found").toResponse();
   }
 
   // Get metadata
-  const metadata = await c.env.DB.prepare(`SELECT content_type FROM media WHERE media_id = ?`)
-    .bind(mediaId)
-    .first<{ content_type: string }>();
+  const metadata = await getLocalMediaMetadata(c, mediaId);
 
   const headers = new Headers();
   headers.set("Content-Type", metadata?.content_type ?? "application/octet-stream");
@@ -208,12 +309,14 @@ app.get("/_matrix/media/v3/thumbnail/:serverName/:mediaId", async (c) => {
   }
 
   // Get media metadata
-  const metadata = await c.env.DB.prepare(`SELECT content_type FROM media WHERE media_id = ?`)
-    .bind(mediaId)
-    .first<{ content_type: string }>();
+  const metadata = await getLocalMediaMetadata(c, mediaId);
 
   if (!metadata) {
     return Errors.notFound("Media not found").toResponse();
+  }
+
+  if (metadata.content_length === 0) {
+    return placeholderMediaNotUploadedResponse();
   }
 
   // Only generate thumbnails for images
@@ -524,83 +627,17 @@ app.post("/_matrix/client/v1/media/upload", requireAuth(), async (c) => {
 });
 
 // POST /_matrix/client/v1/media/create - Create media placeholder (for async uploads)
-app.post("/_matrix/client/v1/media/create", requireAuth(), async (c) => {
-  const userId = c.get("userId");
-
-  const mediaId = await generateOpaqueId(24);
-  const mxcUri = `mxc://${c.env.SERVER_NAME}/${mediaId}`;
-
-  // Create a placeholder entry
-  await c.env.DB.prepare(
-    `INSERT INTO media (media_id, user_id, content_type, content_length, created_at)
-     VALUES (?, ?, 'application/octet-stream', 0, ?)`,
-  )
-    .bind(mediaId, userId, Date.now())
-    .run();
-
-  return c.json({
-    content_uri: mxcUri,
-    unused_expires_at: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
-  });
-});
+app.post("/_matrix/client/v1/media/create", requireAuth(), createMediaPlaceholder);
+// POST /_matrix/media/v1/create - Unauthenticated media API alias expected by Complement
+app.post("/_matrix/media/v1/create", requireAuth(), createMediaPlaceholder);
 
 // PUT /_matrix/client/v1/media/upload/:serverName/:mediaId - Upload to placeholder
-app.put("/_matrix/client/v1/media/upload/:serverName/:mediaId", requireAuth(), async (c) => {
-  const userId = c.get("userId");
-  const serverName = c.req.param("serverName");
-  const mediaId = c.req.param("mediaId");
-
-  if (serverName !== c.env.SERVER_NAME) {
-    return Errors.forbidden("Cannot upload to remote server").toResponse();
-  }
-
-  // Check placeholder exists and belongs to user
-  const existing = await c.env.DB.prepare(
-    `SELECT user_id, content_length FROM media WHERE media_id = ?`,
-  )
-    .bind(mediaId)
-    .first<{ user_id: string; content_length: number }>();
-
-  if (!existing) {
-    return Errors.notFound("Media not found").toResponse();
-  }
-
-  if (existing.user_id !== userId) {
-    return Errors.forbidden("Not authorized to upload to this media").toResponse();
-  }
-
-  if (existing.content_length > 0) {
-    return c.json(
-      {
-        errcode: "M_CANNOT_OVERWRITE_MEDIA",
-        error: "Media already uploaded",
-      },
-      409,
-    );
-  }
-
-  const contentType = c.req.header("Content-Type") ?? "application/octet-stream";
-  const filename = c.req.query("filename");
-
-  const body = await c.req.arrayBuffer();
-
-  await c.env.MEDIA.put(mediaId, body, {
-    httpMetadata: { contentType },
-    customMetadata: {
-      userId,
-      filename: filename ?? "",
-      uploadedAt: Date.now().toString(),
-    },
-  });
-
-  await c.env.DB.prepare(
-    `UPDATE media SET content_type = ?, content_length = ?, filename = ? WHERE media_id = ?`,
-  )
-    .bind(contentType, body.byteLength, filename ?? null, mediaId)
-    .run();
-
-  return c.json({});
-});
+app.put(
+  "/_matrix/client/v1/media/upload/:serverName/:mediaId",
+  requireAuth(),
+  uploadMediaToPlaceholder,
+);
+app.put("/_matrix/media/v3/upload/:serverName/:mediaId", requireAuth(), uploadMediaToPlaceholder);
 
 // GET /_matrix/client/v1/media/download/:serverName/:mediaId - Authenticated download
 app.get("/_matrix/client/v1/media/download/:serverName/:mediaId", requireAuth(), async (c) => {

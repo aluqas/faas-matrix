@@ -6,6 +6,7 @@ import type {
   PDU,
   RoomId,
   StrippedStateEvent,
+  UserId,
 } from "../../types";
 import type {
   DeviceListProjectionQuery,
@@ -59,7 +60,7 @@ function toLeftRoom(event: PDU): LeftRoom {
   };
 }
 
-function isLeaveLikeMembershipEvent(event: PDU | null | undefined, userId: string): event is PDU {
+function isLeaveLikeMembershipEvent(event: PDU | null | undefined, userId: UserId): event is PDU {
   const membership = (event?.content as { membership?: string } | undefined)?.membership;
   return Boolean(
     event &&
@@ -160,7 +161,7 @@ export function shouldIncludeRoom(roomId: string, filter?: FilterDefinition["roo
 
 export async function projectGlobalAccountData(
   repository: SyncRepository,
-  userId: string,
+  userId: UserId,
   sincePosition: number,
   filter?: SyncEventFilter,
   options?: { isIncremental?: boolean },

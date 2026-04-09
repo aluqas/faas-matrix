@@ -7,14 +7,15 @@
 // - Parallel pusher delivery with retry
 
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:workers";
-import type { Env } from "../types";
+import type { Env, EventId, EventType, RoomId, UserId } from "../types";
+import { toUserId } from "../utils/ids";
 
 // Parameters passed when triggering the workflow
 export interface PushParams {
-  eventId: string;
-  roomId: string;
-  eventType: string;
-  sender: string;
+  eventId: EventId;
+  roomId: RoomId;
+  eventType: EventType;
+  sender: UserId;
   content: any;
   originServerTs: number;
 }
@@ -30,7 +31,7 @@ export interface PushResult {
 
 // Serializable member notification result
 interface MemberResult {
-  userId: string;
+  userId: UserId;
   notified: boolean;
   skipped: boolean;
   error?: string;
@@ -73,7 +74,9 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
         `)
           .bind(roomId, sender)
           .all<{ user_id: string }>();
-        return result.results.map((m) => m.user_id);
+        return result.results
+          .map((m) => toUserId(m.user_id))
+          .filter((userId): userId is UserId => userId !== null);
       });
 
       if (members.length === 0) {
@@ -159,7 +162,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
   }
 
   // Get room context for notifications
-  private async getRoomContext(roomId: string, sender: string): Promise<RoomContext> {
+  private async getRoomContext(roomId: RoomId, sender: UserId): Promise<RoomContext> {
     // Get member count
     const memberCountResult = await this.env.DB.prepare(`
       SELECT COUNT(*) as count FROM room_memberships
@@ -206,12 +209,12 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
 
   // Process a batch of members
   private async processMemberBatch(
-    members: string[],
+    members: UserId[],
     eventContext: {
-      eventId: string;
-      roomId: string;
-      eventType: string;
-      sender: string;
+      eventId: EventId;
+      roomId: RoomId;
+      eventType: EventType;
+      sender: UserId;
       content: any;
       originServerTs: number;
       senderDisplayName: string;
@@ -292,8 +295,8 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
 
   // Simplified push rule evaluation (main logic is in push.ts)
   private async evaluatePushRules(
-    userId: string,
-    event: { type: string; content: any; sender: string; room_id: string },
+    userId: UserId,
+    event: { type: EventType; content: any; sender: UserId; room_id: RoomId },
     _roomMemberCount: number,
   ): Promise<PushRuleResult> {
     // Import the evaluatePushRules function isn't possible in workflow context
@@ -320,7 +323,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
   }
 
   // Get unread count for user in room
-  private async getUnreadCount(userId: string, roomId: string): Promise<number> {
+  private async getUnreadCount(userId: UserId, roomId: RoomId): Promise<number> {
     const result = await this.env.DB.prepare(`
       SELECT COUNT(*) as count FROM events e
       WHERE e.room_id = ?
@@ -339,7 +342,7 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
   }
 
   // Get user's pushers
-  private async getUserPushers(userId: string): Promise<SerializablePusher[]> {
+  private async getUserPushers(userId: UserId): Promise<SerializablePusher[]> {
     const result = await this.env.DB.prepare(`
       SELECT pushkey, kind, app_id, data FROM pushers WHERE user_id = ?
     `)
@@ -356,13 +359,13 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
 
   // Send notification to a single pusher
   private async sendToPusher(
-    userId: string,
+    userId: UserId,
     pusher: SerializablePusher,
     eventContext: {
-      eventId: string;
-      roomId: string;
-      eventType: string;
-      sender: string;
+      eventId: EventId;
+      roomId: RoomId;
+      eventType: EventType;
+      sender: UserId;
       content: any;
       senderDisplayName: string;
       roomName: string | undefined;
@@ -476,8 +479,8 @@ export class PushNotificationWorkflow extends WorkflowEntrypoint<Env, PushParams
 
   // Queue notification for history API
   private async queueNotification(
-    userId: string,
-    eventContext: { eventId: string; roomId: string },
+    userId: UserId,
+    eventContext: { eventId: EventId; roomId: RoomId },
     pushResult: PushRuleResult,
   ): Promise<void> {
     await this.env.DB.prepare(`

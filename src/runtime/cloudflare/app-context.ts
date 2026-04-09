@@ -1,5 +1,15 @@
 import type { MiddlewareHandler } from "hono";
-import type { AppEnv, Env, PDU, RoomJoinWorkflowParams, RoomJoinWorkflowStatus } from "../../types";
+import type {
+  AppEnv,
+  Env,
+  EventId,
+  EventType,
+  PDU,
+  RoomId,
+  RoomJoinWorkflowParams,
+  RoomJoinWorkflowStatus,
+  UserId,
+} from "../../types";
 import type { AppContext } from "../../foundation/app-context";
 import { createFeatureProfile } from "../../foundation/config/feature-profile";
 import type { RuntimeCapabilities } from "../../foundation/runtime-capabilities";
@@ -83,13 +93,13 @@ function createRuntimeCapabilities(
       namespace: env.RATE_LIMIT,
     },
     realtime: {
-      notifyRoomEvent(roomId: string, eventId: string, eventType: string) {
+      notifyRoomEvent(roomId: RoomId, eventId: EventId, eventType: EventType) {
         void roomId;
         void eventId;
         void eventType;
         return Promise.resolve();
       },
-      async setRoomTyping(roomId: string, userId: string, typing: boolean, timeoutMs = 30000) {
+      async setRoomTyping(roomId: RoomId, userId: UserId, typing: boolean, timeoutMs = 30000) {
         const doId = env.ROOMS.idFromName(roomId);
         const stub = env.ROOMS.get(doId);
         await stub.fetch(
@@ -105,9 +115,9 @@ function createRuntimeCapabilities(
         );
       },
       async setRoomReceipt(
-        roomId: string,
-        userId: string,
-        eventId: string,
+        roomId: RoomId,
+        userId: UserId,
+        eventId: EventId,
         receiptType: string,
         threadId?: string,
         ts?: number,
@@ -128,7 +138,7 @@ function createRuntimeCapabilities(
           }),
         );
       },
-      async waitForUserEvents(userId: string, timeoutMs: number) {
+      async waitForUserEvents(userId: UserId, timeoutMs: number) {
         const doId = env.SYNC.idFromName(userId);
         const stub = env.SYNC.get(doId);
         const response = await stub.fetch(
@@ -145,7 +155,7 @@ function createRuntimeCapabilities(
       async queueEdu(destination: string, eduType: string, content: Record<string, unknown>) {
         await enqueueFederationEdu(env, destination, eduType, content);
       },
-      async queuePdu(destination: string, roomId: string, pdu: PDU) {
+      async queuePdu(destination: string, roomId: RoomId, pdu: PDU) {
         await enqueueFederationPdu(env, destination, roomId, pdu);
       },
     },

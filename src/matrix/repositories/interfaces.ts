@@ -1,5 +1,6 @@
 import type {
   AccountDataEvent,
+  DeviceId,
   EphemeralEvent,
   EventId,
   Membership,
@@ -13,7 +14,7 @@ import type {
 
 export interface MembershipRecord {
   membership: Membership;
-  eventId: string;
+  eventId: EventId;
   streamOrdering?: number;
 }
 
@@ -95,8 +96,8 @@ export interface RoomRepository {
   ): Promise<void>;
   createRoomAlias(alias: string, roomId: RoomId, creatorId: UserId): Promise<void>;
   upsertRoomAccountData(
-    userId: string,
-    roomId: string,
+    userId: UserId,
+    roomId: RoomId,
     eventType: string,
     content: Record<string, unknown>,
   ): Promise<void>;
@@ -123,23 +124,23 @@ export interface RoomRepository {
 }
 
 export interface SyncRepository {
-  loadFilter(userId: string, filterParam?: string): Promise<FilterDefinition | null>;
+  loadFilter(userId: UserId, filterParam?: string): Promise<FilterDefinition | null>;
   getLatestStreamPosition(): Promise<number>;
   getLatestDeviceKeyPosition(): Promise<number>;
   getToDeviceMessages(
-    userId: string,
-    deviceId: string,
+    userId: UserId,
+    deviceId: DeviceId,
     since: string,
   ): Promise<{ events: ToDeviceEvent[]; nextBatch: string }>;
-  getOneTimeKeyCounts(userId: string, deviceId: string): Promise<Record<string, number>>;
-  getUnusedFallbackKeyTypes(userId: string, deviceId: string): Promise<string[]>;
+  getOneTimeKeyCounts(userId: UserId, deviceId: DeviceId): Promise<Record<string, number>>;
+  getUnusedFallbackKeyTypes(userId: UserId, deviceId: DeviceId): Promise<string[]>;
   getDeviceListChanges(
-    userId: string,
+    userId: UserId,
     sinceEventPosition: number,
     sinceDeviceKeyPosition: number,
   ): Promise<{ changed: string[]; left: string[] }>;
-  getGlobalAccountData(userId: string, since?: number): Promise<AccountDataEvent[]>;
-  getRoomAccountData(userId: string, roomId: string, since?: number): Promise<AccountDataEvent[]>;
+  getGlobalAccountData(userId: UserId, since?: number): Promise<AccountDataEvent[]>;
+  getRoomAccountData(userId: UserId, roomId: RoomId, since?: number): Promise<AccountDataEvent[]>;
   getUserRooms(userId: UserId, membership?: Membership): Promise<RoomId[]>;
   getMembership(roomId: RoomId, userId: UserId): Promise<MembershipRecord | null>;
   getEventsSince(roomId: RoomId, sincePosition: number): Promise<PDU[]>;
@@ -148,7 +149,7 @@ export interface SyncRepository {
   getInviteStrippedState(roomId: RoomId): Promise<StrippedStateEvent[]>;
   getReceiptsForRoom(roomId: RoomId, userId: UserId): Promise<ReceiptEvent>;
   getUnreadNotificationSummary(roomId: RoomId, userId: UserId): Promise<UnreadNotificationSummary>;
-  getTypingUsers(roomId: RoomId): Promise<string[]>;
+  getTypingUsers(roomId: RoomId): Promise<UserId[]>;
   waitForUserEvents(userId: UserId, timeoutMs: number): Promise<{ hasEvents: boolean }>;
 }
 
@@ -164,11 +165,11 @@ export interface FederationRepository {
     txnId: string,
     response: Record<string, unknown>,
   ): Promise<void>;
-  getProcessedPdu(eventId: string): Promise<FederationProcessedPdu | null>;
+  getProcessedPdu(eventId: EventId): Promise<FederationProcessedPdu | null>;
   recordProcessedPdu(
-    eventId: string,
+    eventId: EventId,
     origin: string,
-    roomId: string,
+    roomId: RoomId,
     accepted: boolean,
     rejectionReason?: string,
   ): Promise<void>;
@@ -205,15 +206,15 @@ export interface FederationRepository {
     content: Record<string, unknown>,
   ): Promise<void>;
   upsertPresence(
-    userId: string,
+    userId: UserId,
     presence: string,
     statusMessage: string | null,
     lastActiveTs: number,
     currentlyActive: boolean,
   ): Promise<void>;
   upsertRemoteDeviceList(
-    userId: string,
-    deviceId: string,
+    userId: UserId,
+    deviceId: DeviceId,
     streamId: number,
     keys: Record<string, unknown> | null,
     displayName?: string,

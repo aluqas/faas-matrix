@@ -2,7 +2,6 @@
 
 import { Hono } from "hono";
 import type { AppEnv, UserId } from "../types";
-import type { JsonBodyParseResult } from "../types/common";
 import { Errors } from "../utils/errors";
 import { hashPassword, verifyPassword, hashToken } from "../utils/crypto";
 import {
@@ -30,12 +29,9 @@ import {
   getAccessTokenRecordByHash,
 } from "../services/database";
 import { requireAuth, extractAccessToken } from "../middleware/auth";
+import { isRecord, parseJsonBody } from "./shared-validation";
 
 const app = new Hono<AppEnv>();
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function parseLoginTokenData(value: unknown): { user_id: string; expires_at: number } | null {
   if (!isRecord(value)) {
@@ -92,24 +88,6 @@ function resolveLoginUserId(identifierUser: string, localServerName: string): Us
 
   return formatUserId(identifierUser.toLowerCase(), localServerName);
 }
-
-async function parseJsonBody(request: Request): Promise<JsonBodyParseResult> {
-  const body = await request.arrayBuffer();
-
-  let decoded: string;
-  try {
-    decoded = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(body);
-  } catch {
-    return { ok: false, reason: "not_json" };
-  }
-
-  try {
-    return { ok: true, value: JSON.parse(decoded) as unknown };
-  } catch {
-    return { ok: false, reason: "bad_json" };
-  }
-}
-
 // GET /_matrix/client/v3/login - Get supported login flows
 app.get("/_matrix/client/v3/login", (c) => {
   return c.json({
