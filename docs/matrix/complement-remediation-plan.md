@@ -1,7 +1,7 @@
 # Complement Remediation Plan
 
 Current triage and remediation notes for the latest broad Complement rerun.
-Last updated: 2026-04-05.
+Last updated: 2026-04-09.
 
 This document is for active debugging and repair planning.
 It complements `docs/matrix/complement-analysis.md`, which remains the current-state evidence and baseline document.
@@ -10,21 +10,41 @@ It complements `docs/matrix/complement-analysis.md`, which remains the current-s
 
 Artifacts:
 
-- raw log: [`2026-04-05_07-56-40-49151.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-05_07-56-40-49151.log)
-- summary: [`2026-04-05_07-56-40-49151.summary.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-05_07-56-40-49151.summary.json)
-- classified: [`2026-04-05_07-56-40-49151.classified.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-05_07-56-40-49151.classified.json)
-- docker log: [`2026-04-05_07-56-40-49151.docker.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-05_07-56-40-49151.docker.log)
+- raw log: [`2026-04-09_05-34-24-93047.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-09_05-34-24-93047.log)
+- summary: [`2026-04-09_05-34-24-93047.summary.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-09_05-34-24-93047.summary.json)
+- classified: [`2026-04-09_05-34-24-93047.classified.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-09_05-34-24-93047.classified.json)
 
 Result:
 
-- top-level summary: `207 total / 129 pass / 76 fail / 2 skip`
+- top-level summary: `207 total / 114 pass / 91 fail / 2 skip` (55%)
 - overall classification: `mixed`
 
 Interpretation:
 
-- this run improved over the earlier deep diagnostic run (`118 pass / 87 fail / 2 skip`)
-- it is still not the docs/spec baseline because classification remains `mixed`
-- it is strong backlog and regression-triage evidence, not stable pass-rate evidence
+- this run regressed −15 pass vs 2026-04-05 (`129 pass / 76 fail`)
+- the regression is attributed to types-contract hardening (2026-04-09 refactor) surfacing previously-silent runtime issues
+- it is still classified `mixed`; the stable full-run baseline for spec evidence remains the 2026-04-02 run
+- this run is now the working baseline for triage; concrete failure signatures below are updated accordingly
+
+## 2026-04-09 Regression Summary
+
+Tests that were previously green evidence and are now red in this run:
+
+- `TestACLs`, `TestEventAuth`, `TestGetMissingEventsGapFilling`, `TestInboundCanReturnMissingEvents`
+- `TestInviteFiltering`, `TestRemoteTyping`, `TestSyncOmitsStateChangeOnFilteredEvents`
+- `TestUnbanViaInvite`, `TestUnknownEndpoints`
+
+Working interpretation:
+
+- these were passing against the untyped runtime surface; the types-contract refactor introduced stricter ID handling and parse-helper usage that exposed latent runtime divergences
+- they should each be reproduced in a targeted rerun before treating as stable implementation regressions
+- they are not yet demoted from the green-evidence list in `complement-analysis.md` but are flagged as aggregate-unstable
+
+New tests reaching the baseline in this run (from spec v1.17 / newer Complement) that are currently red:
+
+- `TestComplementCanCreateValidV12Rooms`, `TestMSC4311FullCreateEventOnStrippedState`
+- `TestEventRelationships`, `TestFederatedEventRelationships`
+- `TestTxnIdempotency`, `TestTxnIdempotencyScopedToDevice`, `TestTxnScopeOnLocalEcho`
 
 ## Concrete Failure Signatures
 
@@ -442,7 +462,7 @@ Stack note:
 
 Use this document as:
 
-- the active triage and repair plan for the broad `2026-04-05` mixed run
+- the active triage and repair plan for the broad `2026-04-09` mixed run
 - a reference when choosing targeted reruns and implementation order
 
 Do not use this document alone as spec evidence:

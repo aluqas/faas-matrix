@@ -148,7 +148,7 @@ export function delta(before: TestResults, after: TestResults): Delta {
 // File loading
 // ---------------------------------------------------------------------------
 
-const LOG_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.log$/;
+const LOG_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(-\d+)?\.log$/;
 
 /** Load datetime-named log files from logsDir, newest first. */
 export function loadLogs(logsDir: string, maxDepth = 0, lastN = Infinity): ParsedLog[] {
