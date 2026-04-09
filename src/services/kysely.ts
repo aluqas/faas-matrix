@@ -27,8 +27,15 @@ export interface CompiledQuery {
   compile(): { sql: string; parameters: readonly unknown[] };
 }
 
+export function compileKyselyQuery(query: CompiledQuery): {
+  sql: string;
+  parameters: readonly unknown[];
+} {
+  return query.compile();
+}
+
 export async function executeKyselyQuery<T>(db: D1Database, query: CompiledQuery): Promise<T[]> {
-  const { sql, parameters } = query.compile();
+  const { sql, parameters } = compileKyselyQuery(query);
   const result = await db
     .prepare(sql)
     .bind(...parameters)
@@ -45,9 +52,21 @@ export async function executeKyselyQueryFirst<T>(
 }
 
 export async function executeKyselyRun(db: D1Database, query: CompiledQuery): Promise<void> {
-  const { sql, parameters } = query.compile();
+  const { sql, parameters } = compileKyselyQuery(query);
   await db
     .prepare(sql)
     .bind(...parameters)
     .run();
+}
+
+export async function executeKyselyBatch(
+  db: D1Database,
+  queries: readonly CompiledQuery[],
+): Promise<void> {
+  await db.batch(
+    queries.map((query) => {
+      const { sql, parameters } = compileKyselyQuery(query);
+      return db.prepare(sql).bind(...parameters);
+    }),
+  );
 }

@@ -6,6 +6,7 @@ import {
   updateLocalProfile,
 } from "../../../repositories/profile-repository";
 import type { ProfileCommandPorts } from "./command";
+import { fetchRemoteProfileResponse } from "./profile-federation-gateway";
 import type { ProfileQueryPorts } from "./query";
 import { queryProfileResponse } from "./profile-query";
 import { parseStoredProfileCustomData } from "./shared";
@@ -43,8 +44,9 @@ export function createProfileQueryPorts(
             userId,
             ...(field !== undefined ? { field } : {}),
             localServerName: env.SERVER_NAME,
-            db: env.DB,
-            cache: env.CACHE,
+            getLocalProfile: (targetUserId) => getLocalProfileRecord(env.DB, targetUserId),
+            fetchRemoteProfile: (serverName, targetUserId, targetField) =>
+              fetchRemoteProfileResponse(env, serverName, targetUserId, targetField),
           }),
         catch: (cause) => toInfraError("Failed to query profile", cause),
       }),

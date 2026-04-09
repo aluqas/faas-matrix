@@ -15,7 +15,7 @@ import { projectPresenceEvents } from "../matrix/application/features/presence/p
 import {
   projectGlobalAccountDataSnapshot,
   projectRoomAccountDataSnapshot,
-} from "../matrix/application/features/account-data/storage";
+} from "../matrix/application/features/account-data/projector";
 import { projectDeviceLists } from "../matrix/application/sync-projection";
 import { CloudflareSyncRepository } from "../runtime/cloudflare/matrix-repositories";
 import { getThreadSubscriptionsExtension } from "../matrix/application/features/sync/thread-subscriptions";

@@ -3,6 +3,7 @@ import {
   executeKyselyQuery,
   executeKyselyQueryFirst,
   executeKyselyRun,
+  type CompiledQuery,
 } from "../../services/kysely";
 import type { Generated } from "kysely";
 import type { RoomId, UserId } from "../../types";
@@ -63,7 +64,7 @@ function toAccountDataSyncEvent(
   };
 }
 
-async function getNextAccountDataStreamPosition(db: D1Database): Promise<number> {
+export async function getNextAccountDataStreamPosition(db: D1Database): Promise<number> {
   const eventMax = await executeKyselyQueryFirst<{ max_pos: number | null }>(
     db,
     qb.selectFrom("events").select((eb) => eb.fn.max("stream_ordering").as("max_pos")),
@@ -78,6 +79,65 @@ async function getNextAccountDataStreamPosition(db: D1Database): Promise<number>
   return Math.max(eventMax?.max_pos ?? 0, accountDataMax?.max_pos ?? 0) + 1;
 }
 
+export function buildRecordAccountDataChangeQuery(
+  userId: UserId,
+  roomId: RoomId | "",
+  eventType: string,
+  streamPosition: number,
+): CompiledQuery {
+  return qb.insertInto("account_data_changes").values({
+    user_id: userId,
+    room_id: roomId,
+    event_type: eventType,
+    stream_position: streamPosition,
+  });
+}
+
+export function buildUpsertAccountDataRecordQuery(
+  userId: UserId,
+  roomId: RoomId | "",
+  eventType: string,
+  content: string,
+): CompiledQuery {
+  return qb
+    .insertInto("account_data")
+    .values({
+      user_id: userId,
+      room_id: roomId,
+      event_type: eventType,
+      content,
+      deleted: 0,
+    })
+    .onConflict((oc) =>
+      oc.columns(["user_id", "room_id", "event_type"]).doUpdateSet({
+        content: (eb) => eb.ref("excluded.content"),
+        deleted: 0,
+      }),
+    );
+}
+
+export function buildMarkAccountDataDeletedQuery(
+  userId: UserId,
+  roomId: RoomId | "",
+  eventType: string,
+): CompiledQuery {
+  return qb
+    .insertInto("account_data")
+    .values({
+      user_id: userId,
+      room_id: roomId,
+      event_type: eventType,
+      content: "{}",
+      deleted: 1,
+    })
+    .onConflict((oc) =>
+      oc.columns(["user_id", "room_id", "event_type"]).doUpdateSet({
+        content: "{}",
+        deleted: 1,
+      }),
+    );
+}
+
 export async function recordAccountDataChange(
   db: D1Database,
   userId: UserId,
@@ -85,15 +145,7 @@ export async function recordAccountDataChange(
   eventType: string,
 ): Promise<void> {
   const streamPosition = await getNextAccountDataStreamPosition(db);
-  await executeKyselyRun(
-    db,
-    qb.insertInto("account_data_changes").values({
-      user_id: userId,
-      room_id: roomId,
-      event_type: eventType,
-      stream_position: streamPosition,
-    }),
-  );
+  await executeKyselyRun(db, buildRecordAccountDataChangeQuery(userId, roomId, eventType, streamPosition));
 }
 
 export async function upsertAccountDataRecord(
@@ -103,24 +155,7 @@ export async function upsertAccountDataRecord(
   eventType: string,
   content: string,
 ): Promise<void> {
-  await executeKyselyRun(
-    db,
-    qb
-      .insertInto("account_data")
-      .values({
-        user_id: userId,
-        room_id: roomId,
-        event_type: eventType,
-        content,
-        deleted: 0,
-      })
-      .onConflict((oc) =>
-        oc.columns(["user_id", "room_id", "event_type"]).doUpdateSet({
-          content: (eb) => eb.ref("excluded.content"),
-          deleted: 0,
-        }),
-      ),
-  );
+  await executeKyselyRun(db, buildUpsertAccountDataRecordQuery(userId, roomId, eventType, content));
 }
 
 export async function markAccountDataDeleted(
@@ -129,24 +164,7 @@ export async function markAccountDataDeleted(
   roomId: RoomId | "",
   eventType: string,
 ): Promise<void> {
-  await executeKyselyRun(
-    db,
-    qb
-      .insertInto("account_data")
-      .values({
-        user_id: userId,
-        room_id: roomId,
-        event_type: eventType,
-        content: "{}",
-        deleted: 1,
-      })
-      .onConflict((oc) =>
-        oc.columns(["user_id", "room_id", "event_type"]).doUpdateSet({
-          content: "{}",
-          deleted: 1,
-        }),
-      ),
-  );
+  await executeKyselyRun(db, buildMarkAccountDataDeletedQuery(userId, roomId, eventType));
 }
 
 export async function findAccountDataRecord(
@@ -189,7 +207,7 @@ export async function getGlobalAccountData(
         .where("adc.stream_position", ">", since)
         .groupBy(["ad.event_type", "ad.content"]),
     );
-    return rows.map(toAccountDataSyncEvent);
+    return rows.map((row) => toAccountDataSyncEvent(row));
   }
 
   const rows = await executeKyselyQuery<Pick<AccountDataRow, "event_type" | "content">>(
@@ -201,7 +219,7 @@ export async function getGlobalAccountData(
       .where("room_id", "=", "")
       .where("deleted", "=", 0),
   );
-  return rows.map(toAccountDataSyncEvent);
+  return rows.map((row) => toAccountDataSyncEvent(row));
 }
 
 export async function getRoomAccountData(
@@ -227,7 +245,7 @@ export async function getRoomAccountData(
         .where("adc.stream_position", ">", since)
         .groupBy(["ad.event_type", "ad.content"]),
     );
-    return rows.map(toAccountDataSyncEvent);
+    return rows.map((row) => toAccountDataSyncEvent(row));
   }
 
   const rows = await executeKyselyQuery<Pick<AccountDataRow, "event_type" | "content">>(
@@ -239,7 +257,7 @@ export async function getRoomAccountData(
       .where("room_id", "=", roomId)
       .where("deleted", "=", 0),
   );
-  return rows.map(toAccountDataSyncEvent);
+  return rows.map((row) => toAccountDataSyncEvent(row));
 }
 
 export async function getAllRoomAccountData(

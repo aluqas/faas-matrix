@@ -1,15 +1,11 @@
 import { Effect } from "effect";
-import { getRoomByAlias } from "../../../../services/database";
-import {
-  getRemoteKeysWithNotarySignature,
-  getServerSigningKey,
-  type ServerKeyResponse,
-  type SigningKey,
-} from "../../../../services/federation-keys";
-import { normalizeMatrixBase64, signJson } from "../../../../utils/crypto";
+import type { ServerKeyResponse, SigningKey } from "../../../../services/federation-keys";
+import { normalizeMatrixBase64 } from "../../../../utils/crypto";
 import { Errors, MatrixApiError } from "../../../../utils/errors";
 import { isLocalServerName, isValidServerName, parseUserId } from "../../../../utils/ids";
 import { validateUrl } from "../../../../utils/url-validator";
+import { getLocalProfileRecord } from "../../../repositories/profile-repository";
+import { findRoomIdByAlias } from "../../../repositories/room-directory-repository";
 import {
   listCurrentServerKeys,
   type CurrentServerKeyRecord,
@@ -20,7 +16,15 @@ import {
   buildFederatedEventRelationshipsResponse,
   type EventRelationshipsRequest,
 } from "../../relationship-service";
+import {
+  fetchRemoteProfileResponse,
+} from "../profile/profile-federation-gateway";
 import { queryProfileResponse } from "../profile/profile-query";
+import {
+  fetchNotarizedServerKeys,
+  getOrCreateNotarySigningKey,
+  signNotaryServerKeyResponse,
+} from "./notary-gateway";
 import type { UserId } from "../../../../types";
 import type { ProfileField } from "../../../../types/profile";
 
@@ -89,6 +93,12 @@ export function createFederationQueryPorts(input: {
   db: D1Database;
   cache: KVNamespace;
 }): FederationQueryPorts {
+  const profileGatewayEnv = {
+    SERVER_NAME: input.localServerName,
+    DB: input.db,
+    CACHE: input.cache,
+  };
+
   return {
     localServerName: input.localServerName,
     getProfile: (userId, field) =>
@@ -98,19 +108,20 @@ export function createFederationQueryPorts(input: {
             userId,
             ...(field ? { field } : {}),
             localServerName: input.localServerName,
-            db: input.db,
-            cache: input.cache,
+            getLocalProfile: (targetUserId) => getLocalProfileRecord(input.db, targetUserId),
+            fetchRemoteProfile: (serverName, targetUserId, targetField) =>
+              fetchRemoteProfileResponse(profileGatewayEnv, serverName, targetUserId, targetField),
           }),
         catch: (cause) => toInfraError("Failed to query federation profile", cause),
       }),
     getRoomByAlias: (alias) =>
       Effect.tryPromise({
-        try: () => getRoomByAlias(input.db, alias),
+        try: () => findRoomIdByAlias(input.db, alias),
         catch: (cause) => toInfraError("Failed to resolve room alias", cause),
       }),
     getNotarySigningKey: () =>
       Effect.tryPromise({
-        try: () => getServerSigningKey(input.db),
+        try: () => getOrCreateNotarySigningKey({ DB: input.db }),
         catch: (cause) => toInfraError("Failed to load notary signing key", cause),
       }),
     getCurrentServerKeys: (keyId) =>
@@ -120,28 +131,12 @@ export function createFederationQueryPorts(input: {
       }),
     getNotarizedServerKeys: (serverName, keyId, minimumValidUntilTs, notaryKey) =>
       Effect.tryPromise({
-        try: () =>
-          getRemoteKeysWithNotarySignature(
-            serverName,
-            keyId,
-            minimumValidUntilTs,
-            input.db,
-            input.cache,
-            input.localServerName,
-            notaryKey.keyId,
-            notaryKey.privateKeyJwk,
-          ),
+        try: () => fetchNotarizedServerKeys(profileGatewayEnv, serverName, keyId, minimumValidUntilTs, notaryKey),
         catch: (cause) => toInfraError("Failed to query notarized server keys", cause),
       }),
     signNotaryResponse: (response, notaryKey) =>
       Effect.tryPromise({
-        try: async () =>
-          (await signJson(
-            response,
-            input.localServerName,
-            notaryKey.keyId,
-            notaryKey.privateKeyJwk,
-          )) as ServerKeyResponse,
+        try: () => signNotaryServerKeyResponse(input.localServerName, response, notaryKey),
         catch: (cause) => toInfraError("Failed to sign notary response", cause),
       }),
     buildEventRelationships: (request) =>

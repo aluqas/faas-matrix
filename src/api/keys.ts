@@ -12,23 +12,55 @@
 // D1 has eventual consistency across read replicas, which breaks E2EE bootstrap.
 
 import { Hono } from "hono";
-import type { AppEnv, Env } from "../types";
+import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
 import { federationPost } from "../services/federation-keys";
 import { verifyPassword } from "../utils/crypto";
 import { generateOpaqueId, toUserId } from "../utils/ids";
-import { recordDeviceKeyChange } from "../services/device-key-changes";
-import { getPasswordHash } from "../services/database";
 import { runClientEffect } from "../matrix/application/effect-runtime";
 import { withLogContext } from "../matrix/application/logging";
 import { publishDeviceListUpdateToSharedServers } from "../matrix/application/features/device-lists/command";
 import { getSharedServersInRoomsWithUserIncludingPartialState } from "../matrix/application/features/partial-state/shared-servers";
 import { parseSyncToken } from "../matrix/application/features/sync/contracts";
+import { loadGlobalAccountDataEffect } from "../matrix/application/features/account-data/storage";
 import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
 import {
-  type CrossSigningKeysStore,
+  cacheCrossSigningKeys,
+  cacheDeviceKeys,
+  fetchAllDeviceKeysFromDO,
+  fetchCrossSigningKeysFromDO,
+  fetchDeviceKeyFromDO,
+  loadStoredOneTimeKeyBuckets,
+  saveStoredOneTimeKeyBuckets,
+  storeCrossSigningKeysToDO,
+  storeDeviceKeysToDO,
+} from "../matrix/application/features/federation/e2ee-gateway";
+import {
+  claimFallbackKey,
+  claimUnclaimedOneTimeKey,
+  hasCrossSigningKeysBackup,
+  listCrossSigningSignaturesForKey,
+  markStoredOneTimeKeyClaimed,
+  recordDeviceKeyChangeWithKysely,
+  storeCrossSigningKeysBackup,
+  upsertCrossSigningSignature,
+  upsertFallbackKeyBackups,
+  upsertOneTimeKeyBackups,
+} from "../matrix/repositories/federation-e2ee-repository";
+import {
+  listCurrentMembersInJoinedRooms,
+  listNewlySharedUsers,
+  listNoLongerSharedUsers,
+  listVisibleLocalDeviceKeyChanges,
+  listVisibleRemoteDeviceKeyChanges,
+} from "../matrix/repositories/keys-query-repository";
+import {
+  getUserPasswordHash,
+  hasIdentityProviderLink,
+} from "../matrix/repositories/user-auth-repository";
+import {
   type DeviceKeyRequestMap,
   type DeviceKeysPayload,
   type JsonObject,
@@ -42,17 +74,12 @@ import {
   type UserDeviceKeysMap,
   type UserOneTimeKeysMap,
   isIdempotentCrossSigningUpload,
-  parseCrossSigningKeysStore,
   parseCrossSigningUploadRequest,
-  parseDeviceKeysMap,
-  parseDeviceKeysPayload,
-  parseJsonObject,
   parseKeysClaimRequest,
   parseKeysQueryRequest,
   parseKeysQueryResponse,
   parseKeysUploadRequest,
   parseSignaturesUploadRequest,
-  parseStoredOneTimeKeyBuckets,
   parseTokenSubmitRequest,
   parseUiaSessionData,
 } from "./keys-contracts";
@@ -69,14 +96,6 @@ function createKeysLogger(operation: string, context: Record<string, unknown> = 
   });
 }
 
-function parseJsonObjectString(value: string): JsonObject | null {
-  try {
-    return parseJsonObject(JSON.parse(value));
-  } catch {
-    return null;
-  }
-}
-
 function parseUiaSessionJson(value: string): UiaSessionData | null {
   try {
     return parseUiaSessionData(JSON.parse(value));
@@ -85,145 +104,8 @@ function parseUiaSessionJson(value: string): UiaSessionData | null {
   }
 }
 
-// Helper to get the UserKeys Durable Object stub for a user
-function getUserKeysDO(env: Env, userId: string): DurableObjectStub {
-  const id = env.USER_KEYS.idFromName(userId);
-  return env.USER_KEYS.get(id);
-}
-
-// Fetch cross-signing keys from Durable Object (strongly consistent)
-async function getCrossSigningKeysFromDO(env: Env, userId: string): Promise<CrossSigningKeysStore> {
-  const stub = getUserKeysDO(env, userId);
-  const logger = createKeysLogger("durable_object", { user_id: userId });
-  const response = await stub.fetch(new Request("http://internal/cross-signing/get"));
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "unknown error");
-    await runClientEffect(
-      logger.error("keys.command.do_fetch_failed", new Error(errorText), {
-        endpoint: "cross-signing/get",
-        status: response.status,
-      }),
-    );
-    throw new Error(`DO cross-signing get failed: ${response.status} - ${errorText}`);
-  }
-
-  const parsed = parseCrossSigningKeysStore(await response.json().catch(() => null));
-  if (!parsed) {
-    await runClientEffect(
-      logger.warn("keys.command.do_invalid_payload", {
-        endpoint: "cross-signing/get",
-      }),
-    );
-    throw new Error("DO cross-signing get returned invalid payload");
-  }
-
-  return parsed;
-}
-
-// Store cross-signing keys in Durable Object (strongly consistent)
-async function putCrossSigningKeysToDO(
-  env: Env,
-  userId: string,
-  keys: CrossSigningKeysStore,
-): Promise<void> {
-  const stub = getUserKeysDO(env, userId);
-  const logger = createKeysLogger("durable_object", { user_id: userId });
-  const response = await stub.fetch(
-    new Request("http://internal/cross-signing/put", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(keys),
-    }),
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "unknown error");
-    await runClientEffect(
-      logger.error("keys.command.do_fetch_failed", new Error(errorText), {
-        endpoint: "cross-signing/put",
-        status: response.status,
-      }),
-    );
-    throw new Error(`DO cross-signing put failed: ${response.status} - ${errorText}`);
-  }
-}
-
-async function getAllDeviceKeysFromDO(
-  env: Env,
-  userId: string,
-): Promise<Record<string, DeviceKeysPayload>> {
-  const stub = getUserKeysDO(env, userId);
-  const logger = createKeysLogger("durable_object", { user_id: userId });
-  const response = await stub.fetch(new Request("http://internal/device-keys/get"));
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "unknown error");
-    await runClientEffect(
-      logger.error("keys.command.do_fetch_failed", new Error(errorText), {
-        endpoint: "device-keys/get",
-        status: response.status,
-      }),
-    );
-    throw new Error(`DO all device-keys get failed: ${response.status} - ${errorText}`);
-  }
-
-  const parsed = parseDeviceKeysMap(await response.json().catch(() => null));
-  if (!parsed) {
-    await runClientEffect(
-      logger.warn("keys.command.do_invalid_payload", {
-        endpoint: "device-keys/get",
-      }),
-    );
-    throw new Error("DO device-keys get returned invalid payload");
-  }
-
-  return parsed;
-}
-
-// Fetch a single device key from Durable Object (strongly consistent)
-async function getDeviceKeyFromDO(
-  env: Env,
-  userId: string,
-  deviceId: string,
-): Promise<DeviceKeysPayload | null> {
-  const stub = getUserKeysDO(env, userId);
-  const logger = createKeysLogger("durable_object", { user_id: userId, device_id: deviceId });
-  const response = await stub.fetch(
-    new Request(`http://internal/device-keys/get?device_id=${encodeURIComponent(deviceId)}`),
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "unknown error");
-    await runClientEffect(
-      logger.error("keys.command.do_fetch_failed", new Error(errorText), {
-        endpoint: "device-keys/get",
-        status: response.status,
-      }),
-    );
-    throw new Error(`DO device-keys get failed: ${response.status} - ${errorText}`);
-  }
-
-  const payload = await response.json().catch(() => null);
-  if (payload === null) {
-    return null;
-  }
-
-  const parsed = parseDeviceKeysPayload(payload);
-  if (!parsed) {
-    await runClientEffect(
-      logger.warn("keys.command.do_invalid_payload", {
-        endpoint: "device-keys/get",
-      }),
-    );
-    throw new Error("DO device-keys get returned invalid payload");
-  }
-
-  return parsed;
-}
-
 async function queryRemoteDeviceKeys(
-  env: Env,
+  env: Pick<AppEnv["Bindings"], "SERVER_NAME" | "DB" | "CACHE">,
   requesterUserId: string,
   serverName: string,
   requestedKeys: Record<string, string[]>,
@@ -302,35 +184,6 @@ async function queryRemoteDeviceKeys(
   }
 }
 
-// Store device keys in Durable Object (strongly consistent)
-async function putDeviceKeysToDO(
-  env: Env,
-  userId: string,
-  deviceId: string,
-  keys: DeviceKeysPayload,
-): Promise<void> {
-  const stub = getUserKeysDO(env, userId);
-  const logger = createKeysLogger("durable_object", { user_id: userId, device_id: deviceId });
-  const response = await stub.fetch(
-    new Request("http://internal/device-keys/put", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device_id: deviceId, keys }),
-    }),
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "unknown error");
-    await runClientEffect(
-      logger.error("keys.command.do_fetch_failed", new Error(errorText), {
-        endpoint: "device-keys/put",
-        status: response.status,
-      }),
-    );
-    throw new Error(`DO device-keys put failed: ${response.status} - ${errorText}`);
-  }
-}
-
 // ============================================
 // Device Keys
 // ============================================
@@ -340,6 +193,11 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
   const userId = c.get("userId");
   const deviceId = c.get("deviceId");
   const db = c.env.DB;
+
+  if (!userId || !deviceId) {
+    return Errors.unauthorized().toResponse();
+  }
+
   const logger = createKeysLogger("upload", { user_id: userId, device_id: deviceId });
 
   let body: unknown;
@@ -395,13 +253,13 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
 
     // Write to Durable Object first (primary - strongly consistent)
     // This is critical for E2EE bootstrap where client uploads then immediately queries
-    await putDeviceKeysToDO(c.env, userId, deviceId, device_keys);
+    await storeDeviceKeysToDO(c.env, userId, deviceId, device_keys);
 
     // Also write to KV as backup/cache
-    await c.env.DEVICE_KEYS.put(`device:${userId}:${deviceId}`, JSON.stringify(device_keys));
+    await cacheDeviceKeys(c.env, userId, deviceId, device_keys);
 
     // Record key change for /keys/changes
-    await recordDeviceKeyChange(db, userId, deviceId, "update");
+    await recordDeviceKeyChangeWithKysely(db, userId, deviceId, "update");
 
     // Queue outbound m.device_list_update EDUs to federated servers
     try {
@@ -439,10 +297,7 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
 
   if (one_time_keys) {
     // Get existing keys from KV
-    const existingKeys =
-      parseStoredOneTimeKeyBuckets(
-        await c.env.ONE_TIME_KEYS.get(`otk:${userId}:${deviceId}`, "json"),
-      ) ?? {};
+    const existingKeys = (await loadStoredOneTimeKeyBuckets(c.env, userId, deviceId)) ?? {};
 
     for (const [keyId, keyData] of Object.entries(one_time_keys)) {
       const [algorithm] = keyId.split(":");
@@ -462,21 +317,12 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
       } else {
         bucket.push({ keyId, keyData, claimed: false });
       }
-
-      // Also write to D1 as backup
-      await db
-        .prepare(`
-        INSERT INTO one_time_keys (user_id, device_id, algorithm, key_id, key_data)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT (user_id, device_id, algorithm, key_id) DO UPDATE SET
-          key_data = excluded.key_data
-      `)
-        .bind(userId, deviceId, algorithm, keyId, JSON.stringify(keyData))
-        .run();
     }
 
+    await upsertOneTimeKeyBackups(db, userId, deviceId, one_time_keys);
+
     // Save back to KV
-    await c.env.ONE_TIME_KEYS.put(`otk:${userId}:${deviceId}`, JSON.stringify(existingKeys));
+    await saveStoredOneTimeKeyBuckets(c.env, userId, deviceId, existingKeys);
 
     // Count unclaimed keys
     for (const [algorithm, keys] of Object.entries(existingKeys)) {
@@ -484,8 +330,7 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
     }
   } else {
     // Just get counts from KV
-    const existingKeys = await c.env.ONE_TIME_KEYS.get(`otk:${userId}:${deviceId}`, "json");
-    const parsedExistingKeys = parseStoredOneTimeKeyBuckets(existingKeys);
+    const parsedExistingKeys = await loadStoredOneTimeKeyBuckets(c.env, userId, deviceId);
 
     if (parsedExistingKeys) {
       for (const [algorithm, keys] of Object.entries(parsedExistingKeys)) {
@@ -496,21 +341,7 @@ app.post("/_matrix/client/v3/keys/upload", requireAuth(), async (c) => {
 
   // Store fallback keys
   if (fallback_keys) {
-    for (const [keyId, keyData] of Object.entries(fallback_keys)) {
-      const [algorithm] = keyId.split(":");
-
-      await db
-        .prepare(`
-        INSERT INTO fallback_keys (user_id, device_id, algorithm, key_id, key_data)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT (user_id, device_id, algorithm) DO UPDATE SET
-          key_id = excluded.key_id,
-          key_data = excluded.key_data,
-          used = 0
-      `)
-        .bind(userId, deviceId, algorithm, keyId, JSON.stringify(keyData))
-        .run();
-    }
+    await upsertFallbackKeyBackups(db, userId, deviceId, fallback_keys);
   }
 
   await runClientEffect(
@@ -564,26 +395,15 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
     deviceKey: DeviceKeysPayload,
   ): Promise<DeviceKeysPayload> {
     // Get additional signatures from the database
-    const dbSignatures = await db
-      .prepare(`
-      SELECT signer_user_id, signer_key_id, signature
-      FROM cross_signing_signatures
-      WHERE user_id = ? AND key_id = ?
-    `)
-      .bind(userId, deviceId)
-      .all<{
-        signer_user_id: string;
-        signer_key_id: string;
-        signature: string;
-      }>();
+    const dbSignatures = await listCrossSigningSignaturesForKey(db, userId, deviceId);
 
-    if (dbSignatures.results.length > 0) {
+    if (dbSignatures.length > 0) {
       const mergedSignatures: Record<string, StringMap> = deviceKey.signatures
         ? { ...deviceKey.signatures }
         : {};
-      for (const sig of dbSignatures.results) {
-        mergedSignatures[sig.signer_user_id] = mergedSignatures[sig.signer_user_id] || {};
-        mergedSignatures[sig.signer_user_id][sig.signer_key_id] = sig.signature;
+      for (const sig of dbSignatures) {
+        mergedSignatures[sig.signerUserId] = mergedSignatures[sig.signerUserId] || {};
+        mergedSignatures[sig.signerUserId][sig.signerKeyId] = sig.signature;
       }
       deviceKey.signatures = mergedSignatures;
     }
@@ -614,7 +434,7 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
 
       if (requestedDevices === null || requestedDevices.length === 0) {
         // Get all devices for this user from Durable Object
-        const allDeviceKeys = await getAllDeviceKeysFromDO(c.env, typedUserId);
+        const allDeviceKeys = await fetchAllDeviceKeysFromDO(c.env, typedUserId);
         for (const [deviceId, keys] of Object.entries(allDeviceKeys)) {
           if (keys) {
             // Merge DB signatures into the device keys
@@ -628,7 +448,7 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
       } else {
         // Get specific devices from Durable Object
         for (const deviceId of requestedDevices) {
-          const keys = await getDeviceKeyFromDO(c.env, typedUserId, deviceId);
+          const keys = await fetchDeviceKeyFromDO(c.env, typedUserId, deviceId);
           if (keys) {
             // Merge DB signatures into the device keys
             deviceKeys[typedUserId][deviceId] = await mergeSignaturesForDevice(
@@ -644,7 +464,7 @@ app.post("/_matrix/client/v3/keys/query", requireAuth(), async (c) => {
       // Per Cloudflare blog: D1 has eventual consistency across read replicas.
       // Durable Objects provide single-threaded, atomic storage - critical for
       // E2EE bootstrap where client uploads then immediately queries keys.
-      const csKeys = await getCrossSigningKeysFromDO(c.env, typedUserId);
+      const csKeys = await fetchCrossSigningKeysFromDO(c.env, typedUserId);
 
       if (csKeys.master) {
         masterKeys[typedUserId] = csKeys.master;
@@ -743,9 +563,7 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
 
       for (const [deviceId, algorithm] of Object.entries(devices)) {
         // Try to claim a one-time key from KV first
-        const existingKeys = parseStoredOneTimeKeyBuckets(
-          await c.env.ONE_TIME_KEYS.get(`otk:${typedUserId}:${deviceId}`, "json"),
-        );
+        const existingKeys = await loadStoredOneTimeKeyBuckets(c.env, typedUserId, deviceId);
 
         let foundKey = false;
 
@@ -762,19 +580,10 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
             bucket[keyIndex] = { ...key, claimed: true };
 
             // Save back to KV
-            await c.env.ONE_TIME_KEYS.put(
-              `otk:${typedUserId}:${deviceId}`,
-              JSON.stringify(existingKeys),
-            );
+            await saveStoredOneTimeKeyBuckets(c.env, typedUserId, deviceId, existingKeys);
 
             // Also mark in D1
-            await db
-              .prepare(`
-              UPDATE one_time_keys SET claimed = 1, claimed_at = ?
-              WHERE user_id = ? AND device_id = ? AND key_id = ?
-            `)
-              .bind(Date.now(), typedUserId, deviceId, key.keyId)
-              .run();
+            await markStoredOneTimeKeyClaimed(db, typedUserId, deviceId, key.keyId, Date.now());
 
             oneTimeKeys[typedUserId][deviceId] = {
               [key.keyId]: key.keyData,
@@ -785,30 +594,17 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
 
         if (!foundKey) {
           // Fallback to D1 for legacy keys
-          const otk = await db
-            .prepare(`
-            SELECT id, key_id, key_data FROM one_time_keys
-            WHERE user_id = ? AND device_id = ? AND algorithm = ? AND claimed = 0
-            LIMIT 1
-          `)
-            .bind(typedUserId, deviceId, algorithm)
-            .first<{
-              id: number;
-              key_id: string;
-              key_data: string;
-            }>();
+          const otk = await claimUnclaimedOneTimeKey(
+            db,
+            typedUserId,
+            deviceId,
+            algorithm,
+            Date.now(),
+          );
 
           if (otk) {
-            // Mark as claimed
-            await db
-              .prepare(`
-              UPDATE one_time_keys SET claimed = 1, claimed_at = ? WHERE id = ?
-            `)
-              .bind(Date.now(), otk.id)
-              .run();
-
             oneTimeKeys[typedUserId][deviceId] = {
-              [otk.key_id]: parseJsonObjectString(otk.key_data) ?? {},
+              [otk.keyId]: otk.keyData,
             };
             foundKey = true;
           }
@@ -816,31 +612,12 @@ app.post("/_matrix/client/v3/keys/claim", requireAuth(), async (c) => {
 
         if (!foundKey) {
           // Try fallback key
-          const fallback = await db
-            .prepare(`
-            SELECT key_id, key_data, used FROM fallback_keys
-            WHERE user_id = ? AND device_id = ? AND algorithm = ?
-          `)
-            .bind(typedUserId, deviceId, algorithm)
-            .first<{
-              key_id: string;
-              key_data: string;
-              used: number;
-            }>();
+          const fallback = await claimFallbackKey(db, typedUserId, deviceId, algorithm);
 
           if (fallback) {
-            // Mark fallback as used
-            await db
-              .prepare(`
-              UPDATE fallback_keys SET used = 1 WHERE user_id = ? AND device_id = ? AND algorithm = ?
-            `)
-              .bind(typedUserId, deviceId, algorithm)
-              .run();
-
-            const keyData = parseJsonObjectString(fallback.key_data) ?? {};
             oneTimeKeys[typedUserId][deviceId] = {
-              [fallback.key_id]: {
-                ...keyData,
+              [fallback.keyId]: {
+                ...fallback.keyData,
                 fallback: true,
               },
             };
@@ -870,6 +647,10 @@ app.get("/_matrix/client/v3/keys/changes", requireAuth(), async (c) => {
   const to = c.req.query("to");
   const db = c.env.DB;
 
+  if (!userId) {
+    return Errors.unauthorized().toResponse();
+  }
+
   if (!from || !to) {
     return Errors.missingParam("from and to required").toResponse();
   }
@@ -883,302 +664,33 @@ app.get("/_matrix/client/v3/keys/changes", requireAuth(), async (c) => {
 
   const [localChanged, remoteChanged, newlyShared, currentMembersInJoinedRooms, noLongerShared] =
     await Promise.all([
-      db
-        .prepare(`
-        WITH current_memberships AS (
-          SELECT room_id, user_id, membership
-          FROM room_memberships
-
-          UNION
-
-          SELECT
-            rs.room_id,
-            rs.state_key AS user_id,
-            json_extract(e.content, '$.membership') AS membership
-          FROM room_state rs
-          JOIN events e ON rs.event_id = e.event_id
-          WHERE rs.event_type = 'm.room.member'
-            AND rs.state_key IS NOT NULL
-            AND NOT EXISTS (
-              SELECT 1
-              FROM room_memberships rm
-              WHERE rm.room_id = rs.room_id
-                AND rm.user_id = rs.state_key
-            )
-        ),
-        joined_members AS (
-          SELECT room_id, user_id
-          FROM current_memberships
-          WHERE membership = 'join'
-        )
-        SELECT DISTINCT dkc.user_id, dkc.change_type
-        FROM device_key_changes dkc
-        WHERE dkc.stream_position > ?
-          AND dkc.stream_position <= ?
-          AND (
-            dkc.user_id = ?
-            OR EXISTS (
-              SELECT 1
-              FROM joined_members requester
-              JOIN joined_members target ON requester.room_id = target.room_id
-              WHERE requester.user_id = ?
-                AND target.user_id = dkc.user_id
-            )
-          )
-      `)
-        .bind(fromDeviceKeyPosition, toDeviceKeyPosition, userId, userId)
-        .all<{
-          user_id: string;
-          change_type: string;
-        }>(),
-      db
-        .prepare(`
-        WITH current_memberships AS (
-          SELECT room_id, user_id, membership
-          FROM room_memberships
-
-          UNION
-
-          SELECT
-            rs.room_id,
-            rs.state_key AS user_id,
-            json_extract(e.content, '$.membership') AS membership
-          FROM room_state rs
-          JOIN events e ON rs.event_id = e.event_id
-          WHERE rs.event_type = 'm.room.member'
-            AND rs.state_key IS NOT NULL
-            AND NOT EXISTS (
-              SELECT 1
-              FROM room_memberships rm
-              WHERE rm.room_id = rs.room_id
-                AND rm.user_id = rs.state_key
-            )
-        ),
-        joined_members AS (
-          SELECT room_id, user_id
-          FROM current_memberships
-          WHERE membership = 'join'
-        )
-        SELECT DISTINCT rdls.user_id
-        FROM remote_device_list_streams rdls
-        WHERE rdls.stream_id > ?
-          AND rdls.stream_id <= ?
-          AND EXISTS (
-            SELECT 1
-            FROM joined_members requester
-            JOIN joined_members target ON requester.room_id = target.room_id
-            WHERE requester.user_id = ?
-              AND target.user_id = rdls.user_id
-          )
-      `)
-        .bind(fromDeviceKeyPosition, toDeviceKeyPosition, userId)
-        .all<{ user_id: string }>(),
-      db
-        .prepare(`
-        WITH current_memberships AS (
-          SELECT room_id, user_id, membership
-          FROM room_memberships
-
-          UNION
-
-          SELECT
-            rs.room_id,
-            rs.state_key AS user_id,
-            json_extract(e.content, '$.membership') AS membership
-          FROM room_state rs
-          JOIN events e ON rs.event_id = e.event_id
-          WHERE rs.event_type = 'm.room.member'
-            AND rs.state_key IS NOT NULL
-            AND NOT EXISTS (
-              SELECT 1
-              FROM room_memberships rm
-              WHERE rm.room_id = rs.room_id
-                AND rm.user_id = rs.state_key
-            )
-        ),
-        joined_members AS (
-          SELECT room_id, user_id
-          FROM current_memberships
-          WHERE membership = 'join'
-        )
-        SELECT DISTINCT e.state_key AS user_id
-        FROM events e
-        JOIN joined_members requester_joined
-          ON requester_joined.room_id = e.room_id
-         AND requester_joined.user_id = ?
-        JOIN joined_members target_joined
-          ON target_joined.room_id = e.room_id
-         AND target_joined.user_id = e.state_key
-        WHERE e.event_type = 'm.room.member'
-          AND e.stream_ordering > ?
-          AND e.stream_ordering <= ?
-          AND e.state_key IS NOT NULL
-          AND e.state_key != ?
-          AND json_extract(e.content, '$.membership') = 'join'
-          AND NOT EXISTS (
-            SELECT 1
-            FROM joined_members shared_requester
-            JOIN joined_members shared_target
-              ON shared_requester.room_id = shared_target.room_id
-            WHERE shared_requester.user_id = ?
-              AND shared_target.user_id = e.state_key
-              AND shared_requester.room_id != e.room_id
-          )
-      `)
-        .bind(userId, fromEventPosition, toEventPosition, userId, userId)
-        .all<{ user_id: string }>(),
-      db
-        .prepare(`
-        WITH current_memberships AS (
-          SELECT room_id, user_id, membership
-          FROM room_memberships
-
-          UNION
-
-          SELECT
-            rs.room_id,
-            rs.state_key AS user_id,
-            json_extract(e.content, '$.membership') AS membership
-          FROM room_state rs
-          JOIN events e ON rs.event_id = e.event_id
-          WHERE rs.event_type = 'm.room.member'
-            AND rs.state_key IS NOT NULL
-            AND NOT EXISTS (
-              SELECT 1
-              FROM room_memberships rm
-              WHERE rm.room_id = rs.room_id
-                AND rm.user_id = rs.state_key
-            )
-        ),
-        joined_members AS (
-          SELECT room_id, user_id
-          FROM current_memberships
-          WHERE membership = 'join'
-        )
-        SELECT DISTINCT joined_members.user_id
-        FROM events requester_join_event
-        JOIN joined_members
-          ON joined_members.room_id = requester_join_event.room_id
-        WHERE requester_join_event.event_type = 'm.room.member'
-          AND requester_join_event.stream_ordering > ?
-          AND requester_join_event.stream_ordering <= ?
-          AND requester_join_event.state_key = ?
-          AND json_extract(requester_join_event.content, '$.membership') = 'join'
-      `)
-        .bind(fromEventPosition, toEventPosition, userId)
-        .all<{ user_id: string }>(),
-      db
-        .prepare(`
-        WITH current_memberships AS (
-          SELECT room_id, user_id, membership
-          FROM room_memberships
-
-          UNION
-
-          SELECT
-            rs.room_id,
-            rs.state_key AS user_id,
-            json_extract(e.content, '$.membership') AS membership
-          FROM room_state rs
-          JOIN events e ON rs.event_id = e.event_id
-          WHERE rs.event_type = 'm.room.member'
-            AND rs.state_key IS NOT NULL
-            AND NOT EXISTS (
-              SELECT 1
-              FROM room_memberships rm
-              WHERE rm.room_id = rs.room_id
-                AND rm.user_id = rs.state_key
-            )
-        ),
-        joined_members AS (
-          SELECT room_id, user_id
-          FROM current_memberships
-          WHERE membership = 'join'
-        )
-        SELECT DISTINCT left_user_id AS user_id
-        FROM (
-          SELECT e.state_key AS left_user_id
-          FROM events e
-          JOIN joined_members requester_joined
-            ON requester_joined.room_id = e.room_id
-           AND requester_joined.user_id = ?
-          WHERE e.event_type = 'm.room.member'
-            AND e.stream_ordering > ?
-            AND e.stream_ordering <= ?
-            AND e.state_key IS NOT NULL
-            AND e.state_key != ?
-            AND json_extract(e.content, '$.membership') IN ('leave', 'ban')
-            AND NOT EXISTS (
-              SELECT 1
-              FROM joined_members shared_requester
-              JOIN joined_members shared_target
-                ON shared_requester.room_id = shared_target.room_id
-              WHERE shared_requester.user_id = ?
-                AND shared_target.user_id = e.state_key
-            )
-
-          UNION
-
-          SELECT other_membership.user_id AS left_user_id
-          FROM events e
-          JOIN current_memberships requester_membership
-            ON requester_membership.room_id = e.room_id
-           AND requester_membership.user_id = ?
-           AND requester_membership.membership IN ('leave', 'ban')
-          JOIN joined_members other_membership
-            ON other_membership.room_id = e.room_id
-          WHERE e.event_type = 'm.room.member'
-            AND e.stream_ordering > ?
-            AND e.stream_ordering <= ?
-            AND e.state_key = ?
-            AND other_membership.user_id != ?
-            AND json_extract(e.content, '$.membership') IN ('leave', 'ban')
-            AND NOT EXISTS (
-              SELECT 1
-              FROM joined_members shared_requester
-              JOIN joined_members shared_target
-                ON shared_requester.room_id = shared_target.room_id
-              WHERE shared_requester.user_id = ?
-                AND shared_target.user_id = other_membership.user_id
-            )
-        )
-      `)
-        .bind(
-          userId,
-          fromEventPosition,
-          toEventPosition,
-          userId,
-          userId,
-          userId,
-          fromEventPosition,
-          toEventPosition,
-          userId,
-          userId,
-          userId,
-        )
-        .all<{ user_id: string }>(),
+      listVisibleLocalDeviceKeyChanges(db, userId, fromDeviceKeyPosition, toDeviceKeyPosition),
+      listVisibleRemoteDeviceKeyChanges(db, userId, fromDeviceKeyPosition, toDeviceKeyPosition),
+      listNewlySharedUsers(db, userId, fromEventPosition, toEventPosition),
+      listCurrentMembersInJoinedRooms(db, userId, fromEventPosition, toEventPosition),
+      listNoLongerSharedUsers(db, userId, fromEventPosition, toEventPosition),
     ]);
 
   const changed = new Set<string>();
   const left = new Set<string>();
 
-  for (const change of localChanged.results) {
+  for (const change of localChanged) {
     if (change.change_type === "delete") {
       left.add(change.user_id);
     } else {
       changed.add(change.user_id);
     }
   }
-  for (const row of remoteChanged.results) {
+  for (const row of remoteChanged) {
     changed.add(row.user_id);
   }
-  for (const row of newlyShared.results) {
+  for (const row of newlyShared) {
     changed.add(row.user_id);
   }
-  for (const row of currentMembersInJoinedRooms.results) {
+  for (const row of currentMembersInJoinedRooms) {
     changed.add(row.user_id);
   }
-  for (const row of noLongerShared.results) {
+  for (const row of noLongerShared) {
     if (!changed.has(row.user_id)) {
       left.add(row.user_id);
     }
@@ -1195,19 +707,23 @@ app.get("/_matrix/client/v3/keys/changes", requireAuth(), async (c) => {
 // ============================================
 
 // Helper: Check if user has OIDC/SSO link (logged in via external IdP)
-async function isOIDCUser(db: D1Database, userId: string): Promise<boolean> {
-  const result = await db
-    .prepare(`
-    SELECT COUNT(*) as count FROM idp_user_links WHERE user_id = ?
-  `)
-    .bind(userId)
-    .first<{ count: number }>();
-  return (result?.count ?? 0) > 0;
+function isOIDCUser(db: D1Database, userId: string): Promise<boolean> {
+  const typedUserId = toUserId(userId);
+  if (!typedUserId) {
+    return Promise.resolve(false);
+  }
+
+  return hasIdentityProviderLink(db, typedUserId);
 }
 
 // Helper: Check if user has password set
 async function hasPassword(db: D1Database, userId: string): Promise<boolean> {
-  const hash = await getPasswordHash(db, toUserId(userId)!);
+  const typedUserId = toUserId(userId);
+  if (!typedUserId) {
+    return false;
+  }
+
+  const hash = await getUserPasswordHash(db, typedUserId);
   return hash !== null && hash.length > 0;
 }
 
@@ -1223,6 +739,11 @@ async function hasPassword(db: D1Database, userId: string): Promise<boolean> {
 app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (c) => {
   const userId = c.get("userId");
   const db = c.env.DB;
+
+  if (!userId) {
+    return Errors.unauthorized().toResponse();
+  }
+
   const logger = createKeysLogger("device_signing_upload", { user_id: userId });
 
   let body: unknown;
@@ -1249,15 +770,8 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   );
 
   // Check if user already has cross-signing keys set up
-  const existingKeys = await db
-    .prepare(`
-    SELECT COUNT(*) as count FROM cross_signing_keys WHERE user_id = ?
-  `)
-    .bind(userId)
-    .first<{ count: number }>();
-
-  const hasExistingKeys = (existingKeys?.count ?? 0) > 0;
-  const existingCSKeys = hasExistingKeys ? await getCrossSigningKeysFromDO(c.env, userId) : {};
+  const hasExistingKeys = await hasCrossSigningKeysBackup(db, userId);
+  const existingCSKeys = hasExistingKeys ? await fetchCrossSigningKeysFromDO(c.env, userId) : {};
   const uploadRequest = {
     ...(master_key ? { master_key } : {}),
     ...(self_signing_key ? { self_signing_key } : {}),
@@ -1375,7 +889,12 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
 
     if (auth.type === "m.login.password") {
       // Validate password
-      const storedHash = await getPasswordHash(db, userId);
+      const typedUserId = toUserId(userId);
+      if (!typedUserId) {
+        return Errors.unauthorized().toResponse();
+      }
+
+      const storedHash = await getUserPasswordHash(db, typedUserId);
       if (!storedHash) {
         await runClientEffect(
           logger.warn("keys.command.auth_reject", {
@@ -1532,31 +1051,15 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
   // SSSS immediately after uploading cross-signing keys during the bootstrap flow.
   // The "confirm your identity" screen in Element X is EXPECTED for new users -
   // it prompts them to set up recovery/SSSS.
-  const ssssDefault = await c.env.ACCOUNT_DATA.get(
-    `global:${userId}:m.secret_storage.default_key`,
-    "json",
-  );
-
-  let hasValidSSS = !!(ssssDefault && (ssssDefault as Record<string, unknown>)["key"]);
-  if (!hasValidSSS) {
-    // Also check D1 as fallback
-    const d1Ssss = await db
-      .prepare(`
-      SELECT content FROM account_data
-      WHERE user_id = ? AND event_type = 'm.secret_storage.default_key' AND room_id = ''
-    `)
-      .bind(userId)
-      .first<{ content: string }>();
-
-    if (d1Ssss) {
-      try {
-        const parsed = parseJsonObjectString(d1Ssss.content);
-        hasValidSSS = !!parsed?.["key"];
-      } catch {
-        hasValidSSS = false;
-      }
-    }
+  const typedUserId = toUserId(userId);
+  if (!typedUserId) {
+    return Errors.unauthorized().toResponse();
   }
+
+  const ssssDefault = await runClientEffect(
+    loadGlobalAccountDataEffect(c.env, typedUserId, "m.secret_storage.default_key"),
+  );
+  const hasValidSSS = !!ssssDefault?.["key"];
 
   if (!hasValidSSS) {
     // SSSS is not set up yet - this is OK, Element X will prompt user to set up recovery
@@ -1583,7 +1086,7 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
 
   // Write to Durable Object (primary - strongly consistent)
   // This is critical for E2EE bootstrap where client uploads then immediately queries
-  await putCrossSigningKeysToDO(c.env, userId, csKeys);
+  await storeCrossSigningKeysToDO(c.env, userId, csKeys);
   await runClientEffect(
     logger.info("keys.command.success", {
       command: "device_signing_upload",
@@ -1595,51 +1098,10 @@ app.post("/_matrix/client/v3/keys/device_signing/upload", requireAuth(), async (
 
   // Also write to D1 as backup (for durability/recovery)
   // These writes are eventually consistent but serve as backup storage
-  if (master_key) {
-    const keyId = Object.keys(master_key.keys ?? {})[0] || "";
-    await db
-      .prepare(`
-      INSERT INTO cross_signing_keys (user_id, key_type, key_id, key_data)
-      VALUES (?, 'master', ?, ?)
-      ON CONFLICT (user_id, key_type) DO UPDATE SET
-        key_id = excluded.key_id,
-        key_data = excluded.key_data
-    `)
-      .bind(userId, keyId, JSON.stringify(master_key))
-      .run();
-    await recordDeviceKeyChange(db, userId, null, "update");
-  }
-
-  if (self_signing_key) {
-    const keyId = Object.keys(self_signing_key.keys ?? {})[0] || "";
-    await db
-      .prepare(`
-      INSERT INTO cross_signing_keys (user_id, key_type, key_id, key_data)
-      VALUES (?, 'self_signing', ?, ?)
-      ON CONFLICT (user_id, key_type) DO UPDATE SET
-        key_id = excluded.key_id,
-        key_data = excluded.key_data
-    `)
-      .bind(userId, keyId, JSON.stringify(self_signing_key))
-      .run();
-  }
-
-  if (user_signing_key) {
-    const keyId = Object.keys(user_signing_key.keys ?? {})[0] || "";
-    await db
-      .prepare(`
-      INSERT INTO cross_signing_keys (user_id, key_type, key_id, key_data)
-      VALUES (?, 'user_signing', ?, ?)
-      ON CONFLICT (user_id, key_type) DO UPDATE SET
-        key_id = excluded.key_id,
-        key_data = excluded.key_data
-    `)
-      .bind(userId, keyId, JSON.stringify(user_signing_key))
-      .run();
-  }
+  await storeCrossSigningKeysBackup(db, userId, csKeys, Boolean(master_key));
 
   // Write to KV as cache (eventually consistent, for performance)
-  await c.env.CROSS_SIGNING_KEYS.put(`user:${userId}`, JSON.stringify(csKeys));
+  await cacheCrossSigningKeys(c.env, userId, csKeys);
 
   return c.json({});
 });
@@ -1696,16 +1158,14 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
           // Use the device_id as key_id for device keys, otherwise use the provided keyId
           const effectiveKeyId = signedKeyObj.device_id ?? keyId;
 
-          await db
-            .prepare(`
-            INSERT INTO cross_signing_signatures (
-              user_id, key_id, signer_user_id, signer_key_id, signature
-            ) VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT (user_id, key_id, signer_user_id, signer_key_id) DO UPDATE SET
-              signature = excluded.signature
-          `)
-            .bind(userId, effectiveKeyId, signerUserId, signerKeyId, signature)
-            .run();
+          await upsertCrossSigningSignature(
+            db,
+            userId,
+            effectiveKeyId,
+            signerUserId,
+            signerKeyId,
+            signature,
+          );
         }
 
         // If this is a device key (has device_id field), update the device key in KV
@@ -1713,7 +1173,7 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
           const deviceId = signedKeyObj.device_id;
 
           // Read from Durable Object (strongly consistent)
-          const existingKey = await getDeviceKeyFromDO(c.env, userId, deviceId);
+          const existingKey = await fetchDeviceKeyFromDO(c.env, userId, deviceId);
 
           if (existingKey) {
             // Merge new signatures into existing signatures
@@ -1724,13 +1184,10 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
             };
 
             // Write to Durable Object (primary - strongly consistent)
-            await putDeviceKeysToDO(c.env, userId, deviceId, existingKey);
+            await storeDeviceKeysToDO(c.env, userId, deviceId, existingKey);
 
             // Also update KV as backup/cache
-            await c.env.DEVICE_KEYS.put(
-              `device:${userId}:${deviceId}`,
-              JSON.stringify(existingKey),
-            );
+            await cacheDeviceKeys(c.env, userId, deviceId, existingKey);
           } else {
             await runClientEffect(
               logger.warn("keys.command.signature_missing_device", {
@@ -1742,7 +1199,7 @@ app.post("/_matrix/client/v3/keys/signatures/upload", requireAuth(), async (c) =
         }
 
         // Record key change for sync notifications
-        await recordDeviceKeyChange(db, userId, signedKeyObj.device_id ?? null, "update");
+        await recordDeviceKeyChangeWithKysely(db, userId, signedKeyObj.device_id ?? null, "update");
       } catch (err) {
         await runClientEffect(
           logger.error("keys.command.error", err, {
