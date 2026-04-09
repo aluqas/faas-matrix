@@ -11,6 +11,8 @@ describe("keys route boundary", () => {
     expect(source).toMatch(/encodeClientKeysQueryResponse/);
     expect(source).toMatch(/encodeClientKeysClaimResponse/);
     expect(source).toMatch(/encodeClientKeysChangesResponse/);
-    expect(source).toMatch(/claimOneTimeKeyFromStoreChain/);
+    expect(source).toMatch(/uploadClientKeys/);
+    expect(source).toMatch(/queryClientKeys/);
+    expect(source).toMatch(/claimClientKeys/);
   });
 });

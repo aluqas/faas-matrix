@@ -1,20 +1,22 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { Errors } from "../utils/errors";
-import {
-  canonicalJson,
-  generateSigningKeyPair,
-  normalizeMatrixBase64,
-  signJson,
-} from "../utils/crypto";
 import { requireFederationAuth } from "../middleware/federation-auth";
-import { getServerSigningKey, type ServerKeyResponse } from "../services/federation-keys";
 import federationQueryRoutes from "./federation/query";
 import federationSpaceRoutes from "./federation/spaces";
 import federationTransactionRoutes from "./federation/transaction";
 import federationEventsRoutes from "./federation/events";
 import federationMembershipRoutes from "./federation/membership";
 import federationE2eeRoutes from "./federation/e2ee";
+import {
+  queryCurrentLocalServerKeys,
+  queryLocalServerKeyById,
+} from "../matrix/application/features/federation/local-server-keys";
+import {
+  loadFederationMediaDownload,
+  loadFederationMediaThumbnail,
+} from "../matrix/application/features/federation/media";
+import { queryFederationPublicRooms } from "../matrix/application/features/federation/public-rooms";
 
 const app = new Hono<AppEnv>();
 
@@ -35,15 +37,6 @@ function parseOpenIdTokenData(value: unknown): OpenIdTokenData | null {
         expires_at: data.expires_at,
       }
     : null;
-}
-
-function canonicalJsonResponse(body: Record<string, unknown>): Response {
-  return new Response(canonicalJson(body), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-    },
-  });
 }
 
 function methodNotAllowedJson(): Response {
@@ -93,155 +86,36 @@ app.route("/", federationEventsRoutes);
 app.route("/", federationMembershipRoutes);
 app.route("/", federationE2eeRoutes);
 
-app.get("/_matrix/key/v2/server", async (c) => {
-  const serverName = c.env.SERVER_NAME;
-
-  let keys = await c.env.DB.prepare(
-    `SELECT key_id, public_key, private_key_jwk, key_version, valid_from, valid_until
-     FROM server_keys WHERE is_current = 1 ORDER BY key_version DESC`,
-  ).all<{
-    key_id: string;
-    public_key: string;
-    private_key_jwk: string | null;
-    key_version: number | null;
-    valid_from: number;
-    valid_until: number | null;
-  }>();
-
-  const hasSecureKey = keys.results.some((key) => key.key_version === 2 && key.private_key_jwk);
-  if (keys.results.length === 0 || !hasSecureKey) {
-    const keyPair = await generateSigningKeyPair();
-    const validFrom = Date.now();
-    const validUntil = validFrom + 365 * 24 * 60 * 60 * 1000;
-
-    await c.env.DB.prepare(`UPDATE server_keys SET is_current = 0`).run();
-    await c.env.DB.prepare(
-      `INSERT INTO server_keys (key_id, public_key, private_key, private_key_jwk, key_version, valid_from, valid_until, is_current)
-       VALUES (?, ?, ?, ?, 2, ?, ?, 1)`,
-    )
-      .bind(
-        keyPair.keyId,
-        keyPair.publicKey,
-        JSON.stringify(keyPair.privateKeyJwk),
-        JSON.stringify(keyPair.privateKeyJwk),
-        validFrom,
-        validUntil,
-      )
-      .run();
-
-    keys = {
-      results: [
-        {
-          key_id: keyPair.keyId,
-          public_key: keyPair.publicKey,
-          private_key_jwk: JSON.stringify(keyPair.privateKeyJwk),
-          key_version: 2,
-          valid_from: validFrom,
-          valid_until: validUntil,
-        },
-      ],
-      success: true,
-      meta: {
-        duration: 0,
-        size_after: 0,
-        rows_read: 0,
-        rows_written: 0,
-        last_row_id: 0,
-        changed_db: false,
-        changes: 0,
-      },
-    };
-  }
-
-  const verifyKeys: Record<string, { key: string }> = {};
-  for (const key of keys.results) {
-    verifyKeys[key.key_id] = { key: normalizeMatrixBase64(key.public_key) };
-  }
-
-  const response = {
-    server_name: serverName,
-    valid_until_ts: keys.results[0]?.valid_until ?? Date.now() + 365 * 24 * 60 * 60 * 1000,
-    verify_keys: verifyKeys,
-    old_verify_keys: {},
-  };
-
-  const currentKey = keys.results.find((key) => key.key_version === 2 && key.private_key_jwk);
-  if (currentKey && currentKey.private_key_jwk) {
-    const signed = await signJson(
-      response,
-      serverName,
-      currentKey.key_id,
-      JSON.parse(currentKey.private_key_jwk),
-    );
-    return canonicalJsonResponse(signed);
-  }
-
-  return canonicalJsonResponse(response);
+app.get("/_matrix/key/v2/server", (c) => {
+  return queryCurrentLocalServerKeys(c.env);
 });
 
 app.get("/_matrix/key/v2/server/:keyId", async (c) => {
   const keyId = c.req.param("keyId");
-  const serverName = c.env.SERVER_NAME;
-
-  const key = await c.env.DB.prepare(
-    `SELECT key_id, public_key, valid_from, valid_until FROM server_keys WHERE key_id = ?`,
-  )
-    .bind(keyId)
-    .first<{
-      key_id: string;
-      public_key: string;
-      valid_from: number;
-      valid_until: number | null;
-    }>();
-
-  if (!key) {
+  const response = await queryLocalServerKeyById(c.env, keyId);
+  if (!response) {
     return Errors.notFound("Key not found").toResponse();
   }
-
-  const response: ServerKeyResponse = {
-    server_name: serverName,
-    valid_until_ts: key.valid_until ?? Date.now() + 365 * 24 * 60 * 60 * 1000,
-    verify_keys: {
-      [key.key_id]: { key: normalizeMatrixBase64(key.public_key) },
-    },
-    old_verify_keys: {},
-  };
-
-  const signingKey = await getServerSigningKey(c.env.DB);
-  if (signingKey) {
-    const signed = (await signJson(
-      response,
-      serverName,
-      signingKey.keyId,
-      signingKey.privateKeyJwk,
-    )) as ServerKeyResponse;
-    return canonicalJsonResponse(signed);
-  }
-
-  return canonicalJsonResponse(response);
+  return response;
 });
 
 app.get("/_matrix/federation/v1/media/download/:mediaId", async (c) => {
-  const mediaId = c.req.param("mediaId");
-  const object = await c.env.MEDIA.get(mediaId);
-  if (!object) {
+  const payload = await loadFederationMediaDownload({
+    env: c.env,
+    mediaId: c.req.param("mediaId"),
+  });
+  if (!payload) {
     return Errors.notFound("Media not found").toResponse();
   }
 
-  const metadata = await c.env.DB.prepare(
-    `SELECT content_type, filename FROM media WHERE media_id = ?`,
-  )
-    .bind(mediaId)
-    .first<{ content_type: string; filename: string | null }>();
-
   const headers = new Headers();
-  headers.set("Content-Type", metadata?.content_type ?? "application/octet-stream");
-  if (metadata?.filename) {
-    headers.set("Content-Disposition", `inline; filename="${metadata.filename}"`);
+  headers.set("Content-Type", payload.contentType);
+  if (payload.filename) {
+    headers.set("Content-Disposition", `inline; filename="${payload.filename}"`);
   }
   headers.set("Cache-Control", "public, max-age=31536000, immutable");
 
-  return new Response(object.body, { headers });
+  return new Response(payload.object.body, { headers });
 });
 
 app.get("/_matrix/federation/v1/media/thumbnail/:mediaId", async (c) => {
@@ -249,156 +123,32 @@ app.get("/_matrix/federation/v1/media/thumbnail/:mediaId", async (c) => {
   const width = Math.min(Number.parseInt(c.req.query("width") ?? "96", 10), 1920);
   const height = Math.min(Number.parseInt(c.req.query("height") ?? "96", 10), 1920);
   const method = c.req.query("method") ?? "scale";
-
-  const metadata = await c.env.DB.prepare(`SELECT content_type FROM media WHERE media_id = ?`)
-    .bind(mediaId)
-    .first<{ content_type: string }>();
-  if (!metadata) {
+  const payload = await loadFederationMediaThumbnail({
+    env: c.env,
+    mediaId,
+    width,
+    height,
+    method,
+  });
+  if (!payload) {
     return Errors.notFound("Media not found").toResponse();
   }
-
-  const thumbnailKey = `thumb_${mediaId}_${width}x${height}_${method}`;
-  const existingThumb = await c.env.MEDIA.get(thumbnailKey);
-  if (existingThumb) {
+  if (payload.kind === "cached") {
     const headers = new Headers();
     headers.set("Content-Type", "image/jpeg");
     headers.set("Cache-Control", "public, max-age=31536000, immutable");
-    return new Response(existingThumb.body, { headers });
-  }
-
-  const object = await c.env.MEDIA.get(mediaId);
-  if (!object) {
-    return Errors.notFound("Media not found").toResponse();
+    return new Response(payload.object.body, { headers });
   }
 
   const headers = new Headers();
-  headers.set("Content-Type", metadata.content_type);
+  headers.set("Content-Type", payload.contentType);
   headers.set("Cache-Control", "public, max-age=31536000, immutable");
-  if (metadata.content_type.startsWith("image/")) {
+  if (payload.contentType.startsWith("image/")) {
     headers.set("X-Thumbnail-Generated", "false");
   }
 
-  return new Response(object.body, { headers });
+  return new Response(payload.object.body, { headers });
 });
-
-async function getRoomPublicInfo(db: D1Database, roomId: string): Promise<any> {
-  const [
-    nameEvent,
-    topicEvent,
-    aliasEvent,
-    avatarEvent,
-    joinRuleEvent,
-    historyEvent,
-    guestEvent,
-    memberCount,
-    createEvent,
-  ] = await Promise.all([
-    db
-      .prepare(
-        `SELECT e.content FROM room_state rs
-         JOIN events e ON rs.event_id = e.event_id
-         WHERE rs.room_id = ? AND rs.event_type = 'm.room.name'`,
-      )
-      .bind(roomId)
-      .first<{ content: string }>(),
-    db
-      .prepare(
-        `SELECT e.content FROM room_state rs
-         JOIN events e ON rs.event_id = e.event_id
-         WHERE rs.room_id = ? AND rs.event_type = 'm.room.topic'`,
-      )
-      .bind(roomId)
-      .first<{ content: string }>(),
-    db
-      .prepare(
-        `SELECT e.content FROM room_state rs
-         JOIN events e ON rs.event_id = e.event_id
-         WHERE rs.room_id = ? AND rs.event_type = 'm.room.canonical_alias'`,
-      )
-      .bind(roomId)
-      .first<{ content: string }>(),
-    db
-      .prepare(
-        `SELECT e.content FROM room_state rs
-         JOIN events e ON rs.event_id = e.event_id
-         WHERE rs.room_id = ? AND rs.event_type = 'm.room.avatar'`,
-      )
-      .bind(roomId)
-      .first<{ content: string }>(),
-    db
-      .prepare(
-        `SELECT e.content FROM room_state rs
-         JOIN events e ON rs.event_id = e.event_id
-         WHERE rs.room_id = ? AND rs.event_type = 'm.room.join_rules'`,
-      )
-      .bind(roomId)
-      .first<{ content: string }>(),
-    db
-      .prepare(
-        `SELECT e.content FROM room_state rs
-         JOIN events e ON rs.event_id = e.event_id
-         WHERE rs.room_id = ? AND rs.event_type = 'm.room.history_visibility'`,
-      )
-      .bind(roomId)
-      .first<{ content: string }>(),
-    db
-      .prepare(
-        `SELECT e.content FROM room_state rs
-         JOIN events e ON rs.event_id = e.event_id
-         WHERE rs.room_id = ? AND rs.event_type = 'm.room.guest_access'`,
-      )
-      .bind(roomId)
-      .first<{ content: string }>(),
-    db
-      .prepare(
-        `SELECT COUNT(*) as count FROM room_memberships WHERE room_id = ? AND membership = 'join'`,
-      )
-      .bind(roomId)
-      .first<{ count: number }>(),
-    db
-      .prepare(
-        `SELECT e.content FROM room_state rs
-         JOIN events e ON rs.event_id = e.event_id
-         WHERE rs.room_id = ? AND rs.event_type = 'm.room.create'`,
-      )
-      .bind(roomId)
-      .first<{ content: string }>(),
-  ]);
-
-  let roomType: string | undefined;
-  if (createEvent) {
-    try {
-      roomType = JSON.parse(createEvent.content).type;
-    } catch {}
-  }
-
-  let historyVisibility = "shared";
-  if (historyEvent) {
-    try {
-      historyVisibility = JSON.parse(historyEvent.content).history_visibility;
-    } catch {}
-  }
-
-  let guestAccess = false;
-  if (guestEvent) {
-    try {
-      guestAccess = JSON.parse(guestEvent.content).guest_access === "can_join";
-    } catch {}
-  }
-
-  return {
-    room_id: roomId,
-    name: nameEvent ? JSON.parse(nameEvent.content).name : undefined,
-    topic: topicEvent ? JSON.parse(topicEvent.content).topic : undefined,
-    canonical_alias: aliasEvent ? JSON.parse(aliasEvent.content).alias : undefined,
-    avatar_url: avatarEvent ? JSON.parse(avatarEvent.content).url : undefined,
-    join_rule: joinRuleEvent ? JSON.parse(joinRuleEvent.content).join_rule : "invite",
-    num_joined_members: memberCount?.count ?? 0,
-    world_readable: historyVisibility === "world_readable",
-    guest_can_join: guestAccess,
-    room_type: roomType,
-  };
-}
 
 app.get("/_matrix/federation/v1/publicRooms", async (c) => {
   const limit = Math.min(Number.parseInt(c.req.query("limit") ?? "100", 10), 500);
@@ -410,36 +160,17 @@ app.get("/_matrix/federation/v1/publicRooms", async (c) => {
     offset = Number.parseInt(since.slice(7), 10) || 0;
   }
 
-  const rooms = await c.env.DB.prepare(
-    `SELECT r.room_id
-     FROM rooms r
-     WHERE r.is_public = 1
-     ORDER BY r.created_at DESC
-     LIMIT ? OFFSET ?`,
-  )
-    .bind(limit + 1, offset)
-    .all<{ room_id: string }>();
-
-  const hasMore = rooms.results.length > limit;
-  const chunks = await Promise.all(
-    rooms.results.slice(0, limit).map((room) => getRoomPublicInfo(c.env.DB, room.room_id)),
-  );
-  const totalCount = await c.env.DB.prepare(
-    `SELECT COUNT(*) as count FROM rooms WHERE is_public = 1`,
-  ).first<{ count: number }>();
-
-  const response: any = {
-    chunk: chunks.filter(Boolean),
-    total_room_count_estimate: totalCount?.count ?? 0,
-  };
-  if (hasMore) {
-    response.next_batch = `offset_${offset + limit}`;
-  }
-  if (offset > 0) {
-    response.prev_batch = `offset_${Math.max(0, offset - limit)}`;
-  }
-
-  return c.json(response);
+  const response = await queryFederationPublicRooms({
+    db: c.env.DB,
+    limit,
+    offset,
+  });
+  return c.json({
+    chunk: response.chunk,
+    total_room_count_estimate: response.totalRoomCountEstimate,
+    ...(response.nextBatch ? { next_batch: response.nextBatch } : {}),
+    ...(response.prevBatch ? { prev_batch: response.prevBatch } : {}),
+  });
 });
 
 app.post("/_matrix/federation/v1/publicRooms", async (c) => {
@@ -465,56 +196,18 @@ app.post("/_matrix/federation/v1/publicRooms", async (c) => {
     offset = Number.parseInt(since.slice(7), 10) || 0;
   }
 
-  const rooms = searchTerm
-    ? await c.env.DB.prepare(
-        `SELECT DISTINCT r.room_id
-         FROM rooms r
-         LEFT JOIN room_state rs_name ON rs_name.room_id = r.room_id AND rs_name.event_type = 'm.room.name'
-         LEFT JOIN events e_name ON rs_name.event_id = e_name.event_id
-         LEFT JOIN room_state rs_topic ON rs_topic.room_id = r.room_id AND rs_topic.event_type = 'm.room.topic'
-         LEFT JOIN events e_topic ON rs_topic.event_id = e_topic.event_id
-         LEFT JOIN room_aliases ra ON ra.room_id = r.room_id
-         WHERE r.is_public = 1
-           AND (
-             LOWER(e_name.content) LIKE ?
-             OR LOWER(e_topic.content) LIKE ?
-             OR LOWER(ra.alias) LIKE ?
-           )
-         ORDER BY r.created_at DESC
-         LIMIT ? OFFSET ?`,
-      )
-        .bind(`%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`, limit + 1, offset)
-        .all<{ room_id: string }>()
-    : await c.env.DB.prepare(
-        `SELECT r.room_id
-         FROM rooms r
-         WHERE r.is_public = 1
-         ORDER BY r.created_at DESC
-         LIMIT ? OFFSET ?`,
-      )
-        .bind(limit + 1, offset)
-        .all<{ room_id: string }>();
-
-  const hasMore = rooms.results.length > limit;
-  const chunks = await Promise.all(
-    rooms.results.slice(0, limit).map((room) => getRoomPublicInfo(c.env.DB, room.room_id)),
-  );
-  const totalCount = await c.env.DB.prepare(
-    `SELECT COUNT(*) as count FROM rooms WHERE is_public = 1`,
-  ).first<{ count: number }>();
-
-  const response: any = {
-    chunk: chunks.filter(Boolean),
-    total_room_count_estimate: totalCount?.count ?? 0,
-  };
-  if (hasMore) {
-    response.next_batch = `offset_${offset + limit}`;
-  }
-  if (offset > 0) {
-    response.prev_batch = `offset_${Math.max(0, offset - limit)}`;
-  }
-
-  return c.json(response);
+  const response = await queryFederationPublicRooms({
+    db: c.env.DB,
+    limit,
+    offset,
+    searchTerm,
+  });
+  return c.json({
+    chunk: response.chunk,
+    total_room_count_estimate: response.totalRoomCountEstimate,
+    ...(response.nextBatch ? { next_batch: response.nextBatch } : {}),
+    ...(response.prevBatch ? { prev_batch: response.prevBatch } : {}),
+  });
 });
 
 app.get("/_matrix/federation/v1/openid/userinfo", async (c) => {

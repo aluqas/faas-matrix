@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 describe("federation entrypoint boundary", () => {
   it("keeps split routes out of api/federation.ts", () => {
     const source = readFileSync(new URL("../federation.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/\bDB\.prepare\(/);
     expect(source).toMatch(/federationQueryRoutes/);
     expect(source).toMatch(/federationEventsRoutes/);
     expect(source).toMatch(/federationMembershipRoutes/);

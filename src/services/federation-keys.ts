@@ -10,6 +10,14 @@ import {
   normalizeMatrixBase64,
 } from "../utils/crypto";
 import { discoverServer, buildServerUrl } from "./server-discovery";
+import {
+  getCurrentServerSigningKeyRecord,
+  replaceCurrentServerSigningKey,
+} from "../matrix/repositories/local-server-keys-repository";
+import {
+  listNonExpiredRemoteServerKeys,
+  upsertRemoteServerKeys,
+} from "../matrix/repositories/remote-server-keys-repository";
 
 export interface ServerKeyResponse {
   server_name: string;
@@ -92,17 +100,18 @@ export async function fetchRemoteServerKeys(
   }
 
   // Check D1 cache for non-expired keys
-  const dbKeys = await db
-    .prepare(
-      `SELECT server_name, key_id, public_key, valid_from, valid_until, fetched_at, verified
-       FROM remote_server_keys
-       WHERE server_name = ? AND (valid_until IS NULL OR valid_until > ?)`,
-    )
-    .bind(serverName, Date.now())
-    .all<RemoteServerKey>();
+  const dbKeys = (await listNonExpiredRemoteServerKeys(db, serverName, Date.now())).map((key) => ({
+    server_name: key.serverName,
+    key_id: key.keyId,
+    public_key: key.publicKey,
+    valid_from: key.validFrom,
+    valid_until: key.validUntil,
+    fetched_at: key.fetchedAt,
+    verified: key.verified,
+  }));
 
   // If we have recent keys in D1 (fetched within last hour), use them
-  const recentKeys = dbKeys.results.filter((k) => k.fetched_at > Date.now() - 60 * 60 * 1000);
+  const recentKeys = dbKeys.filter((k) => k.fetched_at > Date.now() - 60 * 60 * 1000);
   if (recentKeys.length > 0) {
     await cache.put(cacheKey, JSON.stringify(recentKeys), { expirationTtl: KEY_CACHE_TTL });
     return recentKeys;
@@ -113,24 +122,18 @@ export async function fetchRemoteServerKeys(
     const keys = await fetchKeysFromRemote(serverName, cache);
 
     // Store in D1
-    for (const key of keys) {
-      await db
-        .prepare(
-          `INSERT OR REPLACE INTO remote_server_keys
-           (server_name, key_id, public_key, valid_from, valid_until, fetched_at, verified)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(
-          key.server_name,
-          key.key_id,
-          key.public_key,
-          key.valid_from,
-          key.valid_until,
-          key.fetched_at,
-          key.verified ? 1 : 0,
-        )
-        .run();
-    }
+    await upsertRemoteServerKeys(
+      db,
+      keys.map((key) => ({
+        serverName: key.server_name,
+        keyId: key.key_id,
+        publicKey: key.public_key,
+        validFrom: key.valid_from,
+        validUntil: key.valid_until,
+        fetchedAt: key.fetched_at,
+        verified: key.verified,
+      })),
+    );
 
     // Cache in KV
     await cache.put(cacheKey, JSON.stringify(keys), { expirationTtl: KEY_CACHE_TTL });
@@ -140,8 +143,8 @@ export async function fetchRemoteServerKeys(
     console.error(`Failed to fetch keys from ${serverName}:`, error);
 
     // Fall back to D1 cache even if stale
-    if (dbKeys.results.length > 0) {
-      return dbKeys.results;
+    if (dbKeys.length > 0) {
+      return dbKeys;
     }
 
     throw new Error(`Cannot fetch signing keys from ${serverName}`, { cause: error });
@@ -481,47 +484,30 @@ export interface SigningKey {
  * Get the current server signing key for outgoing requests
  */
 export async function getServerSigningKey(db: D1Database): Promise<SigningKey | null> {
-  let key = await db
-    .prepare(
-      `SELECT key_id, private_key_jwk FROM server_keys WHERE is_current = 1 AND key_version = 2`,
-    )
-    .first<{ key_id: string; private_key_jwk: string | null }>();
+  let key = await getCurrentServerSigningKeyRecord(db);
 
-  if (!key || !key.private_key_jwk) {
+  if (!key) {
     const generated = await generateSigningKeyPair();
     const validFrom = Date.now();
     const validUntil = validFrom + 365 * 24 * 60 * 60 * 1000;
 
-    await db.prepare(`UPDATE server_keys SET is_current = 0`).run();
-    await db
-      .prepare(
-        `INSERT INTO server_keys (key_id, public_key, private_key, private_key_jwk, key_version, valid_from, valid_until, is_current)
-       VALUES (?, ?, ?, ?, 2, ?, ?, 1)`,
-      )
-      .bind(
-        generated.keyId,
-        generated.publicKey,
-        JSON.stringify(generated.privateKeyJwk),
-        JSON.stringify(generated.privateKeyJwk),
-        validFrom,
-        validUntil,
-      )
-      .run();
+    await replaceCurrentServerSigningKey(db, {
+      keyId: generated.keyId,
+      publicKey: generated.publicKey,
+      privateKeyJwk: generated.privateKeyJwk,
+      validFrom,
+      validUntil,
+    });
 
     key = {
-      key_id: generated.keyId,
-      private_key_jwk: JSON.stringify(generated.privateKeyJwk),
+      keyId: generated.keyId,
+      privateKeyJwk: generated.privateKeyJwk,
     };
   }
 
-  const privateKeyJwk = key.private_key_jwk;
-  if (!privateKeyJwk) {
-    return null;
-  }
-
   return {
-    keyId: key.key_id,
-    privateKeyJwk: JSON.parse(privateKeyJwk),
+    keyId: key.keyId,
+    privateKeyJwk: key.privateKeyJwk,
   };
 }
 

@@ -16,6 +16,7 @@ The goal of the current phase is architectural separation, not feature removal.
 ## Docs
 
 - [Architecture Overview](./docs/architecture/overview.md)
+- [Directory Split Options](./docs/architecture/directory-split-options.md)
 - [Event Pipeline](./docs/architecture/event-pipeline.md)
 - [Feature Profiles](./docs/architecture/feature-profiles.md)
 - [Runtime Capability Mapping](./docs/architecture/runtime-capability-mapping.md)

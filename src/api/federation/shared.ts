@@ -1,24 +1,15 @@
 import { Effect } from "effect";
-import type { AppEnv, MatrixSignatures, PDU, StoredPduRow } from "../../types";
+import type { AppEnv, StoredPduRow } from "../../types";
 import { MatrixApiError } from "../../utils/errors";
-import { toEventId } from "../../utils/ids";
 import { DomainError, toMatrixApiError } from "../../matrix/application/domain-error";
 import { runFederationEffect } from "../../matrix/application/effect-runtime";
 import { withLogContext } from "../../matrix/application/logging";
+export {
+  getFederationEventRowByReference,
+  toFederationPduFromRow,
+} from "../../matrix/repositories/federation-events-repository";
 
 export type { StoredPduRow };
-
-function parseJsonWithFallback<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
 
 export function runDomainValidation<A>(effect: Effect.Effect<A, DomainError>): Promise<A> {
   return runFederationEffect(effect);
@@ -49,74 +40,6 @@ export async function logFederationRouteWarning(
     debugEnabled: true,
   });
   await runFederationEffect(logger.warn(`federation.${operation}.trace`, fields));
-}
-
-export function toFederationPduFromRow(row: StoredPduRow): PDU {
-  return {
-    event_id: row.event_id,
-    room_id: row.room_id,
-    sender: row.sender,
-    type: row.event_type,
-    ...(row.state_key !== null ? { state_key: row.state_key } : {}),
-    ...(row.event_origin ? { origin: row.event_origin } : {}),
-    ...(row.event_membership
-      ? {
-          membership: row.event_membership,
-        }
-      : {}),
-    ...(row.prev_state
-      ? {
-          prev_state: parseJsonWithFallback<string[]>(row.prev_state, []).flatMap((id) => {
-            const typedId = toEventId(id);
-            return typedId ? [typedId] : [];
-          }),
-        }
-      : {}),
-    content: parseJsonWithFallback<Record<string, unknown>>(row.content, {}),
-    origin_server_ts: row.origin_server_ts,
-    depth: row.depth,
-    auth_events: parseJsonWithFallback<string[]>(row.auth_events, []).flatMap((id) => {
-      const typedId = toEventId(id);
-      return typedId ? [typedId] : [];
-    }),
-    prev_events: parseJsonWithFallback<string[]>(row.prev_events, []).flatMap((id) => {
-      const typedId = toEventId(id);
-      return typedId ? [typedId] : [];
-    }),
-    ...(row.hashes ? { hashes: parseJsonWithFallback(row.hashes, { sha256: "" }) } : {}),
-    ...(row.signatures
-      ? {
-          signatures: parseJsonWithFallback<MatrixSignatures>(row.signatures, {}),
-        }
-      : {}),
-  };
-}
-
-function getEventReferenceLookupCandidates(eventId: string): string[] {
-  const normalized = eventId.replaceAll("+", "-").replaceAll("/", "_");
-  const standard = eventId.replaceAll("-", "+").replaceAll("_", "/");
-  return Array.from(new Set([eventId, normalized, standard]));
-}
-
-export async function getFederationEventRowByReference(
-  db: D1Database,
-  eventId: string,
-): Promise<StoredPduRow | null> {
-  for (const candidate of getEventReferenceLookupCandidates(eventId)) {
-    const row = await db
-      .prepare(
-        `SELECT event_id, room_id, sender, event_type, state_key, content,
-         origin_server_ts, depth, auth_events, prev_events, event_origin, event_membership,
-         prev_state, hashes, signatures
-         FROM events WHERE event_id = ?`,
-      )
-      .bind(candidate)
-      .first<StoredPduRow>();
-    if (row) {
-      return row;
-    }
-  }
-  return null;
 }
 
 function getUserKeysDO(env: AppEnv["Bindings"], userId: string): DurableObjectStub {
