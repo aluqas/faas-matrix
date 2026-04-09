@@ -85,7 +85,8 @@ export function requireAuth() {
           const asUserId = url.searchParams.get("user_id");
           const serverName = c.env.SERVER_NAME;
           const senderUserIdStr = asUserId ?? `@${appservice.sender_localpart}:${serverName}`;
-          const senderUserId = toUserId(senderUserIdStr) ?? (senderUserIdStr as UserId);
+          const senderUserId =
+            toUserId(senderUserIdStr) ?? toUserId(`@${appservice.sender_localpart}:${serverName}`)!;
           auth = {
             userId: senderUserId,
             deviceId: null,

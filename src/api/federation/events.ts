@@ -10,7 +10,7 @@ import {
   getFederationEventRowByReference,
   logFederationRouteWarning,
   toFederationPduFromRow,
-  type FederationEventRow,
+  type StoredPduRow,
 } from "./shared";
 
 const app = new Hono<AppEnv>();
@@ -24,7 +24,7 @@ app.get("/_matrix/federation/v1/event/:eventId", async (c) => {
      FROM events WHERE event_id = ?`,
   )
     .bind(c.req.param("eventId"))
-    .first<FederationEventRow>();
+    .first<StoredPduRow>();
 
   if (!event) {
     return Errors.notFound("Event not found").toResponse();
@@ -53,7 +53,7 @@ app.get("/_matrix/federation/v1/state/:roomId", async (c) => {
      WHERE rs.room_id = ?`,
   )
     .bind(roomId)
-    .all<FederationEventRow>();
+    .all<StoredPduRow>();
 
   const pdus = stateEvents.results.map(toFederationPduFromRow);
   const authEventIds = new Set<string>();
@@ -72,7 +72,7 @@ app.get("/_matrix/federation/v1/state/:roomId", async (c) => {
        FROM events WHERE event_id = ?`,
     )
       .bind(authId)
-      .first<FederationEventRow>();
+      .first<StoredPduRow>();
 
     if (authEvent) {
       authChain.push(toFederationPduFromRow(authEvent));
@@ -260,7 +260,7 @@ app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
         .map((value) => toEventId(value))
         .filter((value): value is EventId => value !== null)
     : [];
-  let events: FederationEventRow[];
+  let events: StoredPduRow[];
   if (startEventIds.length > 0) {
     const startEvents = await c.env.DB.prepare(
       `SELECT MIN(depth) as min_depth FROM events WHERE event_id IN (${startEventIds.map(() => "?").join(",")})`,
@@ -280,7 +280,7 @@ app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
          LIMIT ?`,
       )
         .bind(roomId, maxDepth, limit)
-        .all<FederationEventRow>()
+        .all<StoredPduRow>()
     ).results;
   } else {
     events = (
@@ -294,7 +294,7 @@ app.get("/_matrix/federation/v1/backfill/:roomId", async (c) => {
          LIMIT ?`,
       )
         .bind(roomId, limit)
-        .all<FederationEventRow>()
+        .all<StoredPduRow>()
     ).results;
   }
 

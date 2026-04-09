@@ -1,9 +1,9 @@
 import type { JsonObject } from "./common";
 import type {
   AccountDataEvent,
+  ClientEvent,
   EphemeralEvent,
   EventType,
-  MatrixEvent,
   PDU,
   StateKey,
   ToDeviceEvent,
@@ -12,7 +12,7 @@ import type {
 export type MatrixEventOf<
   TContent extends JsonObject = JsonObject,
   TType extends EventType = EventType,
-> = Omit<MatrixEvent, "type" | "content"> & {
+> = Omit<ClientEvent, "type" | "content"> & {
   type: TType;
   content: TContent;
 };

@@ -13,6 +13,26 @@ import { toEventId, toRoomId, toUserId } from "../utils/ids";
 
 const app = new Hono<AppEnv>();
 
+type SearchStateEvent = {
+  type: string;
+  state_key: string;
+  sender: string;
+  content: JsonObject;
+  origin_server_ts: number;
+  room_id: string;
+};
+
+type SearchGroupEntry = {
+  results: string[];
+  order: number;
+  next_batch?: string;
+};
+
+type SearchGroups = {
+  room_id?: Record<string, SearchGroupEntry>;
+  sender?: Record<string, SearchGroupEntry>;
+};
+
 function parseEventContent(value: string): JsonObject {
   try {
     const parsed = JSON.parse(value);
@@ -385,7 +405,7 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
   // Add room state if requested
   if (includeState && formattedResults.length > 0) {
     const roomIds = new Set(formattedResults.map((r) => r.result.room_id));
-    const state: Record<string, any[]> = {};
+    const state: Record<string, SearchStateEvent[]> = {};
 
     for (const roomId of roomIds) {
       const roomState = await db
@@ -419,7 +439,7 @@ app.post("/_matrix/client/v3/search", requireAuth(), async (c) => {
 
   // Add groupings if requested
   if (roomEvents.groupings?.group_by) {
-    const groups: Record<string, any> = {};
+    const groups: SearchGroups = {};
 
     for (const groupBy of roomEvents.groupings.group_by) {
       if (groupBy.key === "room_id") {

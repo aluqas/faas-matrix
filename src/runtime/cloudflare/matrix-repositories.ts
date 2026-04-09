@@ -30,7 +30,7 @@ import { getReceiptsForRoom } from "../../api/receipts";
 import { getToDeviceMessages } from "../../api/to-device";
 import { getTypingUsers } from "../../api/typing";
 import { countUnreadNotificationSummaryWithRules } from "../../services/push-rule-evaluator";
-import type { Env, PDU, Room, ToDeviceEvent, UserId } from "../../types";
+import type { Env, EventId, PDU, Room, RoomId, ToDeviceEvent, UserId } from "../../types";
 import type { AccountDataContent } from "../../types/account-data";
 import type {
   FederationProcessedPdu,
@@ -40,6 +40,7 @@ import type {
   RoomRepository,
   SyncRepository,
 } from "../../matrix/repositories/interfaces";
+import { toUserId } from "../../utils/ids";
 import { validateUrl } from "../../utils/url-validator";
 import type {
   DeliveryQueue,
@@ -91,15 +92,15 @@ export class CloudflareRoomRepository implements RoomRepository {
   }
 
   createRoom(
-    roomId: string,
+    roomId: RoomId,
     roomVersion: string,
-    creatorId: string,
+    creatorId: UserId,
     isPublic: boolean,
   ): Promise<void> {
     return createRoom(this.env.DB, roomId, roomVersion, creatorId, isPublic);
   }
 
-  createRoomAlias(alias: string, roomId: string, creatorId: string): Promise<void> {
+  createRoomAlias(alias: string, roomId: RoomId, creatorId: UserId): Promise<void> {
     return createRoomAlias(this.env.DB, alias, roomId, creatorId);
   }
 
@@ -123,7 +124,7 @@ export class CloudflareRoomRepository implements RoomRepository {
   }
 
   persistMembershipEvent(
-    roomId: string,
+    roomId: RoomId,
     event: PDU,
     source: "client" | "federation" | "workflow",
   ): Promise<void> {
@@ -135,10 +136,10 @@ export class CloudflareRoomRepository implements RoomRepository {
   }
 
   updateMembership(
-    roomId: string,
-    userId: string,
+    roomId: RoomId,
+    userId: UserId,
     membership: "join" | "invite" | "leave" | "ban" | "knock",
-    eventId: string,
+    eventId: EventId,
     displayName?: string,
     avatarUrl?: string,
   ): Promise<void> {
@@ -153,27 +154,27 @@ export class CloudflareRoomRepository implements RoomRepository {
     );
   }
 
-  notifyUsersOfEvent(roomId: string, eventId: string, eventType: string): Promise<void> {
+  notifyUsersOfEvent(roomId: RoomId, eventId: EventId, eventType: string): Promise<void> {
     return notifyUsersOfEvent(this.env, roomId, eventId, eventType);
   }
 
-  getRoom(roomId: string): Promise<Room | null> {
+  getRoom(roomId: RoomId): Promise<Room | null> {
     return getRoom(this.env.DB, roomId);
   }
 
-  getEvent(eventId: string): Promise<PDU | null> {
+  getEvent(eventId: EventId): Promise<PDU | null> {
     return getEvent(this.env.DB, eventId);
   }
 
-  getMembership(roomId: string, userId: string) {
+  getMembership(roomId: RoomId, userId: UserId) {
     return getMembership(this.env.DB, roomId, userId);
   }
 
-  getStateEvent(roomId: string, eventType: string, stateKey?: string) {
+  getStateEvent(roomId: RoomId, eventType: string, stateKey?: string) {
     return getStateEvent(this.env.DB, roomId, eventType, stateKey);
   }
 
-  getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]> {
+  getLatestRoomEvents(roomId: RoomId, limit: number): Promise<PDU[]> {
     return getLatestRoomEventsByDepth(this.env.DB, roomId, limit);
   }
 }
@@ -417,8 +418,14 @@ export class CloudflareSyncRepository implements SyncRepository {
     }
 
     return {
-      changed: [...changed] as UserId[],
-      left: [...left] as UserId[],
+      changed: [...changed].flatMap((id) => {
+        const u = toUserId(id);
+        return u ? [u] : [];
+      }),
+      left: [...left].flatMap((id) => {
+        const u = toUserId(id);
+        return u ? [u] : [];
+      }),
     };
   }
 
@@ -430,44 +437,44 @@ export class CloudflareSyncRepository implements SyncRepository {
     return getRoomAccountData(this.env.DB, userId, roomId, since);
   }
 
-  getUserRooms(userId: string, membership?: "join" | "invite" | "leave" | "ban" | "knock") {
+  getUserRooms(userId: UserId, membership?: "join" | "invite" | "leave" | "ban" | "knock") {
     return getUserRooms(this.env.DB, userId, membership);
   }
 
-  getMembership(roomId: string, userId: string) {
+  getMembership(roomId: RoomId, userId: UserId) {
     return getMembership(this.env.DB, roomId, userId);
   }
 
-  getEventsSince(roomId: string, sincePosition: number) {
+  getEventsSince(roomId: RoomId, sincePosition: number) {
     return getEventsSince(this.env.DB, roomId, sincePosition);
   }
 
-  getEvent(eventId: string) {
+  getEvent(eventId: EventId) {
     return getEvent(this.env.DB, eventId);
   }
 
-  getRoomState(roomId: string) {
+  getRoomState(roomId: RoomId) {
     return getRoomState(this.env.DB, roomId);
   }
 
-  getInviteStrippedState(roomId: string) {
+  getInviteStrippedState(roomId: RoomId) {
     return getInviteStrippedState(this.env.DB, roomId);
   }
 
-  getReceiptsForRoom(roomId: string, userId: string): Promise<ReceiptEvent> {
+  getReceiptsForRoom(roomId: RoomId, userId: UserId): Promise<ReceiptEvent> {
     return getReceiptsForRoom(this.env, roomId, userId) as Promise<ReceiptEvent>;
   }
 
-  async getUnreadNotificationSummary(roomId: string, userId: string) {
+  async getUnreadNotificationSummary(roomId: RoomId, userId: UserId) {
     const receipts = await getReceiptsForRoom(this.env, roomId, userId);
     return countUnreadNotificationSummaryWithRules(this.env.DB, userId, roomId, receipts.content);
   }
 
-  getTypingUsers(roomId: string): Promise<string[]> {
+  getTypingUsers(roomId: RoomId): Promise<string[]> {
     return getTypingUsers(this.env, roomId);
   }
 
-  async waitForUserEvents(userId: string, timeoutMs: number): Promise<{ hasEvents: boolean }> {
+  async waitForUserEvents(userId: UserId, timeoutMs: number): Promise<{ hasEvents: boolean }> {
     const syncDO = this.env.SYNC;
     const doId = syncDO.idFromName(userId);
     const stub = syncDO.get(doId);
@@ -543,31 +550,31 @@ export class CloudflareFederationRepository implements FederationRepository {
   }
 
   createRoom(
-    roomId: string,
+    roomId: RoomId,
     roomVersion: string,
-    creatorId: string,
+    creatorId: UserId,
     isPublic: boolean,
   ): Promise<void> {
     return createRoom(this.env.DB, roomId, roomVersion, creatorId, isPublic);
   }
 
-  getRoom(roomId: string): Promise<Room | null> {
+  getRoom(roomId: RoomId): Promise<Room | null> {
     return getRoom(this.env.DB, roomId);
   }
 
-  getEvent(eventId: string) {
+  getEvent(eventId: EventId) {
     return getEvent(this.env.DB, eventId);
   }
 
-  getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]> {
+  getLatestRoomEvents(roomId: RoomId, limit: number): Promise<PDU[]> {
     return getLatestForwardExtremities(this.env.DB, roomId, limit);
   }
 
-  getRoomState(roomId: string): Promise<PDU[]> {
+  getRoomState(roomId: RoomId): Promise<PDU[]> {
     return getRoomState(this.env.DB, roomId);
   }
 
-  getInviteStrippedState(roomId: string) {
+  getInviteStrippedState(roomId: RoomId) {
     return getInviteStrippedState(this.env.DB, roomId);
   }
 
@@ -575,15 +582,15 @@ export class CloudflareFederationRepository implements FederationRepository {
     await storeEvent(this.env.DB, event);
   }
 
-  notifyUsersOfEvent(roomId: string, eventId: string, eventType: string): Promise<void> {
+  notifyUsersOfEvent(roomId: RoomId, eventId: EventId, eventType: string): Promise<void> {
     return notifyUsersOfEvent(this.env, roomId, eventId, eventType);
   }
 
   updateMembership(
-    roomId: string,
-    userId: string,
+    roomId: RoomId,
+    userId: UserId,
     membership: "join" | "invite" | "leave" | "ban" | "knock",
-    eventId: string,
+    eventId: EventId,
     displayName?: string,
     avatarUrl?: string,
   ): Promise<void> {
@@ -599,10 +606,10 @@ export class CloudflareFederationRepository implements FederationRepository {
   }
 
   async upsertRoomState(
-    roomId: string,
+    roomId: RoomId,
     eventType: string,
     stateKey: string,
-    eventId: string,
+    eventId: EventId,
   ): Promise<void> {
     await this.env.DB.prepare(
       `INSERT OR REPLACE INTO room_state (room_id, event_type, state_key, event_id)
@@ -634,7 +641,7 @@ export class CloudflareFederationRepository implements FederationRepository {
   }
 
   async upsertPresence(
-    userId: string,
+    userId: UserId,
     presence: string,
     statusMessage: string | null,
     lastActiveTs: number,

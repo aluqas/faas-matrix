@@ -14,6 +14,7 @@ import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
 import { getRoomState } from "../services/database";
+import { toRoomId } from "../utils/ids";
 import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
 
 const app = new Hono<AppEnv>();
@@ -70,7 +71,7 @@ function getRoomDO(env: Env, roomId: string) {
 }
 
 async function getRemoteJoinedServers(db: D1Database, roomId: string, localServerName: string) {
-  const state = await getRoomState(db, roomId);
+  const state = await getRoomState(db, toRoomId(roomId)!);
   return Array.from(
     new Set(
       state

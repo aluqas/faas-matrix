@@ -7,6 +7,7 @@
 import { Hono } from "hono";
 import type { AppEnv, Env } from "../types";
 import { Errors } from "../utils/errors";
+import { toRoomId } from "../utils/ids";
 import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
 import { requireAuth } from "../middleware/auth";
 import { getRoomState } from "../services/database";
@@ -44,7 +45,7 @@ function getRoomDO(env: Env, roomId: string) {
 }
 
 async function getRemoteJoinedServers(db: D1Database, roomId: string, localServerName: string) {
-  const state = await getRoomState(db, roomId);
+  const state = await getRoomState(db, toRoomId(roomId) ?? (roomId as import("../types").RoomId));
   return Array.from(
     new Set(
       state

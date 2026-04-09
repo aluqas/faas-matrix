@@ -16,7 +16,9 @@ import {
   type EventId,
   type MatrixSignatures,
   type PDU,
+  type RoomId,
   type RoomJoinWorkflowStatus,
+  type UserId,
 } from "../../types";
 import { isJsonObject } from "../../types/common";
 import type {
@@ -30,7 +32,7 @@ import type {
 } from "../../types/rooms";
 import { calculateContentHash, signJson } from "../../utils/crypto";
 import { Errors, MatrixApiError } from "../../utils/errors";
-import { parseUserId, toEventId, toRoomId } from "../../utils/ids";
+import { parseUserId, toEventId, toRoomId, toUserId } from "../../utils/ids";
 import type { EventPipeline } from "../domain/event-pipeline";
 import type { RoomRepository } from "../repositories/interfaces";
 import { DomainError, toMatrixApiError } from "./domain-error";
@@ -381,7 +383,7 @@ export class MatrixRoomService {
       await this.repository.createRoomAlias(roomAlias, typedRoomId, input.userId);
     }
 
-    await this.repository.notifyUsersOfEvent(typedRoomId, typedRoomId, "m.room.create");
+    await this.repository.notifyUsersOfEvent(typedRoomId, toEventId(createEventId)!, "m.room.create");
 
     if (Array.isArray(invite)) {
       const db = this.appContext.capabilities.sql.connection as D1Database;
@@ -541,7 +543,7 @@ export class MatrixRoomService {
             checkAllowedRoomMembership: (allowedRoomId) =>
               Effect.promise(() =>
                 repository
-                  .getMembership(allowedRoomId, auth.userId)
+                  .getMembership(toRoomId(allowedRoomId)!, auth.userId)
                   .then((m) => m?.membership === "join")
                   .catch(() => false),
               ),
@@ -657,7 +659,7 @@ export class MatrixRoomService {
                 now: () => this.appContext.capabilities.clock.now(),
                 getSharedRemoteServers: (userId) =>
                   getSharedServersInEncryptedRoomsWithUserIncludingPartialState(db, cache, userId),
-                getUserDevices: (userId) => getUserDevices(db, userId),
+                getUserDevices: (userId) => getUserDevices(db, toUserId(userId)!),
                 getStoredDeviceKeys: (userId, deviceId) =>
                   getStoredDeviceKeysFromKv(deviceKeysKv, userId, deviceId),
                 queueEdu: (destination, eduType, content) =>
@@ -1470,9 +1472,9 @@ export class MatrixRoomService {
   }
 
   private async executeModerationAction(input: {
-    actorUserId: string;
-    roomId: string;
-    targetUserId: string;
+    actorUserId: UserId;
+    roomId: RoomId;
+    targetUserId: UserId;
     membership: "leave" | "ban";
     reason?: string;
     authorize: (context: {

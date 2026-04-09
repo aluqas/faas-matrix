@@ -1,12 +1,14 @@
 import type {
   AccountDataEvent,
   EphemeralEvent,
+  EventId,
   Membership,
   PDU,
   Room,
   RoomId,
   StrippedStateEvent,
   ToDeviceEvent,
+  UserId,
 } from "../../types";
 
 export interface MembershipRecord {
@@ -86,12 +88,12 @@ export interface FilterDefinition {
 export interface RoomRepository {
   getRoomByAlias(alias: string): Promise<string | null>;
   createRoom(
-    roomId: string,
+    roomId: RoomId,
     roomVersion: string,
-    creatorId: string,
+    creatorId: UserId,
     isPublic: boolean,
   ): Promise<void>;
-  createRoomAlias(alias: string, roomId: string, creatorId: string): Promise<void>;
+  createRoomAlias(alias: string, roomId: RoomId, creatorId: UserId): Promise<void>;
   upsertRoomAccountData(
     userId: string,
     roomId: string,
@@ -100,24 +102,24 @@ export interface RoomRepository {
   ): Promise<void>;
   storeEvent(event: PDU): Promise<void>;
   persistMembershipEvent(
-    roomId: string,
+    roomId: RoomId,
     event: PDU,
     source: "client" | "federation" | "workflow",
   ): Promise<void>;
   updateMembership(
-    roomId: string,
-    userId: string,
+    roomId: RoomId,
+    userId: UserId,
     membership: Membership,
-    eventId: string,
+    eventId: EventId,
     displayName?: string,
     avatarUrl?: string,
   ): Promise<void>;
-  notifyUsersOfEvent(roomId: string, eventId: string, eventType: string): Promise<void>;
-  getRoom(roomId: string): Promise<Room | null>;
-  getEvent(eventId: string): Promise<PDU | null>;
-  getMembership(roomId: string, userId: string): Promise<MembershipRecord | null>;
-  getStateEvent(roomId: string, eventType: string, stateKey?: string): Promise<PDU | null>;
-  getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]>;
+  notifyUsersOfEvent(roomId: RoomId, eventId: EventId, eventType: string): Promise<void>;
+  getRoom(roomId: RoomId): Promise<Room | null>;
+  getEvent(eventId: EventId): Promise<PDU | null>;
+  getMembership(roomId: RoomId, userId: UserId): Promise<MembershipRecord | null>;
+  getStateEvent(roomId: RoomId, eventType: string, stateKey?: string): Promise<PDU | null>;
+  getLatestRoomEvents(roomId: RoomId, limit: number): Promise<PDU[]>;
 }
 
 export interface SyncRepository {
@@ -138,16 +140,16 @@ export interface SyncRepository {
   ): Promise<{ changed: string[]; left: string[] }>;
   getGlobalAccountData(userId: string, since?: number): Promise<AccountDataEvent[]>;
   getRoomAccountData(userId: string, roomId: string, since?: number): Promise<AccountDataEvent[]>;
-  getUserRooms(userId: string, membership?: Membership): Promise<RoomId[]>;
-  getMembership(roomId: string, userId: string): Promise<MembershipRecord | null>;
-  getEventsSince(roomId: string, sincePosition: number): Promise<PDU[]>;
-  getEvent(eventId: string): Promise<PDU | null>;
-  getRoomState(roomId: string): Promise<PDU[]>;
-  getInviteStrippedState(roomId: string): Promise<StrippedStateEvent[]>;
-  getReceiptsForRoom(roomId: string, userId: string): Promise<ReceiptEvent>;
-  getUnreadNotificationSummary(roomId: string, userId: string): Promise<UnreadNotificationSummary>;
-  getTypingUsers(roomId: string): Promise<string[]>;
-  waitForUserEvents(userId: string, timeoutMs: number): Promise<{ hasEvents: boolean }>;
+  getUserRooms(userId: UserId, membership?: Membership): Promise<RoomId[]>;
+  getMembership(roomId: RoomId, userId: UserId): Promise<MembershipRecord | null>;
+  getEventsSince(roomId: RoomId, sincePosition: number): Promise<PDU[]>;
+  getEvent(eventId: EventId): Promise<PDU | null>;
+  getRoomState(roomId: RoomId): Promise<PDU[]>;
+  getInviteStrippedState(roomId: RoomId): Promise<StrippedStateEvent[]>;
+  getReceiptsForRoom(roomId: RoomId, userId: UserId): Promise<ReceiptEvent>;
+  getUnreadNotificationSummary(roomId: RoomId, userId: UserId): Promise<UnreadNotificationSummary>;
+  getTypingUsers(roomId: RoomId): Promise<string[]>;
+  waitForUserEvents(userId: UserId, timeoutMs: number): Promise<{ hasEvents: boolean }>;
 }
 
 export interface FederationProcessedPdu {
@@ -171,31 +173,31 @@ export interface FederationRepository {
     rejectionReason?: string,
   ): Promise<void>;
   createRoom(
-    roomId: string,
+    roomId: RoomId,
     roomVersion: string,
-    creatorId: string,
+    creatorId: UserId,
     isPublic: boolean,
   ): Promise<void>;
-  getRoom(roomId: string): Promise<Room | null>;
-  getEvent(eventId: string): Promise<PDU | null>;
-  getLatestRoomEvents(roomId: string, limit: number): Promise<PDU[]>;
-  getRoomState(roomId: string): Promise<PDU[]>;
-  getInviteStrippedState(roomId: string): Promise<StrippedStateEvent[]>;
+  getRoom(roomId: RoomId): Promise<Room | null>;
+  getEvent(eventId: EventId): Promise<PDU | null>;
+  getLatestRoomEvents(roomId: RoomId, limit: number): Promise<PDU[]>;
+  getRoomState(roomId: RoomId): Promise<PDU[]>;
+  getInviteStrippedState(roomId: RoomId): Promise<StrippedStateEvent[]>;
   storeIncomingEvent(event: PDU): Promise<void>;
-  notifyUsersOfEvent(roomId: string, eventId: string, eventType: string): Promise<void>;
+  notifyUsersOfEvent(roomId: RoomId, eventId: EventId, eventType: string): Promise<void>;
   updateMembership(
-    roomId: string,
-    userId: string,
+    roomId: RoomId,
+    userId: UserId,
     membership: "join" | "invite" | "leave" | "ban" | "knock",
-    eventId: string,
+    eventId: EventId,
     displayName?: string,
     avatarUrl?: string,
   ): Promise<void>;
   upsertRoomState(
-    roomId: string,
+    roomId: RoomId,
     eventType: string,
     stateKey: string,
-    eventId: string,
+    eventId: EventId,
   ): Promise<void>;
   storeProcessedEdu(
     origin: string,

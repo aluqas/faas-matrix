@@ -192,7 +192,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/upgrade", requireAuth(), async (c) =>
   await createNewRoomEvent("m.room.create", createContent, "");
 
   const joinEventId = await createNewRoomEvent("m.room.member", { membership: "join" }, userId);
-  await updateMembership(db, newRoomId, userId, "join", joinEventId);
+  await updateMembership(db, newRoomId, userId, "join", toEventId(joinEventId)!);
 
   if (powerLevels) {
     await createNewRoomEvent("m.room.power_levels", powerLevels, "");

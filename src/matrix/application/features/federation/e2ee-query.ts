@@ -12,6 +12,7 @@ import type {
   UserId,
 } from "../../../../types";
 import { Errors, MatrixApiError } from "../../../../utils/errors";
+import { toUserId } from "../../../../utils/ids";
 import { extractServerNameFromMatrixId } from "../../../../utils/matrix-ids";
 import type { CrossSigningKeysStore, DeviceKeysPayload } from "../../../../types/client";
 import type { JsonObject } from "../../../../types/common";
@@ -50,11 +51,14 @@ export interface FederationE2EEQueryPorts {
 }
 
 function toLocalUserId(rawUserId: string, localServerName: string): UserId | null {
-  return extractServerNameFromMatrixId(rawUserId) === localServerName &&
-    rawUserId.startsWith("@") &&
-    rawUserId.includes(":")
-    ? (rawUserId as UserId)
-    : null;
+  if (
+    extractServerNameFromMatrixId(rawUserId) !== localServerName ||
+    !rawUserId.startsWith("@") ||
+    !rawUserId.includes(":")
+  ) {
+    return null;
+  }
+  return toUserId(rawUserId);
 }
 
 function mergeDeviceSignatures(

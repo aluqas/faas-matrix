@@ -246,7 +246,7 @@ export async function restoreDeferredPartialStateMemberships(
 
   let restored = 0;
   for (const row of stateRows.results) {
-    const currentEvent = await getEvent(db, row.event_id);
+    const currentEvent = await getEvent(db, toEventId(row.event_id)!);
     if (!currentEvent) {
       continue;
     }
@@ -261,7 +261,7 @@ export async function restoreDeferredPartialStateMemberships(
       continue;
     }
 
-    const previousEvent = await getEvent(db, previousEventId);
+    const previousEvent = await getEvent(db, toEventId(previousEventId)!);
     if (
       !previousEvent ||
       previousEvent.type !== "m.room.member" ||
@@ -280,10 +280,10 @@ export async function restoreDeferredPartialStateMemberships(
       .run();
     await updateMembership(
       db,
-      roomId,
-      row.state_key,
+      toRoomId(roomId)!,
+      toUserId(row.state_key)!,
       previousMembership,
-      previousEventId,
+      toEventId(previousEventId)!,
       previousContent.displayname,
       previousContent.avatar_url,
     );
@@ -297,7 +297,8 @@ export async function reevaluateDeferredPartialStateAuthEvents(
   db: D1Database,
   roomId: string,
 ): Promise<void> {
-  const deferredEvents = await getDeferredPartialStateAuthEventsForRoom(db, roomId);
+  const typedRoomId = toRoomId(roomId)!;
+  const deferredEvents = await getDeferredPartialStateAuthEventsForRoom(db, typedRoomId);
   if (deferredEvents.length === 0) return;
 
   const roomRow = await db
@@ -306,7 +307,7 @@ export async function reevaluateDeferredPartialStateAuthEvents(
     .first<{ room_version: string }>();
   const roomVersion = roomRow?.room_version ?? "10";
 
-  const currentState = await getRoomState(db, roomId);
+  const currentState = await getRoomState(db, typedRoomId);
   const currentStateMap = new Map(
     currentState.map((e) => [`${e.type}\0${e.state_key ?? ""}`, e.event_id]),
   );
@@ -318,23 +319,23 @@ export async function reevaluateDeferredPartialStateAuthEvents(
       event.state_key !== undefined ? currentStateMap.get(stateMapKey) : undefined;
 
     if (authResult.allowed) {
-      await clearDeferredAuthMarkerForEvent(db, event.event_id);
+      await clearDeferredAuthMarkerForEvent(db, toEventId(event.event_id)!);
       if (event.state_key !== undefined && currentStateEventId !== event.event_id) {
-        await setRoomStateEvent(db, roomId, event.type, event.state_key, event.event_id);
+        await setRoomStateEvent(db, typedRoomId, event.type, event.state_key, toEventId(event.event_id)!);
       }
     } else {
       await rejectProcessedPdu(
         db,
-        event.event_id,
+        toEventId(event.event_id)!,
         authResult.error ?? "Auth failed after partial-state completion",
       );
       if (event.state_key !== undefined) {
         if (currentStateEventId === event.event_id) {
           const previousEventId = getPartialStateDeferredPreviousEventId(event);
           if (previousEventId) {
-            await setRoomStateEvent(db, roomId, event.type, event.state_key, previousEventId);
+            await setRoomStateEvent(db, typedRoomId, event.type, event.state_key, toEventId(previousEventId)!);
           } else {
-            await deleteRoomStateEvent(db, roomId, event.type, event.state_key);
+            await deleteRoomStateEvent(db, typedRoomId, event.type, event.state_key);
           }
         }
       }

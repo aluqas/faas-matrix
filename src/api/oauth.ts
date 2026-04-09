@@ -12,6 +12,7 @@ import {
   generateDeviceId,
   generateOpaqueId,
   formatUserId,
+  toUserId,
 } from "../utils/ids";
 import { createDevice, createAccessToken, getUserById } from "../services/database";
 
@@ -587,7 +588,7 @@ app.post("/oauth/token", async (c) => {
 
 // Helper to build userinfo response
 async function buildUserInfoResponse(c: any, userId: string) {
-  const user = await getUserById(c.env.DB, userId);
+  const user = await getUserById(c.env.DB, toUserId(userId)!);
 
   if (!user) {
     return c.json({ error: "invalid_token", error_description: "User not found" }, 401);

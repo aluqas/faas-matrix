@@ -4,10 +4,11 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { AppEnv } from "../types";
 import type { AdminIdPProvider } from "../types/client";
+import { isJsonObject, type JsonObject } from "../types/common";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { getUserById } from "../services/database";
-import { generateLoginToken, generateOpaqueId } from "../utils/ids";
+import { generateLoginToken, generateOpaqueId, toUserId } from "../utils/ids";
 import { hashToken } from "../utils/crypto";
 import { encryptSecret } from "./oidc-auth";
 import { fetchOIDCDiscovery } from "../services/oidc";
@@ -426,7 +427,7 @@ app.get("/admin/api/rooms/:roomId", requireAuth(), requireAdmin, async (c) => {
     .all();
 
   // Parse state
-  const stateMap: Record<string, any> = {};
+  const stateMap: Record<string, AdminRoomStateEntry> = {};
   for (const s of state.results as any[]) {
     stateMap[`${s.event_type}|${s.state_key}`] = {
       type: s.event_type,
@@ -1470,7 +1471,7 @@ app.post("/admin/api/users/:userId/login-token", requireAuth(), requireAdmin, as
   const db = c.env.DB;
 
   // Verify user exists and is not deactivated
-  const user = await getUserById(db, userId);
+  const user = await getUserById(db, toUserId(userId)!);
   if (!user) {
     return Errors.notFound("User not found").toResponse();
   }
@@ -1857,6 +1858,18 @@ app.post("/admin/api/idp/providers/:id/test", requireAuth(), requireAdmin, async
 // ============================================
 
 // GET /admin/api/users/:userId/keys - Debug E2EE key state for a user
+type AdminCrossSigningKeyEntry = {
+  key_id: string;
+  data: JsonObject;
+};
+
+type AdminRoomStateEntry = {
+  type: string;
+  state_key: string;
+  content: JsonObject;
+  sender: string;
+};
+
 app.get("/admin/api/users/:userId/keys", requireAuth(), requireAdmin, async (c) => {
   const userId = decodeURIComponent(c.req.param("userId"));
   const db = c.env.DB;
@@ -1886,20 +1899,27 @@ app.get("/admin/api/users/:userId/keys", requireAuth(), requireAdmin, async (c) 
     .all<{ device_id: string; display_name: string | null }>();
 
   // Get device keys from KV
-  const deviceKeys: Record<string, any> = {};
+  const deviceKeys: Record<string, JsonObject> = {};
   for (const device of devices.results) {
     const keyData = await c.env.DEVICE_KEYS.get(`device:${userId}:${device.device_id}`);
     if (keyData) {
-      deviceKeys[device.device_id] = JSON.parse(keyData);
+      const parsed = JSON.parse(keyData);
+      if (isJsonObject(parsed)) {
+        deviceKeys[device.device_id] = parsed;
+      }
     }
   }
 
   // Parse cross-signing keys
-  const parsedCSKeys: Record<string, any> = {};
+  const parsedCSKeys: Record<string, AdminCrossSigningKeyEntry> = {};
   for (const key of crossSigningKeys.results) {
+    const parsed = JSON.parse(key.key_data);
+    if (!isJsonObject(parsed)) {
+      continue;
+    }
     parsedCSKeys[key.key_type] = {
       key_id: key.key_id,
-      data: JSON.parse(key.key_data),
+      data: parsed,
     };
   }
 
@@ -1913,8 +1933,11 @@ app.get("/admin/api/users/:userId/keys", requireAuth(), requireAdmin, async (c) 
       (s) => s.key_id === deviceId && s.signer_key_id === selfSigningKeyId,
     );
     const deviceKey = deviceKeys[deviceId];
+    const signatureMap = deviceKey && isJsonObject(deviceKey["signatures"]) ? deviceKey["signatures"] : null;
+    const userSignatureMap =
+      signatureMap && isJsonObject(signatureMap[userId]) ? signatureMap[userId] : null;
     const hasSignatureInDeviceKey =
-      deviceKey?.signatures?.[userId]?.[selfSigningKeyId] !== undefined;
+      !!selfSigningKeyId && userSignatureMap?.[selfSigningKeyId] !== undefined;
 
     verificationStatus[deviceId] = {
       verified: hasSelfSigningSignature && hasSignatureInDeviceKey,

@@ -3,9 +3,10 @@ import {
   getRedactionAllowedKeys,
   getRoomVersion,
 } from "../../services/room-versions";
-import type { EventId, MatrixSignatures, PDU, RoomId, UserId } from "../../types";
+import type { MatrixSignatures, PDU } from "../../types";
 import type { PublicRoomSummary } from "../../types/client";
 import type { MissingEventsQuery, TimestampDirection } from "../../types/events";
+import { toEventId, toRoomId, toUserId } from "../../utils/ids";
 
 export type { MissingEventsQuery, TimestampDirection };
 
@@ -65,23 +66,29 @@ function safeJsonParse<T>(value: string | null | undefined): T | null {
   }
 }
 
-function toPdu(row: EventRow): PDU {
+function toPdu(row: EventRow): PDU | null {
+  const event_id = toEventId(row.event_id);
+  const room_id = toRoomId(row.room_id);
+  const sender = toUserId(row.sender);
+  if (!event_id || !room_id || !sender) return null;
   return {
-    event_id: row.event_id as unknown as EventId,
-    room_id: row.room_id as unknown as RoomId,
-    sender: row.sender as unknown as UserId,
+    event_id,
+    room_id,
+    sender,
     type: row.event_type,
     state_key: row.state_key ?? undefined,
     content: safeJsonParse<Record<string, unknown>>(row.content) ?? {},
     unsigned: safeJsonParse<Record<string, unknown>>(row.unsigned ?? undefined) ?? undefined,
     origin_server_ts: row.origin_server_ts,
     depth: row.depth,
-    auth_events: (safeJsonParse<string[]>(row.auth_events) ?? []).map(
-      (e) => e as unknown as EventId,
-    ),
-    prev_events: (safeJsonParse<string[]>(row.prev_events) ?? []).map(
-      (e) => e as unknown as EventId,
-    ),
+    auth_events: (safeJsonParse<string[]>(row.auth_events) ?? []).flatMap((e) => {
+      const id = toEventId(e);
+      return id ? [id] : [];
+    }),
+    prev_events: (safeJsonParse<string[]>(row.prev_events) ?? []).flatMap((e) => {
+      const id = toEventId(e);
+      return id ? [id] : [];
+    }),
     hashes: safeJsonParse<{ sha256: string }>(row.hashes ?? undefined) ?? undefined,
     signatures: safeJsonParse<MatrixSignatures>(row.signatures ?? undefined) ?? undefined,
   };
@@ -127,7 +134,7 @@ function getHistoryVisibilityAtEvent(
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as unknown as EventId,
+          event_id: toEventId(row.event_id)!,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
@@ -154,7 +161,7 @@ function getHistoryVisibilityBeforeEvent(
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as unknown as EventId,
+          event_id: toEventId(row.event_id)!,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
@@ -186,7 +193,7 @@ function getMembershipAtOrBeforeEvent(
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as unknown as EventId,
+          event_id: toEventId(row.event_id)!,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
@@ -217,7 +224,7 @@ function getMembershipBeforeEvent(
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as unknown as EventId,
+          event_id: toEventId(row.event_id)!,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
@@ -242,7 +249,7 @@ function joinedAfterEvent(event: PDU, membershipRows: MembershipRow[], userId: s
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as unknown as EventId,
+          event_id: toEventId(row.event_id)!,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
@@ -338,7 +345,7 @@ function isServerAllowedToSeeEventAtHistoryVisibility(
     if (
       compareEventOrder(
         {
-          event_id: row.event_id as unknown as EventId,
+          event_id: toEventId(row.event_id)!,
           origin_server_ts: row.origin_server_ts,
           depth: row.depth,
         },
@@ -475,6 +482,7 @@ export class EventQueryService {
     }
 
     const event = toPdu(eventRow);
+    if (!event) return null;
 
     const historyRows = await db
       .prepare(`
@@ -548,6 +556,7 @@ export class EventQueryService {
       }
 
       const event = toPdu(row);
+      if (!event) continue;
 
       // Exclude start points (latest_events) and stop points (earliest_events) from results
       if (!startSet.has(event.event_id) && !stopSet.has(event.event_id)) {
@@ -742,7 +751,7 @@ export class EventQueryService {
     const guestAccess = state.get("m.room.guest_access")?.guest_access;
 
     return {
-      room_id: roomId as RoomId,
+      room_id: toRoomId(roomId)!,
       room_type:
         typeof state.get("m.room.create")?.type === "string"
           ? (state.get("m.room.create")?.type as string)

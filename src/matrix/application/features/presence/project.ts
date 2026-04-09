@@ -60,20 +60,22 @@ export async function projectPresenceEvents(
 
   return {
     events: applyEventFilter(
-      Object.entries(presenceByUser).map(([sender, content]): PresenceEvent => ({
-        type: "m.presence" as const,
-        sender: sender as `@${string}:${string}`,
-        content: {
-          presence: content.presence,
-          ...(content.status_msg !== undefined ? { status_msg: content.status_msg } : {}),
-          ...(content.last_active_ago !== undefined
-            ? { last_active_ago: content.last_active_ago }
-            : {}),
-          ...(content.currently_active !== undefined
-            ? { currently_active: content.currently_active }
-            : {}),
-        },
-      })),
+      Object.entries(presenceByUser).map(
+        ([sender, content]): PresenceEvent => ({
+          type: "m.presence" as const,
+          sender: sender as `@${string}:${string}`,
+          content: {
+            presence: content.presence,
+            ...(content.status_msg !== undefined ? { status_msg: content.status_msg } : {}),
+            ...(content.last_active_ago !== undefined
+              ? { last_active_ago: content.last_active_ago }
+              : {}),
+            ...(content.currently_active !== undefined
+              ? { currently_active: content.currently_active }
+              : {}),
+          },
+        }),
+      ),
       query.filter,
     ),
   };

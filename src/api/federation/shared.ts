@@ -1,13 +1,12 @@
 import { Effect } from "effect";
-import type { AppEnv, MatrixSignatures, PDU } from "../../types";
-import type { FederationEventRow } from "../../types/federation";
+import type { AppEnv, MatrixSignatures, PDU, StoredPduRow } from "../../types";
 import { MatrixApiError } from "../../utils/errors";
 import { toEventId } from "../../utils/ids";
 import { DomainError, toMatrixApiError } from "../../matrix/application/domain-error";
 import { runFederationEffect } from "../../matrix/application/effect-runtime";
 import { withLogContext } from "../../matrix/application/logging";
 
-export type { FederationEventRow };
+export type { StoredPduRow };
 
 function parseJsonWithFallback<T>(value: string | null | undefined, fallback: T): T {
   if (!value) {
@@ -52,7 +51,7 @@ export async function logFederationRouteWarning(
   await runFederationEffect(logger.warn(`federation.${operation}.trace`, fields));
 }
 
-export function toFederationPduFromRow(row: FederationEventRow): PDU {
+export function toFederationPduFromRow(row: StoredPduRow): PDU {
   return {
     event_id: row.event_id,
     room_id: row.room_id,
@@ -62,7 +61,7 @@ export function toFederationPduFromRow(row: FederationEventRow): PDU {
     ...(row.event_origin ? { origin: row.event_origin } : {}),
     ...(row.event_membership
       ? {
-          membership: row.event_membership as "join" | "invite" | "leave" | "ban" | "knock",
+          membership: row.event_membership,
         }
       : {}),
     ...(row.prev_state
@@ -102,7 +101,7 @@ function getEventReferenceLookupCandidates(eventId: string): string[] {
 export async function getFederationEventRowByReference(
   db: D1Database,
   eventId: string,
-): Promise<FederationEventRow | null> {
+): Promise<StoredPduRow | null> {
   for (const candidate of getEventReferenceLookupCandidates(eventId)) {
     const row = await db
       .prepare(
@@ -112,7 +111,7 @@ export async function getFederationEventRowByReference(
          FROM events WHERE event_id = ?`,
       )
       .bind(candidate)
-      .first<FederationEventRow>();
+      .first<StoredPduRow>();
     if (row) {
       return row;
     }

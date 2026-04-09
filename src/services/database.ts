@@ -163,7 +163,7 @@ async function persistEventRelation(db: D1Database, event: PDU): Promise<void> {
 // User operations
 export async function createUser(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   localpart: string,
   passwordHash: string | null,
   isGuest: boolean = false,
@@ -179,7 +179,7 @@ export async function createUser(
 
 export async function ensureUserStub(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   localpart: string = userId,
 ): Promise<void> {
   const now = Date.now();
@@ -192,7 +192,7 @@ export async function ensureUserStub(
     .run();
 }
 
-export async function getUserById(db: D1Database, userId: string): Promise<User | null> {
+export async function getUserById(db: D1Database, userId: UserId): Promise<User | null> {
   const result = await db
     .prepare(
       `SELECT user_id, localpart, display_name, avatar_url, is_guest, is_deactivated, admin, created_at
@@ -262,7 +262,7 @@ export async function getUserByLocalpart(db: D1Database, localpart: string): Pro
   };
 }
 
-export async function getPasswordHash(db: D1Database, userId: string): Promise<string | null> {
+export async function getPasswordHash(db: D1Database, userId: UserId): Promise<string | null> {
   const result = await db
     .prepare(`SELECT password_hash FROM users WHERE user_id = ?`)
     .bind(userId)
@@ -273,7 +273,7 @@ export async function getPasswordHash(db: D1Database, userId: string): Promise<s
 
 export async function updateUserProfile(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   displayName?: string | null,
   avatarUrl?: string | null,
 ): Promise<void> {
@@ -294,7 +294,7 @@ export async function updateUserProfile(
 // Device operations
 export async function createDevice(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   deviceId: string,
   displayName?: string,
 ): Promise<void> {
@@ -309,7 +309,7 @@ export async function createDevice(
 
 export async function getDevice(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   deviceId: string,
 ): Promise<Device | null> {
   const result = await db
@@ -341,7 +341,7 @@ export async function getDevice(
   };
 }
 
-export async function getUserDevices(db: D1Database, userId: string): Promise<Device[]> {
+export async function getUserDevices(db: D1Database, userId: UserId): Promise<Device[]> {
   const result = await db
     .prepare(
       `SELECT device_id, user_id, display_name, last_seen_ts, last_seen_ip
@@ -432,7 +432,7 @@ async function deleteDeviceLocalNotificationSettings(
 
 export async function deleteDevice(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   deviceId: string,
 ): Promise<void> {
   await deleteDeviceLocalNotificationSettings(db, userId, deviceId);
@@ -442,7 +442,7 @@ export async function deleteDevice(
     .run();
 }
 
-export async function deleteAllUserDevices(db: D1Database, userId: string): Promise<void> {
+export async function deleteAllUserDevices(db: D1Database, userId: UserId): Promise<void> {
   const notificationSettings = await db
     .prepare(`
       SELECT event_type
@@ -461,7 +461,7 @@ export async function deleteAllUserDevices(db: D1Database, userId: string): Prom
 
 export async function deleteOtherUserDevices(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   keepDeviceId: string,
 ): Promise<void> {
   const devices = await db
@@ -483,7 +483,7 @@ export async function createAccessToken(
   db: D1Database,
   tokenId: string,
   tokenHash: string,
-  userId: string,
+  userId: UserId,
   deviceId: string | null,
 ): Promise<void> {
   await db
@@ -540,16 +540,16 @@ export async function deleteAccessToken(db: D1Database, tokenHash: string): Prom
   await db.prepare(`DELETE FROM access_tokens WHERE token_hash = ?`).bind(tokenHash).run();
 }
 
-export async function deleteAllUserTokens(db: D1Database, userId: string): Promise<void> {
+export async function deleteAllUserTokens(db: D1Database, userId: UserId): Promise<void> {
   await db.prepare(`DELETE FROM access_tokens WHERE user_id = ?`).bind(userId).run();
 }
 
 // Room operations
 export async function createRoom(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
   roomVersion: string,
-  creatorId: string,
+  creatorId: UserId,
   isPublic: boolean = false,
 ): Promise<void> {
   await db
@@ -561,7 +561,7 @@ export async function createRoom(
     .run();
 }
 
-export async function getRoom(db: D1Database, roomId: string): Promise<Room | null> {
+export async function getRoom(db: D1Database, roomId: RoomId): Promise<Room | null> {
   const result = await db
     .prepare(
       `SELECT room_id, room_version, is_public, creator_id, created_at
@@ -672,7 +672,7 @@ export async function storeEvent(
   return streamOrdering;
 }
 
-export async function getEvent(db: D1Database, eventId: string): Promise<PDU | null> {
+export async function getEvent(db: D1Database, eventId: EventId): Promise<PDU | null> {
   const result = await db
     .prepare(
       `SELECT event_id, room_id, sender, event_type, state_key, content,
@@ -690,7 +690,7 @@ export async function getEvent(db: D1Database, eventId: string): Promise<PDU | n
 
 export async function getRoomEvents(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
   fromToken?: number,
   limit: number = 50,
   direction: "f" | "b" = "b",
@@ -758,7 +758,7 @@ export async function getRoomEvents(
 }
 
 // Room state operations
-export async function getRoomState(db: D1Database, roomId: string): Promise<PDU[]> {
+export async function getRoomState(db: D1Database, roomId: RoomId): Promise<PDU[]> {
   const result = await db
     .prepare(
       `SELECT e.event_id, e.room_id, e.sender, e.event_type, e.state_key, e.content,
@@ -796,7 +796,7 @@ export async function getRoomState(db: D1Database, roomId: string): Promise<PDU[
 
 export async function getStateEvent(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
   eventType: string,
   stateKey: string = "",
 ): Promise<PDU | null> {
@@ -838,10 +838,10 @@ export async function getStateEvent(
 // Membership operations
 export async function updateMembership(
   db: D1Database,
-  roomId: string,
-  userId: string,
+  roomId: RoomId,
+  userId: UserId,
   membership: Membership,
-  eventId: string,
+  eventId: EventId,
   displayName?: string,
   avatarUrl?: string,
 ): Promise<void> {
@@ -870,8 +870,8 @@ export async function updateMembership(
 
 export async function getMembership(
   db: D1Database,
-  roomId: string,
-  userId: string,
+  roomId: RoomId,
+  userId: UserId,
 ): Promise<{ membership: Membership; eventId: string; streamOrdering?: number } | null> {
   const result = await db
     .prepare(
@@ -922,7 +922,7 @@ export async function getMembership(
 
 export async function getInviteStrippedState(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
 ): Promise<StrippedStateEvent[]> {
   const result = await db
     .prepare(
@@ -951,7 +951,7 @@ export async function getInviteStrippedState(
  */
 export function getUserRooms(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   membership?: Membership,
 ): Promise<RoomId[]> {
   return getUserRoomIdsWithEffectiveMembership(db, userId, membership);
@@ -959,7 +959,7 @@ export function getUserRooms(
 
 export async function getRoomMembers(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
   membership?: Membership,
 ): Promise<
   Array<{ userId: string; membership: Membership; displayName?: string; avatarUrl?: string }>
@@ -1045,8 +1045,8 @@ export async function getRoomMembers(
 export async function createRoomAlias(
   db: D1Database,
   alias: string,
-  roomId: string,
-  creatorId: string,
+  roomId: RoomId,
+  creatorId: UserId,
 ): Promise<void> {
   await db
     .prepare(
@@ -1087,7 +1087,7 @@ export async function getLatestStreamPosition(db: D1Database): Promise<number> {
 
 export async function getEventsSince(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
   since: number,
   limit: number = 100,
 ): Promise<PDU[]> {
@@ -1120,7 +1120,7 @@ export async function getEventsSince(
 
 export async function getLatestRoomEventsByDepth(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
   limit: number = 1,
 ): Promise<PDU[]> {
   const result = await db
@@ -1141,7 +1141,7 @@ export async function getLatestRoomEventsByDepth(
 
 export async function getLatestForwardExtremities(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
   limit: number = 1,
 ): Promise<PDU[]> {
   const result = await db
@@ -1189,7 +1189,7 @@ const DEFERRED_AUTH_MARKER_SEARCH_PATTERN = `%"io.tuwunel.partial_state_auth_def
 
 export async function getDeferredPartialStateAuthEventsForRoom(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
 ): Promise<PDU[]> {
   const result = await db
     .prepare(
@@ -1207,7 +1207,7 @@ export async function getDeferredPartialStateAuthEventsForRoom(
 
 export async function rejectProcessedPdu(
   db: D1Database,
-  eventId: string,
+  eventId: EventId,
   reason: string,
 ): Promise<void> {
   await db
@@ -1218,7 +1218,7 @@ export async function rejectProcessedPdu(
 
 export async function clearDeferredAuthMarkerForEvent(
   db: D1Database,
-  eventId: string,
+  eventId: EventId,
 ): Promise<void> {
   const row = await db
     .prepare(`SELECT unsigned FROM events WHERE event_id = ?`)
@@ -1247,10 +1247,10 @@ export async function clearDeferredAuthMarkerForEvent(
 
 export async function setRoomStateEvent(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
   eventType: string,
   stateKey: string,
-  eventId: string,
+  eventId: EventId,
 ): Promise<void> {
   await db
     .prepare(
@@ -1263,7 +1263,7 @@ export async function setRoomStateEvent(
 
 export async function deleteRoomStateEvent(
   db: D1Database,
-  roomId: string,
+  roomId: RoomId,
   eventType: string,
   stateKey: string,
 ): Promise<void> {
@@ -1300,7 +1300,7 @@ export async function getAuthChain(db: D1Database, eventIds: string[]): Promise<
 }
 
 // Get the state at a specific event (by traversing auth chain)
-export async function getStateAtEvent(db: D1Database, eventId: string): Promise<PDU[]> {
+export async function getStateAtEvent(db: D1Database, eventId: EventId): Promise<PDU[]> {
   const event = await getEvent(db, eventId);
   if (!event) return [];
 
@@ -1319,13 +1319,13 @@ export async function getStateAtEvent(db: D1Database, eventId: string): Promise<
 }
 
 // Get servers that share rooms with a user
-export function getServersInRoomsWithUser(db: D1Database, userId: string): Promise<string[]> {
+export function getServersInRoomsWithUser(db: D1Database, userId: UserId): Promise<string[]> {
   return getServersInRoomsWithUserExcludingRooms(db, userId, []);
 }
 
 async function getServersInRoomsWithUserScope(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   excludedRoomIds: string[],
   options?: { encryptedOnly?: boolean },
 ): Promise<string[]> {
@@ -1395,7 +1395,7 @@ async function getServersInRoomsWithUserScope(
 
 export function getServersInRoomsWithUserExcludingRooms(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   excludedRoomIds: string[],
 ): Promise<string[]> {
   return getServersInRoomsWithUserScope(db, userId, excludedRoomIds);
@@ -1403,14 +1403,14 @@ export function getServersInRoomsWithUserExcludingRooms(
 
 export function getServersInEncryptedRoomsWithUser(
   db: D1Database,
-  userId: string,
+  userId: UserId,
 ): Promise<string[]> {
   return getServersInRoomsWithUserScope(db, userId, [], { encryptedOnly: true });
 }
 
 export function getServersInEncryptedRoomsWithUserExcludingRooms(
   db: D1Database,
-  userId: string,
+  userId: UserId,
   excludedRoomIds: string[],
 ): Promise<string[]> {
   return getServersInRoomsWithUserScope(db, userId, excludedRoomIds, { encryptedOnly: true });
@@ -1420,8 +1420,8 @@ export function getServersInEncryptedRoomsWithUserExcludingRooms(
 // This wakes up long-polling sync requests waiting for events
 export async function notifyUsersOfEvent(
   env: Env,
-  roomId: string,
-  eventId: string,
+  roomId: RoomId,
+  eventId: EventId,
   eventType: string,
 ): Promise<void> {
   try {
@@ -1475,7 +1475,7 @@ export async function notifyUsersOfEvent(
 // Non-blocking — errors are logged but do not propagate to the caller.
 export async function fanoutEventToFederation(
   env: Env,
-  roomId: string,
+  roomId: RoomId,
   event: PDU,
   options?: { excludeServers?: string[] },
 ): Promise<void> {

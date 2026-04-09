@@ -6,6 +6,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { JsonObject } from "../types/common";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 import { generateOpaqueId, generateEventId } from "../utils/ids";
@@ -252,7 +253,7 @@ export async function sendServerNotice(
 
   const authEvents = authEventRows.results.map((r) => r.event_id);
 
-  const content: Record<string, any> = {
+  const content: JsonObject = {
     msgtype,
     body,
   };

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv, Membership } from "../../types";
 import { Errors } from "../../utils/errors";
-import { toEventId, toRoomId } from "../../utils/ids";
+import { toEventId, toRoomId, toUserId } from "../../utils/ids";
 import { requireAuth } from "../../middleware/auth";
 import { invalidateRoomCache } from "../../services/room-cache";
 import { getEvent, getMembership, updateMembership } from "../../services/database";
@@ -69,9 +69,9 @@ async function putRoomStateEvent(
       await updateMembership(
         c.env.DB,
         roomId,
-        stateKey,
+        toUserId(stateKey)!,
         content.membership as Membership,
-        response.event_id,
+        toEventId(response.event_id)!,
         typeof content.displayname === "string" ? content.displayname : undefined,
         typeof content.avatar_url === "string" ? content.avatar_url : undefined,
       );

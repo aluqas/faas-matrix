@@ -1,5 +1,6 @@
 import { Effect, Schema } from "effect";
 import { ErrorCodes } from "../../types";
+import type { RoomId } from "../../types";
 import {
   CreateRoomRequestSchema,
   InviteRoomRequestSchema,
@@ -15,7 +16,7 @@ import { DomainError } from "./domain-error";
 import { requireRoomVersionPolicy } from "./room-version-policy";
 import { validateStateEvent } from "./rooms-support";
 export type ValidatedJoinRoomRequest = {
-  roomId: string;
+  roomId: RoomId;
   remoteServers: string[];
   content?: Record<string, unknown>;
 };

@@ -1,6 +1,13 @@
 import { Effect } from "effect";
 import type { AppContext } from "../../foundation/app-context";
-import { ErrorCodes, type Membership, type PDU, type RoomId, type UserId } from "../../types";
+import {
+  ErrorCodes,
+  type ClientEvent,
+  type Membership,
+  type PDU,
+  type RoomId,
+  type UserId,
+} from "../../types";
 import { toEventId, toUserId } from "../../utils/ids";
 import type {
   GetRoomMembersInput,
@@ -8,7 +15,6 @@ import type {
   GetRoomStateEventInput,
   GetRoomStateInput,
   GetVisibleRoomEventInput,
-  RoomEventResponse,
   RoomMessagesRelationFilter,
   RoomQueryDependencies,
   TimestampToEventInput,
@@ -39,7 +45,6 @@ export type {
   GetRoomStateEventInput,
   GetRoomStateInput,
   GetVisibleRoomEventInput,
-  RoomEventResponse,
   RoomMessagesRelationFilter,
   RoomQueryDependencies,
   TimestampToEventInput,
@@ -119,7 +124,7 @@ function notFoundDomainError(message: string): DomainError {
   });
 }
 
-function toRoomEventResponse(event: PDU): RoomEventResponse {
+function toRoomEventResponse(event: PDU): ClientEvent {
   return {
     type: event.type,
     state_key: event.state_key,
@@ -227,7 +232,7 @@ export class MatrixRoomQueryService {
 
   getCurrentState(
     input: GetRoomStateInput,
-  ): Effect.Effect<RoomEventResponse[], DomainError | InfraError> {
+  ): Effect.Effect<ClientEvent[], DomainError | InfraError> {
     const db = this.getDb();
     const loadRoomState = this.fromPromise.bind(this);
     const requireMembership = this.requireMembershipEffect.bind(this);
@@ -244,7 +249,7 @@ export class MatrixRoomQueryService {
 
   getStateEvent(
     input: GetRoomStateEventInput,
-  ): Effect.Effect<Record<string, unknown> | RoomEventResponse, DomainError | InfraError> {
+  ): Effect.Effect<Record<string, unknown> | ClientEvent, DomainError | InfraError> {
     const db = this.getDb();
     const requireMembership = this.requireMembershipEffect.bind(this);
     const loadStateEvent = this.fromPromise.bind(this);
@@ -266,7 +271,7 @@ export class MatrixRoomQueryService {
 
   getMembers(
     input: GetRoomMembersInput,
-  ): Effect.Effect<{ chunk: RoomEventResponse[] }, DomainError | InfraError> {
+  ): Effect.Effect<{ chunk: ClientEvent[] }, DomainError | InfraError> {
     const db = this.getDb();
     const waitForPartialState = this.waitForPartialStateJoinCompletionEffect.bind(this);
     const requireMembership = this.requireMembershipEffect.bind(this);
@@ -300,7 +305,7 @@ export class MatrixRoomQueryService {
   getMessages(
     input: GetRoomMessagesInput,
   ): Effect.Effect<
-    { start: string; end?: string; chunk: RoomEventResponse[] },
+    { start: string; end?: string; chunk: ClientEvent[] },
     DomainError | InfraError
   > {
     const db = this.getDb();
@@ -333,7 +338,7 @@ export class MatrixRoomQueryService {
 
   getVisibleEvent(
     input: GetVisibleRoomEventInput,
-  ): Effect.Effect<RoomEventResponse, DomainError | InfraError> {
+  ): Effect.Effect<ClientEvent, DomainError | InfraError> {
     const db = this.getDb();
     const loadVisibleEvent = this.fromPromise.bind(this);
     const dependencies = this.dependencies;

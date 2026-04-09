@@ -1,5 +1,6 @@
-import type { EventId, RoomId, UserId } from "../../../../types/matrix";
+import type { RoomId, UserId } from "../../../../types/matrix";
 import type { PartialStateJoinMarker, PartialStateStatus } from "../../../../types/partial-state";
+import { toEventId, toRoomId, toUserId } from "../../../../utils/ids";
 
 export type { PartialStateJoinMarker, PartialStateStatus };
 
@@ -46,23 +47,27 @@ function parsePartialStateStatus(
     return null;
   }
 
-  const roomId = typeof raw["roomId"] === "string" ? raw["roomId"] : defaults.roomId;
-  const userId = typeof raw["userId"] === "string" ? raw["userId"] : defaults.userId;
-  const eventId = raw["eventId"];
+  const roomIdRaw = typeof raw["roomId"] === "string" ? raw["roomId"] : defaults.roomId;
+  const userIdRaw = typeof raw["userId"] === "string" ? raw["userId"] : defaults.userId;
+  const eventIdRaw = raw["eventId"];
   const startedAt = raw["startedAt"];
   if (
-    typeof roomId !== "string" ||
-    typeof userId !== "string" ||
-    typeof eventId !== "string" ||
+    typeof roomIdRaw !== "string" ||
+    typeof userIdRaw !== "string" ||
+    typeof eventIdRaw !== "string" ||
     typeof startedAt !== "number"
   ) {
     return null;
   }
+  const roomId = toRoomId(roomIdRaw);
+  const userId = toUserId(userIdRaw);
+  const eventId = toEventId(eventIdRaw);
+  if (!roomId || !userId || !eventId) return null;
 
   return {
-    roomId: roomId as unknown as RoomId,
-    userId: userId as unknown as UserId,
-    eventId: eventId as unknown as EventId,
+    roomId,
+    userId,
+    eventId,
     startedAt,
     phase:
       raw["phase"] === "catchup_published" || raw["phase"] === "complete"

@@ -1,7 +1,7 @@
 // Matrix login/registration endpoints
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
+import type { AppEnv, UserId } from "../types";
 import type { JsonBodyParseResult } from "../types/common";
 import { Errors } from "../utils/errors";
 import { hashPassword, verifyPassword, hashToken } from "../utils/crypto";
@@ -14,6 +14,7 @@ import {
   isValidLocalpart,
   isLocalServerName,
   parseUserId,
+  toUserId,
 } from "../utils/ids";
 import {
   createUser,
@@ -77,7 +78,7 @@ function methodNotAllowed() {
   );
 }
 
-function resolveLoginUserId(identifierUser: string, localServerName: string): string | null {
+function resolveLoginUserId(identifierUser: string, localServerName: string): UserId | null {
   if (identifierUser.startsWith("@")) {
     const parsed = parseUserId(identifierUser as `@${string}:${string}`);
     if (!parsed) {
@@ -152,7 +153,7 @@ app.post("/_matrix/client/v3/login", async (c) => {
       ? body["initial_device_display_name"]
       : undefined;
 
-  let userId: string;
+  let userId: UserId;
 
   if (type === "m.login.token") {
     // Token-based login (for QR codes)
@@ -177,7 +178,7 @@ app.post("/_matrix/client/v3/login", async (c) => {
       return Errors.forbidden("Login token has expired").toResponse();
     }
 
-    userId = tokenData.user_id;
+    userId = toUserId(tokenData.user_id)!;
 
     // Delete the token (one-time use)
     await c.env.SESSIONS.delete(`login_token:${tokenHash}`);
@@ -352,7 +353,7 @@ app.post("/_matrix/client/v3/refresh", async (c) => {
   const newTokenHash = await hashToken(newAccessToken);
   const newTokenId = await generateOpaqueId(16);
 
-  await createAccessToken(c.env.DB, newTokenId, newTokenHash, userId, deviceId);
+  await createAccessToken(c.env.DB, newTokenId, newTokenHash, toUserId(userId)!, deviceId);
 
   // Generate new refresh token
   const newRefreshToken = await generateRefreshToken();

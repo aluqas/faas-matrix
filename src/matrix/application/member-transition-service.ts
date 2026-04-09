@@ -339,10 +339,10 @@ export async function applyMembershipTransitionToDatabase(
     const memberContent = input.event.content as { displayname?: string; avatar_url?: string };
     await updateMembership(
       db,
-      input.roomId,
-      stateKey,
+      toRoomId(input.roomId)!,
+      toUserId(stateKey)!,
       result.membershipToPersist,
-      input.event.event_id,
+      toEventId(input.event.event_id)!,
       memberContent.displayname,
       memberContent.avatar_url,
     );
@@ -372,12 +372,13 @@ export async function loadMembershipTransitionContext(
   roomId: string,
   stateKey?: string,
 ): Promise<MembershipTransitionContext> {
+  const typedRoomId = toRoomId(roomId)!;
   return {
-    currentMembership: stateKey ? await getMembership(db, roomId, stateKey) : null,
+    currentMembership: stateKey ? await getMembership(db, typedRoomId, toUserId(stateKey)!) : null,
     currentMemberEvent: stateKey
-      ? await getStateEvent(db, roomId, "m.room.member", stateKey)
+      ? await getStateEvent(db, typedRoomId, "m.room.member", stateKey)
       : null,
-    roomState: await getRoomState(db, roomId),
-    inviteStrippedState: await getInviteStrippedState(db, roomId),
+    roomState: await getRoomState(db, typedRoomId),
+    inviteStrippedState: await getInviteStrippedState(db, typedRoomId),
   };
 }

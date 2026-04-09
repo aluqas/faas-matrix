@@ -1207,7 +1207,7 @@ async function isOIDCUser(db: D1Database, userId: string): Promise<boolean> {
 
 // Helper: Check if user has password set
 async function hasPassword(db: D1Database, userId: string): Promise<boolean> {
-  const hash = await getPasswordHash(db, userId);
+  const hash = await getPasswordHash(db, toUserId(userId)!);
   return hash !== null && hash.length > 0;
 }
 

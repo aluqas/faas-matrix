@@ -19,7 +19,7 @@ import {
   calculateReferenceHashEventIdStandard,
   verifyContentHash,
 } from "../../../../utils/crypto";
-import { toEventId, toRoomId } from "../../../../utils/ids";
+import { toEventId, toRoomId, toUserId } from "../../../../utils/ids";
 import { extractServerNameFromMatrixId } from "../../../../utils/matrix-ids";
 import type { FederationRepository } from "../../../repositories/interfaces";
 import { emitEffectWarningEffect } from "../../effect-debug";
@@ -213,7 +213,7 @@ async function fetchStateSnapshotForMissingPrevEvent(
 
   const missingSnapshotEventIds: string[] = [];
   for (const eventId of snapshotEventIds) {
-    const existing = await ports.repository.getEvent(eventId);
+    const existing = await ports.repository.getEvent(toEventId(eventId)!);
     const processed = await ports.repository.getProcessedPdu(eventId);
     if (!existing && !processed) {
       missingSnapshotEventIds.push(eventId);
@@ -391,7 +391,7 @@ async function fetchMissingPrevEventsIfNeeded(
     );
   }
 
-  const latestKnownEvents = await ports.repository.getLatestRoomEvents(roomId, 1);
+  const latestKnownEvents = await ports.repository.getLatestRoomEvents(toRoomId(roomId)!, 1);
   const earliestKnownEvent = latestKnownEvents[0];
   const earliestEventId = earliestKnownEvent?.event_id;
   if (!earliestEventId) {
@@ -502,7 +502,7 @@ async function storeAcceptedPdu(
     await ports.repository.createRoom(
       pdu.room_id,
       roomVersion,
-      (content.creator ?? pdu.sender) || "",
+      toUserId((content.creator ?? pdu.sender) || "")!,
       false,
     );
   }
@@ -539,7 +539,7 @@ async function storeAcceptedPdu(
       const memberContent = storedPdu.content as { displayname?: string; avatar_url?: string };
       await ports.repository.updateMembership(
         storedPdu.room_id,
-        storedPdu.state_key!,
+        toUserId(storedPdu.state_key!)!,
         result.membershipToPersist,
         storedPdu.event_id,
         memberContent.displayname,
@@ -598,7 +598,7 @@ export async function ingestFederationPdu(
   } = extractRawFederationPduFields(pdu);
 
   if (!roomId || !sender || !eventType || !content) {
-    const fallbackEventId = toEventId(incomingEventId) ?? ("$unknown" as EventId);
+    const fallbackEventId = toEventId(incomingEventId) ?? toEventId("$unknown")!;
     return {
       kind: "rejected",
       eventId: fallbackEventId,
@@ -619,14 +619,14 @@ export async function ingestFederationPdu(
   const urlsafeEventId: EventId | null =
     eventIdFormat === "v1"
       ? (incomingEventIdValidated ?? null)
-      : ((await calculateReferenceHashEventId(input.rawPdu, roomVersion)) as EventId);
+      : toEventId(await calculateReferenceHashEventId(input.rawPdu, roomVersion));
   const standardEventId: EventId | null =
     eventIdFormat === "v1"
       ? (incomingEventIdValidated ?? null)
-      : ((await calculateReferenceHashEventIdStandard(input.rawPdu, roomVersion)) as EventId);
+      : toEventId(await calculateReferenceHashEventIdStandard(input.rawPdu, roomVersion));
   const normalizedEventId: EventId | null =
     eventIdFormat === "v1" ? (incomingEventIdValidated ?? null) : urlsafeEventId;
-  const eventId: EventId = normalizedEventId ?? incomingEventIdValidated ?? ("$unknown" as EventId);
+  const eventId: EventId = normalizedEventId ?? incomingEventIdValidated ?? toEventId("$unknown")!;
   if (!normalizedEventId) {
     return {
       kind: "rejected",

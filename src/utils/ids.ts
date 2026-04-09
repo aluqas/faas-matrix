@@ -85,7 +85,7 @@ export async function generateEventId(
   if (format === "v1") {
     // Room versions 1-2: $opaque:domain
     const opaque = await generateOpaqueId(18);
-    return `$${opaque}:${serverName}` as EventId;
+    return toEventId(`$${opaque}:${serverName}`)!;
   }
   // Room versions 3+: $base64url (no domain)
   const opaque = await generateOpaqueId(32);
@@ -95,7 +95,7 @@ export async function generateEventId(
 // Generate a legacy event ID (room version 1-2)
 export async function generateLegacyEventId(serverName: ServerName): Promise<EventId> {
   const opaque = await generateOpaqueId(18);
-  return `$${opaque}:${serverName}` as EventId;
+  return toEventId(`$${opaque}:${serverName}`)!;
 }
 
 // Get the event ID format for a room version

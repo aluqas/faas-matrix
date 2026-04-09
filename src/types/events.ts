@@ -1,6 +1,7 @@
 import type {
   EventId,
   EventType,
+  Membership,
   RoomId,
   RoomVersionId,
   ServerName,
@@ -53,7 +54,7 @@ export interface MissingEventsQuery {
   roomVersion?: RoomVersionId;
 }
 
-export type StoredContextEvent = {
+export type StoredEventRow = {
   event_id: EventId;
   room_id: RoomId;
   sender: UserId;
@@ -61,4 +62,17 @@ export type StoredContextEvent = {
   state_key: StateKey | null;
   content: string;
   origin_server_ts: number;
+};
+
+export type StoredPduRow = StoredEventRow & {
+  unsigned?: string | null;
+  depth: number;
+  auth_events: string;
+  prev_events: string;
+  event_origin?: ServerName | null;
+  event_membership?: Membership | null;
+  prev_state?: string | null;
+  hashes?: string | null;
+  signatures?: string | null;
+  stream_ordering?: number;
 };

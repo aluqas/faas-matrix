@@ -1,6 +1,5 @@
 import { getRoomVersion } from "../../services/room-versions";
 import type {
-  EventId,
   Membership,
   PDU,
   RoomCreateContent,
@@ -9,6 +8,7 @@ import type {
   UserId,
 } from "../../types";
 import { calculateContentHash, calculateReferenceHashEventId } from "../../utils/crypto";
+import { toEventId, toRoomId, toUserId } from "../../utils/ids";
 import type { RoomRepository } from "../repositories/interfaces";
 
 export interface StateEventValidation {
@@ -106,7 +106,7 @@ export async function createInitialRoomEvents(
     type: string,
     content: Record<string, unknown>,
     stateKey?: string,
-  ): Promise<string> {
+  ): Promise<import("../../types").EventId> {
     const baseEvent = {
       room_id: roomId,
       sender: creatorId,
@@ -124,14 +124,14 @@ export async function createInitialRoomEvents(
       ...baseEvent,
       hashes: { sha256: hash },
     };
-    const eventId = (
+    const eventIdRaw =
       (roomVersion ? getRoomVersion(roomVersion) : null)?.eventIdFormat === "v1"
         ? await generateEventId(serverName, roomVersion)
         : await calculateReferenceHashEventId(
             eventWithHash as unknown as Record<string, unknown>,
             roomVersion,
-          )
-    ) as EventId;
+          );
+    const eventId = toEventId(eventIdRaw)!;
     const event: PDU = {
       event_id: eventId,
       room_id: roomId,
@@ -141,8 +141,14 @@ export async function createInitialRoomEvents(
       content,
       origin_server_ts: createdAt,
       depth: baseEvent.depth,
-      auth_events: [...authEvents] as EventId[],
-      prev_events: [...prevEvents] as EventId[],
+      auth_events: [...authEvents].flatMap((id) => {
+        const e = toEventId(id);
+        return e ? [e] : [];
+      }),
+      prev_events: [...prevEvents].flatMap((id) => {
+        const e = toEventId(id);
+        return e ? [e] : [];
+      }),
       hashes: { sha256: hash },
     };
 
@@ -235,12 +241,16 @@ export async function createInitialRoomEvents(
 
   if (options.invite) {
     for (const invitee of options.invite) {
+      const inviteeUserId = toUserId(invitee);
+      if (!inviteeUserId) {
+        continue;
+      }
       const inviteContent: RoomMemberContent = {
         membership: "invite",
         is_direct: options.is_direct,
       };
       const inviteEventId = await createEvent("m.room.member", inviteContent, invitee);
-      await repository.updateMembership(roomId, invitee, "invite", inviteEventId);
+      await repository.updateMembership(roomId, inviteeUserId, "invite", inviteEventId);
     }
   }
 
@@ -291,26 +301,32 @@ export async function createMembershipEvent(options: CreateMembershipEventOption
     ...baseEvent,
     hashes: { sha256: hash },
   };
-  const eventId = (
+  const eventIdRaw =
     (options.roomVersion ? getRoomVersion(options.roomVersion) : null)?.eventIdFormat === "v1"
       ? await options.generateEventId(options.serverName, options.roomVersion)
       : await calculateReferenceHashEventId(
           eventWithHash as unknown as Record<string, unknown>,
           options.roomVersion,
-        )
-  ) as EventId;
+        );
+  const eventId = toEventId(eventIdRaw)!;
 
   return {
     event_id: eventId,
-    room_id: options.roomId as RoomId,
-    sender: options.sender as UserId,
+    room_id: toRoomId(options.roomId)!,
+    sender: toUserId(options.sender)!,
     type: "m.room.member",
-    state_key: options.userId as UserId,
+    state_key: toUserId(options.userId)!,
     content: { ...options.content, membership: options.membership },
     origin_server_ts: originServerTs,
     depth: options.depth,
-    auth_events: authEvents.map((id) => id as EventId),
-    prev_events: options.prevEventIds.map((id) => id as EventId),
+    auth_events: authEvents.flatMap((id) => {
+      const e = toEventId(id);
+      return e ? [e] : [];
+    }),
+    prev_events: options.prevEventIds.flatMap((id) => {
+      const e = toEventId(id);
+      return e ? [e] : [];
+    }),
     unsigned: options.unsigned ?? undefined,
     hashes: { sha256: hash },
   };

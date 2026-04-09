@@ -1,9 +1,9 @@
 import type {
   AccountDataEvent,
+  ClientEvent,
   DeviceId,
   EventId,
   EphemeralEvent,
-  MatrixEvent,
   RoomId,
   RoomVersionId,
   StrippedStateEvent,
@@ -212,8 +212,8 @@ export interface RoomResult {
   canonical_alias?: string;
   heroes?: StrippedHero[];
   initial?: boolean;
-  required_state?: MatrixEvent[];
-  timeline?: MatrixEvent[];
+  required_state?: ClientEvent[];
+  timeline?: ClientEvent[];
   prev_batch?: string;
   limited?: boolean;
   joined_count?: number;

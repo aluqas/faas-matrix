@@ -193,7 +193,12 @@ async function resolveRoomId(
     return explicitRoomId;
   }
 
-  const event = await getEvent(db, eventId);
+  const typedEventId = toEventId(eventId);
+  if (!typedEventId) {
+    return null;
+  }
+
+  const event = await getEvent(db, typedEventId);
   return event?.room_id ?? null;
 }
 
@@ -300,12 +305,17 @@ export async function queryEventRelationships(
   db: D1Database,
   request: EventRelationshipsRequest,
 ): Promise<EventRelationshipsResult | null> {
-  const roomId = await resolveRoomId(db, request.eventId, request.roomId);
+  const requestEventId = toEventId(request.eventId);
+  if (!requestEventId) {
+    return null;
+  }
+
+  const roomId = await resolveRoomId(db, requestEventId, request.roomId);
   if (!roomId) {
     return null;
   }
 
-  const root = await getEvent(db, request.eventId);
+  const root = await getEvent(db, requestEventId);
   if (!root || root.room_id !== roomId) {
     return null;
   }
@@ -334,7 +344,17 @@ export async function queryEventRelationships(
         break;
       }
 
-      const parent = await getEvent(db, parentId);
+      const typedParentId = toEventId(parentId);
+      if (!typedParentId) {
+        return {
+          roomId,
+          events,
+          limited: false,
+          missingParentId: parentId,
+        };
+      }
+
+      const parent = await getEvent(db, typedParentId);
       if (!parent) {
         return {
           roomId,
@@ -355,7 +375,10 @@ export async function queryEventRelationships(
   if (request.includeParent) {
     const parentId = await loadParentEventId(db, root.event_id);
     if (parentId) {
-      await addEvent(await getEvent(db, parentId));
+      const typedParentId = toEventId(parentId);
+      if (typedParentId) {
+        await addEvent(await getEvent(db, typedParentId));
+      }
     }
   }
 

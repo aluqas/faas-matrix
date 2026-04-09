@@ -30,7 +30,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/aliases", requireAuth(), async (c) => 
   const userId = c.get("userId");
   const roomId = c.req.param("roomId");
 
-  const membership = await getMembership(c.env.DB, roomId, userId);
+  const membership = await getMembership(c.env.DB, toRoomId(roomId)!, userId);
   if (!membership || membership.membership !== "join") {
     return Errors.forbidden("Not a member of this room").toResponse();
   }
@@ -134,12 +134,12 @@ app.put("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async (c)
     return Errors.roomInUse().toResponse();
   }
 
-  const membership = await getMembership(c.env.DB, body.room_id, userId);
+  const membership = await getMembership(c.env.DB, toRoomId(body.room_id)!, userId);
   if (!membership || membership.membership !== "join") {
     return Errors.forbidden("Not a member of this room").toResponse();
   }
 
-  await createRoomAlias(c.env.DB, alias, body.room_id, userId);
+  await createRoomAlias(c.env.DB, alias, toRoomId(body.room_id)!, userId);
   return c.json({});
 });
 
@@ -161,7 +161,7 @@ app.delete("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async 
   if (!canDeleteAsCreator) {
     const powerLevelsEvent = await getStateEvent(
       c.env.DB,
-      aliasRecord.room_id,
+      toRoomId(aliasRecord.room_id)!,
       "m.room.power_levels",
       "",
     );
@@ -178,7 +178,7 @@ app.delete("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async 
 
   const canonicalAliasEvent = await getStateEvent(
     c.env.DB,
-    aliasRecord.room_id,
+    toRoomId(aliasRecord.room_id)!,
     "m.room.canonical_alias",
     "",
   );

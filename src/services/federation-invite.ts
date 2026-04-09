@@ -1,18 +1,9 @@
-import { ErrorCodes, type PDU } from "../types";
+import { ErrorCodes, type PDU, type StrippedStateEvent } from "../types";
 import { isJsonObject } from "../types/common";
+import { toRoomId } from "../utils/ids";
 import { MatrixApiError } from "../utils/errors";
 import { federationPut } from "./federation-keys";
 import { getRoom, getRoomState } from "./database";
-
-type StrippedStateEvent = {
-  type: string;
-  sender: string;
-  content: Record<string, unknown>;
-  state_key?: string;
-  room_id?: string;
-  event_id?: string;
-  origin_server_ts?: number;
-};
 
 function getUserServerName(userId: string): string | null {
   const colonIndex = userId.indexOf(":");
@@ -24,15 +15,12 @@ function getUserServerName(userId: string): string | null {
 
 function toInviteRoomState(events: PDU[]): StrippedStateEvent[] {
   return events
-    .filter((event) => event.state_key !== undefined)
+    .filter((event): event is PDU & { state_key: string } => event.state_key !== undefined)
     .map((event) => ({
       type: event.type,
       sender: event.sender,
       state_key: event.state_key,
       content: event.content,
-      room_id: event.room_id,
-      event_id: event.event_id,
-      origin_server_ts: event.origin_server_ts,
     }));
 }
 
@@ -56,12 +44,17 @@ export async function sendFederationInvite(
     return;
   }
 
-  const room = await getRoom(db, roomId);
+  const typedRoomId = toRoomId(roomId);
+  if (!typedRoomId) {
+    return;
+  }
+
+  const room = await getRoom(db, typedRoomId);
   if (!room) {
     return;
   }
 
-  const roomState = await getRoomState(db, roomId);
+  const roomState = await getRoomState(db, typedRoomId);
   const inviteRoomState = toInviteRoomState(roomState);
 
   const response = await federationPut(

@@ -6,17 +6,10 @@ import type {
   RoomId,
   ServerName,
   StateKey,
-  UnsignedData,
   UserId,
 } from "./matrix";
 import type { PartialStateStatus } from "./partial-state";
-import type { EventWithIdResponse, TimestampDirection } from "./events";
-
-export type RoomEventResponse = EventWithIdResponse & {
-  state_key?: StateKey;
-  room_id: RoomId;
-  unsigned?: UnsignedData;
-};
+import type { TimestampDirection } from "./events";
 
 export interface RoomMessagesRelationFilter {
   relTypes?: string[];

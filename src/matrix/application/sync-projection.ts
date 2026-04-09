@@ -1,9 +1,10 @@
 import type {
   AccountDataEvent,
+  ClientEvent,
   LeftRoom,
   JoinedRoom,
-  MatrixEvent,
   PDU,
+  RoomId,
   StrippedStateEvent,
 } from "../../types";
 import type {
@@ -14,6 +15,7 @@ import type {
   SyncProjectionResult,
 } from "../../types/sync";
 import type { FilterDefinition, SyncRepository } from "../repositories/interfaces";
+import { toEventId } from "../../utils/ids";
 import { FORGOTTEN_ROOM_ACCOUNT_DATA_TYPE } from "./room-account-data";
 import { projectTypingEphemeral } from "./features/typing/project";
 import {
@@ -36,7 +38,7 @@ type EventLike = {
   sender?: string;
 };
 
-function toClientEvent(event: PDU): MatrixEvent {
+function toClientEvent(event: PDU): ClientEvent {
   return {
     type: event.type,
     state_key: event.state_key,
@@ -252,8 +254,8 @@ export async function projectJoinedRoom(
     query.fullState || query.sincePosition === 0 || lazyLoadMembers
       ? await repository.getRoomState(query.roomId)
       : [];
-  let stateEvents: MatrixEvent[] = [];
-  let timelineEvents: MatrixEvent[] = [];
+  let stateEvents: ClientEvent[] = [];
+  let timelineEvents: ClientEvent[] = [];
   let timelineSourceEvents: PDU[] = [];
   let timelineLimited = false;
 
@@ -424,7 +426,7 @@ export async function projectMembershipRooms(
     }
 
     const inviteEvent =
-      (membership.eventId ? await repository.getEvent(membership.eventId) : null) ??
+      (membership.eventId ? await repository.getEvent(toEventId(membership.eventId)!) : null) ??
       roomState.find(
         (event) =>
           event.type === "m.room.member" &&
@@ -475,7 +477,7 @@ export async function projectMembershipRooms(
     const roomState = await repository.getRoomState(roomId);
     const stripped = await repository.getInviteStrippedState(roomId);
     const stateSource = toStrippedStateSource(roomState, stripped);
-    const knockEvent = await repository.getEvent(membership.eventId);
+    const knockEvent = await repository.getEvent(toEventId(membership.eventId)!);
     if (
       knockEvent &&
       knockEvent.type === "m.room.member" &&
@@ -503,7 +505,7 @@ export async function projectMembershipRooms(
     return result;
   }
 
-  const leaveLikeRoomIds = new Set<string>([
+  const leaveLikeRoomIds = new Set<RoomId>([
     ...(await repository.getUserRooms(query.userId, "leave")),
     ...(await repository.getUserRooms(query.userId, "ban")),
   ]);
@@ -529,7 +531,7 @@ export async function projectMembershipRooms(
     if (!leaveEvent) {
       const membership = await repository.getMembership(roomId, query.userId);
       if (membership?.membership === "leave" || membership?.membership === "ban") {
-        const event = await repository.getEvent(membership.eventId);
+        const event = await repository.getEvent(toEventId(membership.eventId)!);
         if (isLeaveLikeMembershipEvent(event, query.userId)) {
           leaveEvent = event;
         } else {
@@ -544,7 +546,7 @@ export async function projectMembershipRooms(
       continue;
     }
 
-    result.leaveRooms[roomId as `!${string}:${string}`] = toLeftRoom(leaveEvent);
+    result.leaveRooms[roomId] = toLeftRoom(leaveEvent);
   }
 
   return result;

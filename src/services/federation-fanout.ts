@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { EventId, PDU, RoomId } from "../types";
+import type { EventId, PDU } from "../types";
 import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
 import { toEventId, toRoomId, toUserId } from "../utils/ids";
 import { createServerAclPolicy } from "../matrix/application/features/server-acl/policy";
@@ -80,7 +80,7 @@ async function shouldFanoutEvent(
   const aclPolicy = createServerAclPolicy([
     {
       event_id: toEventId(aclEvent.event_id) ?? event.event_id,
-      room_id: toRoomId(aclEvent.room_id) ?? (roomId as RoomId),
+      room_id: toRoomId(aclEvent.room_id) ?? toRoomId(roomId) ?? event.room_id,
       sender: toUserId(aclEvent.sender) ?? event.sender,
       type: aclEvent.event_type,
       state_key: aclEvent.state_key ?? undefined,

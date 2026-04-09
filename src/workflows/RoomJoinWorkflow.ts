@@ -8,7 +8,7 @@
 
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import type { Env, EventId, PDU, RoomId, UserId } from "../types";
-import { generateEventId, toEventId } from "../utils/ids";
+import { generateEventId, toEventId, toUserId } from "../utils/ids";
 import { isJsonObject } from "../types/common";
 import type { PartialStateJoinMarker, PartialStateStatus } from "../types/partial-state";
 import { calculateContentHash, calculateReferenceHashEventId } from "../utils/crypto";
@@ -126,7 +126,7 @@ class RemoteJoinHttpError extends Error {
   }
 }
 
-const WORKFLOW_FAILURE_EVENT_ID = "$workflow-failure" as EventId;
+const WORKFLOW_FAILURE_EVENT_ID = toEventId("$workflow-failure")!;
 
 function parseStateIdsResponse(
   value: unknown,
@@ -465,7 +465,13 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
                   this.env.CACHE,
                   sharedUserId,
                 ),
-              getUserDevices: (deviceUserId) => getUserDevices(this.env.DB, deviceUserId),
+              getUserDevices: (deviceUserId) => {
+                const typedUserId = toUserId(deviceUserId);
+                if (!typedUserId) {
+                  return Promise.resolve([]);
+                }
+                return getUserDevices(this.env.DB, typedUserId);
+              },
               getStoredDeviceKeys: (deviceUserId, deviceId) =>
                 getStoredDeviceKeysFromKv(this.env.DEVICE_KEYS, deviceUserId, deviceId),
               queueEdu: (destination, eduType, content) =>

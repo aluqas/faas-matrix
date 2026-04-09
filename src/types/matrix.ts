@@ -42,7 +42,7 @@ export type PresenceState = "online" | "offline" | "unavailable";
 export type MatrixSignatures = Record<ServerName, Record<string, string>>;
 
 // Base event structure
-export interface MatrixEvent {
+export interface ClientEvent {
   event_id: EventId;
   room_id: RoomId;
   sender: UserId;
@@ -58,12 +58,12 @@ export interface UnsignedData {
   transaction_id?: string;
   prev_content?: Record<string, unknown>;
   prev_sender?: UserId;
-  redacted_because?: MatrixEvent;
+  redacted_because?: ClientEvent;
   "m.relations"?: Record<string, unknown>;
 }
 
 // Persistent Data Unit (PDU) - events as stored/transmitted
-export interface PDU extends MatrixEvent {
+export interface PDU extends ClientEvent {
   auth_events: EventId[];
   prev_events: EventId[];
   depth: number;
@@ -300,13 +300,13 @@ export interface ThreadUnreadNotificationEntry {
 export interface JoinedRoom {
   summary?: RoomSummary;
   state?: {
-    events: MatrixEvent[];
+    events: ClientEvent[];
   };
   state_after?: {
-    events: MatrixEvent[];
+    events: ClientEvent[];
   };
   timeline?: {
-    events: MatrixEvent[];
+    events: ClientEvent[];
     limited?: boolean;
     prev_batch?: string;
   };
@@ -331,10 +331,10 @@ export interface InvitedRoom {
 
 export interface LeftRoom {
   state?: {
-    events: MatrixEvent[];
+    events: ClientEvent[];
   };
   timeline?: {
-    events: MatrixEvent[];
+    events: ClientEvent[];
     limited?: boolean;
     prev_batch?: string;
   };

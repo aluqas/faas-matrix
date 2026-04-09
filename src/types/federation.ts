@@ -94,21 +94,3 @@ export interface FederationRelationshipsQueryInput {
 export type FederationQueryInput =
   | ({ kind: "profile" } & FederationProfileQueryInput)
   | ({ kind: "event_relationships" } & FederationRelationshipsQueryInput);
-
-export type FederationEventRow = {
-  event_id: EventId;
-  room_id: RoomId;
-  sender: UserId;
-  event_type: EventType;
-  state_key: StateKey | null;
-  content: string;
-  origin_server_ts: number;
-  depth: number;
-  auth_events: string;
-  prev_events: string;
-  event_origin?: ServerName | null;
-  event_membership?: string | null;
-  prev_state?: string | null;
-  hashes?: string | null;
-  signatures?: string | null;
-};

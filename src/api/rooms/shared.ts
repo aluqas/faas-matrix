@@ -3,7 +3,7 @@ import type { AppEnv, RoomId } from "../../types";
 import { isJsonObject } from "../../types/common";
 import { ErrorCodes } from "../../types";
 import { Errors, MatrixApiError } from "../../utils/errors";
-import { parseRoomAlias, toRoomId } from "../../utils/ids";
+import { parseRoomAlias, toRoomId, toUserId } from "../../utils/ids";
 import { federationGet } from "../../services/federation-keys";
 import { getMembership, getRoomByAlias, getStateEvent } from "../../services/database";
 
@@ -246,12 +246,12 @@ export async function canUserSendStateEvent(
   userId: string,
   eventType: string,
 ): Promise<boolean> {
-  const membership = await getMembership(db, roomId, userId);
+  const membership = await getMembership(db, toRoomId(roomId)!, toUserId(userId)!);
   if (!membership || membership.membership !== "join") {
     return false;
   }
 
-  const powerLevelsEvent = await getStateEvent(db, roomId, "m.room.power_levels", "");
+  const powerLevelsEvent = await getStateEvent(db, toRoomId(roomId)!, "m.room.power_levels", "");
   const { userPower, stateDefault, eventLevels } = getUserPowerLevelFromContent(
     powerLevelsEvent?.content,
     userId,

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../../types";
-import type { StoredContextEvent } from "../../types/events";
+import type { StoredEventRow } from "../../types/events";
 import { Errors } from "../../utils/errors";
 import { requireAuth } from "../../middleware/auth";
 import { getEvent, getMembership, getRoomMembers, getRoomState } from "../../services/database";
@@ -14,7 +14,7 @@ import type { RoomId, UserId } from "../../types";
 const app = new Hono<AppEnv>();
 const PARTIAL_STATE_WAIT_TIMEOUT_MS = 2000;
 
-function formatContextEvent(event: StoredContextEvent) {
+function formatContextEvent(event: StoredEventRow) {
   return {
     type: event.event_type,
     state_key: event.state_key ?? undefined,
@@ -102,7 +102,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), asyn
      ORDER BY origin_server_ts DESC LIMIT ?`,
   )
     .bind(roomId, targetEvent.origin_server_ts, halfLimit)
-    .all<StoredContextEvent>();
+    .all<StoredEventRow>();
   const eventsAfter = await c.env.DB.prepare(
     `SELECT event_id, room_id, sender, event_type, state_key, content, origin_server_ts
      FROM events
@@ -110,7 +110,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/context/:eventId", requireAuth(), asyn
      ORDER BY origin_server_ts ASC LIMIT ?`,
   )
     .bind(roomId, targetEvent.origin_server_ts, halfLimit)
-    .all<StoredContextEvent>();
+    .all<StoredEventRow>();
   const state = await getRoomState(c.env.DB, roomId);
 
   return c.json({

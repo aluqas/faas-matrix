@@ -193,7 +193,7 @@ app.post("/_matrix/client/unstable/event_relationships", requireAuth(), async (c
   }
 
   let result = await queryEventRelationships(c.env.DB, request);
-  const roomId = (result?.roomId ?? request.roomId) as RoomId;
+  const roomId = toRoomId(result?.roomId ?? request.roomId);
   if (!roomId) {
     return Errors.notFound("Event not found").toResponse();
   }
@@ -784,7 +784,10 @@ app.delete(
   requireAuth(),
   async (c) => {
     const userId = c.get("userId");
-    const roomId = decodeURIComponent(c.req.param("roomId")) as unknown as RoomId;
+    const roomId = toRoomId(decodeURIComponent(c.req.param("roomId")));
+    if (!roomId) {
+      return Errors.invalidParam("roomId", "Invalid room ID").toResponse();
+    }
     const threadRootId = decodeURIComponent(c.req.param("threadRootId"));
     const db = c.env.DB;
 

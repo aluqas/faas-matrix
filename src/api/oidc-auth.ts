@@ -3,6 +3,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import type { UserId } from "../types";
 import type { IdPProvider, IdPUserLink, OAuthState } from "../types/client";
 import {
   fetchOIDCDiscovery,
@@ -282,7 +283,7 @@ app.get("/auth/oidc/:providerId/callback", async (c) => {
       .bind(providerId, claims.sub)
       .first<IdPUserLink>();
 
-    let userId: string;
+    let userId: UserId;
 
     if (userLink) {
       // Existing user - update last login

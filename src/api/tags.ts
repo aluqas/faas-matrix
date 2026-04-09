@@ -6,6 +6,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import { isJsonObject, type JsonObject } from "../types/common";
 import { Errors } from "../utils/errors";
 import { requireAuth } from "../middleware/auth";
 
@@ -86,9 +87,12 @@ app.put("/_matrix/client/v3/user/:userId/rooms/:roomId/tags/:tag", requireAuth()
   }
 
   // Parse body for tag content (e.g., order)
-  let tagContent: Record<string, any> = {};
+  let tagContent: JsonObject = {};
   try {
-    tagContent = await c.req.json();
+    const body = await c.req.json();
+    if (isJsonObject(body)) {
+      tagContent = body;
+    }
   } catch {
     // Body is optional
   }
@@ -102,11 +106,17 @@ app.put("/_matrix/client/v3/user/:userId/rooms/:roomId/tags/:tag", requireAuth()
     .bind(requestingUserId, roomId)
     .first<{ content: string }>();
 
-  let tags: Record<string, Record<string, any>> = {};
+  let tags: Record<string, JsonObject> = {};
   if (existing) {
     try {
       const content = JSON.parse(existing.content);
-      tags = content.tags ?? {};
+      if (isJsonObject(content.tags)) {
+        tags = Object.fromEntries(
+          Object.entries(content.tags).flatMap(([key, value]) =>
+            isJsonObject(value) ? [[key, value]] : [],
+          ),
+        );
+      }
     } catch {
       // Start fresh
     }
@@ -156,10 +166,16 @@ app.delete("/_matrix/client/v3/user/:userId/rooms/:roomId/tags/:tag", requireAut
     return c.json({});
   }
 
-  let tags: Record<string, Record<string, any>> = {};
+  let tags: Record<string, JsonObject> = {};
   try {
     const content = JSON.parse(existing.content);
-    tags = content.tags ?? {};
+    if (isJsonObject(content.tags)) {
+      tags = Object.fromEntries(
+        Object.entries(content.tags).flatMap(([key, value]) =>
+          isJsonObject(value) ? [[key, value]] : [],
+        ),
+      );
+    }
   } catch {
     return c.json({});
   }

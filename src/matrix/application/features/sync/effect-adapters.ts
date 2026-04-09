@@ -10,7 +10,7 @@ import {
   getPartialStateCompletionStatus,
   getPartialStateStatus,
 } from "../partial-state/tracker";
-import { toRoomId, toUserId } from "../../../../utils/ids";
+import { toEventId, toRoomId, toUserId } from "../../../../utils/ids";
 import type { PartialStatePort, SyncQueryPort } from "./effect-ports";
 import { toInfraError } from "./effect-ports";
 
@@ -64,52 +64,52 @@ export function createEffectSyncQueryPort(repository: SyncRepository): SyncQuery
       }),
     getUserRooms: (userId, membership) =>
       Effect.tryPromise({
-        try: () => repository.getUserRooms(userId, membership),
+        try: () => repository.getUserRooms(toUserId(userId)!, membership),
         catch: (cause) => toInfraError("Failed to load user rooms", cause),
       }),
     getMembership: (roomId, userId) =>
       Effect.tryPromise({
-        try: () => repository.getMembership(roomId, userId),
+        try: () => repository.getMembership(toRoomId(roomId)!, toUserId(userId)!),
         catch: (cause) => toInfraError("Failed to load room membership", cause),
       }),
     getEventsSince: (roomId, sincePosition) =>
       Effect.tryPromise({
-        try: () => repository.getEventsSince(roomId, sincePosition),
+        try: () => repository.getEventsSince(toRoomId(roomId)!, sincePosition),
         catch: (cause) => toInfraError("Failed to load room events", cause),
       }),
     getEvent: (eventId) =>
       Effect.tryPromise({
-        try: () => repository.getEvent(eventId),
+        try: () => repository.getEvent(toEventId(eventId)!),
         catch: (cause) => toInfraError("Failed to load event", cause),
       }),
     getRoomState: (roomId) =>
       Effect.tryPromise({
-        try: () => repository.getRoomState(roomId),
+        try: () => repository.getRoomState(toRoomId(roomId)!),
         catch: (cause) => toInfraError("Failed to load room state", cause),
       }),
     getInviteStrippedState: (roomId) =>
       Effect.tryPromise({
-        try: () => repository.getInviteStrippedState(roomId),
+        try: () => repository.getInviteStrippedState(toRoomId(roomId)!),
         catch: (cause) => toInfraError("Failed to load invite stripped state", cause),
       }),
     getReceiptsForRoom: (roomId, userId) =>
       Effect.tryPromise({
-        try: () => repository.getReceiptsForRoom(roomId, userId),
+        try: () => repository.getReceiptsForRoom(toRoomId(roomId)!, toUserId(userId)!),
         catch: (cause) => toInfraError("Failed to load room receipts", cause),
       }),
     getUnreadNotificationSummary: (roomId, userId) =>
       Effect.tryPromise({
-        try: () => repository.getUnreadNotificationSummary(roomId, userId),
+        try: () => repository.getUnreadNotificationSummary(toRoomId(roomId)!, toUserId(userId)!),
         catch: (cause) => toInfraError("Failed to load unread notification summary", cause),
       }),
     getTypingUsers: (roomId) =>
       Effect.tryPromise({
-        try: () => repository.getTypingUsers(roomId),
+        try: () => repository.getTypingUsers(toRoomId(roomId)!),
         catch: (cause) => toInfraError("Failed to load typing users", cause),
       }),
     waitForUserEvents: (userId, timeoutMs) =>
       Effect.tryPromise({
-        try: () => repository.waitForUserEvents(userId, timeoutMs),
+        try: () => repository.waitForUserEvents(toUserId(userId)!, timeoutMs),
         catch: (cause) => toInfraError("Failed to wait for user events", cause),
       }),
   };
