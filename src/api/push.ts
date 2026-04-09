@@ -10,15 +10,15 @@
 // even when the app is not running.
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { isJsonObject } from "../types/common";
-import { Errors } from "../utils/errors";
-import { extractAccessToken, requireAuth } from "../middleware/auth";
-import { hashToken } from "../utils/crypto";
-import { runClientEffect } from "../matrix/application/effect-runtime";
+import type { AppEnv } from "../shared/types";
+import { isJsonObject } from "../shared/types/common";
+import { Errors } from "../shared/utils/errors";
+import { extractAccessToken, requireAuth } from "../infra/middleware/auth";
+import { hashToken } from "../shared/utils/crypto";
+import { runClientEffect } from "../matrix/application/runtime/effect-runtime";
 import { withLogContext } from "../matrix/application/logging";
-import { getAccessTokenRecordByHash } from "../services/database";
-import { notifySyncUser } from "../services/sync-notify";
+import { getAccessTokenRecordByHash } from "../infra/db/database";
+import { notifySyncUser } from "../infra/realtime/sync-notify";
 import {
   type JsonObject,
   type PusherData,
@@ -1240,7 +1240,7 @@ function matchesCondition(
       const match = condition.is.match(/^(==|<|>|<=|>=)?(\d+)$/);
       if (!match) return false;
 
-      const op = match[1] || "==";
+      const op = match[1] ?? "==";
       const count = parseInt(match[2] ?? "0", 10);
 
       switch (op) {
@@ -1304,7 +1304,7 @@ export async function sendPushNotification(
   userId: string,
   event: PushEvent,
   counts: PushNotificationCounts,
-  env?: import("../types").Env, // Optional env for direct APNs delivery
+  env?: import("../shared/types").Env, // Optional env for direct APNs delivery
 ): Promise<void> {
   const logger = createPushLogger("send_notification", {
     user_id: userId,
@@ -1589,7 +1589,7 @@ export async function sendPushNotification(
 
 // Send push notification directly to APNs via Push Durable Object
 async function sendDirectAPNs(
-  env: import("../types").Env,
+  env: import("../shared/types").Env,
   pusher: { pushkey: string; app_id: string },
   _pusherData: PusherData,
   event: PushEvent,
@@ -1711,7 +1711,7 @@ async function sendDirectAPNs(
 // Notify all room members about a new event (called when messages are sent)
 export async function notifyRoomMembersOfMessage(
   db: D1Database,
-  env: import("../types").Env,
+  env: import("../shared/types").Env,
   event: PushEvent,
 ): Promise<void> {
   const logger = createPushLogger("notify_room_members", {

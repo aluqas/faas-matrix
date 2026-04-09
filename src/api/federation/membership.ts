@@ -1,17 +1,17 @@
 import { Hono } from "hono";
-import type { AppEnv, PDU, RoomId } from "../../types";
-import { Errors } from "../../utils/errors";
-import { getPartialStateJoinForRoom } from "../../matrix/application/features/partial-state/tracker";
-import { buildFederationMakeJoinTemplate } from "../../matrix/application/features/federation/make-join";
-import { processFederationSendJoin } from "../../matrix/application/features/federation/send-join";
-import { buildFederationMakeLeaveTemplate } from "../../matrix/application/features/federation/make-leave";
-import { processFederationSendLeave } from "../../matrix/application/features/federation/send-leave";
-import { processFederationInvite } from "../../matrix/application/features/federation/invite";
-import { buildFederationMakeKnockTemplate } from "../../matrix/application/features/federation/make-knock";
-import { processFederationSendKnock } from "../../matrix/application/features/federation/send-knock";
-import { exchangeFederationThirdPartyInvite } from "../../matrix/application/features/federation/third-party-invite";
+import type { AppEnv, PDU, RoomId } from "../../shared/types";
+import { Errors } from "../../shared/utils/errors";
+import { getPartialStateJoinForRoom } from "../../features/partial-state/tracker";
+import { buildFederationMakeJoinTemplate } from "../../features/federation-membership/make-join";
+import { processFederationSendJoin } from "../../features/federation-membership/send-join";
+import { buildFederationMakeLeaveTemplate } from "../../features/federation-membership/make-leave";
+import { processFederationSendLeave } from "../../features/federation-membership/send-leave";
+import { processFederationInvite } from "../../features/federation-membership/invite";
+import { buildFederationMakeKnockTemplate } from "../../features/federation-membership/make-knock";
+import { processFederationSendKnock } from "../../features/federation-membership/send-knock";
+import { exchangeFederationThirdPartyInvite } from "../../features/federation-membership/third-party-invite";
 import { logFederationRouteWarning, toFederationErrorResponse } from "./shared";
-import { toEventId, toRoomId, toUserId } from "../../utils/ids";
+import { toEventId, toRoomId, toUserId } from "../../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 

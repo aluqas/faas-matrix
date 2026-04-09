@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { AppContext } from "../../foundation/app-context";
-import { createFeatureProfile } from "../../foundation/config/feature-profile";
-import type { PDU } from "../../types";
-import { runClientEffect } from "./effect-runtime";
+import type { AppContext } from "../../shared/runtime/app-context";
+import { createFeatureProfile } from "../../shared/config/feature-profile";
+import type { PDU } from "../../shared/types";
+import { runClientEffect } from "./runtime/effect-runtime";
 import {
   MatrixRoomQueryService,
   type RoomMessagesRelationFilter,

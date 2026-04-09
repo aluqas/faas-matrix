@@ -1,18 +1,18 @@
 import { Hono } from "hono";
-import type { AppEnv } from "../../types";
-import { isJsonObject } from "../../types/common";
-import { Errors } from "../../utils/errors";
-import { requireAuth } from "../../middleware/auth";
-import { federationGet } from "../../services/federation-keys";
+import type { AppEnv } from "../../shared/types";
+import { isJsonObject } from "../../shared/types/common";
+import { Errors } from "../../shared/utils/errors";
+import { requireAuth } from "../../infra/middleware/auth";
+import { federationGet } from "../../infra/federation/federation-keys";
 import {
   createRoomAlias,
   deleteRoomAlias,
   getMembership,
   getRoomByAlias,
   getStateEvent,
-} from "../../services/database";
-import { parseRoomAlias } from "../../utils/ids";
-import { hashToken } from "../../utils/crypto";
+} from "../../infra/db/database";
+import { parseRoomAlias } from "../../shared/utils/ids";
+import { hashToken } from "../../shared/utils/crypto";
 import {
   canUserSendStateEvent,
   getUserPowerLevelFromContent,
@@ -22,7 +22,7 @@ import {
   resolveRoomIdOrAlias,
   toRouteErrorResponse,
 } from "./shared";
-import { toRoomId } from "../../utils/ids";
+import { toRoomId } from "../../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 
@@ -30,7 +30,7 @@ app.get("/_matrix/client/v3/rooms/:roomId/aliases", requireAuth(), async (c) => 
   const userId = c.get("userId");
   const roomId = c.req.param("roomId");
 
-  const membership = await getMembership(c.env.DB, toRoomId(roomId)!, userId);
+  const membership = await getMembership(c.env.DB, toRoomId(roomId), userId);
   if (!membership || membership.membership !== "join") {
     return Errors.forbidden("Not a member of this room").toResponse();
   }
@@ -134,12 +134,12 @@ app.put("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async (c)
     return Errors.roomInUse().toResponse();
   }
 
-  const membership = await getMembership(c.env.DB, toRoomId(body.room_id)!, userId);
+  const membership = await getMembership(c.env.DB, toRoomId(body.room_id), userId);
   if (!membership || membership.membership !== "join") {
     return Errors.forbidden("Not a member of this room").toResponse();
   }
 
-  await createRoomAlias(c.env.DB, alias, toRoomId(body.room_id)!, userId);
+  await createRoomAlias(c.env.DB, alias, toRoomId(body.room_id), userId);
   return c.json({});
 });
 
@@ -161,7 +161,7 @@ app.delete("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async 
   if (!canDeleteAsCreator) {
     const powerLevelsEvent = await getStateEvent(
       c.env.DB,
-      toRoomId(aliasRecord.room_id)!,
+      toRoomId(aliasRecord.room_id),
       "m.room.power_levels",
       "",
     );
@@ -178,7 +178,7 @@ app.delete("/_matrix/client/v3/directory/room/:roomAlias", requireAuth(), async 
 
   const canonicalAliasEvent = await getStateEvent(
     c.env.DB,
-    toRoomId(aliasRecord.room_id)!,
+    toRoomId(aliasRecord.room_id),
     "m.room.canonical_alias",
     "",
   );

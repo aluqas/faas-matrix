@@ -3,37 +3,37 @@
 
 import { Effect } from "effect";
 import { Hono, type Context } from "hono";
-import type { AppEnv, EventId, RoomId, UserId } from "../types";
+import type { AppEnv, EventId, RoomId, UserId } from "../shared/types";
 import type {
   RoomResult,
   SlidingRoomFilter,
   SlidingSyncRequest,
   SlidingSyncResponse,
-} from "../types/sync";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
-import { runClientEffect } from "../matrix/application/effect-runtime";
-import { getTypingForRooms } from "./typing";
-import { getReceiptsForRooms } from "./receipts";
-import { countNotificationsWithRules } from "../services/push-rule-evaluator";
-import type { ConnectionState } from "../matrix/application/features/sync/effect-ports";
+} from "../shared/types/sync";
+import { Errors } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
+import { runClientEffect } from "../matrix/application/runtime/effect-runtime";
+import { getTypingForRooms } from "../features/typing/project";
+import { getReceiptsForRooms } from "../features/receipts/project";
+import { countNotificationsWithRules } from "../infra/realtime/push-rule-evaluator";
+import type { ConnectionState } from "../features/sync/effect-ports";
 import {
   didSlidingSyncListChange,
   firstTimeRead,
   readMarkerChanged,
   shouldIncludeSlidingSyncRoom,
   trackSlidingSyncRoomReadState,
-} from "../matrix/application/features/sync/sliding-sync-shared";
-import { buildSlidingSyncVisibilityContext } from "../matrix/application/features/sync/contracts";
+} from "../features/sync/sliding-sync-shared";
+import { buildSlidingSyncVisibilityContext } from "../features/sync/contracts";
 import {
   getEffectiveJoinedMemberCount,
   getJoinedRoomIdsIncludingPartialState,
-} from "../matrix/repositories/membership-repository";
+} from "../infra/repositories/membership-repository";
 import {
   buildSlidingSyncExtensions,
   type SlidingSyncExtensionConfig,
 } from "./sliding-sync-extensions";
-import { toEventId, toRoomId, toUserId } from "../utils/ids";
+import { toEventId, toRoomId, toUserId } from "../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 

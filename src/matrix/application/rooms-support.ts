@@ -1,4 +1,4 @@
-import { getRoomVersion } from "../../services/room-versions";
+import { getRoomVersion } from "../../infra/db/room-versions";
 import type {
   Membership,
   PDU,
@@ -6,10 +6,10 @@ import type {
   RoomId,
   RoomMemberContent,
   UserId,
-} from "../../types";
-import { calculateContentHash, calculateReferenceHashEventId } from "../../utils/crypto";
-import { toEventId, toRoomId, toUserId } from "../../utils/ids";
-import type { RoomRepository } from "../repositories/interfaces";
+} from "../../shared/types";
+import { calculateContentHash, calculateReferenceHashEventId } from "../../shared/utils/crypto";
+import { toEventId, toRoomId, toUserId } from "../../shared/utils/ids";
+import type { RoomRepository } from "../../infra/repositories/interfaces";
 
 export interface StateEventValidation {
   valid: boolean;
@@ -106,7 +106,7 @@ export async function createInitialRoomEvents(
     type: string,
     content: Record<string, unknown>,
     stateKey?: string,
-  ): Promise<import("../../types").EventId> {
+  ): Promise<import("../../shared/types").EventId> {
     const baseEvent = {
       room_id: roomId,
       sender: creatorId,
@@ -131,7 +131,7 @@ export async function createInitialRoomEvents(
             eventWithHash as unknown as Record<string, unknown>,
             roomVersion,
           );
-    const eventId = toEventId(eventIdRaw)!;
+    const eventId = toEventId(eventIdRaw);
     const event: PDU = {
       event_id: eventId,
       room_id: roomId,
@@ -308,14 +308,14 @@ export async function createMembershipEvent(options: CreateMembershipEventOption
           eventWithHash as unknown as Record<string, unknown>,
           options.roomVersion,
         );
-  const eventId = toEventId(eventIdRaw)!;
+  const eventId = toEventId(eventIdRaw);
 
   return {
     event_id: eventId,
-    room_id: toRoomId(options.roomId)!,
-    sender: toUserId(options.sender)!,
+    room_id: toRoomId(options.roomId),
+    sender: toUserId(options.sender),
     type: "m.room.member",
-    state_key: toUserId(options.userId)!,
+    state_key: toUserId(options.userId),
     content: { ...options.content, membership: options.membership },
     origin_server_ts: originServerTs,
     depth: options.depth,

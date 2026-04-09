@@ -1,4 +1,4 @@
-import type { AppContext } from "../../foundation/app-context";
+import type { AppContext } from "../../shared/runtime/app-context";
 
 export interface AdminService {
   getStats(refresh?: boolean): Promise<Record<string, unknown>>;

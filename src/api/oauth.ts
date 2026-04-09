@@ -3,18 +3,18 @@
 // and Matrix-specific extensions (MSC2965, MSC3861)
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import type { AuthorizationCode, OAuthClient, OAuthToken } from "../types/client";
-import { requireAuth } from "../middleware/auth";
-import { hashToken, verifyPassword } from "../utils/crypto";
+import type { AppEnv } from "../shared/types";
+import type { AuthorizationCode, OAuthClient, OAuthToken } from "../shared/types/client";
+import { requireAuth } from "../infra/middleware/auth";
+import { hashToken, verifyPassword } from "../shared/utils/crypto";
 import {
   generateAccessToken,
   generateDeviceId,
   generateOpaqueId,
   formatUserId,
   toUserId,
-} from "../utils/ids";
-import { createDevice, createAccessToken, getUserById } from "../services/database";
+} from "../shared/utils/ids";
+import { createDevice, createAccessToken, getUserById } from "../infra/db/database";
 
 const app = new Hono<AppEnv>();
 
@@ -455,7 +455,7 @@ app.post("/oauth/token", async (c) => {
     // Extract device ID from scope per MSC2967
     // Scope format: urn:matrix:org.matrix.msc2967.client:device:DEVICE_ID
     let deviceId: string | undefined;
-    const scopes = authCode.scope?.split(" ") || [];
+    const scopes = authCode.scope?.split(" ") ?? [];
     for (const scope of scopes) {
       if (scope.startsWith("urn:matrix:org.matrix.msc2967.client:device:")) {
         deviceId = scope.replace("urn:matrix:org.matrix.msc2967.client:device:", "");
@@ -588,7 +588,7 @@ app.post("/oauth/token", async (c) => {
 
 // Helper to build userinfo response
 async function buildUserInfoResponse(c: any, userId: string) {
-  const user = await getUserById(c.env.DB, toUserId(userId)!);
+  const user = await getUserById(c.env.DB, toUserId(userId));
 
   if (!user) {
     return c.json({ error: "invalid_token", error_description: "User not found" }, 401);

@@ -2,9 +2,9 @@
 // Implements: https://spec.matrix.org/v1.12/identity-service-api/
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { Errors } from "../utils/errors";
-import { sha256 } from "../utils/crypto";
+import type { AppEnv } from "../shared/types";
+import { Errors } from "../shared/utils/errors";
+import { sha256 } from "../shared/utils/crypto";
 
 const app = new Hono<AppEnv>();
 

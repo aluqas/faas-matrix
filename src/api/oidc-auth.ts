@@ -2,9 +2,9 @@
 // Handles OAuth flow for external Identity Providers
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import type { UserId } from "../types";
-import type { IdPProvider, IdPUserLink, OAuthState } from "../types/client";
+import type { AppEnv } from "../shared/types";
+import type { UserId } from "../shared/types";
+import type { IdPProvider, IdPUserLink, OAuthState } from "../shared/types/client";
 import {
   fetchOIDCDiscovery,
   fetchJWKS,
@@ -13,13 +13,13 @@ import {
   validateIDToken,
   generateRandomString,
   deriveUsername,
-} from "../services/oidc";
-import { formatUserId } from "../utils/ids";
-import { generateAccessToken, generateDeviceId } from "../utils/ids";
-import { hashToken } from "../utils/crypto";
-import { createUser, getUserById, createDevice, createAccessToken } from "../services/database";
-import { requireAuth } from "../middleware/auth";
-import { generateOpaqueId } from "../utils/ids";
+} from "../infra/integrations/oidc";
+import { formatUserId } from "../shared/utils/ids";
+import { generateAccessToken, generateDeviceId } from "../shared/utils/ids";
+import { hashToken } from "../shared/utils/crypto";
+import { createUser, getUserById, createDevice, createAccessToken } from "../infra/db/database";
+import { requireAuth } from "../infra/middleware/auth";
+import { generateOpaqueId } from "../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 

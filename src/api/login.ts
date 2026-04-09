@@ -1,9 +1,9 @@
 // Matrix login/registration endpoints
 
 import { Hono } from "hono";
-import type { AppEnv, UserId } from "../types";
-import { Errors } from "../utils/errors";
-import { hashPassword, verifyPassword, hashToken } from "../utils/crypto";
+import type { AppEnv, UserId } from "../shared/types";
+import { Errors } from "../shared/utils/errors";
+import { hashPassword, verifyPassword, hashToken } from "../shared/utils/crypto";
 import {
   formatUserId,
   generateDeviceId,
@@ -14,7 +14,7 @@ import {
   isLocalServerName,
   parseUserId,
   toUserId,
-} from "../utils/ids";
+} from "../shared/utils/ids";
 import {
   createUser,
   getUserByLocalpart,
@@ -27,8 +27,8 @@ import {
   deleteAllUserDevices,
   deleteDevice,
   getAccessTokenRecordByHash,
-} from "../services/database";
-import { requireAuth, extractAccessToken } from "../middleware/auth";
+} from "../infra/db/database";
+import { requireAuth, extractAccessToken } from "../infra/middleware/auth";
 import { isRecord, parseJsonBody } from "./shared-validation";
 
 const app = new Hono<AppEnv>();
@@ -331,7 +331,7 @@ app.post("/_matrix/client/v3/refresh", async (c) => {
   const newTokenHash = await hashToken(newAccessToken);
   const newTokenId = await generateOpaqueId(16);
 
-  await createAccessToken(c.env.DB, newTokenId, newTokenHash, toUserId(userId)!, deviceId);
+  await createAccessToken(c.env.DB, newTokenId, newTokenHash, toUserId(userId), deviceId);
 
   // Generate new refresh token
   const newRefreshToken = await generateRefreshToken();

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import type { AppEnv } from "./types";
-import { handleAppError } from "./runtime/http-error-handler";
-import { Errors } from "./utils/errors";
+import type { AppEnv } from "./shared/types";
+import { handleAppError } from "./platform/cloudflare/http-error-handler";
+import { Errors } from "./shared/utils/errors";
 
 describe("handleAppError", () => {
   it("returns MatrixApiError responses without converting them to 500", async () => {

@@ -5,11 +5,11 @@
 // instead of LiveKit, providing a fully Cloudflare-based solution.
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { requireAuth } from "../middleware/auth";
-import { Errors } from "../utils/errors";
-import { isCallsConfigured } from "../services/cloudflare-calls";
-import { generateOpaqueId } from "../utils/ids";
+import type { AppEnv } from "../shared/types";
+import { requireAuth } from "../infra/middleware/auth";
+import { Errors } from "../shared/utils/errors";
+import { isCallsConfigured } from "../infra/integrations/cloudflare-calls";
+import { generateOpaqueId } from "../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 

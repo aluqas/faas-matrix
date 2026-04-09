@@ -1,12 +1,12 @@
 // Matrix media endpoints (using R2 for storage)
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
-import { generateOpaqueId } from "../utils/ids";
-import { validateUrlForPreview } from "../utils/url-validator";
-import { federationGet } from "../services/federation-keys";
+import type { AppEnv } from "../shared/types";
+import { Errors } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
+import { generateOpaqueId } from "../shared/utils/ids";
+import { validateUrlForPreview } from "../shared/utils/url-validator";
+import { federationGet } from "../infra/federation/federation-keys";
 
 const app = new Hono<AppEnv>();
 app.notFound(() => Errors.unrecognizedRoute().toResponse());
@@ -413,7 +413,7 @@ app.get("/_matrix/media/v3/preview_url", requireAuth(), async (c) => {
 
   try {
     // Use the sanitized URL
-    const parsedUrl = new URL(validation.sanitizedUrl!);
+    const parsedUrl = new URL(validation.sanitizedUrl ?? url);
 
     // Check cache first
     const cacheKey = `preview:${url}`;
@@ -821,7 +821,7 @@ app.get("/_matrix/client/v1/media/preview_url", requireAuth(), async (c) => {
 
   try {
     // Use the sanitized URL
-    const parsedUrl = new URL(validation.sanitizedUrl!);
+    const parsedUrl = new URL(validation.sanitizedUrl ?? url);
 
     const cacheKey = `preview:${url}`;
     const cached = await c.env.CACHE.get(cacheKey);

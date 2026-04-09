@@ -1,4 +1,4 @@
-import type { JsonValue } from "../types/common";
+import type { JsonValue } from "../shared/types/common";
 import type {
   CrossSigningKeyPayload,
   CrossSigningKeysStore,
@@ -22,7 +22,7 @@ import type {
   UserCrossSigningKeyMap,
   UserDeviceKeysMap,
   UserOneTimeKeysMap,
-} from "../types/client";
+} from "../shared/types/client";
 import {
   parseCrossSigningKeyPayload,
   parseDeviceKeyRequestMap,
@@ -32,7 +32,7 @@ import {
   parseOneTimeKeyClaimMap,
   parseStringArray,
   parseStringMap,
-} from "../types/e2ee";
+} from "../shared/types/e2ee";
 
 export type {
   CrossSigningKeyPayload,
@@ -64,9 +64,9 @@ export {
   parseDeviceKeysMap,
   parseDeviceKeysPayload,
   parseStoredOneTimeKeyBuckets,
-} from "../types/e2ee";
+} from "../shared/types/e2ee";
 
-export type { OneTimeKeyClaimMap } from "../types/client";
+export type { OneTimeKeyClaimMap } from "../shared/types/client";
 
 function isPlainObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);

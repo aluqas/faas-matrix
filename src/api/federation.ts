@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { Errors } from "../utils/errors";
-import { requireFederationAuth } from "../middleware/federation-auth";
+import type { AppEnv } from "../shared/types";
+import { Errors } from "../shared/utils/errors";
+import { requireFederationAuth } from "../infra/middleware/federation-auth";
 import federationQueryRoutes from "./federation/query";
 import federationSpaceRoutes from "./federation/spaces";
 import federationTransactionRoutes from "./federation/transaction";
@@ -11,12 +11,12 @@ import federationE2eeRoutes from "./federation/e2ee";
 import {
   queryCurrentLocalServerKeys,
   queryLocalServerKeyById,
-} from "../matrix/application/features/federation/local-server-keys";
+} from "../features/federation-query/local-server-keys";
 import {
   loadFederationMediaDownload,
   loadFederationMediaThumbnail,
-} from "../matrix/application/features/federation/media";
-import { queryFederationPublicRooms } from "../matrix/application/features/federation/public-rooms";
+} from "../features/federation-query/media";
+import { queryFederationPublicRooms } from "../features/federation-query/public-rooms";
 
 const app = new Hono<AppEnv>();
 

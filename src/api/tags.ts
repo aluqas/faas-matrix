@@ -5,10 +5,10 @@
 // Tags are stored per-user and are private.
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { isJsonObject, type JsonObject } from "../types/common";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
+import type { AppEnv } from "../shared/types";
+import { isJsonObject, type JsonObject } from "../shared/types/common";
+import { Errors } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
 
 const app = new Hono<AppEnv>();
 

@@ -1,19 +1,19 @@
 import { Hono } from "hono";
-import type { AppEnv, EventId } from "../../types";
-import { Errors } from "../../utils/errors";
-import { toEventId, toRoomId } from "../../utils/ids";
-import { EventQueryService } from "../../matrix/application/event-query-service";
-import { getPartialStateJoinForRoom } from "../../matrix/application/features/partial-state/tracker";
-import { fetchFederationBackfill } from "../../matrix/application/features/federation/backfill";
-import { fetchFederationEventAuth } from "../../matrix/application/features/federation/event-auth-fetch";
-import { fetchFederationEventById } from "../../matrix/application/features/federation/event-fetch";
-import { fetchFederationMissingEvents } from "../../matrix/application/features/federation/missing-events";
-import { fetchFederationState } from "../../matrix/application/features/federation/state-fetch";
-import { fetchFederationStateIds } from "../../matrix/application/features/federation/state-ids-fetch";
+import type { AppEnv, EventId } from "../../shared/types";
+import { Errors } from "../../shared/utils/errors";
+import { toEventId, toRoomId } from "../../shared/utils/ids";
+import { EventQueryService } from "../../matrix/application/orchestrators/event-query-service";
+import { getPartialStateJoinForRoom } from "../../features/partial-state/tracker";
+import { fetchFederationBackfill } from "../../features/federation-events/backfill";
+import { fetchFederationEventAuth } from "../../features/federation-events/event-auth-fetch";
+import { fetchFederationEventById } from "../../features/federation-events/event-fetch";
+import { fetchFederationMissingEvents } from "../../features/federation-events/missing-events";
+import { fetchFederationState } from "../../features/federation-events/state-fetch";
+import { fetchFederationStateIds } from "../../features/federation-events/state-ids-fetch";
 import {
   logFederationRouteWarning,
 } from "./shared";
-import { getFederationRoomRecord } from "../../matrix/repositories/federation-events-repository";
+import { getFederationRoomRecord } from "../../infra/repositories/federation-events-repository";
 
 const app = new Hono<AppEnv>();
 const queries = new EventQueryService();

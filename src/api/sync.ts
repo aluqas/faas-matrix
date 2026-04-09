@@ -1,11 +1,11 @@
 // Matrix sync endpoint
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
-import { runClientEffect } from "../matrix/application/effect-runtime";
-import type { SyncUserInput } from "../matrix/application/features/sync/contracts";
+import type { AppEnv } from "../shared/types";
+import { Errors } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
+import { runClientEffect } from "../matrix/application/runtime/effect-runtime";
+import type { SyncUserInput } from "../features/sync/contracts";
 
 const app = new Hono<AppEnv>();
 

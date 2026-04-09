@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
+import type { AppEnv } from "../shared/types";
 import roomLifecycleRoutes from "./rooms/lifecycle";
 import roomCommandRoutes from "./rooms/commands";
 import roomMembershipRoutes from "./rooms/membership";

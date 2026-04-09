@@ -4,12 +4,12 @@
 // Room aliases provide human-readable names for rooms (e.g., #general:server.org)
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { isJsonObject } from "../types/common";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
-import { parseRoomAlias } from "../utils/ids";
-import { federationGet } from "../services/federation-keys";
+import type { AppEnv } from "../shared/types";
+import { isJsonObject } from "../shared/types/common";
+import { Errors } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
+import { parseRoomAlias } from "../shared/utils/ids";
+import { federationGet } from "../infra/federation/federation-keys";
 
 const app = new Hono<AppEnv>();
 

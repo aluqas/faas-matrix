@@ -2,16 +2,16 @@
 
 import { Effect } from "effect";
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { Errors, MatrixApiError } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
-import { runClientEffect } from "../matrix/application/effect-runtime";
+import type { AppEnv } from "../shared/types";
+import { Errors, MatrixApiError } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
+import { runClientEffect } from "../matrix/application/runtime/effect-runtime";
 import {
   deleteGlobalAccountDataEffect,
   deleteRoomAccountDataEffect,
   upsertGlobalAccountDataEffect,
   upsertRoomAccountDataEffect,
-} from "../matrix/application/features/account-data/command";
+} from "../features/account-data/command";
 import {
   decodeDeleteGlobalAccountDataInput,
   decodeDeleteRoomAccountDataInput,
@@ -19,19 +19,19 @@ import {
   decodeGetRoomAccountDataInput,
   decodePutGlobalAccountDataInput,
   decodePutRoomAccountDataInput,
-} from "../matrix/application/features/account-data/decode";
+} from "../features/account-data/decode";
 import {
   createAccountDataCommandPorts,
   createAccountDataQueryPorts,
-} from "../matrix/application/features/account-data/effect-adapters";
+} from "../features/account-data/effect-adapters";
 import {
   encodeAccountDataContentResponse,
   encodeEmptyAccountDataResponse,
-} from "../matrix/application/features/account-data/encoder";
+} from "../features/account-data/encoder";
 import {
   queryGlobalAccountDataEffect,
   queryRoomAccountDataEffect,
-} from "../matrix/application/features/account-data/query";
+} from "../features/account-data/query";
 
 const app = new Hono<AppEnv>();
 

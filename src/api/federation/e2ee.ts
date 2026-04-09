@@ -1,25 +1,25 @@
 import { Effect } from "effect";
 import { Hono } from "hono";
-import type { AppEnv } from "../../types";
-import { Errors, MatrixApiError } from "../../utils/errors";
+import type { AppEnv } from "../../shared/types";
+import { Errors, MatrixApiError } from "../../shared/utils/errors";
 import { DomainError, toMatrixApiError } from "../../matrix/application/domain-error";
-import { runFederationEffect } from "../../matrix/application/effect-runtime";
-import { createFederationE2EEQueryPorts } from "../../matrix/application/features/federation/e2ee-effect-adapters";
+import { runFederationEffect } from "../../matrix/application/runtime/effect-runtime";
+import { createFederationE2EEQueryPorts } from "../../features/federation-e2ee/e2ee-effect-adapters";
 import {
   claimFederationOneTimeKeysEffect,
   queryFederationDeviceKeysEffect,
   queryFederationUserDevicesEffect,
-} from "../../matrix/application/features/federation/e2ee-query";
+} from "../../features/federation-e2ee/e2ee-query";
 import {
   decodeFederationKeysClaimInput,
   decodeFederationKeysQueryInput,
   decodeFederationUserDevicesInput,
-} from "../../matrix/application/features/federation/e2ee-decode";
+} from "../../features/federation-e2ee/e2ee-decode";
 import {
   encodeFederationKeysClaimResponse,
   encodeFederationKeysQueryResponse,
   encodeFederationUserDevicesResponse,
-} from "../../matrix/application/features/federation/e2ee-encoder";
+} from "../../features/federation-e2ee/e2ee-encoder";
 
 const app = new Hono<AppEnv>();
 

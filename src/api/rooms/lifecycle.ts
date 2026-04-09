@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import type { AppEnv, EventId, PDU, RoomCreateContent } from "../../types";
-import { ErrorCodes } from "../../types";
-import { Errors, MatrixApiError } from "../../utils/errors";
-import { requireAuth } from "../../middleware/auth";
-import { generateEventId, generateRoomId, toEventId, toRoomId } from "../../utils/ids";
+import type { AppEnv, EventId, PDU, RoomCreateContent } from "../../shared/types";
+import { ErrorCodes } from "../../shared/types";
+import { Errors, MatrixApiError } from "../../shared/utils/errors";
+import { requireAuth } from "../../infra/middleware/auth";
+import { generateEventId, generateRoomId, toEventId, toRoomId } from "../../shared/utils/ids";
 import {
   createRoom,
   getMembership,
@@ -13,7 +13,7 @@ import {
   getUserRooms,
   storeEvent,
   updateMembership,
-} from "../../services/database";
+} from "../../infra/db/database";
 import { FORGOTTEN_ROOM_ACCOUNT_DATA_TYPE } from "../../matrix/application/room-account-data";
 import { toRouteErrorResponse } from "./shared";
 
@@ -192,7 +192,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/upgrade", requireAuth(), async (c) =>
   await createNewRoomEvent("m.room.create", createContent, "");
 
   const joinEventId = await createNewRoomEvent("m.room.member", { membership: "join" }, userId);
-  await updateMembership(db, newRoomId, userId, "join", toEventId(joinEventId)!);
+  await updateMembership(db, newRoomId, userId, "join", toEventId(joinEventId));
 
   if (powerLevels) {
     await createNewRoomEvent("m.room.power_levels", powerLevels, "");

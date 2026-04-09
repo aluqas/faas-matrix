@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import type { AppEnv } from "../../types";
-import { Errors } from "../../utils/errors";
+import type { AppEnv } from "../../shared/types";
+import { Errors } from "../../shared/utils/errors";
 import {
   EventQueryService,
   normalizeOffsetToken,
   selectSpaceChildren,
-} from "../../matrix/application/event-query-service";
+} from "../../matrix/application/orchestrators/event-query-service";
 
 const app = new Hono<AppEnv>();
 const queries = new EventQueryService();

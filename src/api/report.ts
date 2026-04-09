@@ -4,10 +4,10 @@
 // Allows users to report inappropriate content to server admins
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import type { ContentReportRecord } from "../types/client";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
+import type { AppEnv } from "../shared/types";
+import type { ContentReportRecord } from "../shared/types/client";
+import { Errors } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
 
 const app = new Hono<AppEnv>();
 

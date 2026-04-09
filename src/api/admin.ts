@@ -2,16 +2,15 @@
 
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
-import type { AppEnv } from "../types";
-import type { AdminIdPProvider } from "../types/client";
-import { isJsonObject, type JsonObject } from "../types/common";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
-import { getUserById } from "../services/database";
-import { generateLoginToken, generateOpaqueId, toUserId } from "../utils/ids";
-import { hashToken } from "../utils/crypto";
+import type { AppEnv } from "../shared/types";
+import { isJsonObject, type JsonObject } from "../shared/types/common";
+import { Errors } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
+import { getUserById } from "../infra/db/database";
+import { generateLoginToken, generateOpaqueId, toUserId } from "../shared/utils/ids";
+import { hashToken } from "../shared/utils/crypto";
 import { encryptSecret } from "./oidc-auth";
-import { fetchOIDCDiscovery } from "../services/oidc";
+import { fetchOIDCDiscovery } from "../infra/integrations/oidc";
 
 const app = new Hono<AppEnv>();
 
@@ -45,13 +44,13 @@ const requireAdmin = createMiddleware<AppEnv>(async (c, next) => {
 });
 
 // Helper to get AdminDurableObject instance
-function getAdminDO(env: import("../types").Env) {
+function getAdminDO(env: import("../shared/types").Env) {
   const id = env.ADMIN.idFromName("global");
   return env.ADMIN.get(id);
 }
 
 // Invalidate stats cache after data-modifying operations
-async function invalidateStatsCache(env: import("../types").Env) {
+async function invalidateStatsCache(env: import("../shared/types").Env) {
   const adminDO = getAdminDO(env);
   await adminDO.fetch("http://internal/invalidate-cache");
 }
@@ -322,7 +321,7 @@ app.post("/admin/api/users/:userId/reset-password", requireAuth(), requireAdmin,
   }
 
   // Import hash function
-  const { hashPassword } = await import("../utils/crypto");
+  const { hashPassword } = await import("../shared/utils/crypto");
   const passwordHash = await hashPassword(password);
 
   await db
@@ -1141,7 +1140,7 @@ app.post("/admin/api/users/create", requireAuth(), requireAdmin, async (c) => {
   }
 
   // Hash password
-  const { hashPassword } = await import("../utils/crypto");
+  const { hashPassword } = await import("../shared/utils/crypto");
   const passwordHash = await hashPassword(password);
 
   // Create user
@@ -1471,7 +1470,7 @@ app.post("/admin/api/users/:userId/login-token", requireAuth(), requireAdmin, as
   const db = c.env.DB;
 
   // Verify user exists and is not deactivated
-  const user = await getUserById(db, toUserId(userId)!);
+  const user = await getUserById(db, toUserId(userId));
   if (!user) {
     return Errors.notFound("User not found").toResponse();
   }
@@ -1538,7 +1537,7 @@ app.get("/admin/api/idp/providers", requireAuth(), requireAdmin, async (c) => {
     FROM idp_providers
     ORDER BY display_order ASC, name ASC
   `)
-    .all<Omit<AdminIdPProvider, "client_secret_encrypted">>();
+    .all();
 
   // Get user counts for each provider
   const providers = await Promise.all(
@@ -1653,7 +1652,7 @@ app.get("/admin/api/idp/providers/:id", requireAuth(), requireAdmin, async (c) =
     FROM idp_providers WHERE id = ?
   `)
     .bind(id)
-    .first<Omit<AdminIdPProvider, "client_secret_encrypted">>();
+    .first();
 
   if (!provider) {
     return Errors.notFound("Identity provider not found").toResponse();
@@ -2186,7 +2185,7 @@ app.post("/_synapse/admin/v1/reset_password/:userId", requireAuth(), requireAdmi
   }
 
   // Hash and update password
-  const { hashPassword } = await import("../utils/crypto");
+  const { hashPassword } = await import("../shared/utils/crypto");
   const passwordHash = await hashPassword(new_password);
 
   await db
@@ -2565,7 +2564,7 @@ app.put("/_synapse/admin/v2/users/:userId", requireAuth(), requireAdmin, async (
       params.push(avatar_url);
     }
     if (password !== undefined) {
-      const { hashPassword } = await import("../utils/crypto");
+      const { hashPassword } = await import("../shared/utils/crypto");
       const passwordHash = await hashPassword(password);
       updates.push("password_hash = ?");
       params.push(passwordHash);
@@ -2601,7 +2600,7 @@ app.put("/_synapse/admin/v2/users/:userId", requireAuth(), requireAdmin, async (
   }
   const localpart = match[1];
 
-  const { hashPassword } = await import("../utils/crypto");
+  const { hashPassword } = await import("../shared/utils/crypto");
   const passwordHash = await hashPassword(password);
 
   await db

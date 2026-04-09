@@ -1,13 +1,13 @@
 import { Effect } from "effect";
-import type { AppEnv, StoredPduRow } from "../../types";
-import { MatrixApiError } from "../../utils/errors";
+import type { AppEnv, StoredPduRow } from "../../shared/types";
+import { MatrixApiError } from "../../shared/utils/errors";
 import { DomainError, toMatrixApiError } from "../../matrix/application/domain-error";
-import { runFederationEffect } from "../../matrix/application/effect-runtime";
+import { runFederationEffect } from "../../matrix/application/runtime/effect-runtime";
 import { withLogContext } from "../../matrix/application/logging";
 export {
   getFederationEventRowByReference,
   toFederationPduFromRow,
-} from "../../matrix/repositories/federation-events-repository";
+} from "../../infra/repositories/federation-events-repository";
 
 export type { StoredPduRow };
 

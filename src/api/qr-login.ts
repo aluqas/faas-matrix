@@ -2,8 +2,8 @@
 // When users scan a QR code, they're directed here to complete login
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { hashToken } from "../utils/crypto";
+import type { AppEnv } from "../shared/types";
+import { hashToken } from "../shared/utils/crypto";
 
 const app = new Hono<AppEnv>();
 

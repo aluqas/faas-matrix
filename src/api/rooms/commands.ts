@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import { requireAuth } from "../../middleware/auth";
-import type { AppEnv } from "../../types";
-import { Errors } from "../../utils/errors";
-import { toRoomId, toUserId } from "../../utils/ids";
+import { requireAuth } from "../../infra/middleware/auth";
+import type { AppEnv } from "../../shared/types";
+import { Errors } from "../../shared/utils/errors";
+import { toRoomId, toUserId } from "../../shared/utils/ids";
 import {
   MAX_ROOM_EVENT_CONTENT_BYTES,
   parseRequiredJsonObjectBody,

@@ -4,24 +4,24 @@
 // Password changes, account deactivation, 3PIDs (email/phone)
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { Errors } from "../utils/errors";
-import { extractAccessToken, requireAuth } from "../middleware/auth";
-import { hashPassword, hashToken, verifyPassword } from "../utils/crypto";
-import { generateOpaqueId } from "../utils/ids";
+import type { AppEnv } from "../shared/types";
+import { Errors } from "../shared/utils/errors";
+import { extractAccessToken, requireAuth } from "../infra/middleware/auth";
+import { hashPassword, hashToken, verifyPassword } from "../shared/utils/crypto";
+import { generateOpaqueId } from "../shared/utils/ids";
 import {
   deleteAllUserDevices,
   deleteOtherUserDevices,
   deleteAllUserTokens,
   getAccessTokenRecordByHash,
   getPasswordHash,
-} from "../services/database";
+} from "../infra/db/database";
 import {
   sendVerificationEmail,
   createVerificationSession,
   validateEmailToken,
   getValidatedSession,
-} from "../services/email";
+} from "../infra/integrations/email";
 
 const app = new Hono<AppEnv>();
 

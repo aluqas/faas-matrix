@@ -1,15 +1,15 @@
 import { Hono } from "hono";
-import type { AppEnv } from "../../types";
-import type { StoredEventRow } from "../../types/events";
-import { Errors } from "../../utils/errors";
-import { requireAuth } from "../../middleware/auth";
-import { getEvent, getMembership, getRoomMembers, getRoomState } from "../../services/database";
+import type { AppEnv } from "../../shared/types";
+import type { StoredEventRow } from "../../shared/types/events";
+import { Errors } from "../../shared/utils/errors";
+import { requireAuth } from "../../infra/middleware/auth";
+import { getEvent, getMembership, getRoomMembers, getRoomState } from "../../infra/db/database";
 import {
   getPartialStateCompletionStatus,
   getPartialStateStatus,
-} from "../../matrix/application/features/partial-state/tracker";
-import { toEventId, toRoomId, toUserId } from "../../utils/ids";
-import type { RoomId, UserId } from "../../types";
+} from "../../features/partial-state/tracker";
+import { toEventId, toRoomId, toUserId } from "../../shared/utils/ids";
+import type { RoomId, UserId } from "../../shared/types";
 
 const app = new Hono<AppEnv>();
 const PARTIAL_STATE_WAIT_TIMEOUT_MS = 2000;
@@ -18,7 +18,7 @@ function formatContextEvent(event: StoredEventRow) {
   return {
     type: event.event_type,
     state_key: event.state_key ?? undefined,
-    content: JSON.parse(event.content || "{}"),
+    content: JSON.parse(event.content ?? "{}"),
     sender: event.sender,
     origin_server_ts: event.origin_server_ts,
     event_id: event.event_id,

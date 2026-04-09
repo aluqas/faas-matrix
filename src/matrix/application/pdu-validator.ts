@@ -1,12 +1,12 @@
 import { Effect, Schema } from "effect";
-import { getDefaultRoomVersion, getRoomVersion } from "../../services/room-versions";
-import type { PDU } from "../../types";
-import { ErrorCodes } from "../../types";
-import { IncomingPduSchema, type IncomingPdu } from "../../types/schema";
-import { calculateReferenceHashEventId } from "../../utils/crypto";
-import { MatrixApiError } from "../../utils/errors";
+import { getDefaultRoomVersion, getRoomVersion } from "../../infra/db/room-versions";
+import type { PDU } from "../../shared/types";
+import { ErrorCodes } from "../../shared/types";
+import { IncomingPduSchema, type IncomingPdu } from "../../shared/types/schema";
+import { calculateReferenceHashEventId } from "../../shared/utils/crypto";
+import { MatrixApiError } from "../../shared/utils/errors";
 import { DomainError, toMatrixApiError } from "./domain-error";
-import { runFederationEffect } from "./effect-runtime";
+import { runFederationEffect } from "./runtime/effect-runtime";
 
 export function roomVersionRequiresIntegerJsonNumbers(roomVersion?: string): boolean {
   const numericVersion = Number(roomVersion ?? getDefaultRoomVersion());

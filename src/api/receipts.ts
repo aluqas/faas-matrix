@@ -1,440 +1,100 @@
 // Read Receipts API
 // Implements: https://spec.matrix.org/v1.12/client-server-api/#receipts
-//
-// Read receipts track which events users have read.
-// Types:
-// - m.read: Public read receipt (visible to others) - stored in Room DO
-// - m.read.private: Private read receipt (only visible to self) - stored in Room DO
-// - m.fully_read: Read marker (stored in account data for unread counts)
 
+import { Effect } from "effect";
 import { Hono } from "hono";
-import type { AppEnv, Env } from "../types";
-import { isJsonObject } from "../types/common";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
-import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
-import { getRoomState } from "../services/database";
-import { toRoomId } from "../utils/ids";
-import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
+import type { AppEnv } from "../shared/types";
+import { Errors, MatrixApiError } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
+import { runClientEffect } from "../matrix/application/runtime/effect-runtime";
+import { sendReceiptEffect, setReadMarkersEffect } from "../features/receipts/command";
+import {
+  decodeSendReceiptInput,
+  decodeSetReadMarkersInput,
+} from "../features/receipts/decode";
+import { createReceiptsCommandPorts } from "../features/receipts/effect-adapters";
 
 const app = new Hono<AppEnv>();
 
-type ReceiptContent = Record<
-  string,
-  Record<string, Record<string, { ts: number; thread_id?: string }>>
->;
-
-function parseReceiptContent(value: unknown): ReceiptContent {
-  if (!isJsonObject(value)) {
-    return {};
-  }
-
-  const parsed: ReceiptContent = {};
-  for (const [eventId, receiptTypes] of Object.entries(value)) {
-    if (!isJsonObject(receiptTypes)) {
-      continue;
+async function respondWithClientEffect<A>(
+  effect: Effect.Effect<A, unknown>,
+  respond: (value: A) => Response,
+): Promise<Response> {
+  try {
+    return respond(await runClientEffect(effect));
+  } catch (error) {
+    if (error instanceof MatrixApiError) {
+      return error.toResponse();
     }
-    const parsedTypes: ReceiptContent[string] = {};
-
-    for (const [receiptType, users] of Object.entries(receiptTypes)) {
-      if (!isJsonObject(users)) {
-        continue;
-      }
-      const parsedUsers: ReceiptContent[string][string] = {};
-
-      for (const [userId, receipt] of Object.entries(users)) {
-        if (!isJsonObject(receipt) || typeof receipt.ts !== "number") {
-          continue;
-        }
-        parsedUsers[userId] =
-          typeof receipt.thread_id === "string"
-            ? { ts: receipt.ts, thread_id: receipt.thread_id }
-            : { ts: receipt.ts };
-      }
-
-      parsedTypes[receiptType] = parsedUsers;
-    }
-
-    parsed[eventId] = parsedTypes;
+    throw error;
   }
-
-  return parsed;
 }
 
-// ============================================
-// Helper to get Room DO stub
-// ============================================
-
-function getRoomDO(env: Env, roomId: string) {
-  const id = env.ROOMS.idFromName(roomId);
-  return env.ROOMS.get(id);
+async function parseOptionalJsonBody(
+  c: import("hono").Context<AppEnv>,
+): Promise<{ ok: true; body?: unknown } | { ok: false; response: Response }> {
+  try {
+    return { ok: true, body: await c.req.json() };
+  } catch {
+    return { ok: true };
+  }
 }
 
-async function getRemoteJoinedServers(db: D1Database, roomId: string, localServerName: string) {
-  const state = await getRoomState(db, toRoomId(roomId)!);
-  return Array.from(
-    new Set(
-      state
-        .filter(
-          (event) =>
-            event.type === "m.room.member" &&
-            event.state_key &&
-            event.content &&
-            typeof event.content === "object" &&
-            event.content["membership"] === "join",
-        )
-        .map((event) => extractServerNameFromMatrixId(event.state_key))
-        .filter((server): server is string => Boolean(server) && server !== localServerName),
-    ),
-  );
+async function parseRequiredJsonBody(
+  c: import("hono").Context<AppEnv>,
+): Promise<{ ok: true; body: unknown } | { ok: false; response: Response }> {
+  try {
+    return { ok: true, body: await c.req.json() };
+  } catch {
+    return { ok: false, response: Errors.badJson().toResponse() };
+  }
 }
 
-// ============================================
-// Endpoints
-// ============================================
-
-// POST /_matrix/client/v3/rooms/:roomId/receipt/:receiptType/:eventId - Send receipt
 app.post(
   "/_matrix/client/v3/rooms/:roomId/receipt/:receiptType/:eventId",
   requireAuth(),
   async (c) => {
-    const userId = c.get("userId");
-    const roomId = c.req.param("roomId");
-    const receiptType = c.req.param("receiptType");
-    const eventId = c.req.param("eventId");
-    const db = c.env.DB;
+    const body = await parseOptionalJsonBody(c);
+    if (!body.ok) {
+      return body.response;
+    }
 
-    console.log(
-      "[receipts] POST request from",
-      userId,
-      "type:",
-      receiptType,
-      "event:",
-      eventId,
-      "room:",
-      roomId,
+    return respondWithClientEffect(
+      decodeSendReceiptInput({
+        authUserId: c.get("userId"),
+        roomId: decodeURIComponent(c.req.param("roomId")),
+        receiptType: c.req.param("receiptType"),
+        eventId: decodeURIComponent(c.req.param("eventId")),
+        body: body.body,
+        now: Date.now(),
+      }).pipe(
+        Effect.flatMap((input) =>
+          sendReceiptEffect(createReceiptsCommandPorts(c.env), input),
+        ),
+      ),
+      () => c.json({}),
     );
-
-    // Validate receipt type
-    const validTypes = ["m.read", "m.read.private", "m.fully_read"];
-    if (!validTypes.includes(receiptType)) {
-      return c.json(
-        {
-          errcode: "M_INVALID_PARAM",
-          error: `Invalid receipt type: ${receiptType}`,
-        },
-        400,
-      );
-    }
-
-    // Check membership
-    const membership = await db
-      .prepare(`
-    SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?
-  `)
-      .bind(roomId, userId)
-      .first<{ membership: string }>();
-
-    if (!membership || membership.membership !== "join") {
-      return Errors.forbidden("Not a member of this room").toResponse();
-    }
-
-    // Parse optional body for thread_id
-    let threadId: string | undefined;
-    try {
-      const body = await c.req.json();
-      threadId = body.thread_id;
-    } catch {
-      // Body is optional
-    }
-
-    // m.fully_read is special - it's room account data, not an ephemeral receipt
-    // Store it in account_data table so it's returned in account_data extension
-    if (receiptType === "m.fully_read") {
-      await db
-        .prepare(`
-      INSERT INTO account_data (user_id, room_id, event_type, content)
-      VALUES (?, ?, 'm.fully_read', ?)
-      ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET
-        content = excluded.content
-    `)
-        .bind(userId, roomId, JSON.stringify({ event_id: eventId }))
-        .run();
-      console.log(
-        "[receipts] Stored m.fully_read in account_data for",
-        userId,
-        "in room",
-        roomId,
-        "event",
-        eventId,
-      );
-    } else {
-      // Store m.read and m.read.private in Room Durable Object
-      const roomDO = getRoomDO(c.env, roomId);
-      await roomDO.fetch(
-        new Request("https://room/receipt", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            user_id: userId,
-            event_id: eventId,
-            receipt_type: receiptType,
-            thread_id: threadId,
-          }),
-        }),
-      );
-      console.log(
-        "[receipts] Stored",
-        receiptType,
-        "in Room DO for",
-        userId,
-        "in room",
-        roomId,
-        "event",
-        eventId,
-      );
-
-      if (receiptType === "m.read") {
-        const destinations = await getRemoteJoinedServers(db, roomId, c.env.SERVER_NAME);
-        await Promise.all(
-          destinations.map((destination) =>
-            queueFederationEdu(c.env, destination, "m.receipt", {
-              [roomId]: {
-                "m.read": {
-                  [userId]: {
-                    event_ids: [eventId],
-                    data: {
-                      ts: Date.now(),
-                      ...(threadId ? { thread_id: threadId } : {}),
-                    },
-                  },
-                },
-              },
-            }),
-          ),
-        );
-      }
-
-      // Only unthreaded m.read receipts should advance the room-level read marker.
-      // Threaded receipts affect only their scoped timeline and must not collapse
-      // unread counts for the whole room.
-      if (receiptType === "m.read" && threadId === undefined) {
-        await db
-          .prepare(`
-        INSERT INTO account_data (user_id, room_id, event_type, content)
-        VALUES (?, ?, 'm.fully_read', ?)
-        ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET
-          content = excluded.content
-      `)
-          .bind(userId, roomId, JSON.stringify({ event_id: eventId }))
-          .run();
-        console.log(
-          "[receipts] Also updated m.fully_read in account_data for",
-          userId,
-          "in room",
-          roomId,
-        );
-      }
-    }
-
-    return c.json({});
   },
 );
 
-// POST /_matrix/client/v3/rooms/:roomId/read_markers - Set read marker
 app.post("/_matrix/client/v3/rooms/:roomId/read_markers", requireAuth(), async (c) => {
-  const userId = c.get("userId");
-  const roomId = c.req.param("roomId");
-  const db = c.env.DB;
-
-  let body: {
-    "m.fully_read"?: string;
-    "m.read"?: string;
-    "m.read.private"?: string;
-  };
-  try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
+  const body = await parseRequiredJsonBody(c);
+  if (!body.ok) {
+    return body.response;
   }
 
-  // Check membership
-  const membership = await db
-    .prepare(`
-    SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?
-  `)
-    .bind(roomId, userId)
-    .first<{ membership: string }>();
-
-  if (!membership || membership.membership !== "join") {
-    return Errors.forbidden("Not a member of this room").toResponse();
-  }
-
-  // Process m.fully_read (stored in account data for unread counts)
-  if (body["m.fully_read"]) {
-    await db
-      .prepare(`
-      INSERT INTO account_data (user_id, room_id, event_type, content)
-      VALUES (?, ?, 'm.fully_read', ?)
-      ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET
-        content = excluded.content
-    `)
-      .bind(userId, roomId, JSON.stringify({ event_id: body["m.fully_read"] }))
-      .run();
-    console.log("[receipts] Stored m.fully_read in account_data for", userId, "in room", roomId);
-  }
-
-  const roomDO = getRoomDO(c.env, roomId);
-
-  // Process m.read (stored in Room DO)
-  if (body["m.read"]) {
-    await roomDO.fetch(
-      new Request("https://room/receipt", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: userId,
-          event_id: body["m.read"],
-          receipt_type: "m.read",
-        }),
-      }),
-    );
-
-    // If m.fully_read wasn't explicitly provided, also update it to match m.read
-    // This keeps unread counts in sync for clients that only send m.read
-    if (!body["m.fully_read"]) {
-      await db
-        .prepare(`
-        INSERT INTO account_data (user_id, room_id, event_type, content)
-        VALUES (?, ?, 'm.fully_read', ?)
-        ON CONFLICT (user_id, room_id, event_type) DO UPDATE SET
-          content = excluded.content
-      `)
-        .bind(userId, roomId, JSON.stringify({ event_id: body["m.read"] }))
-        .run();
-      console.log(
-        "[receipts] Auto-updated m.fully_read to match m.read for",
-        userId,
-        "in room",
-        roomId,
-      );
-    }
-  }
-
-  // Process m.read.private (stored in Room DO)
-  if (body["m.read.private"]) {
-    await roomDO.fetch(
-      new Request("https://room/receipt", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: userId,
-          event_id: body["m.read.private"],
-          receipt_type: "m.read.private",
-        }),
-      }),
-    );
-  }
-
-  return c.json({});
+  return respondWithClientEffect(
+    decodeSetReadMarkersInput({
+      authUserId: c.get("userId"),
+      roomId: decodeURIComponent(c.req.param("roomId")),
+      body: body.body,
+    }).pipe(
+      Effect.flatMap((input) =>
+        setReadMarkersEffect(createReceiptsCommandPorts(c.env), input),
+      ),
+    ),
+    () => c.json({}),
+  );
 });
-
-// ============================================
-// Internal Helpers
-// ============================================
-
-// Get receipts for a room (for sync) - fetches from Room Durable Object
-// requestingUserId is used to filter m.read.private receipts - they should only be visible to the owner
-export async function getReceiptsForRoom(
-  env: Env,
-  roomId: string,
-  requestingUserId?: string,
-): Promise<{
-  type: "m.receipt";
-  content: Record<string, Record<string, Record<string, { ts: number; thread_id?: string }>>>;
-}> {
-  const roomDO = getRoomDO(env, roomId);
-  const response = await roomDO.fetch(
-    new Request("https://room/receipts", {
-      method: "GET",
-    }),
-  );
-
-  const data = await response.json();
-  const receipts = isJsonObject(data) ? parseReceiptContent(data.receipts) : {};
-
-  // Filter private receipts - m.read.private should only be visible to the owner
-  if (requestingUserId) {
-    const filteredReceipts: ReceiptContent = {};
-
-    for (const [eventId, receiptTypes] of Object.entries(receipts)) {
-      filteredReceipts[eventId] = {};
-
-      for (const [receiptType, users] of Object.entries(receiptTypes)) {
-        if (receiptType === "m.read.private") {
-          // Only include private receipt if it belongs to the requesting user
-          if (users[requestingUserId]) {
-            filteredReceipts[eventId][receiptType] = {
-              [requestingUserId]: users[requestingUserId],
-            };
-          }
-        } else {
-          // Include all public receipts
-          filteredReceipts[eventId][receiptType] = users;
-        }
-      }
-
-      // Remove empty event entries
-      if (Object.keys(filteredReceipts[eventId]).length === 0) {
-        delete filteredReceipts[eventId];
-      }
-    }
-
-    return {
-      type: "m.receipt",
-      content: filteredReceipts,
-    };
-  }
-
-  return {
-    type: "m.receipt",
-    content: receipts,
-  };
-}
-
-// Get receipts for multiple rooms (for sync)
-// requestingUserId is used to filter m.read.private receipts
-export async function getReceiptsForRooms(
-  env: Env,
-  roomIds: string[],
-  requestingUserId?: string,
-): Promise<
-  Record<string, Record<string, Record<string, Record<string, { ts: number; thread_id?: string }>>>>
-> {
-  if (roomIds.length === 0) return {};
-
-  const results = await Promise.all(
-    roomIds.map(async (roomId) => {
-      try {
-        const receipts = await getReceiptsForRoom(env, roomId, requestingUserId);
-        return { roomId, content: receipts.content };
-      } catch {
-        return { roomId, content: {} };
-      }
-    }),
-  );
-
-  const byRoom: Record<
-    string,
-    Record<string, Record<string, Record<string, { ts: number; thread_id?: string }>>>
-  > = {};
-  for (const { roomId, content } of results) {
-    if (Object.keys(content).length > 0) {
-      byRoom[roomId] = content;
-    }
-  }
-
-  return byRoom;
-}
 
 export default app;

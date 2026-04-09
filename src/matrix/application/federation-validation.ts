@@ -1,14 +1,14 @@
 import { Effect, Schema } from "effect";
-import type { EventId, MatrixSignatures, PDU, RoomId, UserId } from "../../types";
-import { ErrorCodes } from "../../types";
+import type { EventId, MatrixSignatures, PDU, RoomId, UserId } from "../../shared/types";
+import { ErrorCodes } from "../../shared/types";
 import {
   FederationInviteEnvelopeSchema,
   FederationPduEnvelopeSchema,
   FederationThirdPartyInviteExchangeSchema,
   type FederationPduEnvelope,
-} from "../../types/schema";
-import { extractServerNameFromMatrixId } from "../../utils/matrix-ids";
-import { toEventId, toRoomId, toUserId } from "../../utils/ids";
+} from "../../shared/types/schema";
+import { extractServerNameFromMatrixId } from "../../shared/utils/matrix-ids";
+import { toEventId, toRoomId, toUserId } from "../../shared/utils/ids";
 import { DomainError } from "./domain-error";
 import { requireRoomVersionPolicy } from "./room-version-policy";
 

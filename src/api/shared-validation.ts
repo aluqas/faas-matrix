@@ -1,5 +1,5 @@
-import type { JsonBodyParseResult, UnknownRecord } from "../types/common";
-import { Errors, type MatrixApiError } from "../utils/errors";
+import type { JsonBodyParseResult, UnknownRecord } from "../shared/types/common";
+import { Errors, type MatrixApiError } from "../shared/utils/errors";
 
 export function isRecord(value: unknown): value is UnknownRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value);

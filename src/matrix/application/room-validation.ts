@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
-import { ErrorCodes } from "../../types";
-import type { RoomId } from "../../types";
+import { ErrorCodes } from "../../shared/types";
+import type { RoomId } from "../../shared/types";
 import {
   CreateRoomRequestSchema,
   InviteRoomRequestSchema,
@@ -10,8 +10,8 @@ import {
   type ValidatedInviteRoomRequest,
   type ValidatedJoinRoomSchemaInput,
   type ValidatedModerationRequest,
-} from "../../types/schema";
-import { getDefaultRoomVersion } from "../../services/room-versions";
+} from "../../shared/types/schema";
+import { getDefaultRoomVersion } from "../../infra/db/room-versions";
 import { DomainError } from "./domain-error";
 import { requireRoomVersionPolicy } from "./room-version-policy";
 import { validateStateEvent } from "./rooms-support";

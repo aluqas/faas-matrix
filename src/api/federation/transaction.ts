@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import type { AppEnv } from "../../types";
-import { Errors } from "../../utils/errors";
+import type { AppEnv } from "../../shared/types";
+import { Errors } from "../../shared/utils/errors";
 
 const app = new Hono<AppEnv>();
 

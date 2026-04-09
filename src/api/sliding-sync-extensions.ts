@@ -6,21 +6,21 @@
  * This module owns the shared logic so the two handlers don't drift apart.
  */
 
-import type { SlidingSyncExtensionContext, SlidingSyncExtensionOutput } from "../types/sync";
-import type { SlidingSyncExtensionConfig } from "../types/client";
-import type { AccountDataEvent, RoomId } from "../types";
-import type { ToDeviceEvent } from "../types/matrix";
+import type { SlidingSyncExtensionContext, SlidingSyncExtensionOutput } from "../shared/types/sync";
+import type { SlidingSyncExtensionConfig } from "../shared/types/client";
+import type { AccountDataEvent, RoomId } from "../shared/types";
+import type { ToDeviceEvent } from "../shared/types/matrix";
 
-import { projectPresenceEvents } from "../matrix/application/features/presence/project";
+import { projectPresenceEvents } from "../features/presence/project";
 import {
   projectGlobalAccountDataSnapshot,
   projectRoomAccountDataSnapshot,
-} from "../matrix/application/features/account-data/projector";
-import { projectDeviceLists } from "../matrix/application/sync-projection";
-import { CloudflareSyncRepository } from "../runtime/cloudflare/matrix-repositories";
-import { getThreadSubscriptionsExtension } from "../matrix/application/features/sync/thread-subscriptions";
-import { getTypingForRooms } from "./typing";
-import { getReceiptsForRooms } from "./receipts";
+} from "../features/account-data/projector";
+import { projectDeviceLists } from "../matrix/application/orchestrators/sync-projection";
+import { CloudflareSyncRepository } from "../platform/cloudflare/matrix-repositories";
+import { getThreadSubscriptionsExtension } from "../features/sync/thread-subscriptions";
+import { getTypingForRooms } from "../features/typing/project";
+import { getReceiptsForRooms } from "../features/receipts/project";
 
 const THREAD_SUBSCRIPTIONS_EVENT_TYPE = "io.element.msc4306.thread_subscriptions";
 

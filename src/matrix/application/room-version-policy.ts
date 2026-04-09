@@ -1,6 +1,6 @@
-import type { RoomJoinRulesContent } from "../../types";
-import { ErrorCodes } from "../../types";
-import { getRoomVersion, type RoomVersionBehavior } from "../../services/room-versions";
+import type { RoomJoinRulesContent } from "../../shared/types";
+import { ErrorCodes } from "../../shared/types";
+import { getRoomVersion, type RoomVersionBehavior } from "../../infra/db/room-versions";
 import { DomainError } from "./domain-error";
 
 export interface RoomVersionPolicy extends RoomVersionBehavior {

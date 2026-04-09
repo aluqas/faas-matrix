@@ -4,12 +4,12 @@
 // Provides full-text search for room messages
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import type { JsonObject } from "../types/common";
-import type { SearchRequest, SearchResultEntry } from "../types/client";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
-import { toEventId, toRoomId, toUserId } from "../utils/ids";
+import type { AppEnv } from "../shared/types";
+import type { JsonObject } from "../shared/types/common";
+import type { SearchRequest, SearchResultEntry } from "../shared/types/client";
+import { Errors } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
+import { toEventId, toRoomId, toUserId } from "../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 

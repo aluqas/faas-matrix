@@ -6,7 +6,7 @@
 // on new devices.
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
+import type { AppEnv } from "../shared/types";
 import type {
   BackupAlgorithmData,
   BackupVersionResponse,
@@ -14,9 +14,9 @@ import type {
   KeyBackupData,
   KeysBackupRequest,
   RoomKeyBackup,
-} from "../types/client";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
+} from "../shared/types/client";
+import { Errors } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
 import { parseJsonObjectBody, requireEnumValue } from "./shared-validation";
 
 const app = new Hono<AppEnv>();
@@ -256,8 +256,8 @@ app.put("/_matrix/client/v3/room_keys/keys", requireAuth(), async (c) => {
   let count = 0;
 
   // Process each room
-  for (const [roomId, roomBackup] of Object.entries(body.rooms || {})) {
-    for (const [sessionId, sessionData] of Object.entries(roomBackup.sessions || {})) {
+  for (const [roomId, roomBackup] of Object.entries(body.rooms ?? {})) {
+    for (const [sessionId, sessionData] of Object.entries(roomBackup.sessions ?? {})) {
       // Upsert the key
       await db
         .prepare(`
@@ -342,7 +342,7 @@ app.put("/_matrix/client/v3/room_keys/keys/:roomId", requireAuth(), async (c) =>
   }
 
   // Process sessions
-  for (const [sessionId, sessionData] of Object.entries(body.sessions || {})) {
+  for (const [sessionId, sessionData] of Object.entries(body.sessions ?? {})) {
     await db
       .prepare(`
       INSERT INTO key_backup_keys (
@@ -523,9 +523,7 @@ app.get("/_matrix/client/v3/room_keys/keys", requireAuth(), async (c) => {
   // Group by room
   const rooms: Record<string, RoomKeyBackup> = {};
   for (const key of keys.results) {
-    if (!rooms[key.room_id]) {
-      rooms[key.room_id] = { sessions: {} };
-    }
+    rooms[key.room_id] ??= { sessions: {} };
     rooms[key.room_id].sessions[key.session_id] = {
       first_message_index: key.first_message_index,
       forwarded_count: key.forwarded_count,

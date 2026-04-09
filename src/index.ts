@@ -4,7 +4,7 @@
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import type { AppEnv } from "./types";
+import type { AppEnv } from "./shared/types";
 
 // Import API routes
 import versions from "./api/versions";
@@ -32,12 +32,12 @@ import serverNotices from "./api/server-notices";
 import report from "./api/report";
 import { validateFilterDefinition } from "./api/filter-validation";
 // import qrLogin from './api/qr-login'; // QR feature commented out - requires MSC4108/OIDC for Element X
-import { rateLimitMiddleware } from "./middleware/rate-limit";
-import { requireAuth } from "./middleware/auth";
-import { analyticsMiddleware } from "./middleware/analytics";
-import { appContextMiddleware } from "./runtime/cloudflare/app-context";
-import { FEDERATION_OUTBOUND_DO_NAME } from "./services/federation-outbound";
-import { handleAppError } from "./runtime/http-error-handler";
+import { rateLimitMiddleware } from "./infra/middleware/rate-limit";
+import { requireAuth } from "./infra/middleware/auth";
+import { analyticsMiddleware } from "./infra/middleware/analytics";
+import { appContextMiddleware } from "./platform/cloudflare/app-context";
+import { FEDERATION_OUTBOUND_DO_NAME } from "./infra/federation/federation-outbound";
+import { handleAppError } from "./platform/cloudflare/http-error-handler";
 
 // Import Durable Objects
 export {
@@ -49,7 +49,7 @@ export {
   UserKeysDurableObject,
   PushDurableObject,
   RateLimitDurableObject,
-} from "./durable-objects";
+} from "./platform/durable-objects";
 
 // Import Workflows
 export {
@@ -58,7 +58,7 @@ export {
   FederationCatchupWorkflow,
   MediaCleanupWorkflow,
   StateCompactionWorkflow,
-} from "./workflows";
+} from "./platform/workflows";
 
 // Create the main app
 // strict: false normalises trailing slashes so e.g. PUT /state/m.room.join_rules/
@@ -73,7 +73,7 @@ async function dispatchLazyRoute(c: Context<AppEnv>, loader: () => Promise<LazyR
 }
 
 async function renderAdminDashboard(serverName: string): Promise<string> {
-  const module = await import("./admin/dashboard");
+  const module = await import("./features/admin/dashboard");
   return module.adminDashboardHtml(serverName);
 }
 

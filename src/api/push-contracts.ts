@@ -11,7 +11,7 @@ import type {
   PushRuleActionsRequest,
   PushRuleEnabledRequest,
   PushRuleUpsertRequest,
-} from "../types/client";
+} from "../shared/types/client";
 
 export type {
   JsonObject,

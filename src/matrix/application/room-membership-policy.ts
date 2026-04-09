@@ -1,6 +1,6 @@
 import { Effect } from "effect";
-import type { Membership, RoomJoinRulesContent } from "../../types";
-import { ErrorCodes } from "../../types";
+import type { Membership, RoomJoinRulesContent } from "../../shared/types";
+import { ErrorCodes } from "../../shared/types";
 import { DomainError } from "./domain-error";
 import { requireRoomVersionPolicy, type RoomVersionPolicy } from "./room-version-policy";
 

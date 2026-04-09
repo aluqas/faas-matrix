@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import { Effect } from "effect";
-import type { AppEnv } from "../../types";
-import { Errors } from "../../utils/errors";
-import { requireAuth } from "../../middleware/auth";
-import { runClientEffect } from "../../matrix/application/effect-runtime";
+import type { AppEnv } from "../../shared/types";
+import { Errors } from "../../shared/utils/errors";
+import { requireAuth } from "../../infra/middleware/auth";
+import { runClientEffect } from "../../matrix/application/runtime/effect-runtime";
 import type { RoomMessagesRelationFilter } from "../../matrix/application/room-query-service";
-import { toEventId, toRoomId } from "../../utils/ids";
+import { toEventId, toRoomId } from "../../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 

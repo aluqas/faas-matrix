@@ -2,35 +2,35 @@
 
 import { Effect } from "effect";
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { Errors, MatrixApiError } from "../utils/errors";
-import { requireAuth, optionalAuth } from "../middleware/auth";
-import { runClientEffect } from "../matrix/application/effect-runtime";
+import type { AppEnv } from "../shared/types";
+import { Errors, MatrixApiError } from "../shared/utils/errors";
+import { requireAuth, optionalAuth } from "../infra/middleware/auth";
+import { runClientEffect } from "../matrix/application/runtime/effect-runtime";
 import {
   deleteCustomProfileKeyEffect,
   putCustomProfileKeyEffect,
   updateProfileFieldEffect,
-} from "../matrix/application/features/profile/command";
+} from "../features/profile/command";
 import {
   decodeDeleteCustomProfileKeyInput,
   decodeGetCustomProfileKeyInput,
   decodeProfileFieldUpdateInput,
   decodeProfileUserId,
   decodePutCustomProfileKeyInput,
-} from "../matrix/application/features/profile/decode";
+} from "../features/profile/decode";
 import {
   createProfileCommandPorts,
   createProfileQueryPorts,
-} from "../matrix/application/features/profile/effect-adapters";
+} from "../features/profile/effect-adapters";
 import {
   encodeEmptyProfileResponse,
   encodeProfileFieldResponse,
   encodeProfileResponseBody,
-} from "../matrix/application/features/profile/encoder";
+} from "../features/profile/encoder";
 import {
   queryCustomProfileKeyEffect,
   queryProfileEffect,
-} from "../matrix/application/features/profile/query";
+} from "../features/profile/query";
 
 const app = new Hono<AppEnv>();
 

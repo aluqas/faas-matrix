@@ -1,10 +1,10 @@
 import { Hono } from "hono";
-import type { AppEnv, Membership } from "../../types";
-import { Errors } from "../../utils/errors";
-import { toEventId, toRoomId, toUserId } from "../../utils/ids";
-import { requireAuth } from "../../middleware/auth";
-import { invalidateRoomCache } from "../../services/room-cache";
-import { getEvent, getMembership, updateMembership } from "../../services/database";
+import type { AppEnv, Membership } from "../../shared/types";
+import { Errors } from "../../shared/utils/errors";
+import { toEventId, toRoomId, toUserId } from "../../shared/utils/ids";
+import { requireAuth } from "../../infra/middleware/auth";
+import { invalidateRoomCache } from "../../infra/realtime/room-cache";
+import { getEvent, getMembership, updateMembership } from "../../infra/db/database";
 import {
   isRecord,
   MAX_ROOM_EVENT_CONTENT_BYTES,
@@ -69,9 +69,9 @@ async function putRoomStateEvent(
       await updateMembership(
         c.env.DB,
         roomId,
-        toUserId(stateKey)!,
+        toUserId(stateKey),
         content.membership as Membership,
-        toEventId(response.event_id)!,
+        toEventId(response.event_id),
         typeof content.displayname === "string" ? content.displayname : undefined,
         typeof content.avatar_url === "string" ? content.avatar_url : undefined,
       );

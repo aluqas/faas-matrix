@@ -1,219 +1,66 @@
 // Typing Indicators API
-// Implements: https://spec.matrix.org/v1.12/client-server-api/#typing-notifications
-//
-// Typing notifications inform other users when someone is typing.
-// They are ephemeral - stored in Room Durable Objects (not D1).
 
+import { Effect } from "effect";
 import { Hono } from "hono";
-import type { AppEnv, Env, RoomId, UserId } from "../types";
-import { Errors } from "../utils/errors";
-import { toRoomId, toUserId } from "../utils/ids";
-import { extractServerNameFromMatrixId } from "../utils/matrix-ids";
-import { requireAuth } from "../middleware/auth";
-import { getRoomState } from "../services/database";
-import { queueFederationEdu } from "../matrix/application/features/shared/federation-edu-queue";
-import { executeTypingCommand } from "../matrix/application/features/typing/command";
-import type { TypingEduContent } from "../matrix/application/features/typing/contracts";
+import type { AppEnv } from "../shared/types";
+import { Errors, MatrixApiError } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
+import { runClientEffect } from "../matrix/application/runtime/effect-runtime";
+import { setTypingEffect } from "../features/typing/command";
+import { decodeSetTypingInput } from "../features/typing/decode";
+import { createTypingRequestPorts } from "../features/typing/effect-adapters";
 
 const app = new Hono<AppEnv>();
 
-// ============================================
-// Constants
-// ============================================
-
-const DEFAULT_TYPING_TIMEOUT = 30000; // 30 seconds
-const MAX_TYPING_TIMEOUT = 120000; // 2 minutes
-
-function parseTypingUsersResponse(value: unknown): UserId[] {
-  if (!value || typeof value !== "object") {
-    return [];
-  }
-
-  const data = value as { user_ids?: unknown };
-  return Array.isArray(data.user_ids)
-    ? data.user_ids
-        .map((userId) => toUserId(userId))
-        .filter((userId): userId is UserId => userId !== null)
-    : [];
-}
-
-// ============================================
-// Helper to get Room DO stub
-// ============================================
-
-function getRoomDO(env: Env, roomId: string) {
-  const id = env.ROOMS.idFromName(roomId);
-  return env.ROOMS.get(id);
-}
-
-async function getRemoteJoinedServers(db: D1Database, roomId: string, localServerName: string) {
-  const state = await getRoomState(db, toRoomId(roomId) ?? (roomId as import("../types").RoomId));
-  return Array.from(
-    new Set(
-      state
-        .filter(
-          (event) =>
-            event.type === "m.room.member" &&
-            event.state_key &&
-            event.content &&
-            typeof event.content === "object" &&
-            event.content["membership"] === "join",
-        )
-        .map((event) => extractServerNameFromMatrixId(event.state_key))
-        .filter((server): server is string => Boolean(server) && server !== localServerName),
-    ),
-  );
-}
-
-// ============================================
-// Endpoints
-// ============================================
-
-// PUT /_matrix/client/v3/rooms/:roomId/typing/:userId - Set typing status
-app.put("/_matrix/client/v3/rooms/:roomId/typing/:userId", requireAuth(), async (c) => {
-  const requestingUserId = c.get("userId");
-  const roomId = c.req.param("roomId");
-  const targetUserId = c.req.param("userId");
-  const db = c.env.DB;
-
-  console.log(
-    "[typing] PUT request from",
-    requestingUserId,
-    "for user",
-    targetUserId,
-    "in room",
-    roomId,
-  );
-
-  // Users can only set their own typing status
-  if (requestingUserId !== targetUserId) {
-    return c.json(
-      {
-        errcode: "M_FORBIDDEN",
-        error: "Cannot set typing status for other users",
-      },
-      403,
-    );
-  }
-
-  // Check membership
-  const membership = await db
-    .prepare(`
-    SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?
-  `)
-    .bind(roomId, requestingUserId)
-    .first<{ membership: string }>();
-
-  if (!membership || membership.membership !== "join") {
-    return Errors.forbidden("Not a member of this room").toResponse();
-  }
-
-  let body: { typing: boolean; timeout?: number };
+async function respondWithClientEffect<A>(
+  effect: Effect.Effect<A, unknown>,
+  respond: (value: A) => Response,
+): Promise<Response> {
   try {
-    body = await c.req.json();
-  } catch {
-    return Errors.badJson().toResponse();
-  }
-
-  const { typing, timeout: requestedTimeout } = body;
-
-  if (typeof typing !== "boolean") {
-    return Errors.missingParam("typing").toResponse();
-  }
-
-  // Calculate timeout
-  let timeout = DEFAULT_TYPING_TIMEOUT;
-  if (typing && requestedTimeout) {
-    timeout = Math.min(requestedTimeout, MAX_TYPING_TIMEOUT);
-  }
-
-  await executeTypingCommand(
-    {
-      roomId,
-      userId: requestingUserId,
-      typing,
-      timeoutMs: timeout,
-    },
-    {
-      async setRoomTyping(targetRoomId, userId, isTyping, timeoutMs = DEFAULT_TYPING_TIMEOUT) {
-        const roomDO = getRoomDO(c.env, targetRoomId);
-        await roomDO.fetch(
-          new Request("https://room/typing", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              user_id: userId,
-              typing: isTyping,
-              timeout: timeoutMs,
-            }),
-          }),
-        );
-      },
-      resolveInterestedServers(targetRoomId: string) {
-        return getRemoteJoinedServers(db, targetRoomId, c.env.SERVER_NAME);
-      },
-      async queueEdu(destination: string, content: TypingEduContent) {
-        await queueFederationEdu(c.env, destination, "m.typing", content);
-      },
-      debugEnabled: c.get("appContext").profile.name === "complement",
-    },
-  );
-
-  console.log(
-    "[typing] User",
-    requestingUserId,
-    typing ? "started" : "stopped",
-    "typing in room",
-    roomId,
-  );
-
-  return c.json({});
-});
-
-// ============================================
-// Internal Helpers
-// ============================================
-
-// Get typing users for a room (for sync) - uses Room Durable Object
-export async function getTypingUsers(env: Env, roomId: RoomId): Promise<UserId[]> {
-  const roomDO = getRoomDO(env, roomId);
-  const response = await roomDO.fetch(
-    new Request("https://room/typing", {
-      method: "GET",
-    }),
-  );
-
-  return parseTypingUsersResponse(await response.json());
-}
-
-// Get typing status for multiple rooms (for sync) - uses Room Durable Objects
-export async function getTypingForRooms(
-  env: Env,
-  roomIds: RoomId[],
-): Promise<Record<RoomId, UserId[]>> {
-  if (roomIds.length === 0) return {};
-
-  const byRoom: Partial<Record<RoomId, UserId[]>> = {};
-
-  // Fetch typing state from each Room DO in parallel
-  const results = await Promise.all(
-    roomIds.map(async (roomId) => {
-      try {
-        const users = await getTypingUsers(env, roomId);
-        return { roomId, users };
-      } catch {
-        return { roomId, users: [] };
-      }
-    }),
-  );
-
-  for (const { roomId, users } of results) {
-    if (users.length > 0) {
-      byRoom[roomId] = users;
+    return respond(await runClientEffect(effect));
+  } catch (error) {
+    if (error instanceof MatrixApiError) {
+      return error.toResponse();
     }
+    throw error;
+  }
+}
+
+async function parseRequiredJsonBody(
+  c: import("hono").Context<AppEnv>,
+): Promise<{ ok: true; body: unknown } | { ok: false; response: Response }> {
+  try {
+    return { ok: true, body: await c.req.json() };
+  } catch {
+    return { ok: false, response: Errors.badJson().toResponse() };
+  }
+}
+
+app.put("/_matrix/client/v3/rooms/:roomId/typing/:userId", requireAuth(), async (c) => {
+  const body = await parseRequiredJsonBody(c);
+  if (!body.ok) {
+    return body.response;
   }
 
-  return byRoom as Record<RoomId, UserId[]>;
-}
+  return respondWithClientEffect(
+    decodeSetTypingInput({
+      authUserId: c.get("userId"),
+      roomId: decodeURIComponent(c.req.param("roomId")),
+      targetUserId: decodeURIComponent(c.req.param("userId")),
+      body: body.body,
+    }).pipe(
+      Effect.flatMap((input) =>
+        setTypingEffect(
+          createTypingRequestPorts(
+            c.env,
+            c.get("appContext").profile.name === "complement",
+          ),
+          input,
+        ),
+      ),
+    ),
+    () => c.json({}),
+  );
+});
 
 export default app;

@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { Effect } from "effect";
-import type { AppEnv } from "../../types";
-import { Errors, MatrixApiError } from "../../utils/errors";
+import type { AppEnv } from "../../shared/types";
+import { Errors, MatrixApiError } from "../../shared/utils/errors";
 import { DomainError, toMatrixApiError } from "../../matrix/application/domain-error";
-import { runFederationEffect } from "../../matrix/application/effect-runtime";
+import { runFederationEffect } from "../../matrix/application/runtime/effect-runtime";
 import {
   createFederationQueryPorts,
   queryFederationEventRelationshipsEffect,
@@ -11,18 +11,18 @@ import {
   queryFederationServerKeysBatchEffect,
   queryFederationServerKeysEffect,
   resolveFederationDirectoryEffect,
-} from "../../matrix/application/features/federation/query";
+} from "../../features/federation-query/query";
 import {
   decodeFederationDirectoryQueryInput,
   decodeFederationEventRelationshipsInput,
   decodeFederationProfileQueryInput,
   decodeFederationServerKeysBatchQueryInput,
   decodeFederationServerKeysQueryInput,
-} from "../../matrix/application/features/federation/query-decode";
+} from "../../features/federation-query/query-decode";
 import {
   encodeFederationProfileResponse,
   encodeFederationServerKeysResponse,
-} from "../../matrix/application/features/federation/query-encoder";
+} from "../../features/federation-query/query-encoder";
 
 const app = new Hono<AppEnv>();
 

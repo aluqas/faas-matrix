@@ -5,24 +5,24 @@
 
 import { Hono } from "hono";
 import type { Context } from "hono";
-import type { AppEnv } from "../types";
-import { isJsonObject } from "../types/common";
+import type { AppEnv } from "../shared/types";
+import { isJsonObject } from "../shared/types/common";
 import type {
   PublicRoomSummary,
   SpaceHierarchyChildEdge,
   SpaceHierarchyChildStateEvent,
   SpaceHierarchyRoom,
   SpaceHierarchySnapshot,
-} from "../types/client";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
+} from "../shared/types/client";
+import { Errors } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
 import {
   EventQueryService,
   selectSpaceChildren,
   type SpaceChildEdge,
-} from "../matrix/application/event-query-service";
-import { federationGet } from "../services/federation-keys";
-import { toRoomId, toUserId } from "../utils/ids";
+} from "../matrix/application/orchestrators/event-query-service";
+import { federationGet } from "../infra/federation/federation-keys";
+import { toRoomId, toUserId } from "../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 const queries = new EventQueryService();

@@ -3,10 +3,10 @@
 // Also implements MSC4143 RTC transports discovery
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import type { GetTokenRequest, GetTokenResponse, OpenIDToken } from "../types/client";
-import { Errors } from "../utils/errors";
-import { generateLiveKitToken, getLiveKitConfig } from "../services/livekit";
+import type { AppEnv } from "../shared/types";
+import type { GetTokenRequest, GetTokenResponse, OpenIDToken } from "../shared/types/client";
+import { Errors } from "../shared/utils/errors";
+import { generateLiveKitToken, getLiveKitConfig } from "../infra/integrations/livekit";
 import { parseJsonObjectBody } from "./shared-validation";
 
 const app = new Hono<AppEnv>();

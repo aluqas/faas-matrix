@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import type { AppEnv } from "../../types";
+import type { AppEnv } from "../../shared/types";
 import { parseOptionalJsonObjectBody, resolveRoomIdOrAlias, toRouteErrorResponse } from "./shared";
-import { requireAuth } from "../../middleware/auth";
-import { Errors } from "../../utils/errors";
-import { toRoomId } from "../../utils/ids";
+import { requireAuth } from "../../infra/middleware/auth";
+import { Errors } from "../../shared/utils/errors";
+import { toRoomId } from "../../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 
@@ -61,7 +61,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/leave", requireAuth(), async (c) => {
 
 async function handleKnock(
   c: import("hono").Context<AppEnv>,
-  roomId: import("../../types").RoomId,
+  roomId: import("../../shared/types").RoomId,
   reason?: string,
   serverNames?: string[],
 ): Promise<Response> {

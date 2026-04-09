@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { AppContext } from "../../foundation/app-context";
+import type { AppContext } from "../../shared/runtime/app-context";
 import {
   ErrorCodes,
   type ClientEvent,
@@ -7,8 +7,8 @@ import {
   type PDU,
   type RoomId,
   type UserId,
-} from "../../types";
-import { toEventId, toUserId } from "../../utils/ids";
+} from "../../shared/types";
+import { toEventId, toUserId } from "../../shared/utils/ids";
 import type {
   GetRoomMembersInput,
   GetRoomMessagesInput,
@@ -18,21 +18,21 @@ import type {
   RoomMessagesRelationFilter,
   RoomQueryDependencies,
   TimestampToEventInput,
-} from "../../types/rooms";
+} from "../../shared/types/rooms";
 import {
   getMembership,
   getRoomEvents,
   getRoomMembers,
   getRoomState,
   getStateEvent,
-} from "../../services/database";
-import { EventQueryService } from "./event-query-service";
+} from "../../infra/db/database";
+import { EventQueryService } from "./orchestrators/event-query-service";
 import { DomainError, InfraError } from "./domain-error";
 import {
   getPartialStateCompletionStatus,
   getPartialStateStatus,
-} from "./features/partial-state/tracker";
-import { getPartialStateDeferredAuthReason } from "./features/federation/partial-state-membership";
+} from "../../features/partial-state/tracker";
+import { getPartialStateDeferredAuthReason } from "../../features/federation-core/partial-state-membership";
 
 type MembershipRecord = {
   membership: Membership;

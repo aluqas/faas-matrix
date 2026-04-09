@@ -1,7 +1,7 @@
 // Matrix Client-Server API version endpoints
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
+import type { AppEnv } from "../shared/types";
 
 const app = new Hono<AppEnv>();
 

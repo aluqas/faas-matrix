@@ -2,11 +2,11 @@
 // Implements: https://spec.matrix.org/v1.12/application-service-api/
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { Errors } from "../utils/errors";
-import { getAppServiceByToken } from "../services/appservice";
-import { getUserById } from "../services/database";
-import { toUserId } from "../utils/ids";
+import type { AppEnv } from "../shared/types";
+import { Errors } from "../shared/utils/errors";
+import { getAppServiceByToken } from "../infra/integrations/appservice";
+import { getUserById } from "../infra/db/database";
+import { toUserId } from "../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 
@@ -30,7 +30,7 @@ async function requireAppServiceAuth(c: any, next: () => Promise<void>): Promise
 // GET /_matrix/app/v1/users/:userId - Query if a user exists (AS → HS direction)
 app.get("/_matrix/app/v1/users/:userId", requireAppServiceAuth, async (c) => {
   const userId = c.req.param("userId");
-  const user = await getUserById(c.env.DB, toUserId(userId)!);
+  const user = await getUserById(c.env.DB, toUserId(userId));
 
   if (!user) {
     return Errors.notFound("User not found").toResponse();

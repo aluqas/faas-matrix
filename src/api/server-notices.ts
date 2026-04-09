@@ -5,11 +5,11 @@
 // important events like terms of service updates, security alerts, etc.
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import type { JsonObject } from "../types/common";
-import { Errors } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
-import { generateOpaqueId, generateEventId } from "../utils/ids";
+import type { AppEnv } from "../shared/types";
+import type { JsonObject } from "../shared/types/common";
+import { Errors } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
+import { generateOpaqueId, generateEventId } from "../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 

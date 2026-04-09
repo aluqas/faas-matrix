@@ -12,21 +12,21 @@
 // D1 has eventual consistency across read replicas, which breaks E2EE bootstrap.
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { Errors, MatrixApiError } from "../utils/errors";
-import { requireAuth } from "../middleware/auth";
-import { runClientEffect } from "../matrix/application/effect-runtime";
+import type { AppEnv } from "../shared/types";
+import { Errors, MatrixApiError } from "../shared/utils/errors";
+import { requireAuth } from "../infra/middleware/auth";
+import { runClientEffect } from "../matrix/application/runtime/effect-runtime";
 import {
   encodeClientKeysChangesResponse,
   encodeClientKeysClaimResponse,
   encodeClientKeysQueryResponse,
   encodeClientKeysSignaturesUploadResponse,
   encodeClientKeysUploadResponse,
-} from "../matrix/application/features/e2ee/encoder";
-import { uploadClientKeys } from "../matrix/application/features/keys/upload";
-import { queryClientKeyChanges, queryClientKeys } from "../matrix/application/features/keys/query";
-import { claimClientKeys } from "../matrix/application/features/keys/claim";
-import { createKeysLogger } from "../matrix/application/features/keys/shared";
+} from "../features/e2ee-shared/encoder";
+import { uploadClientKeys } from "../features/client-keys/upload";
+import { queryClientKeyChanges, queryClientKeys } from "../features/client-keys/query";
+import { claimClientKeys } from "../features/client-keys/claim";
+import { createKeysLogger } from "../features/client-keys/shared";
 import {
   generateSSOErrorPage,
   generateSSOSuccessPage,
@@ -34,11 +34,11 @@ import {
   submitUiaToken,
   loadUiaSession,
   completeUiaSsoCallback,
-} from "../matrix/application/features/keys/uia";
+} from "../features/client-keys/uia";
 import {
   uploadCrossSigningKeys,
   uploadKeySignatures,
-} from "../matrix/application/features/keys/cross-signing";
+} from "../features/client-keys/cross-signing";
 import {
   type SignaturesUploadRequest,
   type TokenSubmitRequest,

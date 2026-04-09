@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PDU } from "../../types";
+import type { PDU } from "../../shared/types";
 import {
   MembershipTransitionService,
   toMembershipCommand,

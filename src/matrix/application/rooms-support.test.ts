@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PDU } from "../../types";
+import type { PDU } from "../../shared/types";
 import { createInitialRoomEvents } from "./rooms-support";
 
 describe("createInitialRoomEvents", () => {

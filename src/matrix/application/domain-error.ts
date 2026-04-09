@@ -1,6 +1,6 @@
 import { Data } from "effect";
-import type { DomainErrorKind, DomainErrorShape, InfraErrorShape } from "../../types/error";
-import { MatrixApiError } from "../../utils/errors";
+import type { DomainErrorKind, DomainErrorShape, InfraErrorShape } from "../../shared/types/error";
+import { MatrixApiError } from "../../shared/utils/errors";
 export type { DomainErrorKind };
 
 export class DomainError extends Data.TaggedError("DomainError")<DomainErrorShape> {}

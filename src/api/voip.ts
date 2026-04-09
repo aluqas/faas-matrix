@@ -1,16 +1,16 @@
 // Matrix VoIP endpoints (TURN server credentials)
 
 import { Hono } from "hono";
-import type { AppEnv } from "../types";
-import { requireAuth } from "../middleware/auth";
+import type { AppEnv } from "../shared/types";
+import { requireAuth } from "../infra/middleware/auth";
 import {
   getMatrixTurnCredentials,
   getStunServers,
   isTurnConfigured,
   TurnError,
-} from "../services/turn";
-import { notifyUsersOfEvent } from "../services/database";
-import { toEventId, toRoomId } from "../utils/ids";
+} from "../infra/integrations/turn";
+import { notifyUsersOfEvent } from "../infra/db/database";
+import { toEventId, toRoomId } from "../shared/utils/ids";
 
 const app = new Hono<AppEnv>();
 
@@ -304,7 +304,7 @@ app.put("/_matrix/client/v1/rooms/:roomId/call", requireAuth(), async (c) => {
   console.log("[voip] User", userId, "device", targetDeviceId, "joined call in room", roomId);
 
   // Notify room members about the call state change (wakes up long-polling syncs)
-  await notifyUsersOfEvent(c.env, toRoomId(roomId)!, toEventId(eventId)!, "m.call.member");
+  await notifyUsersOfEvent(c.env, toRoomId(roomId), toEventId(eventId), "m.call.member");
 
   return c.json({
     event_id: eventId,

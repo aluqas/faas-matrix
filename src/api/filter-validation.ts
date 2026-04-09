@@ -1,6 +1,6 @@
-import { parseRoomId, parseUserId } from "../utils/ids";
-import type { JsonObject } from "../types/common";
-import { Errors, type MatrixApiError } from "../utils/errors";
+import { parseRoomId, parseUserId } from "../shared/utils/ids";
+import type { JsonObject } from "../shared/types/common";
+import { Errors, type MatrixApiError } from "../shared/utils/errors";
 
 const ROOM_FILTER_KEYS = new Set([
   "rooms",
