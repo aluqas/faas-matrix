@@ -6,16 +6,27 @@ import { queryCustomProfileKeyEffect, queryProfileEffect, type ProfileQueryPorts
 function createPorts(overrides: Partial<ProfileQueryPorts> = {}): ProfileQueryPorts {
   return {
     localServerName: "test",
-    getProfile: () =>
-      Effect.succeed({
-        displayname: "Alice",
-        avatar_url: "mxc://test/alice",
-      }),
-    getLocalUserExists: () => Effect.succeed(true),
-    getStoredCustomProfile: () =>
-      Effect.succeed({
-        "im.example.color": "blue",
-      }),
+    profileRepository: {
+      getLocalProfile: () =>
+        Effect.succeed({
+          displayname: "Alice",
+          avatar_url: "mxc://test/alice",
+        }),
+      getLocalUserExists: () => Effect.succeed(true),
+    },
+    customProfileStore: {
+      getStoredCustomProfile: () =>
+        Effect.succeed({
+          "im.example.color": "blue",
+        }),
+    },
+    profileGateway: {
+      fetchRemoteProfile: () =>
+        Effect.succeed({
+          displayname: "Alice",
+          avatar_url: "mxc://test/alice",
+        }),
+    },
     ...overrides,
   };
 }
@@ -23,7 +34,10 @@ function createPorts(overrides: Partial<ProfileQueryPorts> = {}): ProfileQueryPo
 describe("profile query", () => {
   it("returns a not-found error when no profile exists", async () => {
     const ports = createPorts({
-      getProfile: () => Effect.succeed(null),
+      profileRepository: {
+        getLocalProfile: () => Effect.succeed(null),
+        getLocalUserExists: () => Effect.succeed(true),
+      },
     });
 
     await expect(

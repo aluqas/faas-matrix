@@ -13,19 +13,15 @@ import {
   getNextAccountDataStreamPosition,
 } from "../../../repositories/account-data-repository";
 import { InfraError } from "../../domain-error";
+import { fromInfraVoid, toInfraError } from "../../../lib/infra-effect";
+import {
+  deleteKvValue,
+  putKvTextValue,
+} from "../shared/kv-gateway";
 import {
   deleteE2EEAccountDataFromDO,
   putE2EEAccountDataToDO,
 } from "./e2ee-gateway";
-
-function toInfraError(message: string, cause: unknown, status = 500): InfraError {
-  return new InfraError({
-    errcode: "M_UNKNOWN",
-    message,
-    status,
-    cause,
-  });
-}
 
 async function persistDatabaseAccountDataRecord(
   db: D1Database,
@@ -61,7 +57,12 @@ async function persistDoBackedGlobalAccountData(
   content: AccountDataContent,
 ): Promise<void> {
   await putE2EEAccountDataToDO(env, userId, eventType, content);
-  await env.ACCOUNT_DATA.put(`global:${userId}:${eventType}`, JSON.stringify(content));
+  await putKvTextValue(
+    env,
+    "ACCOUNT_DATA",
+    `global:${userId}:${eventType}`,
+    JSON.stringify(content),
+  );
 }
 
 async function deleteDoBackedGlobalAccountData(
@@ -70,7 +71,7 @@ async function deleteDoBackedGlobalAccountData(
   eventType: string,
 ): Promise<void> {
   await deleteE2EEAccountDataFromDO(env, userId, eventType);
-  await env.ACCOUNT_DATA.delete(`global:${userId}:${eventType}`);
+  await deleteKvValue(env, "ACCOUNT_DATA", `global:${userId}:${eventType}`);
 }
 
 export function persistGlobalAccountDataEffect(
@@ -79,14 +80,16 @@ export function persistGlobalAccountDataEffect(
   eventType: string,
   content: AccountDataContent,
 ): Effect.Effect<void, InfraError> {
-  return Effect.tryPromise({
-    try: async () => {
+  return fromInfraVoid(
+    async () => {
       if (isDoBackedAccountDataEventType(eventType)) {
         await persistDoBackedGlobalAccountData(env, userId, eventType, content);
       }
       await persistDatabaseAccountDataRecord(env.DB, userId, "", eventType, content);
     },
-    catch: (cause) =>
+    "Failed to store account data",
+  ).pipe(
+    Effect.mapError((cause) =>
       toInfraError(
         isDoBackedAccountDataEventType(eventType)
           ? "Failed to store E2EE account data"
@@ -94,7 +97,8 @@ export function persistGlobalAccountDataEffect(
         cause,
         isDoBackedAccountDataEventType(eventType) ? 503 : 500,
       ),
-  });
+    ),
+  );
 }
 
 export function deleteGlobalAccountDataEffect(
@@ -102,15 +106,15 @@ export function deleteGlobalAccountDataEffect(
   userId: UserId,
   eventType: string,
 ): Effect.Effect<void, InfraError> {
-  return Effect.tryPromise({
-    try: async () => {
+  return fromInfraVoid(
+    async () => {
       if (isDoBackedAccountDataEventType(eventType)) {
         await deleteDoBackedGlobalAccountData(env, userId, eventType);
       }
       await markDatabaseAccountDataDeleted(env.DB, userId, "", eventType);
     },
-    catch: (cause) => toInfraError("Failed to delete global account data", cause),
-  });
+    "Failed to delete global account data",
+  );
 }
 
 export function persistRoomAccountDataEffect(
@@ -120,12 +124,12 @@ export function persistRoomAccountDataEffect(
   eventType: string,
   content: AccountDataContent,
 ): Effect.Effect<void, InfraError> {
-  return Effect.tryPromise({
-    try: async () => {
+  return fromInfraVoid(
+    async () => {
       await persistDatabaseAccountDataRecord(env.DB, userId, roomId, eventType, content);
     },
-    catch: (cause) => toInfraError("Failed to store room account data", cause),
-  });
+    "Failed to store room account data",
+  );
 }
 
 export function deleteRoomAccountDataEffect(
@@ -134,10 +138,10 @@ export function deleteRoomAccountDataEffect(
   roomId: RoomId,
   eventType: string,
 ): Effect.Effect<void, InfraError> {
-  return Effect.tryPromise({
-    try: async () => {
+  return fromInfraVoid(
+    async () => {
       await markDatabaseAccountDataDeleted(env.DB, userId, roomId, eventType);
     },
-    catch: (cause) => toInfraError("Failed to delete room account data", cause),
-  });
+    "Failed to delete room account data",
+  );
 }

@@ -8,10 +8,15 @@ import type {
 } from "../../../../types/account-data";
 import { isEmptyAccountDataContent } from "../../../../types/account-data";
 import type { RoomId, UserId } from "../../../../types/matrix";
-import { Errors, MatrixApiError } from "../../../../utils/errors";
+import type { MatrixApiError } from "../../../../utils/errors";
 import { InfraError } from "../../domain-error";
+import { requireJoinedRoom, requireOwnUser } from "../../../lib/guards";
 
-export interface AccountDataCommandPorts {
+export interface AccountDataMembershipService {
+  isUserJoinedToRoom(userId: UserId, roomId: RoomId): Effect.Effect<boolean, InfraError>;
+}
+
+export interface AccountDataWriterService {
   putGlobalAccountData(
     userId: UserId,
     eventType: string,
@@ -29,27 +34,16 @@ export interface AccountDataCommandPorts {
     roomId: RoomId,
     eventType: string,
   ): Effect.Effect<void, InfraError>;
-  isUserJoinedToRoom(userId: UserId, roomId: RoomId): Effect.Effect<boolean, InfraError>;
+}
+
+export interface AccountDataNotifierService {
   notifyAccountDataChange(input: NotifyAccountDataChangeInput): Effect.Effect<void, InfraError>;
 }
 
-function ensureOwnAccountData(
-  authUserId: UserId,
-  targetUserId: UserId,
-): Effect.Effect<void, MatrixApiError> {
-  return authUserId === targetUserId
-    ? Effect.void
-    : Effect.fail(Errors.forbidden("Cannot modify other users account data"));
-}
-
-function ensureJoinedRoom(
-  ports: AccountDataCommandPorts,
-  userId: UserId,
-  roomId: RoomId,
-): Effect.Effect<void, MatrixApiError | InfraError> {
-  return Effect.flatMap(ports.isUserJoinedToRoom(userId, roomId), (joined) =>
-    joined ? Effect.void : Effect.fail(Errors.forbidden("User not in room")),
-  );
+export interface AccountDataCommandPorts {
+  membership: AccountDataMembershipService;
+  accountDataWriter: AccountDataWriterService;
+  accountDataNotifier: AccountDataNotifierService;
 }
 
 export function putGlobalAccountDataEffect(
@@ -57,9 +51,9 @@ export function putGlobalAccountDataEffect(
   input: PutGlobalAccountDataInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* ensureOwnAccountData(input.authUserId, input.targetUserId);
-    yield* ports.putGlobalAccountData(input.targetUserId, input.eventType, input.content);
-    yield* ports.notifyAccountDataChange({
+    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify other users account data");
+    yield* ports.accountDataWriter.putGlobalAccountData(input.targetUserId, input.eventType, input.content);
+    yield* ports.accountDataNotifier.notifyAccountDataChange({
       userId: input.targetUserId,
       eventType: input.eventType,
     });
@@ -80,9 +74,9 @@ export function deleteGlobalAccountDataEffect(
   input: DeleteGlobalAccountDataInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* ensureOwnAccountData(input.authUserId, input.targetUserId);
-    yield* ports.deleteGlobalAccountData(input.targetUserId, input.eventType);
-    yield* ports.notifyAccountDataChange({
+    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify other users account data");
+    yield* ports.accountDataWriter.deleteGlobalAccountData(input.targetUserId, input.eventType);
+    yield* ports.accountDataNotifier.notifyAccountDataChange({
       userId: input.targetUserId,
       eventType: input.eventType,
     });
@@ -94,15 +88,19 @@ export function putRoomAccountDataEffect(
   input: PutRoomAccountDataInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* ensureOwnAccountData(input.authUserId, input.targetUserId);
-    yield* ensureJoinedRoom(ports, input.targetUserId, input.roomId);
-    yield* ports.putRoomAccountData(
+    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify other users account data");
+    yield* requireJoinedRoom(
+      (userId, roomId) => ports.membership.isUserJoinedToRoom(userId, roomId),
+      input.targetUserId,
+      input.roomId,
+    );
+    yield* ports.accountDataWriter.putRoomAccountData(
       input.targetUserId,
       input.roomId,
       input.eventType,
       input.content,
     );
-    yield* ports.notifyAccountDataChange({
+    yield* ports.accountDataNotifier.notifyAccountDataChange({
       userId: input.targetUserId,
       roomId: input.roomId,
       eventType: input.eventType,
@@ -124,10 +122,14 @@ export function deleteRoomAccountDataEffect(
   input: DeleteRoomAccountDataInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* ensureOwnAccountData(input.authUserId, input.targetUserId);
-    yield* ensureJoinedRoom(ports, input.targetUserId, input.roomId);
-    yield* ports.deleteRoomAccountData(input.targetUserId, input.roomId, input.eventType);
-    yield* ports.notifyAccountDataChange({
+    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify other users account data");
+    yield* requireJoinedRoom(
+      (userId, roomId) => ports.membership.isUserJoinedToRoom(userId, roomId),
+      input.targetUserId,
+      input.roomId,
+    );
+    yield* ports.accountDataWriter.deleteRoomAccountData(input.targetUserId, input.roomId, input.eventType);
+    yield* ports.accountDataNotifier.notifyAccountDataChange({
       userId: input.targetUserId,
       roomId: input.roomId,
       eventType: input.eventType,

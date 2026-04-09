@@ -12,13 +12,17 @@ import {
 function createPorts(store: JsonObject = {}): ProfileCommandPorts {
   return {
     localServerName: "test",
-    updateProfile: () => Effect.void,
-    getStoredCustomProfile: () => Effect.succeed({ ...store }),
-    putStoredCustomProfile: (_userId, value) =>
-      Effect.sync(() => {
-        Object.keys(store).forEach((key) => delete store[key]);
-        Object.assign(store, value);
-      }),
+    profileRepository: {
+      updateProfile: () => Effect.void,
+    },
+    customProfileStore: {
+      getStoredCustomProfile: () => Effect.succeed({ ...store }),
+      putStoredCustomProfile: (_userId, value) =>
+        Effect.sync(() => {
+          Object.keys(store).forEach((key) => delete store[key]);
+          Object.assign(store, value);
+        }),
+    },
   };
 }
 

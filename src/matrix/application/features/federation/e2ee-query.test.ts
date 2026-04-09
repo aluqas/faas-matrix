@@ -11,47 +11,55 @@ import {
 function createPorts(overrides: Partial<FederationE2EEQueryPorts> = {}): FederationE2EEQueryPorts {
   return {
     localServerName: "test",
-    localUserExists: () => Effect.succeed(true),
-    getAllDeviceKeys: () =>
-      Effect.succeed({
-        DEVICE: {
+    identityRepository: {
+      localUserExists: () => Effect.succeed(true),
+      listStoredDevices: () =>
+        Effect.succeed([
+          {
+            deviceId: "DEVICE",
+            displayName: "Alice phone",
+          },
+        ]),
+      getDeviceKeyStreamId: () => Effect.succeed(7),
+    },
+    deviceKeysGateway: {
+      getAllDeviceKeys: () =>
+        Effect.succeed({
+          DEVICE: {
+            user_id: "@alice:test",
+            device_id: "DEVICE",
+            keys: { "ed25519:DEVICE": "pub" },
+          },
+        }),
+      getDeviceKey: (_userId, deviceId) =>
+        Effect.succeed({
           user_id: "@alice:test",
-          device_id: "DEVICE",
-          keys: { "ed25519:DEVICE": "pub" },
-        },
-      }),
-    getDeviceKey: (_userId, deviceId) =>
-      Effect.succeed({
-        user_id: "@alice:test",
-        device_id: deviceId,
-      }),
-    getCrossSigningKeys: () =>
-      Effect.succeed({
-        master: {
-          user_id: "@alice:test",
-          usage: ["master"],
-          keys: { "ed25519:master": "pub" },
-        },
-      }),
-    listDeviceSignatures: () =>
-      Effect.succeed([
-        {
-          signerUserId: "@alice:test",
-          signerKeyId: "ed25519:DEVICE",
-          signature: "sig",
-        },
-      ]),
-    claimStoredOneTimeKey: () => Effect.succeed(null),
-    claimDatabaseOneTimeKey: () => Effect.succeed(null),
-    claimFallbackKey: () => Effect.succeed(null),
-    listStoredDevices: () =>
-      Effect.succeed([
-        {
-          deviceId: "DEVICE",
-          displayName: "Alice phone",
-        },
-      ]),
-    getDeviceKeyStreamId: () => Effect.succeed(7),
+          device_id: deviceId,
+        }),
+      getCrossSigningKeys: () =>
+        Effect.succeed({
+          master: {
+            user_id: "@alice:test",
+            usage: ["master"],
+            keys: { "ed25519:master": "pub" },
+          },
+        }),
+    },
+    signaturesRepository: {
+      listDeviceSignatures: () =>
+        Effect.succeed([
+          {
+            signerUserId: "@alice:test",
+            signerKeyId: "ed25519:DEVICE",
+            signature: "sig",
+          },
+        ]),
+    },
+    oneTimeKeyStore: {
+      claimStoredOneTimeKey: () => Effect.succeed(null),
+      claimDatabaseOneTimeKey: () => Effect.succeed(null),
+      claimFallbackKey: () => Effect.succeed(null),
+    },
     ...overrides,
   };
 }
@@ -74,18 +82,20 @@ describe("federation e2ee query effect", () => {
     const response = await runFederationEffect(
       claimFederationOneTimeKeysEffect(
         createPorts({
-          claimStoredOneTimeKey: (_userId, deviceId) =>
-            deviceId === "DEVICE1"
-              ? Effect.succeed({ keyId: "signed_curve25519:AAA", keyData: { key: "a" } })
-              : Effect.succeed(null),
-          claimDatabaseOneTimeKey: (_userId, deviceId) =>
-            deviceId === "DEVICE2"
-              ? Effect.succeed({ keyId: "signed_curve25519:BBB", keyData: { key: "b" } })
-              : Effect.succeed(null),
-          claimFallbackKey: (_userId, deviceId) =>
-            deviceId === "DEVICE3"
-              ? Effect.succeed({ keyId: "signed_curve25519:CCC", keyData: { key: "c" } })
-              : Effect.succeed(null),
+          oneTimeKeyStore: {
+            claimStoredOneTimeKey: (_userId, deviceId) =>
+              deviceId === "DEVICE1"
+                ? Effect.succeed({ keyId: "signed_curve25519:AAA", keyData: { key: "a" } })
+                : Effect.succeed(null),
+            claimDatabaseOneTimeKey: (_userId, deviceId) =>
+              deviceId === "DEVICE2"
+                ? Effect.succeed({ keyId: "signed_curve25519:BBB", keyData: { key: "b" } })
+                : Effect.succeed(null),
+            claimFallbackKey: (_userId, deviceId) =>
+              deviceId === "DEVICE3"
+                ? Effect.succeed({ keyId: "signed_curve25519:CCC", keyData: { key: "c" } })
+                : Effect.succeed(null),
+          },
         }),
         {
           requestedKeys: {

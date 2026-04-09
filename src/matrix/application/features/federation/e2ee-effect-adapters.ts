@@ -9,7 +9,7 @@ import {
   listUserDevices,
   localUserExists,
 } from "../../../repositories/federation-e2ee-repository";
-import { InfraError } from "../../domain-error";
+import { fromInfraPromise, fromInfraVoid } from "../../../lib/infra-effect";
 import {
   fetchAllDeviceKeysFromDO,
   fetchCrossSigningKeysFromDO,
@@ -19,24 +19,15 @@ import {
 } from "./e2ee-gateway";
 import type { FederationE2EEQueryPorts } from "./e2ee-query";
 
-function toInfraError(message: string, cause: unknown, status = 500): InfraError {
-  return new InfraError({
-    errcode: "M_UNKNOWN",
-    message,
-    status,
-    cause,
-  });
-}
-
 function loadStoredOneTimeKeyBucketsEffect(
   env: Pick<AppEnv["Bindings"], "ONE_TIME_KEYS">,
   userId: UserId,
   deviceId: string,
-): Effect.Effect<StoredOneTimeKeyBuckets | null, InfraError> {
-  return Effect.tryPromise({
-    try: () => loadStoredOneTimeKeyBuckets(env, userId, deviceId),
-    catch: (cause) => toInfraError("Failed to load one-time keys from KV", cause),
-  });
+) {
+  return fromInfraPromise(
+    () => loadStoredOneTimeKeyBuckets(env, userId, deviceId),
+    "Failed to load one-time keys from KV",
+  );
 }
 
 function saveStoredOneTimeKeyBucketsEffect(
@@ -44,11 +35,11 @@ function saveStoredOneTimeKeyBucketsEffect(
   userId: UserId,
   deviceId: string,
   buckets: StoredOneTimeKeyBuckets,
-): Effect.Effect<void, InfraError> {
-  return Effect.tryPromise({
-    try: () => saveStoredOneTimeKeyBuckets(env, userId, deviceId, buckets),
-    catch: (cause) => toInfraError("Failed to store one-time keys in KV", cause),
-  });
+) {
+  return fromInfraVoid(
+    () => saveStoredOneTimeKeyBuckets(env, userId, deviceId, buckets),
+    "Failed to store one-time keys in KV",
+  );
 }
 
 export function createFederationE2EEQueryPorts(
@@ -56,71 +47,64 @@ export function createFederationE2EEQueryPorts(
 ): FederationE2EEQueryPorts {
   return {
     localServerName: env.SERVER_NAME,
-    localUserExists: (userId) =>
-      Effect.tryPromise({
-        try: () => localUserExists(env.DB, userId),
-        catch: (cause) => toInfraError("Failed to load user", cause),
-      }),
-    getAllDeviceKeys: (userId) =>
-      Effect.tryPromise({
-        try: () => fetchAllDeviceKeysFromDO(env, userId),
-        catch: (cause) => toInfraError("Failed to load device keys", cause),
-      }),
-    getDeviceKey: (userId, deviceId) =>
-      Effect.tryPromise({
-        try: () => fetchDeviceKeyFromDO(env, userId, deviceId),
-        catch: (cause) => toInfraError("Failed to load device key", cause),
-      }),
-    getCrossSigningKeys: (userId) =>
-      Effect.tryPromise({
-        try: () => fetchCrossSigningKeysFromDO(env, userId),
-        catch: (cause) => toInfraError("Failed to load cross-signing keys", cause),
-      }),
-    listDeviceSignatures: (userId, keyId) =>
-      Effect.tryPromise({
-        try: () => listCrossSigningSignaturesForKey(env.DB, userId, keyId),
-        catch: (cause) => toInfraError("Failed to load device signatures", cause),
-      }),
-    claimStoredOneTimeKey: (userId, deviceId, algorithm) =>
-      Effect.gen(function* () {
-        const existingKeys = yield* loadStoredOneTimeKeyBucketsEffect(env, userId, deviceId);
-        const bucket = existingKeys?.[algorithm];
-        if (!bucket) {
-          return null;
-        }
+    identityRepository: {
+      localUserExists: (userId) =>
+        fromInfraPromise(() => localUserExists(env.DB, userId), "Failed to load user"),
+      listStoredDevices: (userId) =>
+        fromInfraPromise(() => listUserDevices(env.DB, userId), "Failed to load devices"),
+      getDeviceKeyStreamId: (userId) =>
+        fromInfraPromise(
+          () => getDeviceKeyStreamId(env.DB, userId),
+          "Failed to load device key stream id",
+        ),
+    },
+    deviceKeysGateway: {
+      getAllDeviceKeys: (userId) =>
+        fromInfraPromise(() => fetchAllDeviceKeysFromDO(env, userId), "Failed to load device keys"),
+      getDeviceKey: (userId, deviceId) =>
+        fromInfraPromise(() => fetchDeviceKeyFromDO(env, userId, deviceId), "Failed to load device key"),
+      getCrossSigningKeys: (userId) =>
+        fromInfraPromise(() => fetchCrossSigningKeysFromDO(env, userId), "Failed to load cross-signing keys"),
+    },
+    signaturesRepository: {
+      listDeviceSignatures: (userId, keyId) =>
+        fromInfraPromise(
+          () => listCrossSigningSignaturesForKey(env.DB, userId, keyId),
+          "Failed to load device signatures",
+        ),
+    },
+    oneTimeKeyStore: {
+      claimStoredOneTimeKey: (userId, deviceId, algorithm) =>
+        Effect.gen(function* () {
+          const existingKeys = yield* loadStoredOneTimeKeyBucketsEffect(env, userId, deviceId);
+          const bucket = existingKeys?.[algorithm];
+          if (!bucket) {
+            return null;
+          }
 
-        const keyIndex = bucket.findIndex((key: StoredOneTimeKeyBuckets[string][number]) => !key.claimed);
-        if (keyIndex < 0) {
-          return null;
-        }
+          const keyIndex = bucket.findIndex((key: StoredOneTimeKeyBuckets[string][number]) => !key.claimed);
+          if (keyIndex < 0) {
+            return null;
+          }
 
-        const key = bucket[keyIndex];
-        bucket[keyIndex] = { ...key, claimed: true };
-        yield* saveStoredOneTimeKeyBucketsEffect(env, userId, deviceId, existingKeys);
-        return {
-          keyId: key.keyId,
-          keyData: key.keyData,
-        } satisfies FederationClaimedOneTimeKeyRecord;
-      }),
-    claimDatabaseOneTimeKey: (userId, deviceId, algorithm) =>
-      Effect.tryPromise({
-        try: () => claimUnclaimedOneTimeKey(env.DB, userId, deviceId, algorithm, Date.now()),
-        catch: (cause) => toInfraError("Failed to claim one-time key", cause),
-      }),
-    claimFallbackKey: (userId, deviceId, algorithm) =>
-      Effect.tryPromise({
-        try: () => claimFallbackKey(env.DB, userId, deviceId, algorithm),
-        catch: (cause) => toInfraError("Failed to claim fallback key", cause),
-      }),
-    listStoredDevices: (userId) =>
-      Effect.tryPromise({
-        try: () => listUserDevices(env.DB, userId),
-        catch: (cause) => toInfraError("Failed to load devices", cause),
-      }),
-    getDeviceKeyStreamId: (userId) =>
-      Effect.tryPromise({
-        try: () => getDeviceKeyStreamId(env.DB, userId),
-        catch: (cause) => toInfraError("Failed to load device key stream id", cause),
-      }),
+          const key = bucket[keyIndex];
+          bucket[keyIndex] = { ...key, claimed: true };
+          yield* saveStoredOneTimeKeyBucketsEffect(env, userId, deviceId, existingKeys);
+          return {
+            keyId: key.keyId,
+            keyData: key.keyData,
+          } satisfies FederationClaimedOneTimeKeyRecord;
+        }),
+      claimDatabaseOneTimeKey: (userId, deviceId, algorithm) =>
+        fromInfraPromise(
+          () => claimUnclaimedOneTimeKey(env.DB, userId, deviceId, algorithm, Date.now()),
+          "Failed to claim one-time key",
+        ),
+      claimFallbackKey: (userId, deviceId, algorithm) =>
+        fromInfraPromise(
+          () => claimFallbackKey(env.DB, userId, deviceId, algorithm),
+          "Failed to claim fallback key",
+        ),
+    },
   };
 }

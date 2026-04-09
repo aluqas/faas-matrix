@@ -1,6 +1,6 @@
 import type { UserId } from "../../../../types";
 import type { ProfileField, ProfileResponseBody } from "../../../../types/profile";
-import { isLocalServerName, parseUserId } from "../../../../utils/ids";
+import { resolveLocalOrRemoteUserTarget } from "../shared/local-remote-dispatch";
 
 export interface ProfileLookupInput {
   userId: string;
@@ -21,8 +21,11 @@ function isSupportedProfileField(field: string | undefined): field is ProfileFie
 export function queryProfileResponse(
   input: ProfileLookupInput,
 ): Promise<ProfileResponseBody | null> {
-  const parsed = parseUserId(input.userId as `@${string}:${string}`);
-  if (!parsed) {
+  const target = resolveLocalOrRemoteUserTarget(
+    input.userId as UserId,
+    input.localServerName,
+  );
+  if (!target) {
     return Promise.resolve(null);
   }
 
@@ -30,14 +33,13 @@ export function queryProfileResponse(
     return Promise.resolve(null);
   }
 
-  const userId = input.userId as UserId;
-  if (isLocalServerName(parsed.serverName, input.localServerName)) {
-    return input.getLocalProfile(userId);
+  if (target.isLocal) {
+    return input.getLocalProfile(target.userId);
   }
 
   return input.fetchRemoteProfile(
-    parsed.serverName,
-    userId,
+    target.serverName,
+    target.userId,
     input.field,
   );
 }

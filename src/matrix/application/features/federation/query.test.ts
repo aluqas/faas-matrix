@@ -14,47 +14,64 @@ import {
 function createPorts(overrides: Partial<FederationQueryPorts> = {}): FederationQueryPorts {
   return {
     localServerName: "test",
-    getProfile: () =>
-      Effect.succeed({
-        displayname: "Alice",
-        avatar_url: "mxc://test/alice",
-      }),
-    getRoomByAlias: () => Effect.succeed("!room:test"),
-    getNotarySigningKey: () =>
-      Effect.succeed({
-        keyId: "ed25519:test",
-        privateKeyJwk: {} as JsonWebKey,
-      }),
-    getCurrentServerKeys: () =>
-      Effect.succeed([
-        {
+    profileRepository: {
+      getLocalProfile: () =>
+        Effect.succeed({
+          displayname: "Alice",
+          avatar_url: "mxc://test/alice",
+        }),
+    },
+    profileGateway: {
+      fetchRemoteProfile: () =>
+        Effect.succeed({
+          displayname: "Alice",
+          avatar_url: "mxc://test/alice",
+        }),
+    },
+    roomDirectoryRepository: {
+      findRoomIdByAlias: () => Effect.succeed("!room:test"),
+    },
+    serverKeysRepository: {
+      getCurrentServerKeys: () =>
+        Effect.succeed([
+          {
+            keyId: "ed25519:test",
+            publicKey: "dGVzdA",
+            validUntil: 123,
+          },
+        ]),
+    },
+    notaryGateway: {
+      getSigningKey: () =>
+        Effect.succeed({
           keyId: "ed25519:test",
-          publicKey: "dGVzdA",
-          validUntil: 123,
-        },
-      ]),
-    getNotarizedServerKeys: (serverName, keyId, minimumValidUntilTs) =>
-      Effect.succeed([
-        {
-          server_name: serverName,
-          valid_until_ts: minimumValidUntilTs || 1,
-          verify_keys: keyId
-            ? { [keyId]: { key: "cmVtb3Rl" } }
-            : { "ed25519:remote": { key: "cmVtb3Rl" } },
-          old_verify_keys: {},
-        },
-      ]),
-    signNotaryResponse: (response) =>
-      Effect.succeed({
-        ...response,
-        signatures: { test: { "ed25519:test": "sig" } },
-      }),
-    buildEventRelationships: () =>
-      Effect.succeed({
-        events: [],
-        limited: false,
-        auth_chain: [],
-      }),
+          privateKeyJwk: {} as JsonWebKey,
+        }),
+      getNotarizedServerKeys: (serverName, keyId, minimumValidUntilTs) =>
+        Effect.succeed([
+          {
+            server_name: serverName,
+            valid_until_ts: minimumValidUntilTs || 1,
+            verify_keys: keyId
+              ? { [keyId]: { key: "cmVtb3Rl" } }
+              : { "ed25519:remote": { key: "cmVtb3Rl" } },
+            old_verify_keys: {},
+          },
+        ]),
+      signResponse: (response) =>
+        Effect.succeed({
+          ...response,
+          signatures: { test: { "ed25519:test": "sig" } },
+        }),
+    },
+    relationshipsReader: {
+      buildEventRelationships: () =>
+        Effect.succeed({
+          events: [],
+          limited: false,
+          auth_chain: [],
+        }),
+    },
     ...overrides,
   };
 }
@@ -93,18 +110,21 @@ describe("federation query effect", () => {
       minimumValidUntilTs: number;
     }> = [];
     const ports = createPorts({
-      getNotarizedServerKeys: (serverName, keyId, minimumValidUntilTs) => {
-        remoteCalls.push({ serverName, keyId, minimumValidUntilTs });
-        return Effect.succeed([
-          {
-            server_name: serverName,
-            valid_until_ts: minimumValidUntilTs || 1,
-            verify_keys: keyId
-              ? { [keyId]: { key: "cmVtb3Rl" } }
-              : { "ed25519:remote": { key: "cmVtb3Rl" } },
-            old_verify_keys: {},
-          },
-        ]);
+      notaryGateway: {
+        ...createPorts().notaryGateway,
+        getNotarizedServerKeys: (serverName, keyId, minimumValidUntilTs) => {
+          remoteCalls.push({ serverName, keyId, minimumValidUntilTs });
+          return Effect.succeed([
+            {
+              server_name: serverName,
+              valid_until_ts: minimumValidUntilTs || 1,
+              verify_keys: keyId
+                ? { [keyId]: { key: "cmVtb3Rl" } }
+                : { "ed25519:remote": { key: "cmVtb3Rl" } },
+              old_verify_keys: {},
+            },
+          ]);
+        },
       },
     });
 
@@ -147,7 +167,10 @@ describe("federation query effect", () => {
 
   it("returns not found when a specific remote server key is unavailable", async () => {
     const ports = createPorts({
-      getNotarizedServerKeys: () => Effect.succeed([]),
+      notaryGateway: {
+        ...createPorts().notaryGateway,
+        getNotarizedServerKeys: () => Effect.succeed([]),
+      },
     });
 
     await expect(

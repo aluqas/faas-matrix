@@ -1,8 +1,8 @@
-import { makeFederationRequest } from "../../../../services/federation-keys";
 import type { AppEnv, UserId } from "../../../../types";
 import { isJsonObject } from "../../../../types/common";
 import type { ProfileField, ProfileResponseBody } from "../../../../types/profile";
 import { getOrCreateNotarySigningKey } from "../federation/notary-gateway";
+import { fetchFederationJson } from "../shared/federation-http-gateway";
 
 function parseProfileResponseBody(value: unknown): ProfileResponseBody | null {
   if (!isJsonObject(value)) {
@@ -41,18 +41,12 @@ export async function fetchRemoteProfileResponse(
     throw new Error("Server signing key not configured");
   }
 
-  const response = await makeFederationRequest(
-    "GET",
-    serverName,
-    `/_matrix/federation/v1/query/profile?${params.toString()}`,
-    env.SERVER_NAME,
-    signingKey,
-    env.CACHE,
+  return parseProfileResponseBody(
+    await fetchFederationJson(
+      env,
+      serverName,
+      `/_matrix/federation/v1/query/profile?${params.toString()}`,
+      signingKey,
+    ),
   );
-
-  if (!response.ok) {
-    return null;
-  }
-
-  return parseProfileResponseBody(await response.json().catch(() => null));
 }

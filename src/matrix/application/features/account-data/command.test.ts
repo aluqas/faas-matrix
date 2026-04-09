@@ -11,27 +11,33 @@ import {
 
 function createPorts(recorder: string[] = []): AccountDataCommandPorts {
   return {
-    putGlobalAccountData: (_userId, eventType) =>
-      Effect.sync(() => {
-        recorder.push(`put-global:${eventType}`);
-      }),
-    deleteGlobalAccountData: (_userId, eventType) =>
-      Effect.sync(() => {
-        recorder.push(`delete-global:${eventType}`);
-      }),
-    putRoomAccountData: (_userId, roomId, eventType) =>
-      Effect.sync(() => {
-        recorder.push(`put-room:${roomId}:${eventType}`);
-      }),
-    deleteRoomAccountData: (_userId, roomId, eventType) =>
-      Effect.sync(() => {
-        recorder.push(`delete-room:${roomId}:${eventType}`);
-      }),
-    isUserJoinedToRoom: () => Effect.succeed(true),
-    notifyAccountDataChange: ({ roomId, eventType }) =>
-      Effect.sync(() => {
-        recorder.push(`notify:${roomId ?? "global"}:${eventType}`);
-      }),
+    accountDataWriter: {
+      putGlobalAccountData: (_userId, eventType) =>
+        Effect.sync(() => {
+          recorder.push(`put-global:${eventType}`);
+        }),
+      deleteGlobalAccountData: (_userId, eventType) =>
+        Effect.sync(() => {
+          recorder.push(`delete-global:${eventType}`);
+        }),
+      putRoomAccountData: (_userId, roomId, eventType) =>
+        Effect.sync(() => {
+          recorder.push(`put-room:${roomId}:${eventType}`);
+        }),
+      deleteRoomAccountData: (_userId, roomId, eventType) =>
+        Effect.sync(() => {
+          recorder.push(`delete-room:${roomId}:${eventType}`);
+        }),
+    },
+    membership: {
+      isUserJoinedToRoom: () => Effect.succeed(true),
+    },
+    accountDataNotifier: {
+      notifyAccountDataChange: ({ roomId, eventType }) =>
+        Effect.sync(() => {
+          recorder.push(`notify:${roomId ?? "global"}:${eventType}`);
+        }),
+    },
   };
 }
 
@@ -81,7 +87,9 @@ describe("account-data command effect", () => {
         putRoomAccountDataEffect(
           {
             ...createPorts(recorder),
-            isUserJoinedToRoom: () => Effect.succeed(false),
+            membership: {
+              isUserJoinedToRoom: () => Effect.succeed(false),
+            },
           },
           {
             authUserId: "@alice:test",

@@ -9,33 +9,24 @@ import type {
 import type { UserId } from "../../../../types/matrix";
 import { Errors, MatrixApiError } from "../../../../utils/errors";
 import { InfraError } from "../../domain-error";
-import { isLocalProfileUser, isStandardProfileField } from "./shared";
+import { requireLocalUser, requireOwnUser } from "../../../lib/guards";
+import { isStandardProfileField } from "./shared";
 
 type ProfileFieldUpdate = Partial<Record<ProfileField, string | null>>;
 
-export interface ProfileCommandPorts {
-  localServerName: string;
+export interface ProfileRepositoryService {
   updateProfile(userId: UserId, update: ProfileFieldUpdate): Effect.Effect<void, InfraError>;
+}
+
+export interface CustomProfileStoreService {
   getStoredCustomProfile(userId: UserId): Effect.Effect<JsonObject, InfraError>;
   putStoredCustomProfile(userId: UserId, value: JsonObject): Effect.Effect<void, InfraError>;
 }
 
-function ensureOwnProfile(
-  authUserId: UserId,
-  targetUserId: UserId,
-): Effect.Effect<void, MatrixApiError> {
-  return authUserId === targetUserId
-    ? Effect.void
-    : Effect.fail(Errors.forbidden("Cannot modify another user's profile"));
-}
-
-function ensureLocalProfileTarget(
-  userId: UserId,
-  localServerName: string,
-): Effect.Effect<void, MatrixApiError> {
-  return isLocalProfileUser(userId, localServerName)
-    ? Effect.void
-    : Effect.fail(Errors.notFound("User not found"));
+export interface ProfileCommandPorts {
+  localServerName: string;
+  profileRepository: ProfileRepositoryService;
+  customProfileStore: CustomProfileStoreService;
 }
 
 export function updateProfileFieldEffect(
@@ -43,9 +34,9 @@ export function updateProfileFieldEffect(
   input: UpdateProfileFieldInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* ensureOwnProfile(input.authUserId, input.targetUserId);
-    yield* ensureLocalProfileTarget(input.targetUserId, ports.localServerName);
-    yield* ports.updateProfile(input.targetUserId, { [input.field]: input.value });
+    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify another user's profile");
+    yield* requireLocalUser(input.targetUserId, ports.localServerName);
+    yield* ports.profileRepository.updateProfile(input.targetUserId, { [input.field]: input.value });
   });
 }
 
@@ -54,14 +45,14 @@ export function putCustomProfileKeyEffect(
   input: PutCustomProfileKeyInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* ensureOwnProfile(input.authUserId, input.targetUserId);
-    yield* ensureLocalProfileTarget(input.targetUserId, ports.localServerName);
+    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify another user's profile");
+    yield* requireLocalUser(input.targetUserId, ports.localServerName);
     if (isStandardProfileField(input.keyName)) {
       return yield* Effect.fail(Errors.unrecognized("Use specific endpoint"));
     }
 
-    const profileData = yield* ports.getStoredCustomProfile(input.targetUserId);
-    yield* ports.putStoredCustomProfile(input.targetUserId, {
+    const profileData = yield* ports.customProfileStore.getStoredCustomProfile(input.targetUserId);
+    yield* ports.customProfileStore.putStoredCustomProfile(input.targetUserId, {
       ...profileData,
       [input.keyName]: input.value,
     });
@@ -73,15 +64,15 @@ export function deleteCustomProfileKeyEffect(
   input: DeleteCustomProfileKeyInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* ensureOwnProfile(input.authUserId, input.targetUserId);
-    yield* ensureLocalProfileTarget(input.targetUserId, ports.localServerName);
+    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify another user's profile");
+    yield* requireLocalUser(input.targetUserId, ports.localServerName);
     if (isStandardProfileField(input.keyName)) {
       return yield* Effect.fail(Errors.forbidden("Cannot delete standard profile keys"));
     }
 
-    const profileData = yield* ports.getStoredCustomProfile(input.targetUserId);
+    const profileData = yield* ports.customProfileStore.getStoredCustomProfile(input.targetUserId);
     const nextProfileData = { ...profileData };
     delete nextProfileData[input.keyName];
-    yield* ports.putStoredCustomProfile(input.targetUserId, nextProfileData);
+    yield* ports.customProfileStore.putStoredCustomProfile(input.targetUserId, nextProfileData);
   });
 }

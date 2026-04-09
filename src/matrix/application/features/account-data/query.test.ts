@@ -9,9 +9,13 @@ import {
 
 function createPorts(overrides: Partial<AccountDataQueryPorts> = {}): AccountDataQueryPorts {
   return {
-    getGlobalAccountData: () => Effect.succeed({ "@alice:test": ["!room:test"] }),
-    getRoomAccountData: () => Effect.succeed({ tags: {} }),
-    isUserJoinedToRoom: () => Effect.succeed(true),
+    accountDataReader: {
+      getGlobalAccountData: () => Effect.succeed({ "@alice:test": ["!room:test"] }),
+      getRoomAccountData: () => Effect.succeed({ tags: {} }),
+    },
+    membership: {
+      isUserJoinedToRoom: () => Effect.succeed(true),
+    },
     ...overrides,
   };
 }
@@ -33,7 +37,11 @@ describe("account-data query effect", () => {
     await expect(
       runClientEffect(
         queryRoomAccountDataEffect(
-          createPorts({ isUserJoinedToRoom: () => Effect.succeed(false) }),
+          createPorts({
+            membership: {
+              isUserJoinedToRoom: () => Effect.succeed(false),
+            },
+          }),
           {
             authUserId: "@alice:test",
             targetUserId: "@alice:test",
@@ -51,7 +59,12 @@ describe("account-data query effect", () => {
     await expect(
       runClientEffect(
         queryGlobalAccountDataEffect(
-          createPorts({ getGlobalAccountData: () => Effect.succeed(null) }),
+          createPorts({
+            accountDataReader: {
+              getGlobalAccountData: () => Effect.succeed(null),
+              getRoomAccountData: () => Effect.succeed({ tags: {} }),
+            },
+          }),
           {
             authUserId: "@alice:test",
             targetUserId: "@alice:test",

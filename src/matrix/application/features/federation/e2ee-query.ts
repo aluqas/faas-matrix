@@ -15,22 +15,36 @@ import { Errors, MatrixApiError } from "../../../../utils/errors";
 import { toUserId } from "../../../../utils/ids";
 import { extractServerNameFromMatrixId } from "../../../../utils/matrix-ids";
 import type { CrossSigningKeysStore, DeviceKeysPayload } from "../../../../types/client";
-import type { JsonObject } from "../../../../types/common";
 import { InfraError } from "../../domain-error";
+import {
+  attachCrossSigningKeys,
+  claimKeyFromStores,
+  loadRequestedDeviceKeys,
+} from "./e2ee-query-helpers";
 
-export interface FederationE2EEQueryPorts {
-  localServerName: string;
+export interface FederationIdentityRepository {
   localUserExists(userId: UserId): Effect.Effect<boolean, InfraError>;
+  listStoredDevices(userId: UserId): Effect.Effect<FederationStoredDeviceRecord[], InfraError>;
+  getDeviceKeyStreamId(userId: UserId): Effect.Effect<number, InfraError>;
+}
+
+export interface FederationDeviceKeysGateway {
   getAllDeviceKeys(userId: UserId): Effect.Effect<Record<string, DeviceKeysPayload>, InfraError>;
   getDeviceKey(
     userId: UserId,
     deviceId: string,
   ): Effect.Effect<DeviceKeysPayload | null, InfraError>;
   getCrossSigningKeys(userId: UserId): Effect.Effect<CrossSigningKeysStore, InfraError>;
+}
+
+export interface FederationSignaturesRepository {
   listDeviceSignatures(
     userId: UserId,
     keyId: string,
   ): Effect.Effect<FederationDeviceSignatureRecord[], InfraError>;
+}
+
+export interface FederationOneTimeKeyStore {
   claimStoredOneTimeKey(
     userId: UserId,
     deviceId: string,
@@ -46,8 +60,14 @@ export interface FederationE2EEQueryPorts {
     deviceId: string,
     algorithm: string,
   ): Effect.Effect<FederationClaimedOneTimeKeyRecord | null, InfraError>;
-  listStoredDevices(userId: UserId): Effect.Effect<FederationStoredDeviceRecord[], InfraError>;
-  getDeviceKeyStreamId(userId: UserId): Effect.Effect<number, InfraError>;
+}
+
+export interface FederationE2EEQueryPorts {
+  localServerName: string;
+  identityRepository: FederationIdentityRepository;
+  deviceKeysGateway: FederationDeviceKeysGateway;
+  signaturesRepository: FederationSignaturesRepository;
+  oneTimeKeyStore: FederationOneTimeKeyStore;
 }
 
 function toLocalUserId(rawUserId: string, localServerName: string): UserId | null {
@@ -61,46 +81,14 @@ function toLocalUserId(rawUserId: string, localServerName: string): UserId | nul
   return toUserId(rawUserId);
 }
 
-function mergeDeviceSignatures(
-  deviceKey: DeviceKeysPayload,
-  signatures: FederationDeviceSignatureRecord[],
-): DeviceKeysPayload {
-  if (signatures.length === 0) {
-    return deviceKey;
-  }
-
-  const mergedSignatures: NonNullable<DeviceKeysPayload["signatures"]> = {
-    ...deviceKey.signatures,
-  };
-
-  for (const signature of signatures) {
-    mergedSignatures[signature.signerUserId] = {
-      ...mergedSignatures[signature.signerUserId],
-      [signature.signerKeyId]: signature.signature,
-    };
-  }
-
-  return {
-    ...deviceKey,
-    signatures: mergedSignatures,
-  };
-}
-
-function withFallbackMarker(keyData: JsonObject): JsonObject {
-  return {
-    ...keyData,
-    fallback: true,
-  };
-}
-
 export function queryFederationDeviceKeysEffect(
   ports: FederationE2EEQueryPorts,
   input: FederationKeysQueryInput,
 ): Effect.Effect<FederationKeysQueryResponseBody, InfraError> {
   return Effect.gen(function* () {
-    const deviceKeys: FederationKeysQueryResponseBody["device_keys"] = {};
-    const masterKeys: NonNullable<FederationKeysQueryResponseBody["master_keys"]> = {};
-    const selfSigningKeys: NonNullable<FederationKeysQueryResponseBody["self_signing_keys"]> = {};
+    let response: FederationKeysQueryResponseBody = {
+      device_keys: {},
+    };
 
     for (const [rawUserId, requestedDevices] of Object.entries(input.requestedKeys)) {
       const userId = toLocalUserId(rawUserId, ports.localServerName);
@@ -108,44 +96,24 @@ export function queryFederationDeviceKeysEffect(
         continue;
       }
 
-      const userExists = yield* ports.localUserExists(userId);
+      const userExists = yield* ports.identityRepository.localUserExists(userId);
       if (!userExists) {
         continue;
       }
 
-      deviceKeys[userId] = {};
+      response = {
+        ...response,
+        device_keys: {
+          ...response.device_keys,
+          [userId]: yield* loadRequestedDeviceKeys(ports, userId, requestedDevices),
+        },
+      };
 
-      if (!requestedDevices || requestedDevices.length === 0) {
-        const allDeviceKeys = yield* ports.getAllDeviceKeys(userId);
-        for (const [deviceId, keys] of Object.entries(allDeviceKeys)) {
-          const signatures = yield* ports.listDeviceSignatures(userId, deviceId);
-          deviceKeys[userId][deviceId] = mergeDeviceSignatures(keys, signatures);
-        }
-      } else {
-        for (const deviceId of requestedDevices) {
-          const keys = yield* ports.getDeviceKey(userId, deviceId);
-          if (!keys) {
-            continue;
-          }
-          const signatures = yield* ports.listDeviceSignatures(userId, deviceId);
-          deviceKeys[userId][deviceId] = mergeDeviceSignatures(keys, signatures);
-        }
-      }
-
-      const crossSigningKeys = yield* ports.getCrossSigningKeys(userId);
-      if (crossSigningKeys.master) {
-        masterKeys[userId] = crossSigningKeys.master;
-      }
-      if (crossSigningKeys.self_signing) {
-        selfSigningKeys[userId] = crossSigningKeys.self_signing;
-      }
+      const crossSigningKeys = yield* ports.deviceKeysGateway.getCrossSigningKeys(userId);
+      response = attachCrossSigningKeys(response, userId, crossSigningKeys);
     }
 
-    return {
-      device_keys: deviceKeys,
-      ...(Object.keys(masterKeys).length > 0 ? { master_keys: masterKeys } : {}),
-      ...(Object.keys(selfSigningKeys).length > 0 ? { self_signing_keys: selfSigningKeys } : {}),
-    };
+    return response;
   });
 }
 
@@ -165,27 +133,9 @@ export function claimFederationOneTimeKeysEffect(
       oneTimeKeys[userId] = {};
 
       for (const [deviceId, algorithm] of Object.entries(devices)) {
-        const storedKey = yield* ports.claimStoredOneTimeKey(userId, deviceId, algorithm);
-        if (storedKey) {
-          oneTimeKeys[userId][deviceId] = {
-            [storedKey.keyId]: storedKey.keyData,
-          };
-          continue;
-        }
-
-        const dbKey = yield* ports.claimDatabaseOneTimeKey(userId, deviceId, algorithm);
-        if (dbKey) {
-          oneTimeKeys[userId][deviceId] = {
-            [dbKey.keyId]: dbKey.keyData,
-          };
-          continue;
-        }
-
-        const fallbackKey = yield* ports.claimFallbackKey(userId, deviceId, algorithm);
-        if (fallbackKey) {
-          oneTimeKeys[userId][deviceId] = {
-            [fallbackKey.keyId]: withFallbackMarker(fallbackKey.keyData),
-          };
+        const claimedKey = yield* claimKeyFromStores(ports, userId, deviceId, algorithm);
+        if (claimedKey) {
+          oneTimeKeys[userId][deviceId] = claimedKey;
         }
       }
     }
@@ -205,16 +155,16 @@ export function queryFederationUserDevicesEffect(
       return yield* Effect.fail(Errors.forbidden("User is not local to this server"));
     }
 
-    const userExists = yield* ports.localUserExists(input.userId);
+    const userExists = yield* ports.identityRepository.localUserExists(input.userId);
     if (!userExists) {
       return yield* Effect.fail(Errors.notFound("User not found"));
     }
 
     const [devices, allDeviceKeys, streamId, crossSigningKeys] = yield* Effect.all([
-      ports.listStoredDevices(input.userId),
-      ports.getAllDeviceKeys(input.userId),
-      ports.getDeviceKeyStreamId(input.userId),
-      ports.getCrossSigningKeys(input.userId),
+      ports.identityRepository.listStoredDevices(input.userId),
+      ports.deviceKeysGateway.getAllDeviceKeys(input.userId),
+      ports.identityRepository.getDeviceKeyStreamId(input.userId),
+      ports.deviceKeysGateway.getCrossSigningKeys(input.userId),
     ]);
 
     return {

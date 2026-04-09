@@ -1,10 +1,10 @@
 import type { AppEnv } from "../../../../types";
 import {
-  getRemoteKeysWithNotarySignature,
   type ServerKeyResponse,
   type SigningKey,
 } from "../../../../services/federation-keys";
 import { generateSigningKeyPair, signJson } from "../../../../utils/crypto";
+import { fetchNotarizedServerKeysResponse } from "../shared/federation-http-gateway";
 import {
   getCurrentServerSigningKeyRecord,
   replaceCurrentServerSigningKey,
@@ -45,15 +45,12 @@ export function fetchNotarizedServerKeys(
   minimumValidUntilTs: number,
   notaryKey: SigningKey,
 ): Promise<ServerKeyResponse[]> {
-  return getRemoteKeysWithNotarySignature(
+  return fetchNotarizedServerKeysResponse(
+    env,
     serverName,
     keyId,
     minimumValidUntilTs,
-    env.DB,
-    env.CACHE,
-    env.SERVER_NAME,
-    notaryKey.keyId,
-    notaryKey.privateKeyJwk,
+    notaryKey,
   );
 }
 

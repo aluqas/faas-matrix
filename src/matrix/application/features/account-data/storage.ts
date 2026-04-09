@@ -11,21 +11,14 @@ import {
 } from "../../../repositories/account-data-repository";
 import { InfraError } from "../../domain-error";
 import { requireLogContext, withLogContext } from "../../logging";
+import { fromInfraNullable } from "../../../lib/infra-effect";
+import { getKvTextValue } from "../shared/kv-gateway";
 import { getE2EEAccountDataFromDO as loadE2EEAccountDataFromDO } from "./e2ee-gateway";
 export { getE2EEAccountDataFromDO } from "./e2ee-gateway";
 export {
   projectGlobalAccountDataSnapshot,
   projectRoomAccountDataSnapshot,
 } from "./projector";
-
-function toInfraError(message: string, cause: unknown, status = 500): InfraError {
-  return new InfraError({
-    errcode: "M_UNKNOWN",
-    message,
-    status,
-    cause,
-  });
-}
 
 function logAccountDataFallbackEffect(
   userId: UserId,
@@ -58,13 +51,13 @@ export function loadDatabaseAccountDataEffect(
   roomId: RoomId | "",
   eventType: string,
 ): Effect.Effect<AccountDataContent | null, InfraError> {
-  return Effect.tryPromise({
-    try: async () => {
+  return fromInfraNullable(
+    async () => {
       const record = await findAccountDataRecord(env.DB, userId, roomId, eventType);
       return record && !record.deleted ? record.content : null;
     },
-    catch: (cause) => toInfraError("Failed to load account data", cause),
-  });
+    "Failed to load account data",
+  );
 }
 
 export function loadGlobalAccountDataEffect(
@@ -75,10 +68,10 @@ export function loadGlobalAccountDataEffect(
   return Effect.gen(function* () {
     if (isDoBackedAccountDataEventType(eventType)) {
       const doData = yield* Effect.catchAll(
-        Effect.tryPromise({
-          try: () => loadE2EEAccountDataFromDO(env, userId, eventType),
-          catch: (cause) => toInfraError("Failed to load E2EE account data from DO", cause),
-        }),
+        fromInfraNullable(
+          () => loadE2EEAccountDataFromDO(env, userId, eventType),
+          "Failed to load E2EE account data from DO",
+        ),
         (error) =>
           logAccountDataFallbackEffect(userId, eventType, "do", error).pipe(
             Effect.zipRight(Effect.succeed<AccountDataContent | null>(null)),
@@ -89,13 +82,13 @@ export function loadGlobalAccountDataEffect(
       }
 
       const kvData = yield* Effect.catchAll(
-        Effect.tryPromise({
-          try: async () => {
-            const stored = await env.ACCOUNT_DATA.get(`global:${userId}:${eventType}`);
+        fromInfraNullable(
+          async () => {
+            const stored = await getKvTextValue(env, "ACCOUNT_DATA", `global:${userId}:${eventType}`);
             return stored ? parseStoredAccountDataContent(stored) : null;
           },
-          catch: (cause) => toInfraError("Failed to load E2EE account data from KV", cause),
-        }),
+          "Failed to load E2EE account data from KV",
+        ),
         (error) =>
           logAccountDataFallbackEffect(userId, eventType, "kv", error).pipe(
             Effect.zipRight(Effect.succeed<AccountDataContent | null>(null)),

@@ -2,10 +2,8 @@ import { Hono } from "hono";
 import { Effect } from "effect";
 import type { AppEnv } from "../../types";
 import { Errors, MatrixApiError } from "../../utils/errors";
-import { toEventId, toRoomId, toUserId } from "../../utils/ids";
 import { DomainError, toMatrixApiError } from "../../matrix/application/domain-error";
 import { runFederationEffect } from "../../matrix/application/effect-runtime";
-import { type EventRelationshipsRequest } from "../../matrix/application/relationship-service";
 import {
   createFederationQueryPorts,
   queryFederationEventRelationshipsEffect,
@@ -14,6 +12,13 @@ import {
   queryFederationServerKeysEffect,
   resolveFederationDirectoryEffect,
 } from "../../matrix/application/features/federation/query";
+import {
+  decodeFederationDirectoryQueryInput,
+  decodeFederationEventRelationshipsInput,
+  decodeFederationProfileQueryInput,
+  decodeFederationServerKeysBatchQueryInput,
+  decodeFederationServerKeysQueryInput,
+} from "../../matrix/application/features/federation/query-decode";
 
 const app = new Hono<AppEnv>();
 
@@ -67,36 +72,8 @@ function getFederationQueryPorts(c: {
   });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function parseFederationEventRelationshipsRequest(
-  input: unknown,
-): EventRelationshipsRequest | null {
-  if (!isRecord(input) || typeof input.event_id !== "string") {
-    return null;
-  }
-  const eventId = toEventId(input.event_id);
-  const roomId = typeof input.room_id === "string" ? toRoomId(input.room_id) : null;
-  if (!eventId) {
-    return null;
-  }
-
-  return {
-    eventId,
-    ...(roomId ? { roomId } : {}),
-    direction: input.direction === "up" ? "up" : "down",
-    ...(typeof input.include_parent === "boolean" ? { includeParent: input.include_parent } : {}),
-    ...(typeof input.recent_first === "boolean" ? { recentFirst: input.recent_first } : {}),
-    ...(typeof input.max_depth === "number" ? { maxDepth: input.max_depth } : {}),
-  };
-}
-
 app.post("/_matrix/key/v2/query", async (c) => {
-  let body: {
-    server_keys?: Record<string, Record<string, { minimum_valid_until_ts?: number }>>;
-  };
+  let body: unknown;
 
   try {
     body = await c.req.json();
@@ -104,15 +81,10 @@ app.post("/_matrix/key/v2/query", async (c) => {
     return Errors.badJson().toResponse();
   }
 
-  const serverKeys = body.server_keys;
-  if (!serverKeys || typeof serverKeys !== "object") {
-    return Errors.missingParam("server_keys").toResponse();
-  }
-
   return respondWithFederationEffect(
-    queryFederationServerKeysBatchEffect(getFederationQueryPorts(c), {
-      serverKeys,
-    }),
+    decodeFederationServerKeysBatchQueryInput(body).pipe(
+      Effect.flatMap((input) => queryFederationServerKeysBatchEffect(getFederationQueryPorts(c), input)),
+    ),
     (results) => c.json({ server_keys: results }),
   );
 });
@@ -120,72 +92,51 @@ app.post("/_matrix/key/v2/query", async (c) => {
 app.on(["GET", "PUT", "DELETE", "PATCH"], "/_matrix/key/v2/query", () => methodNotAllowedJson());
 
 app.get("/_matrix/key/v2/query/:serverName", (c) => {
-  const serverName = c.req.param("serverName");
-  const minimumValidUntilTs = Number.parseInt(c.req.query("minimum_valid_until_ts") ?? "0", 10);
-
   return respondWithFederationEffect(
-    queryFederationServerKeysEffect(getFederationQueryPorts(c), {
-      serverName,
-      minimumValidUntilTs,
-    }),
+    decodeFederationServerKeysQueryInput({
+      serverName: c.req.param("serverName"),
+      minimumValidUntilTs: c.req.query("minimum_valid_until_ts"),
+    }).pipe(
+      Effect.flatMap((input) => queryFederationServerKeysEffect(getFederationQueryPorts(c), input)),
+    ),
     (keyResponses) => c.json({ server_keys: keyResponses }),
   );
 });
 
 app.get("/_matrix/key/v2/query/:serverName/:keyId", (c) => {
-  const serverName = c.req.param("serverName");
-  const keyId = c.req.param("keyId");
-  const minimumValidUntilTs = Number.parseInt(c.req.query("minimum_valid_until_ts") ?? "0", 10);
-
   return respondWithFederationEffect(
-    queryFederationServerKeysEffect(getFederationQueryPorts(c), {
-      serverName,
-      keyId,
-      minimumValidUntilTs,
-    }),
+    decodeFederationServerKeysQueryInput({
+      serverName: c.req.param("serverName"),
+      keyId: c.req.param("keyId"),
+      minimumValidUntilTs: c.req.query("minimum_valid_until_ts"),
+    }).pipe(
+      Effect.flatMap((input) => queryFederationServerKeysEffect(getFederationQueryPorts(c), input)),
+    ),
     (keyResponses) => c.json({ server_keys: keyResponses }),
   );
 });
 
 app.get("/_matrix/federation/v1/query/directory", (c) => {
-  const alias = c.req.query("room_alias");
-  if (!alias) {
-    return Errors.missingParam("room_alias").toResponse();
-  }
-
   return respondWithFederationEffect(
-    resolveFederationDirectoryEffect(getFederationQueryPorts(c), {
-      roomAlias: alias,
-    }),
+    decodeFederationDirectoryQueryInput({
+      roomAlias: c.req.query("room_alias"),
+    }).pipe(
+      Effect.flatMap((input) => resolveFederationDirectoryEffect(getFederationQueryPorts(c), input)),
+    ),
     (result) => c.json(result),
   );
 });
 
 app.get("/_matrix/federation/v1/query/profile", (c) => {
-  const rawUserId = c.req.query("user_id");
-  const rawField = c.req.query("field");
-
-  if (!rawUserId) {
-    return Errors.missingParam("user_id").toResponse();
-  }
-  const userId = toUserId(rawUserId);
-  if (!userId) {
-    return Errors.invalidParam("user_id", "Invalid user ID").toResponse();
-  }
-  const field =
-    rawField === undefined || rawField === "displayname" || rawField === "avatar_url"
-      ? rawField
-      : null;
-  if (field === null) {
-    return Errors.invalidParam("field", "Invalid profile field").toResponse();
-  }
-
   return respondWithFederationEffect(
-    queryFederationProfileEffect(getFederationQueryPorts(c), {
-      userId,
-      ...(field ? { field } : {}),
-    }),
+    decodeFederationProfileQueryInput({
+      userId: c.req.query("user_id"),
+      field: c.req.query("field"),
+    }).pipe(
+      Effect.flatMap((input) => queryFederationProfileEffect(getFederationQueryPorts(c), input)),
+    ),
     (profile) => {
+      const field = c.req.query("field");
       if (field === "displayname") {
         return c.json({ displayname: profile.displayname });
       }
@@ -205,13 +156,10 @@ app.post("/_matrix/federation/unstable/event_relationships", async (c) => {
     return Errors.badJson().toResponse();
   }
 
-  const request = parseFederationEventRelationshipsRequest(body);
-  if (!request) {
-    return Errors.badJson().toResponse();
-  }
-
   return respondWithFederationEffect(
-    queryFederationEventRelationshipsEffect(getFederationQueryPorts(c), request),
+    decodeFederationEventRelationshipsInput(body).pipe(
+      Effect.flatMap((request) => queryFederationEventRelationshipsEffect(getFederationQueryPorts(c), request)),
+    ),
     (result) => c.json(result),
   );
 });

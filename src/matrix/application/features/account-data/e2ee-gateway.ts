@@ -1,11 +1,10 @@
 import type { AccountDataContent, E2EEAccountDataMap } from "../../../../types/account-data";
 import { normalizeE2EEAccountDataMap } from "../../../../types/account-data";
 import type { Env } from "../../../../types";
-
-function getUserKeysDO(env: Pick<Env, "USER_KEYS">, userId: string): DurableObjectStub {
-  const id = env.USER_KEYS.idFromName(userId);
-  return env.USER_KEYS.get(id);
-}
+import {
+  fetchDurableObjectJson,
+  postDurableObjectVoid,
+} from "../shared/do-gateway";
 
 export async function getE2EEAccountDataFromDO(
   env: Pick<Env, "USER_KEYS">,
@@ -21,18 +20,10 @@ export async function getE2EEAccountDataFromDO(
   userId: string,
   eventType?: string,
 ): Promise<E2EEAccountDataMap | AccountDataContent | null> {
-  const stub = getUserKeysDO(env, userId);
   const url = eventType
     ? `http://internal/account-data/get?event_type=${encodeURIComponent(eventType)}`
     : "http://internal/account-data/get";
-  const response = await stub.fetch(new Request(url));
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "unknown error");
-    throw new Error(`DO get failed: ${response.status} - ${errorText}`);
-  }
-
-  const payload = await response.json();
+  const payload = await fetchDurableObjectJson(env, "USER_KEYS", userId, url, "DO account-data get");
   if (eventType !== undefined) {
     return normalizeE2EEAccountDataMap({ [eventType]: payload })[eventType] ?? null;
   }
@@ -45,19 +36,14 @@ export async function putE2EEAccountDataToDO(
   eventType: string,
   content: AccountDataContent,
 ): Promise<void> {
-  const stub = getUserKeysDO(env, userId);
-  const response = await stub.fetch(
-    new Request("http://internal/account-data/put", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event_type: eventType, content }),
-    }),
+  await postDurableObjectVoid(
+    env,
+    "USER_KEYS",
+    userId,
+    "http://internal/account-data/put",
+    { event_type: eventType, content },
+    "DO account-data put",
   );
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "unknown error");
-    throw new Error(`DO put failed: ${response.status} - ${errorText}`);
-  }
 }
 
 export async function deleteE2EEAccountDataFromDO(
@@ -65,17 +51,12 @@ export async function deleteE2EEAccountDataFromDO(
   userId: string,
   eventType: string,
 ): Promise<void> {
-  const stub = getUserKeysDO(env, userId);
-  const response = await stub.fetch(
-    new Request("http://internal/account-data/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event_type: eventType }),
-    }),
+  await postDurableObjectVoid(
+    env,
+    "USER_KEYS",
+    userId,
+    "http://internal/account-data/delete",
+    { event_type: eventType },
+    "DO account-data delete",
   );
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "unknown error");
-    throw new Error(`DO delete failed: ${response.status} - ${errorText}`);
-  }
 }
