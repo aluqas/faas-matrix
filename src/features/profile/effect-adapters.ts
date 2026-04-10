@@ -3,11 +3,12 @@ import {
   getLocalProfileRecord,
   updateLocalProfile,
 } from "../../infra/repositories/profile-repository";
-import { fromInfraNullable, fromInfraPromise, fromInfraVoid } from "../../shared/effect/infra-effect";
 import {
-  getKvTextValue,
-  putKvJsonValue,
-} from "../shared/kv-gateway";
+  fromInfraNullable,
+  fromInfraPromise,
+  fromInfraVoid,
+} from "../../shared/effect/infra-effect";
+import { getKvTextValue, putKvJsonValue } from "../shared/kv-gateway";
 import type { ProfileCommandPorts } from "./command";
 import { fetchRemoteProfileResponse } from "./profile-federation-gateway";
 import type { ProfileQueryPorts } from "./query";

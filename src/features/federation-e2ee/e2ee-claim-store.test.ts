@@ -5,10 +5,7 @@ import {
   toClaimedOneTimeKeyEntry,
 } from "./e2ee-claim-store";
 
-function createDbMock(options: {
-  allResults?: unknown[];
-  onRun?: () => void;
-}) {
+function createDbMock(options: { allResults?: unknown[]; onRun?: () => void }) {
   return {
     prepare: () => ({
       bind: () => ({
@@ -68,13 +65,7 @@ describe("e2ee claim store", () => {
     });
 
     await expect(
-      claimStoredOneTimeKeyWithMirrorMark(
-        env,
-        "@alice:test",
-        "DEVICE",
-        "signed_curve25519",
-        123,
-      ),
+      claimStoredOneTimeKeyWithMirrorMark(env, "@alice:test", "DEVICE", "signed_curve25519", 123),
     ).resolves.toEqual({
       keyId: "signed_curve25519:AAA",
       keyData: { key: "a" },
@@ -109,18 +100,10 @@ describe("e2ee claim store", () => {
     });
 
     await expect(
-      claimStoredOneTimeKeyWithMirrorMark(
-        env,
-        "@alice:test",
-        "DEVICE",
-        "signed_curve25519",
-        123,
-      ),
+      claimStoredOneTimeKeyWithMirrorMark(env, "@alice:test", "DEVICE", "signed_curve25519", 123),
     ).rejects.toThrow("db mark failed");
 
-    await expect(
-      env.ONE_TIME_KEYS.get("otk:@alice:test:DEVICE", "json"),
-    ).resolves.toEqual({
+    await expect(env.ONE_TIME_KEYS.get("otk:@alice:test:DEVICE", "json")).resolves.toEqual({
       signed_curve25519: [
         {
           keyId: "signed_curve25519:AAA",

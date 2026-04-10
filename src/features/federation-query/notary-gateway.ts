@@ -1,8 +1,5 @@
 import type { AppEnv } from "../../shared/types";
-import {
-  type ServerKeyResponse,
-  type SigningKey,
-} from "../../infra/federation/federation-keys";
+import { type ServerKeyResponse, type SigningKey } from "../../infra/federation/federation-keys";
 import { generateSigningKeyPair, signJson } from "../../shared/utils/crypto";
 import { fetchNotarizedServerKeysResponse } from "../shared/federation-http-gateway";
 import {
@@ -45,13 +42,7 @@ export function fetchNotarizedServerKeys(
   minimumValidUntilTs: number,
   notaryKey: SigningKey,
 ): Promise<ServerKeyResponse[]> {
-  return fetchNotarizedServerKeysResponse(
-    env,
-    serverName,
-    keyId,
-    minimumValidUntilTs,
-    notaryKey,
-  );
+  return fetchNotarizedServerKeysResponse(env, serverName, keyId, minimumValidUntilTs, notaryKey);
 }
 
 export async function signNotaryServerKeyResponse(

@@ -145,7 +145,10 @@ export function sendToDeviceEffect(
   input: ToDeviceCommandInput,
 ): Effect.Effect<Record<string, unknown>, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    const existing = yield* ports.transactionStore.getTransactionResponse(input.senderUserId, input.txnId);
+    const existing = yield* ports.transactionStore.getTransactionResponse(
+      input.senderUserId,
+      input.txnId,
+    );
     if (existing) {
       return existing;
     }
@@ -156,7 +159,11 @@ export function sendToDeviceEffect(
 
     yield* ports.dispatcher.dispatch(input);
     const response: Record<string, unknown> = {};
-    yield* ports.transactionStore.storeTransactionResponse(input.senderUserId, input.txnId, response);
+    yield* ports.transactionStore.storeTransactionResponse(
+      input.senderUserId,
+      input.txnId,
+      response,
+    );
     return response;
   });
 }

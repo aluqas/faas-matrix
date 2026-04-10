@@ -13,10 +13,7 @@ import type { PDU, RoomId, UserId } from "../../shared/types";
 import { encodeUnpaddedBase64 } from "../../shared/utils/crypto";
 import { toEventId, toRoomId, toUserId } from "../../shared/utils/ids";
 import { extractServerNameFromMatrixId } from "../../shared/utils/matrix-ids";
-import {
-  getFederationEventRowById,
-  toFederationPduFromRow,
-} from "./federation-events-repository";
+import { getFederationEventRowById, toFederationPduFromRow } from "./federation-events-repository";
 
 const THREAD_SUBSCRIPTIONS_EVENT_TYPE = "io.element.msc4306.thread_subscriptions";
 
@@ -199,10 +196,7 @@ async function buildRelationSummary(
   };
 }
 
-export async function augmentRelationEvent(
-  db: D1Database,
-  event: PDU,
-): Promise<PDU> {
+export async function augmentRelationEvent(db: D1Database, event: PDU): Promise<PDU> {
   const unsigned = event.unsigned as Record<string, unknown> | undefined;
   if (
     unsigned &&
@@ -479,10 +473,7 @@ export async function getRemoteServersForRelationRoom(
   ).toSorted();
 }
 
-export async function getRoomVersionForRelations(
-  db: D1Database,
-  roomId: string,
-): Promise<string> {
+export async function getRoomVersionForRelations(db: D1Database, roomId: string): Promise<string> {
   const row = await executeKyselyQueryFirst<Pick<RoomRow, "room_version">>(
     db,
     qb.selectFrom("rooms").select("room_version").where("room_id", "=", roomId).limit(1),
@@ -560,11 +551,7 @@ export async function listRelationEvents(
     query = query.where("e.event_type", "=", input.eventType);
   }
   if (input.cursor) {
-    query = query.where(
-      input.cursor.column,
-      input.dir === "b" ? "<" : ">",
-      input.cursor.value,
-    );
+    query = query.where(input.cursor.column, input.dir === "b" ? "<" : ">", input.cursor.value);
   }
 
   const orderColumn = input.cursor?.column ?? "origin_server_ts";
@@ -585,8 +572,8 @@ export async function listRelationEvents(
   const lastEvent = rows[Math.min(input.limit, rows.length) - 1];
   const nextValue =
     orderColumn === "stream_ordering"
-      ? lastEvent?.stream_ordering ?? 0
-      : lastEvent?.origin_server_ts ?? 0;
+      ? (lastEvent?.stream_ordering ?? 0)
+      : (lastEvent?.origin_server_ts ?? 0);
 
   return {
     chunk: events,

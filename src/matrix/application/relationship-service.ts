@@ -71,9 +71,6 @@ export async function buildFederatedEventRelationshipsResponse(
   };
 }
 
-export function getRoomVersionForRelationships(
-  db: D1Database,
-  roomId: string,
-): Promise<string> {
+export function getRoomVersionForRelationships(db: D1Database, roomId: string): Promise<string> {
   return getRoomVersionForRelations(db, roomId);
 }

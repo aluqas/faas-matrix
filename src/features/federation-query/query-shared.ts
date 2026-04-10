@@ -114,7 +114,10 @@ export function createFederationQueryPorts(input: {
     localServerName: input.localServerName,
     profileRepository: {
       getLocalProfile: (userId) =>
-        fromInfraNullable(() => getLocalProfileRecord(input.db, userId), "Failed to query federation profile"),
+        fromInfraNullable(
+          () => getLocalProfileRecord(input.db, userId),
+          "Failed to query federation profile",
+        ),
     },
     profileGateway: {
       fetchRemoteProfile: (serverName, userId, field) =>
@@ -142,7 +145,8 @@ export function createFederationQueryPorts(input: {
         ),
       getNotarizedServerKeys: (serverName, keyId, minimumValidUntilTs, notaryKey) =>
         fromInfraPromise(
-          () => fetchNotarizedServerKeys(gatewayEnv, serverName, keyId, minimumValidUntilTs, notaryKey),
+          () =>
+            fetchNotarizedServerKeys(gatewayEnv, serverName, keyId, minimumValidUntilTs, notaryKey),
           "Failed to query notarized server keys",
         ),
       signResponse: (response, notaryKey) =>

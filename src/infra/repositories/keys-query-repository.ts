@@ -1,9 +1,5 @@
 import { sql, type RawBuilder } from "kysely";
-import {
-  type CompiledQuery,
-  createKyselyBuilder,
-  executeKyselyQuery,
-} from "../../infra/db/kysely";
+import { type CompiledQuery, createKyselyBuilder, executeKyselyQuery } from "../../infra/db/kysely";
 import type { UserId } from "../../shared/types";
 
 interface KeysChangeRow {

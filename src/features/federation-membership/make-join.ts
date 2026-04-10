@@ -46,14 +46,19 @@ export async function buildFederationMakeJoinTemplate(input: {
     return Errors.notFound("Room not found").toResponse();
   }
 
-  const [createEventId, joinRulesEvent, powerLevelsEventId, currentMembership, currentStateMembership] =
-    await Promise.all([
-      getFederationStateEventId(input.db, input.roomId, "m.room.create"),
-      getFederationStateEventRef(input.db, input.roomId, "m.room.join_rules"),
-      getFederationStateEventId(input.db, input.roomId, "m.room.power_levels"),
-      getFederationMembershipRecord(input.db, input.roomId, input.userId),
-      getFederationCurrentStateMembership(input.db, input.roomId, input.userId),
-    ]);
+  const [
+    createEventId,
+    joinRulesEvent,
+    powerLevelsEventId,
+    currentMembership,
+    currentStateMembership,
+  ] = await Promise.all([
+    getFederationStateEventId(input.db, input.roomId, "m.room.create"),
+    getFederationStateEventRef(input.db, input.roomId, "m.room.join_rules"),
+    getFederationStateEventId(input.db, input.roomId, "m.room.power_levels"),
+    getFederationMembershipRecord(input.db, input.roomId, input.userId),
+    getFederationCurrentStateMembership(input.db, input.roomId, input.userId),
+  ]);
 
   const joinRulesContent = joinRulesEvent
     ? (JSON.parse(joinRulesEvent.content) as JoinRulesContent)

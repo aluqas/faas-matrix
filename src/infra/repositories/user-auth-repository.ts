@@ -17,26 +17,16 @@ interface UserAuthDatabase {
 
 const qb = createKyselyBuilder<UserAuthDatabase>();
 
-export async function getUserPasswordHash(
-  db: D1Database,
-  userId: UserId,
-): Promise<string | null> {
+export async function getUserPasswordHash(db: D1Database, userId: UserId): Promise<string | null> {
   const row = await executeKyselyQueryFirst<Pick<UserRow, "password_hash">>(
     db,
-    qb
-      .selectFrom("users")
-      .select("password_hash")
-      .where("user_id", "=", userId)
-      .limit(1),
+    qb.selectFrom("users").select("password_hash").where("user_id", "=", userId).limit(1),
   );
 
   return row?.password_hash ?? null;
 }
 
-export async function hasIdentityProviderLink(
-  db: D1Database,
-  userId: UserId,
-): Promise<boolean> {
+export async function hasIdentityProviderLink(db: D1Database, userId: UserId): Promise<boolean> {
   const row = await executeKyselyQueryFirst<{ count: number | null }>(
     db,
     qb
@@ -48,17 +38,10 @@ export async function hasIdentityProviderLink(
   return (row?.count ?? 0) > 0;
 }
 
-export async function userExists(
-  db: D1Database,
-  userId: UserId,
-): Promise<boolean> {
+export async function userExists(db: D1Database, userId: UserId): Promise<boolean> {
   const row = await executeKyselyQueryFirst<{ user_id: string }>(
     db,
-    qb
-      .selectFrom("users")
-      .select("user_id")
-      .where("user_id", "=", userId)
-      .limit(1),
+    qb.selectFrom("users").select("user_id").where("user_id", "=", userId).limit(1),
   );
 
   return row !== null;

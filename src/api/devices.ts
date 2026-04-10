@@ -23,7 +23,10 @@ import {
   encodeEmptyDeviceResponse,
   encodePasswordUiaResponse,
 } from "../features/devices/encoder";
-import { createDeviceCommandPorts, createDeviceQueryPorts } from "../features/devices/effect-adapters";
+import {
+  createDeviceCommandPorts,
+  createDeviceQueryPorts,
+} from "../features/devices/effect-adapters";
 import { getDeviceEffect, listDevicesEffect } from "../features/devices/query";
 
 const app = new Hono<AppEnv>();
@@ -91,7 +94,9 @@ app.put("/_matrix/client/v3/devices/:deviceId", requireAuth(), async (c) => {
       deviceId: c.req.param("deviceId"),
       body: body.body,
     }).pipe(
-      Effect.flatMap((input) => updateDeviceDisplayNameEffect(createDeviceCommandPorts(c.env), input)),
+      Effect.flatMap((input) =>
+        updateDeviceDisplayNameEffect(createDeviceCommandPorts(c.env), input),
+      ),
     ),
     () => c.json(encodeEmptyDeviceResponse()),
   );

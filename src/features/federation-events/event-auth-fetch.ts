@@ -12,24 +12,21 @@ export async function fetchFederationEventAuth(input: {
   env: Pick<AppEnv["Bindings"], "DB">;
   roomId: string;
   eventId: string;
-}): Promise<
-  | null
-  | {
-      authChain: PDU[];
-      requestedAuthEvents: EventId[];
-      returnedAuthChain: Array<{
-        event_id: string;
-        calculated_event_id: string;
-        type: string;
-        state_key?: string;
-        origin_server_ts: number;
-        depth: number;
-        auth_events: EventId[];
-        prev_events: EventId[];
-      }>;
-      missingAuthEvents: string[];
-    }
-> {
+}): Promise<null | {
+  authChain: PDU[];
+  requestedAuthEvents: EventId[];
+  returnedAuthChain: Array<{
+    event_id: string;
+    calculated_event_id: string;
+    type: string;
+    state_key?: string;
+    origin_server_ts: number;
+    depth: number;
+    auth_events: EventId[];
+    prev_events: EventId[];
+  }>;
+  missingAuthEvents: string[];
+}> {
   const room = await getFederationRoomRecord(input.env.DB, input.roomId);
   if (!room) {
     return null;

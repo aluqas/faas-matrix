@@ -27,10 +27,19 @@ import {
   upsertAccountDataRecord,
 } from "../../infra/repositories/account-data-repository";
 import { getReceiptsForRoom } from "../../features/receipts/project";
-import { getToDeviceMessages } from "../../api/to-device";
+import { getToDeviceMessages } from "../../features/to-device/project";
 import { getTypingUsers } from "../../features/typing/project";
 import { countUnreadNotificationSummaryWithRules } from "../../infra/realtime/push-rule-evaluator";
-import type { DeviceId, Env, EventId, PDU, Room, RoomId, ToDeviceEvent, UserId } from "../../shared/types";
+import type {
+  DeviceId,
+  Env,
+  EventId,
+  PDU,
+  Room,
+  RoomId,
+  ToDeviceEvent,
+  UserId,
+} from "../../shared/types";
 import type { AccountDataContent } from "../../shared/types/account-data";
 import type {
   FederationProcessedPdu,

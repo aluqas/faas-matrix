@@ -47,8 +47,13 @@ export async function executeKyselyQueryFirst<T>(
   db: D1Database,
   query: CompiledQuery,
 ): Promise<T | null> {
-  const results = await executeKyselyQuery<T>(db, query);
-  return results[0] ?? null;
+  const { sql, parameters } = compileKyselyQuery(query);
+  return (
+    (await db
+      .prepare(sql)
+      .bind(...parameters)
+      .first<T>()) ?? null
+  );
 }
 
 export async function executeKyselyRun(db: D1Database, query: CompiledQuery): Promise<void> {

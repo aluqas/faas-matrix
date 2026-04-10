@@ -1,21 +1,11 @@
-import type {
-  AppEnv,
-  FederationClaimedOneTimeKeyRecord,
-  UserId,
-} from "../../shared/types";
-import type {
-  DeviceOneTimeKeysMap,
-  StoredOneTimeKeyBuckets,
-} from "../../shared/types/client";
+import type { AppEnv, FederationClaimedOneTimeKeyRecord, UserId } from "../../shared/types";
+import type { DeviceOneTimeKeysMap, StoredOneTimeKeyBuckets } from "../../shared/types/client";
 import {
   claimFallbackKey,
   claimUnclaimedOneTimeKey,
   markStoredOneTimeKeyClaimed,
 } from "../../infra/repositories/federation-e2ee-repository";
-import {
-  loadStoredOneTimeKeyBuckets,
-  saveStoredOneTimeKeyBuckets,
-} from "./e2ee-gateway";
+import { loadStoredOneTimeKeyBuckets, saveStoredOneTimeKeyBuckets } from "./e2ee-gateway";
 
 export interface ClaimedOneTimeKeyResult extends FederationClaimedOneTimeKeyRecord {
   isFallback: boolean;
@@ -34,7 +24,9 @@ export function toClaimedOneTimeKeyEntry(
   claimedKey: ClaimedOneTimeKeyResult,
 ): DeviceOneTimeKeysMap[string] {
   return {
-    [claimedKey.keyId]: claimedKey.isFallback ? markFallbackKey(claimedKey.keyData) : claimedKey.keyData,
+    [claimedKey.keyId]: claimedKey.isFallback
+      ? markFallbackKey(claimedKey.keyData)
+      : claimedKey.keyData,
   };
 }
 

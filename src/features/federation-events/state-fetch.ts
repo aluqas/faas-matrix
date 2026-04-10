@@ -26,6 +26,8 @@ export async function fetchFederationState(
     origin: env.SERVER_NAME,
     origin_server_ts: Date.now(),
     pdus,
-    auth_chain: authRows.filter((row): row is NonNullable<typeof row> => row !== null).map(toFederationPduFromRow),
+    auth_chain: authRows
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+      .map(toFederationPduFromRow),
   };
 }

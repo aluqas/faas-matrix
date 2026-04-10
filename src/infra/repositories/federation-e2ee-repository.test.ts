@@ -34,7 +34,7 @@ describe("federation e2ee repository row parsers", () => {
     expect(() =>
       toFederationClaimedOneTimeKeyRecord({
         key_id: "signed_curve25519:AAA",
-        key_data: "\"invalid\"",
+        key_data: '"invalid"',
       }),
     ).toThrow("Stored E2EE JSON payload is not a valid object");
   });

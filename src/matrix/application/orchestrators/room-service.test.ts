@@ -4,7 +4,12 @@ import { createFeatureProfile } from "../../../shared/config/feature-profile";
 import { DefaultEventPipeline } from "../../domain/event-pipeline";
 import { MatrixRoomService } from "./room-service";
 import type { MembershipRecord, RoomRepository } from "../../../infra/repositories/interfaces";
-import type { PDU, Room, RoomJoinWorkflowParams, RoomJoinWorkflowStatus } from "../../../shared/types";
+import type {
+  PDU,
+  Room,
+  RoomJoinWorkflowParams,
+  RoomJoinWorkflowStatus,
+} from "../../../shared/types";
 
 class MemoryIdempotencyStore {
   private readonly entries = new Map<string, Record<string, unknown>>();

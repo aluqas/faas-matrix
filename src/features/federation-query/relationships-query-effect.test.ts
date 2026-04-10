@@ -5,7 +5,9 @@ import { queryFederationEventRelationshipsEffect } from "./relationships-query-e
 import type { FederationQueryPorts } from "./query-shared";
 
 function createPorts(
-  result: Awaited<ReturnType<FederationQueryPorts["relationshipsReader"]["buildEventRelationships"]>> extends Effect.Effect<infer A, any>
+  result: Awaited<
+    ReturnType<FederationQueryPorts["relationshipsReader"]["buildEventRelationships"]>
+  > extends Effect.Effect<infer A, any>
     ? A
     : never,
 ): FederationQueryPorts {
@@ -38,14 +40,17 @@ describe("federation relationships query effect", () => {
   it("returns the built event relationships response", async () => {
     await expect(
       runFederationEffect(
-        queryFederationEventRelationshipsEffect(createPorts({
-          events: [],
-          limited: false,
-          auth_chain: [],
-        }), {
-          eventId: "$event",
-          direction: "down",
-        }),
+        queryFederationEventRelationshipsEffect(
+          createPorts({
+            events: [],
+            limited: false,
+            auth_chain: [],
+          }),
+          {
+            eventId: "$event",
+            direction: "down",
+          },
+        ),
       ),
     ).resolves.toEqual({
       events: [],

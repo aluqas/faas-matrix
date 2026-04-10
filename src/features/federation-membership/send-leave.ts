@@ -6,7 +6,10 @@ import {
   applyMembershipTransitionToDatabase,
   loadMembershipTransitionContext,
 } from "../../matrix/application/membership-transition-service";
-import { federationEventExists, getFederationRoomRecord } from "../../infra/repositories/federation-membership-read-repository";
+import {
+  federationEventExists,
+  getFederationRoomRecord,
+} from "../../infra/repositories/federation-membership-read-repository";
 import { runDomainValidation } from "../../api/federation/shared";
 import { validateSendLeaveRequest } from "../../matrix/application/federation-validation";
 

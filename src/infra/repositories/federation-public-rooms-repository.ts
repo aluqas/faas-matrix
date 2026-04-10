@@ -151,27 +151,37 @@ export async function getPublicRoomInfo(
   db: D1Database,
   roomId: string,
 ): Promise<FederationPublicRoomInfo> {
-  const [nameContent, topicContent, aliasContent, avatarContent, joinRuleContent, historyContent, guestContent, createContent, memberCountRow] =
-    await Promise.all([
-      getStateContent(db, roomId, "m.room.name"),
-      getStateContent(db, roomId, "m.room.topic"),
-      getStateContent(db, roomId, "m.room.canonical_alias"),
-      getStateContent(db, roomId, "m.room.avatar"),
-      getStateContent(db, roomId, "m.room.join_rules"),
-      getStateContent(db, roomId, "m.room.history_visibility"),
-      getStateContent(db, roomId, "m.room.guest_access"),
-      getStateContent(db, roomId, "m.room.create"),
-      executeKyselyQueryFirst<{ count: number | null }>(
-        db,
-        qb
-          .selectFrom("room_memberships")
-          .select((eb) => eb.fn.countAll<number>().as("count"))
-          .where("room_id", "=", roomId)
-          .where("membership", "=", "join"),
-      ),
-    ]);
+  const [
+    nameContent,
+    topicContent,
+    aliasContent,
+    avatarContent,
+    joinRuleContent,
+    historyContent,
+    guestContent,
+    createContent,
+    memberCountRow,
+  ] = await Promise.all([
+    getStateContent(db, roomId, "m.room.name"),
+    getStateContent(db, roomId, "m.room.topic"),
+    getStateContent(db, roomId, "m.room.canonical_alias"),
+    getStateContent(db, roomId, "m.room.avatar"),
+    getStateContent(db, roomId, "m.room.join_rules"),
+    getStateContent(db, roomId, "m.room.history_visibility"),
+    getStateContent(db, roomId, "m.room.guest_access"),
+    getStateContent(db, roomId, "m.room.create"),
+    executeKyselyQueryFirst<{ count: number | null }>(
+      db,
+      qb
+        .selectFrom("room_memberships")
+        .select((eb) => eb.fn.countAll<number>().as("count"))
+        .where("room_id", "=", roomId)
+        .where("membership", "=", "join"),
+    ),
+  ]);
 
-  const historyVisibility = parseJsonField<string>(historyContent, "history_visibility") ?? "shared";
+  const historyVisibility =
+    parseJsonField<string>(historyContent, "history_visibility") ?? "shared";
   const guestAccess = parseJsonField<string>(guestContent, "guest_access") === "can_join";
 
   return {

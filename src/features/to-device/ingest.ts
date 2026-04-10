@@ -37,10 +37,7 @@ export async function ingestDirectToDeviceEdu(
           recipientDeviceId: targetDeviceId,
           senderUserId: sender,
           eventType,
-          content:
-            messageContent && typeof messageContent === "object"
-              ? (messageContent)
-              : {},
+          content: messageContent && typeof messageContent === "object" ? messageContent : {},
           messageId,
           streamPosition,
         });

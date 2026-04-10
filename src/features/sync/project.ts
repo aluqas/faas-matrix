@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 import type { AppContext } from "../../shared/runtime/app-context";
 import type { SyncResponse } from "../../shared/types";
-import { InfraError, type InfraError as InfraErrorType } from "../../matrix/application/domain-error";
+import {
+  InfraError,
+  type InfraError as InfraErrorType,
+} from "../../matrix/application/domain-error";
 import { requireLogContext, withLogContext } from "../../matrix/application/logging";
 import type { SyncRepository } from "../../infra/repositories/interfaces";
 import { executePresenceCommand } from "../presence/command";

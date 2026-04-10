@@ -6,13 +6,25 @@ function createPorts(): {
   ports: ReceiptsCommandPorts;
   calls: {
     fullyRead: Array<{ userId: string; roomId: string; eventId: string }>;
-    receipts: Array<{ roomId: string; userId: string; eventId: string; type: string; threadId?: string }>;
+    receipts: Array<{
+      roomId: string;
+      userId: string;
+      eventId: string;
+      type: string;
+      threadId?: string;
+    }>;
     queued: Array<{ destination: string; content: Record<string, unknown> }>;
   };
 } {
   const calls = {
     fullyRead: [] as Array<{ userId: string; roomId: string; eventId: string }>,
-    receipts: [] as Array<{ roomId: string; userId: string; eventId: string; type: string; threadId?: string }>,
+    receipts: [] as Array<{
+      roomId: string;
+      userId: string;
+      eventId: string;
+      type: string;
+      threadId?: string;
+    }>,
     queued: [] as Array<{ destination: string; content: Record<string, unknown> }>,
   };
 
@@ -31,7 +43,13 @@ function createPorts(): {
       roomReceiptStore: {
         putReceipt: (roomId, userId, eventId, receiptType, threadId) =>
           Effect.sync(() => {
-            calls.receipts.push({ roomId, userId, eventId, type: receiptType, ...(threadId ? { threadId } : {}) });
+            calls.receipts.push({
+              roomId,
+              userId,
+              eventId,
+              type: receiptType,
+              ...(threadId ? { threadId } : {}),
+            });
           }),
       },
       federation: {

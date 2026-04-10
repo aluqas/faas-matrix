@@ -54,7 +54,7 @@ export async function buildSlidingSyncExtensions(
   // ── to_device ─────────────────────────────────────────────────────────────
   if (config.to_device) {
     const limit = config.to_device.limit ?? 100;
-    const { getToDeviceMessages } = await import("./to-device");
+    const { getToDeviceMessages } = await import("../features/to-device/project");
     const { events, nextBatch } = await getToDeviceMessages(
       db,
       userId,

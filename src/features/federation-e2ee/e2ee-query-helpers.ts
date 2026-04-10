@@ -1,15 +1,15 @@
 import { Effect } from "effect";
-import type {
-  FederationKeysQueryResponseBody,
-  UserId,
-} from "../../shared/types";
+import type { FederationKeysQueryResponseBody, UserId } from "../../shared/types";
 import type {
   CrossSigningKeysStore,
   DeviceKeysPayload,
   DeviceOneTimeKeysMap,
   UserDeviceKeysMap,
 } from "../../shared/types/client";
-import type { FederationClaimedOneTimeKeyRecord, FederationDeviceSignatureRecord } from "../../shared/types/e2ee";
+import type {
+  FederationClaimedOneTimeKeyRecord,
+  FederationDeviceSignatureRecord,
+} from "../../shared/types/e2ee";
 import type { JsonObject } from "../../shared/types/common";
 import { InfraError } from "../../matrix/application/domain-error";
 import type { FederationE2EEQueryPorts } from "./e2ee-query";
@@ -131,7 +131,11 @@ export function claimKeyFromStores(
   algorithm: string,
 ): Effect.Effect<DeviceOneTimeKeysMap[string] | null, InfraError> {
   return Effect.gen(function* () {
-    const storedKey = yield* ports.oneTimeKeyStore.claimStoredOneTimeKey(userId, deviceId, algorithm);
+    const storedKey = yield* ports.oneTimeKeyStore.claimStoredOneTimeKey(
+      userId,
+      deviceId,
+      algorithm,
+    );
     if (storedKey) {
       return toClaimedOneTimeKeyEntry(storedKey);
     }

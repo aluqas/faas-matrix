@@ -7,11 +7,7 @@ import {
   executeKyselyQueryFirst,
   executeKyselyRun,
 } from "../../infra/db/kysely";
-import type {
-  CrossSigningKeysStore,
-  JsonObject,
-  JsonObjectMap,
-} from "../../shared/types/client";
+import type { CrossSigningKeysStore, JsonObject, JsonObjectMap } from "../../shared/types/client";
 import type {
   FederationClaimedOneTimeKeyRecord,
   FederationDeviceSignatureRecord,
@@ -204,10 +200,7 @@ function stringifyJson(value: JsonObject): string {
   return JSON.stringify(value);
 }
 
-export async function hasCrossSigningKeysBackup(
-  db: D1Database,
-  userId: string,
-): Promise<boolean> {
+export async function hasCrossSigningKeysBackup(db: D1Database, userId: string): Promise<boolean> {
   const row = await executeKyselyQueryFirst<{ count: number | null }>(
     db,
     qb

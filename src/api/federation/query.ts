@@ -87,7 +87,9 @@ app.post("/_matrix/key/v2/query", async (c) => {
 
   return respondWithFederationEffect(
     decodeFederationServerKeysBatchQueryInput(body).pipe(
-      Effect.flatMap((input) => queryFederationServerKeysBatchEffect(getFederationQueryPorts(c), input)),
+      Effect.flatMap((input) =>
+        queryFederationServerKeysBatchEffect(getFederationQueryPorts(c), input),
+      ),
     ),
     (results) => c.json(encodeFederationServerKeysResponse(results)),
   );
@@ -125,7 +127,9 @@ app.get("/_matrix/federation/v1/query/directory", (c) => {
     decodeFederationDirectoryQueryInput({
       roomAlias: c.req.query("room_alias"),
     }).pipe(
-      Effect.flatMap((input) => resolveFederationDirectoryEffect(getFederationQueryPorts(c), input)),
+      Effect.flatMap((input) =>
+        resolveFederationDirectoryEffect(getFederationQueryPorts(c), input),
+      ),
     ),
     (result) => c.json(result),
   );
@@ -156,7 +160,9 @@ app.post("/_matrix/federation/unstable/event_relationships", async (c) => {
 
   return respondWithFederationEffect(
     decodeFederationEventRelationshipsInput(body).pipe(
-      Effect.flatMap((request) => queryFederationEventRelationshipsEffect(getFederationQueryPorts(c), request)),
+      Effect.flatMap((request) =>
+        queryFederationEventRelationshipsEffect(getFederationQueryPorts(c), request),
+      ),
     ),
     (result) => c.json(result),
   );

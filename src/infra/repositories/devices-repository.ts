@@ -47,7 +47,9 @@ export interface DeviceRecord {
 
 const qb = createKyselyBuilder<DevicesDatabase>();
 
-function toDeviceRecord(row: Pick<DeviceRow, "device_id" | "display_name" | "last_seen_ts" | "last_seen_ip">): DeviceRecord {
+function toDeviceRecord(
+  row: Pick<DeviceRow, "device_id" | "display_name" | "last_seen_ts" | "last_seen_ip">,
+): DeviceRecord {
   return {
     deviceId: row.device_id,
     displayName: row.display_name,
@@ -77,10 +79,7 @@ function buildMarkNotificationSettingsDeletedQuery(
     );
 }
 
-export async function listDevicesForUser(
-  db: D1Database,
-  userId: UserId,
-): Promise<DeviceRecord[]> {
+export async function listDevicesForUser(db: D1Database, userId: UserId): Promise<DeviceRecord[]> {
   const rows = await executeKyselyQuery<
     Pick<DeviceRow, "device_id" | "display_name" | "last_seen_ts" | "last_seen_ip">
   >(
@@ -137,10 +136,7 @@ export function deleteAccessTokensForDevice(
 ): Promise<void> {
   return executeKyselyRun(
     db,
-    qb
-      .deleteFrom("access_tokens")
-      .where("user_id", "=", userId)
-      .where("device_id", "=", deviceId),
+    qb.deleteFrom("access_tokens").where("user_id", "=", userId).where("device_id", "=", deviceId),
   );
 }
 

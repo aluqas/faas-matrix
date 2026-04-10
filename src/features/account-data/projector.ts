@@ -1,8 +1,5 @@
 import type { AppEnv } from "../../shared/types";
-import type {
-  AccountDataSyncEvent,
-  E2EEAccountDataMap,
-} from "../../shared/types/account-data";
+import type { AccountDataSyncEvent, E2EEAccountDataMap } from "../../shared/types/account-data";
 import type { RoomId, UserId } from "../../shared/types/matrix";
 import {
   getGlobalAccountData,

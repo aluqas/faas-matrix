@@ -31,10 +31,7 @@ async function persistFederatedRelationshipResponse(
 }
 
 export async function fetchFederatedEventRelationshipsResponse(
-  env: Pick<
-    import("../../shared/types").AppEnv["Bindings"],
-    "DB" | "CACHE" | "SERVER_NAME"
-  >,
+  env: Pick<import("../../shared/types").AppEnv["Bindings"], "DB" | "CACHE" | "SERVER_NAME">,
   remoteServerName: string,
   roomVersion: string,
   request: EventRelationshipsRequest,

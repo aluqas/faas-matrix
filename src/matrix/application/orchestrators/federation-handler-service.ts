@@ -2,7 +2,6 @@ import {
   clearDeferredAuthMarkerForEvent,
   deleteRoomStateEvent,
   getDeferredPartialStateAuthEventsForRoom,
-  getAuthChain,
   getEvent,
   getRoomState,
   rejectProcessedPdu,
@@ -11,7 +10,17 @@ import {
   updateMembership,
 } from "../../../infra/db/database";
 import { checkEventAuth } from "../../../infra/db/event-auth";
-import type { MatrixSignatures, Membership, PDU } from "../../../shared/types";
+import {
+  ensureFederatedRoomStubRecord,
+  federationEventExists,
+  getEffectiveMembershipForRealtimeUser,
+  getFederationRoomVersion,
+  listFederationMembershipStatePointers,
+  loadFederationStateBundleFromRepository,
+  persistInviteStrippedStateRecords,
+  upsertFederatedRoomState,
+} from "../../../infra/repositories/federation-state-repository";
+import type { Membership, PDU } from "../../../shared/types";
 import { toEventId, toRoomId, toUserId } from "../../../shared/utils/ids";
 import { extractServerNameFromMatrixId } from "../../../shared/utils/matrix-ids";
 import type { FederationRepository } from "../../../infra/repositories/interfaces";
@@ -37,22 +46,6 @@ import {
   isPartialStateDeferredMembershipEvent,
 } from "../../../features/federation-core/partial-state-membership";
 
-type StoredEventRow = {
-  event_id: string;
-  room_id: string;
-  sender: string;
-  event_type: string;
-  state_key: string | null;
-  content: string;
-  origin_server_ts: number;
-  depth: number;
-  auth_events: string;
-  prev_events: string;
-  hashes: string | null;
-  signatures: string | null;
-  unsigned?: string | null;
-};
-
 export interface FederationStateBundle {
   state: PDU[];
   authChain: PDU[];
@@ -60,106 +53,11 @@ export interface FederationStateBundle {
   serversInRoom: string[];
 }
 
-function parseJson<T>(value: string | null | undefined, fallback?: T): T | undefined {
-  if (!value) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function rowToPdu(row: StoredEventRow): PDU {
-  const eventId = toEventId(row.event_id);
-  const roomId = toRoomId(row.room_id);
-  const sender = toUserId(row.sender);
-  if (!eventId || !roomId || !sender) {
-    throw new TypeError("Stored event row contains invalid Matrix identifiers");
-  }
-  return {
-    event_id: eventId,
-    room_id: roomId,
-    sender,
-    type: row.event_type,
-    state_key: row.state_key ?? undefined,
-    content: parseJson<Record<string, unknown>>(row.content, {}) ?? {},
-    origin_server_ts: row.origin_server_ts,
-    depth: row.depth,
-    auth_events: (parseJson<string[]>(row.auth_events, []) ?? []).flatMap((id) => {
-      const typedId = toEventId(id);
-      return typedId ? [typedId] : [];
-    }),
-    prev_events: (parseJson<string[]>(row.prev_events, []) ?? []).flatMap((id) => {
-      const typedId = toEventId(id);
-      return typedId ? [typedId] : [];
-    }),
-    unsigned: parseJson<Record<string, unknown> | undefined>(row.unsigned),
-    hashes: parseJson<{ sha256: string } | undefined>(row.hashes),
-    signatures: parseJson<MatrixSignatures | undefined>(row.signatures),
-  };
-}
-
-async function loadCreateEventFallback(db: D1Database, roomId: string): Promise<PDU | null> {
-  const createRow = await db
-    .prepare(
-      `SELECT event_id, room_id, sender, event_type, state_key, content, origin_server_ts, depth,
-              auth_events, prev_events, hashes, signatures, unsigned
-       FROM events
-       WHERE room_id = ? AND event_type = 'm.room.create'
-       LIMIT 1`,
-    )
-    .bind(roomId)
-    .first<StoredEventRow>();
-
-  return createRow ? rowToPdu(createRow) : null;
-}
-
-export async function loadFederationStateBundle(
+export function loadFederationStateBundle(
   db: D1Database,
   roomId: string,
 ): Promise<FederationStateBundle> {
-  const stateRows = await db
-    .prepare(
-      `SELECT e.event_id, e.room_id, e.sender, e.event_type, e.state_key, e.content,
-              e.origin_server_ts, e.depth, e.auth_events, e.prev_events, e.hashes, e.signatures, e.unsigned
-       FROM room_state rs
-       JOIN events e ON rs.event_id = e.event_id
-       WHERE rs.room_id = ?`,
-    )
-    .bind(roomId)
-    .all<StoredEventRow>();
-
-  const state = stateRows.results.map(rowToPdu);
-  const roomState = [...state];
-  if (!roomState.some((event) => event.type === "m.room.create")) {
-    const createEvent = await loadCreateEventFallback(db, roomId);
-    if (createEvent) {
-      roomState.push(createEvent);
-    }
-  }
-
-  const authChainIds = new Set<string>();
-  for (const event of roomState) {
-    for (const authEventId of event.auth_events) {
-      authChainIds.add(authEventId);
-    }
-  }
-
-  const authChain = await getAuthChain(db, Array.from(authChainIds));
-
-  const serversInRoom = Array.from(
-    new Set(
-      roomState
-        .filter((event) => event.type === "m.room.member" && event.content.membership === "join")
-        .map((event) => extractServerNameFromMatrixId(event.sender))
-        .filter((server): server is string => Boolean(server)),
-    ),
-  );
-
-  return { state: roomState, authChain, roomState, serversInRoom };
+  return loadFederationStateBundleFromRepository(db, roomId);
 }
 
 export async function persistFederationMembershipEvent(
@@ -170,10 +68,7 @@ export async function persistFederationMembershipEvent(
     source?: MembershipTransitionSource;
   },
 ): Promise<void> {
-  const existing = await db
-    .prepare(`SELECT event_id FROM events WHERE event_id = ?`)
-    .bind(input.event.event_id)
-    .first();
+  const existing = await federationEventExists(db, input.event.event_id);
   const context = await loadMembershipTransitionContext(db, input.roomId, input.event.state_key);
 
   if (!existing) {
@@ -235,17 +130,10 @@ export async function restoreDeferredPartialStateMemberships(
   db: D1Database,
   roomId: string,
 ): Promise<number> {
-  const stateRows = await db
-    .prepare(
-      `SELECT state_key, event_id
-       FROM room_state
-       WHERE room_id = ? AND event_type = 'm.room.member'`,
-    )
-    .bind(roomId)
-    .all<{ state_key: string; event_id: string }>();
+  const stateRows = await listFederationMembershipStatePointers(db, roomId);
 
   let restored = 0;
-  for (const row of stateRows.results) {
+  for (const row of stateRows) {
     const currentEventId = toEventId(row.event_id);
     if (!currentEventId) {
       continue;
@@ -279,13 +167,7 @@ export async function restoreDeferredPartialStateMemberships(
     }
 
     const previousContent = previousEvent.content as { displayname?: string; avatar_url?: string };
-    await db
-      .prepare(
-        `INSERT OR REPLACE INTO room_state (room_id, event_type, state_key, event_id)
-         VALUES (?, 'm.room.member', ?, ?)`,
-      )
-      .bind(roomId, row.state_key, previousEventId)
-      .run();
+    await upsertFederatedRoomState(db, roomId, "m.room.member", row.state_key, previousEventId);
     await updateMembership(
       db,
       toRoomId(roomId),
@@ -309,11 +191,7 @@ export async function reevaluateDeferredPartialStateAuthEvents(
   const deferredEvents = await getDeferredPartialStateAuthEventsForRoom(db, typedRoomId);
   if (deferredEvents.length === 0) return;
 
-  const roomRow = await db
-    .prepare(`SELECT room_version FROM rooms WHERE room_id = ?`)
-    .bind(roomId)
-    .first<{ room_version: string }>();
-  const roomVersion = roomRow?.room_version ?? "10";
+  const roomVersion = await getFederationRoomVersion(db, roomId);
 
   const currentState = await getRoomState(db, typedRoomId);
   const currentStateMap = new Map(
@@ -368,30 +246,7 @@ export async function persistInviteStrippedState(
   roomId: string,
   strippedStateEvents: unknown[],
 ): Promise<void> {
-  for (const event of strippedStateEvents) {
-    if (!event || typeof event !== "object") {
-      continue;
-    }
-
-    const record = event as Record<string, unknown>;
-    if (typeof record.type !== "string" || typeof record.sender !== "string") {
-      continue;
-    }
-
-    await db
-      .prepare(
-        `INSERT OR REPLACE INTO invite_stripped_state (room_id, event_type, state_key, content, sender)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        roomId,
-        record.type,
-        typeof record.state_key === "string" ? record.state_key : "",
-        JSON.stringify(record.content && typeof record.content === "object" ? record.content : {}),
-        record.sender,
-      )
-      .run();
-  }
+  await persistInviteStrippedStateRecords(db, roomId, strippedStateEvents);
 }
 
 export async function ensureFederatedRoomStub(
@@ -400,13 +255,7 @@ export async function ensureFederatedRoomStub(
   roomVersion: string,
   creatorId: string,
 ): Promise<void> {
-  await db
-    .prepare(
-      `INSERT OR IGNORE INTO rooms (room_id, room_version, creator_id, is_public)
-       VALUES (?, ?, ?, 0)`,
-    )
-    .bind(roomId, roomVersion, creatorId)
-    .run();
+  await ensureFederatedRoomStubRecord(db, roomId, roomVersion, creatorId);
 }
 
 async function upsertRoomState(db: D1Database, roomId: string, event: PDU): Promise<void> {
@@ -414,13 +263,7 @@ async function upsertRoomState(db: D1Database, roomId: string, event: PDU): Prom
     return;
   }
 
-  await db
-    .prepare(
-      `INSERT OR REPLACE INTO room_state (room_id, event_type, state_key, event_id)
-       VALUES (?, ?, ?, ?)`,
-    )
-    .bind(roomId, event.type, event.state_key, event.event_id)
-    .run();
+  await upsertFederatedRoomState(db, roomId, event.type, event.state_key, event.event_id);
 }
 
 export async function persistFederationStateSnapshot(
@@ -445,12 +288,7 @@ export async function persistFederationStateSnapshot(
       ...event,
       room_id: event.room_id || input.roomId,
     };
-    const existing = await db
-      .prepare(`SELECT event_id FROM events WHERE event_id = ?`)
-      .bind(normalizedEvent.event_id)
-      .first();
-
-    if (!existing) {
+    if (!(await federationEventExists(db, normalizedEvent.event_id))) {
       await storeEvent(db, normalizedEvent, { skipRoomState: true });
     }
   }
@@ -475,11 +313,7 @@ export async function persistFederationStateSnapshot(
       continue;
     }
 
-    const existing = await db
-      .prepare(`SELECT event_id FROM events WHERE event_id = ?`)
-      .bind(normalizedEvent.event_id)
-      .first();
-    if (!existing) {
+    if (!(await federationEventExists(db, normalizedEvent.event_id))) {
       await storeEvent(db, normalizedEvent);
     }
 
@@ -536,32 +370,8 @@ export async function handleFederationTypingEdu(
   }
 
   await ingestTypingEdu(origin, content, {
-    async getMembership(roomId: string, userId: string) {
-      const membership = await db
-        .prepare(
-          `SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ? LIMIT 1`,
-        )
-        .bind(roomId, userId)
-        .first<{ membership: string }>();
-
-      if (membership?.membership) {
-        return membership.membership;
-      }
-
-      const stateMembership = await db
-        .prepare(
-          `SELECT json_extract(e.content, '$.membership') AS membership
-           FROM room_state rs
-           JOIN events e ON rs.event_id = e.event_id
-           WHERE rs.room_id = ?
-             AND rs.event_type = 'm.room.member'
-             AND rs.state_key = ?
-           LIMIT 1`,
-        )
-        .bind(roomId, userId)
-        .first<{ membership: string | null }>();
-
-      return stateMembership?.membership ?? null;
+    getMembership(roomId: string, userId: string) {
+      return getEffectiveMembershipForRealtimeUser(db, roomId, userId);
     },
     async isPartialStateRoom(roomId: string) {
       const typedRoomId = toRoomId(roomId);
@@ -625,13 +435,8 @@ export async function handleFederationReceiptEdu(
           continue;
         }
 
-        const membership = await db
-          .prepare(
-            `SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ? LIMIT 1`,
-          )
-          .bind(roomId, userId)
-          .first<{ membership: string }>();
-        if (membership?.membership !== "join" && !partialStateRoom) {
+        const membership = await getEffectiveMembershipForRealtimeUser(db, roomId, userId);
+        if (membership !== "join" && !partialStateRoom) {
           continue;
         }
 

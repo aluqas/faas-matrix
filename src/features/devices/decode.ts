@@ -50,7 +50,10 @@ export function decodeUpdateDeviceInput(input: {
   authUserId: string;
   deviceId: string;
   body: unknown;
-}): Effect.Effect<{ authUserId: UserId; deviceId: string; displayName: string | null }, MatrixApiError> {
+}): Effect.Effect<
+  { authUserId: UserId; deviceId: string; displayName: string | null },
+  MatrixApiError
+> {
   return Effect.gen(function* () {
     const authUserId = decodeAuthUserId(input.authUserId);
     if (authUserId instanceof MatrixApiError) {
@@ -79,7 +82,10 @@ export function decodeDeleteDeviceInput(input: {
   authUserId: string;
   deviceId: string;
   body?: unknown;
-}): Effect.Effect<{ authUserId: UserId; deviceId: string; auth?: PasswordAuthInput }, MatrixApiError> {
+}): Effect.Effect<
+  { authUserId: UserId; deviceId: string; auth?: PasswordAuthInput },
+  MatrixApiError
+> {
   return Effect.gen(function* () {
     const authUserId = decodeAuthUserId(input.authUserId);
     if (authUserId instanceof MatrixApiError) {
@@ -89,7 +95,9 @@ export function decodeDeleteDeviceInput(input: {
     return {
       authUserId,
       deviceId: input.deviceId,
-      ...(isRecord(input.body) && "auth" in input.body ? { auth: decodeAuth(input.body.auth) } : {}),
+      ...(isRecord(input.body) && "auth" in input.body
+        ? { auth: decodeAuth(input.body.auth) }
+        : {}),
     };
   });
 }
@@ -97,7 +105,10 @@ export function decodeDeleteDeviceInput(input: {
 export function decodeDeleteDevicesInput(input: {
   authUserId: string;
   body: unknown;
-}): Effect.Effect<{ authUserId: UserId; deviceIds: string[]; auth?: PasswordAuthInput }, MatrixApiError> {
+}): Effect.Effect<
+  { authUserId: UserId; deviceIds: string[]; auth?: PasswordAuthInput },
+  MatrixApiError
+> {
   return Effect.gen(function* () {
     const authUserId = decodeAuthUserId(input.authUserId);
     if (authUserId instanceof MatrixApiError) {
@@ -110,7 +121,9 @@ export function decodeDeleteDevicesInput(input: {
     return {
       authUserId,
       deviceIds: input.body.devices.filter((value): value is string => typeof value === "string"),
-      ...(isRecord(input.body) && "auth" in input.body ? { auth: decodeAuth(input.body.auth) } : {}),
+      ...(isRecord(input.body) && "auth" in input.body
+        ? { auth: decodeAuth(input.body.auth) }
+        : {}),
     };
   });
 }

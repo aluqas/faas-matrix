@@ -7,9 +7,11 @@ export function resolveFederationDirectoryEffect(
   ports: FederationQueryPorts,
   input: FederationDirectoryQueryInput,
 ): Effect.Effect<{ room_id: string; servers: string[] }, MatrixApiError | InfraError> {
-  return Effect.flatMap(ports.roomDirectoryRepository.findRoomIdByAlias(input.roomAlias), (roomId) =>
-    roomId
-      ? Effect.succeed({ room_id: roomId, servers: [ports.localServerName] })
-      : Effect.fail(Errors.notFound("Room alias not found")),
+  return Effect.flatMap(
+    ports.roomDirectoryRepository.findRoomIdByAlias(input.roomAlias),
+    (roomId) =>
+      roomId
+        ? Effect.succeed({ room_id: roomId, servers: [ports.localServerName] })
+        : Effect.fail(Errors.notFound("Room alias not found")),
   );
 }

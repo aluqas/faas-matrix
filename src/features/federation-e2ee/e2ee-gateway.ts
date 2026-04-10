@@ -10,14 +10,8 @@ import type {
   DeviceKeysPayload,
   StoredOneTimeKeyBuckets,
 } from "../../shared/types/client";
-import {
-  fetchDurableObjectJson,
-  postDurableObjectVoid,
-} from "../shared/do-gateway";
-import {
-  getKvJsonValue,
-  putKvJsonValue,
-} from "../shared/kv-gateway";
+import { fetchDurableObjectJson, postDurableObjectVoid } from "../shared/do-gateway";
+import { getKvJsonValue, putKvJsonValue } from "../shared/kv-gateway";
 
 export async function fetchAllDeviceKeysFromDO(
   env: Pick<AppEnv["Bindings"], "USER_KEYS">,

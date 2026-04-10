@@ -13,5 +13,10 @@ export async function recordDeviceKeyChange(
   deviceId: string | null,
   changeType: string,
 ): Promise<void> {
-  await recordDeviceKeyChangeEntry(db, userId as import("../../shared/types").UserId, deviceId, changeType);
+  await recordDeviceKeyChangeEntry(
+    db,
+    userId as import("../../shared/types").UserId,
+    deviceId,
+    changeType,
+  );
 }

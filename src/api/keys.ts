@@ -35,10 +35,7 @@ import {
   loadUiaSession,
   completeUiaSsoCallback,
 } from "../features/client-keys/uia";
-import {
-  uploadCrossSigningKeys,
-  uploadKeySignatures,
-} from "../features/client-keys/cross-signing";
+import { uploadCrossSigningKeys, uploadKeySignatures } from "../features/client-keys/cross-signing";
 import {
   type SignaturesUploadRequest,
   type TokenSubmitRequest,

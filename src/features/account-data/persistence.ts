@@ -14,14 +14,8 @@ import {
 } from "../../infra/repositories/account-data-repository";
 import { InfraError } from "../../matrix/application/domain-error";
 import { fromInfraVoid, toInfraError } from "../../shared/effect/infra-effect";
-import {
-  deleteKvValue,
-  putKvTextValue,
-} from "../shared/kv-gateway";
-import {
-  deleteE2EEAccountDataFromDO,
-  putE2EEAccountDataToDO,
-} from "./e2ee-gateway";
+import { deleteKvValue, putKvTextValue } from "../shared/kv-gateway";
+import { deleteE2EEAccountDataFromDO, putE2EEAccountDataToDO } from "./e2ee-gateway";
 
 async function persistDatabaseAccountDataRecord(
   db: D1Database,
@@ -80,15 +74,12 @@ export function persistGlobalAccountDataEffect(
   eventType: string,
   content: AccountDataContent,
 ): Effect.Effect<void, InfraError> {
-  return fromInfraVoid(
-    async () => {
-      if (isDoBackedAccountDataEventType(eventType)) {
-        await persistDoBackedGlobalAccountData(env, userId, eventType, content);
-      }
-      await persistDatabaseAccountDataRecord(env.DB, userId, "", eventType, content);
-    },
-    "Failed to store account data",
-  ).pipe(
+  return fromInfraVoid(async () => {
+    if (isDoBackedAccountDataEventType(eventType)) {
+      await persistDoBackedGlobalAccountData(env, userId, eventType, content);
+    }
+    await persistDatabaseAccountDataRecord(env.DB, userId, "", eventType, content);
+  }, "Failed to store account data").pipe(
     Effect.mapError((cause) =>
       toInfraError(
         isDoBackedAccountDataEventType(eventType)
@@ -106,15 +97,12 @@ export function deleteGlobalAccountDataEffect(
   userId: UserId,
   eventType: string,
 ): Effect.Effect<void, InfraError> {
-  return fromInfraVoid(
-    async () => {
-      if (isDoBackedAccountDataEventType(eventType)) {
-        await deleteDoBackedGlobalAccountData(env, userId, eventType);
-      }
-      await markDatabaseAccountDataDeleted(env.DB, userId, "", eventType);
-    },
-    "Failed to delete global account data",
-  );
+  return fromInfraVoid(async () => {
+    if (isDoBackedAccountDataEventType(eventType)) {
+      await deleteDoBackedGlobalAccountData(env, userId, eventType);
+    }
+    await markDatabaseAccountDataDeleted(env.DB, userId, "", eventType);
+  }, "Failed to delete global account data");
 }
 
 export function persistRoomAccountDataEffect(
@@ -124,12 +112,9 @@ export function persistRoomAccountDataEffect(
   eventType: string,
   content: AccountDataContent,
 ): Effect.Effect<void, InfraError> {
-  return fromInfraVoid(
-    async () => {
-      await persistDatabaseAccountDataRecord(env.DB, userId, roomId, eventType, content);
-    },
-    "Failed to store room account data",
-  );
+  return fromInfraVoid(async () => {
+    await persistDatabaseAccountDataRecord(env.DB, userId, roomId, eventType, content);
+  }, "Failed to store room account data");
 }
 
 export function deleteRoomAccountDataEffect(
@@ -138,10 +123,7 @@ export function deleteRoomAccountDataEffect(
   roomId: RoomId,
   eventType: string,
 ): Effect.Effect<void, InfraError> {
-  return fromInfraVoid(
-    async () => {
-      await markDatabaseAccountDataDeleted(env.DB, userId, roomId, eventType);
-    },
-    "Failed to delete room account data",
-  );
+  return fromInfraVoid(async () => {
+    await markDatabaseAccountDataDeleted(env.DB, userId, roomId, eventType);
+  }, "Failed to delete room account data");
 }

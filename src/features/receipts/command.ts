@@ -22,7 +22,10 @@ export interface ReceiptsCommandPorts {
   };
   federation: {
     listJoinedServers(roomId: RoomId): Effect.Effect<string[], InfraError>;
-    queueReceipt(destination: string, content: Record<string, unknown>): Effect.Effect<void, InfraError>;
+    queueReceipt(
+      destination: string,
+      content: Record<string, unknown>,
+    ): Effect.Effect<void, InfraError>;
   };
 }
 
@@ -103,12 +106,7 @@ export function setReadMarkersEffect(
     }
 
     if (input.read) {
-      yield* ports.roomReceiptStore.putReceipt(
-        input.roomId,
-        input.userId,
-        input.read,
-        "m.read",
-      );
+      yield* ports.roomReceiptStore.putReceipt(input.roomId, input.userId, input.read, "m.read");
       if (!input.fullyRead) {
         yield* ports.fullyReadStore.putFullyRead(input.userId, input.roomId, input.read);
       }

@@ -34,9 +34,15 @@ export function updateProfileFieldEffect(
   input: UpdateProfileFieldInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify another user's profile");
+    yield* requireOwnUser(
+      input.authUserId,
+      input.targetUserId,
+      "Cannot modify another user's profile",
+    );
     yield* requireLocalUser(input.targetUserId, ports.localServerName);
-    yield* ports.profileRepository.updateProfile(input.targetUserId, { [input.field]: input.value });
+    yield* ports.profileRepository.updateProfile(input.targetUserId, {
+      [input.field]: input.value,
+    });
   });
 }
 
@@ -45,7 +51,11 @@ export function putCustomProfileKeyEffect(
   input: PutCustomProfileKeyInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify another user's profile");
+    yield* requireOwnUser(
+      input.authUserId,
+      input.targetUserId,
+      "Cannot modify another user's profile",
+    );
     yield* requireLocalUser(input.targetUserId, ports.localServerName);
     if (isStandardProfileField(input.keyName)) {
       return yield* Effect.fail(Errors.unrecognized("Use specific endpoint"));
@@ -64,7 +74,11 @@ export function deleteCustomProfileKeyEffect(
   input: DeleteCustomProfileKeyInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify another user's profile");
+    yield* requireOwnUser(
+      input.authUserId,
+      input.targetUserId,
+      "Cannot modify another user's profile",
+    );
     yield* requireLocalUser(input.targetUserId, ports.localServerName);
     if (isStandardProfileField(input.keyName)) {
       return yield* Effect.fail(Errors.forbidden("Cannot delete standard profile keys"));

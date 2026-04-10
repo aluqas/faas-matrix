@@ -16,7 +16,10 @@ export interface PasswordAuthInput {
 export interface DeviceCommandPorts {
   localServerName: string;
   deviceRepository: {
-    getDevice(userId: UserId, deviceId: string): Effect.Effect<
+    getDevice(
+      userId: UserId,
+      deviceId: string,
+    ): Effect.Effect<
       {
         deviceId: string;
         displayName: string | null;
@@ -143,7 +146,11 @@ export function updateDeviceDisplayNameEffect(
       );
       if (existingKeys) {
         deviceKeys = withUpdatedDisplayName(existingKeys, input.displayName);
-        yield* ports.deviceKeysGateway.putStoredDeviceKeys(input.authUserId, input.deviceId, deviceKeys);
+        yield* ports.deviceKeysGateway.putStoredDeviceKeys(
+          input.authUserId,
+          input.deviceId,
+          deviceKeys,
+        );
       }
     } catch {
       // Best-effort: device metadata update should not fail the endpoint.
@@ -206,7 +213,11 @@ export function deleteDeviceEffect(
         }),
     });
     if (!verified.ok) {
-      return { kind: "uia", session: verified.session, ...(verified.error ? { error: verified.error } : {}) };
+      return {
+        kind: "uia",
+        session: verified.session,
+        ...(verified.error ? { error: verified.error } : {}),
+      };
     }
 
     yield* ports.deviceRepository.deleteDeviceAccessTokens(input.authUserId, input.deviceId);
@@ -232,7 +243,11 @@ export function deleteDevicesEffect(
         }),
     });
     if (!verified.ok) {
-      return { kind: "uia", session: verified.session, ...(verified.error ? { error: verified.error } : {}) };
+      return {
+        kind: "uia",
+        session: verified.session,
+        ...(verified.error ? { error: verified.error } : {}),
+      };
     }
 
     yield* ports.deviceRepository.deleteDevices(input.authUserId, input.deviceIds);

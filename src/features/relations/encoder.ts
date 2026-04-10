@@ -1,10 +1,10 @@
 import type { PDU } from "../../shared/types";
 import type { ClientRelationEvent } from "./query";
 
-export function encodeEventRelationshipsResponse(input: {
+export function encodeEventRelationshipsResponse(input: { events: PDU[]; limited: boolean }): {
   events: PDU[];
   limited: boolean;
-}): { events: PDU[]; limited: boolean } {
+} {
   return {
     events: input.events,
     limited: input.limited,
@@ -21,9 +21,9 @@ export function encodeRelationChunkResponse(input: {
   };
 }
 
-export function encodeThreadSubscriptionResponse(input: {
+export function encodeThreadSubscriptionResponse(input: { automatic: boolean }): {
   automatic: boolean;
-}): { automatic: boolean } {
+} {
   return {
     automatic: input.automatic,
   };

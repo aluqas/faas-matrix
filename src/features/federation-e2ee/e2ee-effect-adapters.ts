@@ -36,9 +36,15 @@ export function createFederationE2EEQueryPorts(
       getAllDeviceKeys: (userId) =>
         fromInfraPromise(() => fetchAllDeviceKeysFromDO(env, userId), "Failed to load device keys"),
       getDeviceKey: (userId, deviceId) =>
-        fromInfraPromise(() => fetchDeviceKeyFromDO(env, userId, deviceId), "Failed to load device key"),
+        fromInfraPromise(
+          () => fetchDeviceKeyFromDO(env, userId, deviceId),
+          "Failed to load device key",
+        ),
       getCrossSigningKeys: (userId) =>
-        fromInfraPromise(() => fetchCrossSigningKeysFromDO(env, userId), "Failed to load cross-signing keys"),
+        fromInfraPromise(
+          () => fetchCrossSigningKeysFromDO(env, userId),
+          "Failed to load cross-signing keys",
+        ),
     },
     signaturesRepository: {
       listDeviceSignatures: (userId, keyId) =>

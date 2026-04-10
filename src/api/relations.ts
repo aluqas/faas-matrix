@@ -85,9 +85,7 @@ app.get("/_matrix/client/v1/rooms/:roomId/relations/:eventId", requireAuth(), (c
       limit: c.req.query("limit"),
       dir: c.req.query("dir"),
     }).pipe(
-      Effect.flatMap((input) =>
-        listRelationEventsEffect(createRelationsQueryPorts(c.env), input),
-      ),
+      Effect.flatMap((input) => listRelationEventsEffect(createRelationsQueryPorts(c.env), input)),
     ),
     (result) => c.json(encodeRelationChunkResponse(result)),
   );
@@ -104,9 +102,7 @@ app.get("/_matrix/client/v1/rooms/:roomId/relations/:eventId/:relType", requireA
       limit: c.req.query("limit"),
       dir: c.req.query("dir"),
     }).pipe(
-      Effect.flatMap((input) =>
-        listRelationEventsEffect(createRelationsQueryPorts(c.env), input),
-      ),
+      Effect.flatMap((input) => listRelationEventsEffect(createRelationsQueryPorts(c.env), input)),
     ),
     (result) => c.json(encodeRelationChunkResponse(result)),
   );
@@ -143,9 +139,7 @@ app.get("/_matrix/client/v1/rooms/:roomId/threads", requireAuth(), (c) => {
       roomId: decodeURIComponent(c.req.param("roomId")),
       limit: c.req.query("limit"),
       include: c.req.query("include"),
-    }).pipe(
-      Effect.flatMap((input) => listThreadsEffect(createRelationsQueryPorts(c.env), input)),
-    ),
+    }).pipe(Effect.flatMap((input) => listThreadsEffect(createRelationsQueryPorts(c.env), input))),
     (result) => c.json(encodeRelationChunkResponse(result)),
   );
 });

@@ -7,7 +7,10 @@ import {
 } from "../../infra/db/kysely";
 import type { Generated } from "kysely";
 import type { RoomId, UserId } from "../../shared/types";
-import type { AccountDataSyncEvent, StoredAccountDataRecord } from "../../shared/types/account-data";
+import type {
+  AccountDataSyncEvent,
+  StoredAccountDataRecord,
+} from "../../shared/types/account-data";
 import { parseStoredAccountDataContent } from "../../shared/types/account-data";
 
 interface AccountDataRow {
@@ -145,7 +148,10 @@ export async function recordAccountDataChange(
   eventType: string,
 ): Promise<void> {
   const streamPosition = await getNextAccountDataStreamPosition(db);
-  await executeKyselyRun(db, buildRecordAccountDataChangeQuery(userId, roomId, eventType, streamPosition));
+  await executeKyselyRun(
+    db,
+    buildRecordAccountDataChangeQuery(userId, roomId, eventType, streamPosition),
+  );
 }
 
 export async function upsertAccountDataRecord(

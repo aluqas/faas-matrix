@@ -35,8 +35,15 @@ export function queryGlobalAccountDataEffect(
   input: GetGlobalAccountDataInput,
 ): Effect.Effect<AccountDataContent, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot access other users account data");
-    const content = yield* ports.accountDataReader.getGlobalAccountData(input.targetUserId, input.eventType);
+    yield* requireOwnUser(
+      input.authUserId,
+      input.targetUserId,
+      "Cannot access other users account data",
+    );
+    const content = yield* ports.accountDataReader.getGlobalAccountData(
+      input.targetUserId,
+      input.eventType,
+    );
     return yield* content
       ? Effect.succeed(content)
       : Effect.fail(Errors.notFound("Account data not found"));
@@ -48,7 +55,11 @@ export function queryRoomAccountDataEffect(
   input: GetRoomAccountDataInput,
 ): Effect.Effect<AccountDataContent, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot access other users account data");
+    yield* requireOwnUser(
+      input.authUserId,
+      input.targetUserId,
+      "Cannot access other users account data",
+    );
     yield* requireJoinedRoom(
       (userId, roomId) => ports.membership.isUserJoinedToRoom(userId, roomId),
       input.targetUserId,

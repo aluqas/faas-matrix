@@ -76,7 +76,10 @@ export async function processFederationSendJoin(input: {
   const authResult = checkEventAuth(incomingEvent, stateBundle.roomState, room.roomVersion);
   if (!authResult.allowed) {
     return new Response(
-      JSON.stringify({ errcode: "M_FORBIDDEN", error: authResult.error ?? "Join event not allowed" }),
+      JSON.stringify({
+        errcode: "M_FORBIDDEN",
+        error: authResult.error ?? "Join event not allowed",
+      }),
       { status: 403, headers: { "content-type": "application/json" } },
     );
   }

@@ -1,5 +1,9 @@
 import type { AppEnv } from "../../shared/types";
-import type { JsonObjectMap, KeysClaimRequest, UserOneTimeKeysMap } from "../../shared/types/client";
+import type {
+  JsonObjectMap,
+  KeysClaimRequest,
+  UserOneTimeKeysMap,
+} from "../../shared/types/client";
 import { runClientEffect } from "../../matrix/application/runtime/effect-runtime";
 import { createKeysLogger } from "./shared";
 import {

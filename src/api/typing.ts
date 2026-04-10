@@ -51,10 +51,7 @@ app.put("/_matrix/client/v3/rooms/:roomId/typing/:userId", requireAuth(), async 
     }).pipe(
       Effect.flatMap((input) =>
         setTypingEffect(
-          createTypingRequestPorts(
-            c.env,
-            c.get("appContext").profile.name === "complement",
-          ),
+          createTypingRequestPorts(c.env, c.get("appContext").profile.name === "complement"),
           input,
         ),
       ),

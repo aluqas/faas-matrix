@@ -5,11 +5,9 @@ export function getKvTextValue<TBinding extends string>(
   binding: TBinding,
   key: string,
 ): Promise<string | null> {
-  return env[binding]
-    .get(key)
-    .catch((error) => {
-      throw new Error(`${binding} KV get failed for ${key}`, { cause: error });
-    });
+  return env[binding].get(key).catch((error) => {
+    throw new Error(`${binding} KV get failed for ${key}`, { cause: error });
+  });
 }
 
 export function getKvJsonValue<TBinding extends string>(
@@ -17,11 +15,9 @@ export function getKvJsonValue<TBinding extends string>(
   binding: TBinding,
   key: string,
 ): Promise<unknown> {
-  return env[binding]
-    .get(key, "json")
-    .catch((error) => {
-      throw new Error(`${binding} KV get failed for ${key}`, { cause: error });
-    });
+  return env[binding].get(key, "json").catch((error) => {
+    throw new Error(`${binding} KV get failed for ${key}`, { cause: error });
+  });
 }
 
 export function putKvTextValue<TBinding extends string>(
@@ -31,11 +27,9 @@ export function putKvTextValue<TBinding extends string>(
   value: string,
   options?: KVNamespacePutOptions,
 ): Promise<void> {
-  return env[binding]
-    .put(key, value, options)
-    .catch((error) => {
-      throw new Error(`${binding} KV put failed for ${key}`, { cause: error });
-    });
+  return env[binding].put(key, value, options).catch((error) => {
+    throw new Error(`${binding} KV put failed for ${key}`, { cause: error });
+  });
 }
 
 export function putKvJsonValue<TBinding extends string>(
@@ -45,11 +39,9 @@ export function putKvJsonValue<TBinding extends string>(
   value: unknown,
   options?: KVNamespacePutOptions,
 ): Promise<void> {
-  return env[binding]
-    .put(key, JSON.stringify(value), options)
-    .catch((error) => {
-      throw new Error(`${binding} KV put failed for ${key}`, { cause: error });
-    });
+  return env[binding].put(key, JSON.stringify(value), options).catch((error) => {
+    throw new Error(`${binding} KV put failed for ${key}`, { cause: error });
+  });
 }
 
 export function deleteKvValue<TBinding extends string>(
@@ -57,9 +49,7 @@ export function deleteKvValue<TBinding extends string>(
   binding: TBinding,
   key: string,
 ): Promise<void> {
-  return env[binding]
-    .delete(key)
-    .catch((error) => {
-      throw new Error(`${binding} KV delete failed for ${key}`, { cause: error });
-    });
+  return env[binding].delete(key).catch((error) => {
+    throw new Error(`${binding} KV delete failed for ${key}`, { cause: error });
+  });
 }

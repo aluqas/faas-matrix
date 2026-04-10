@@ -27,10 +27,7 @@ import {
   encodeProfileFieldResponse,
   encodeProfileResponseBody,
 } from "../features/profile/encoder";
-import {
-  queryCustomProfileKeyEffect,
-  queryProfileEffect,
-} from "../features/profile/query";
+import { queryCustomProfileKeyEffect, queryProfileEffect } from "../features/profile/query";
 
 const app = new Hono<AppEnv>();
 
@@ -59,7 +56,7 @@ async function decodeJsonBody(c: import("hono").Context<AppEnv>): Promise<unknow
 // GET /_matrix/client/v3/profile/:userId - Get user profile
 app.get("/_matrix/client/v3/profile/:userId", optionalAuth(), (c) => {
   return respondWithClientEffect(
-      decodeProfileUserId(decodeURIComponent(c.req.param("userId"))).pipe(
+    decodeProfileUserId(decodeURIComponent(c.req.param("userId"))).pipe(
       Effect.flatMap((userId) => queryProfileEffect(createProfileQueryPorts(c.env), { userId })),
     ),
     (profile) => c.json(encodeProfileResponseBody(profile)),

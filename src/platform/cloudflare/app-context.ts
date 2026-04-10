@@ -34,7 +34,10 @@ import {
   CloudflareSyncRepository,
 } from "./matrix-repositories";
 import { CloudflareIdempotencyStore } from "./idempotency-store";
-import { enqueueFederationEdu, enqueueFederationPdu } from "../../infra/federation/federation-outbound";
+import {
+  enqueueFederationEdu,
+  enqueueFederationPdu,
+} from "../../infra/federation/federation-outbound";
 
 function createRuntimeCapabilities(
   env: Env,

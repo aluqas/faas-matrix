@@ -4,16 +4,12 @@
 import { Effect } from "effect";
 import { Hono } from "hono";
 import type { AppEnv } from "../shared/types";
-import type { DeviceId, UserId } from "../shared/types/matrix";
 import { Errors, MatrixApiError } from "../shared/utils/errors";
 import { requireAuth } from "../infra/middleware/auth";
 import { runClientEffect } from "../matrix/application/runtime/effect-runtime";
 import { sendToDeviceEffect } from "../features/to-device/command";
 import { decodeSendToDeviceInput } from "../features/to-device/decode";
 import { createToDeviceRequestPorts } from "../features/to-device/effect-adapters";
-import { projectToDeviceMessages } from "../features/to-device/project";
-import { deleteDeliveredToDeviceMessagesBefore } from "../infra/repositories/to-device-repository";
-import type { ToDeviceBatch } from "../features/to-device/contracts";
 
 const app = new Hono<AppEnv>();
 
@@ -56,10 +52,7 @@ app.put("/_matrix/client/v3/sendToDevice/:eventType/:txnId", requireAuth(), asyn
     }).pipe(
       Effect.flatMap((input) =>
         sendToDeviceEffect(
-          createToDeviceRequestPorts(
-            c.env,
-            c.get("appContext").profile.name === "complement",
-          ),
+          createToDeviceRequestPorts(c.env, c.get("appContext").profile.name === "complement"),
           input,
         ),
       ),
@@ -67,22 +60,5 @@ app.put("/_matrix/client/v3/sendToDevice/:eventType/:txnId", requireAuth(), asyn
     (result) => c.json(result),
   );
 });
-
-export function getToDeviceMessages(
-  db: D1Database,
-  userId: UserId,
-  deviceId: DeviceId,
-  since?: string,
-  limit: number = 100,
-): Promise<ToDeviceBatch> {
-  return projectToDeviceMessages(db, userId, deviceId, since, limit);
-}
-
-export function cleanupOldToDeviceMessages(
-  db: D1Database,
-  maxAgeMs: number = 7 * 24 * 60 * 60 * 1000,
-): Promise<number> {
-  return deleteDeliveredToDeviceMessagesBefore(db, Date.now() - maxAgeMs);
-}
 
 export default app;

@@ -9,7 +9,11 @@ import {
   fanoutEventToRemoteServersWithPorts,
 } from "../../../infra/federation/federation-fanout";
 import { sendFederationInvite } from "../../../infra/federation/federation-invite";
-import { federationGet, federationPut, getServerSigningKey } from "../../../infra/federation/federation-keys";
+import {
+  federationGet,
+  federationPut,
+  getServerSigningKey,
+} from "../../../infra/federation/federation-keys";
 import { getDefaultRoomVersion, getRoomVersion } from "../../../infra/db/room-versions";
 import {
   ErrorCodes,
@@ -544,19 +548,17 @@ export class MatrixRoomService {
             joinRulesContent,
             currentMembership: currentMembership?.membership,
             checkAllowedRoomMembership: (allowedRoomId) =>
-              Effect.promise(() =>
-                {
-                  const typedAllowedRoomId = toRoomId(allowedRoomId);
-                  if (!typedAllowedRoomId) {
-                    return Promise.resolve(false);
-                  }
+              Effect.promise(() => {
+                const typedAllowedRoomId = toRoomId(allowedRoomId);
+                if (!typedAllowedRoomId) {
+                  return Promise.resolve(false);
+                }
 
-                  return repository
-                    .getMembership(typedAllowedRoomId, auth.userId)
-                    .then((m) => m?.membership === "join")
-                    .catch(() => false);
-                },
-              ),
+                return repository
+                  .getMembership(typedAllowedRoomId, auth.userId)
+                  .then((m) => m?.membership === "join")
+                  .catch(() => false);
+              }),
           }),
         );
       },

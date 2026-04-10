@@ -1,5 +1,9 @@
 import type { AppEnv, Membership } from "../../shared/types";
-import { fromInfraNullable, fromInfraPromise, fromInfraVoid } from "../../shared/effect/infra-effect";
+import {
+  fromInfraNullable,
+  fromInfraPromise,
+  fromInfraVoid,
+} from "../../shared/effect/infra-effect";
 import {
   getLatestThreadStreamOrdering,
   getRemoteServersForRelationRoom,
@@ -24,31 +28,32 @@ export function createRelationsQueryPorts(
     membership: {
       getMembership: (roomId, userId) =>
         fromInfraNullable<Membership | null>(
-          async () => (await getRoomMembershipForRelations(env.DB, roomId, userId)) as Membership | null,
+          async () =>
+            (await getRoomMembershipForRelations(env.DB, roomId, userId)) as Membership | null,
           "Failed to load room membership",
         ),
     },
     relationsReader: {
       queryEventRelationships: (request) =>
-        fromInfraNullable(
-          async () => {
-            const result = await queryRelationEventTree(env.DB, request);
-            return result
-              ? {
-                  ...result,
-                  roomId: result.roomId as import("../../shared/types").RoomId,
-                }
-              : null;
-          },
-          "Failed to query event relationships",
-        ),
+        fromInfraNullable(async () => {
+          const result = await queryRelationEventTree(env.DB, request);
+          return result
+            ? {
+                ...result,
+                roomId: result.roomId as import("../../shared/types").RoomId,
+              }
+            : null;
+        }, "Failed to query event relationships"),
       getRemoteServersForRoom: (roomId) =>
         fromInfraPromise(
           () => getRemoteServersForRelationRoom(env.DB, roomId, env.SERVER_NAME),
           "Failed to load remote servers for room",
         ),
       getRoomVersion: (roomId) =>
-        fromInfraPromise(() => getRoomVersionForRelations(env.DB, roomId), "Failed to load room version"),
+        fromInfraPromise(
+          () => getRoomVersionForRelations(env.DB, roomId),
+          "Failed to load room version",
+        ),
       listRelations: (input) =>
         fromInfraPromise(async () => {
           const result = await listRelationEvents(env.DB, input);
@@ -59,11 +64,15 @@ export function createRelationsQueryPorts(
         }, "Failed to list relation events"),
       listThreads: (input) =>
         fromInfraPromise(
-          async () => (await listThreadRoots(env.DB, input)) as import("./query").ClientRelationEvent[],
+          async () =>
+            (await listThreadRoots(env.DB, input)) as import("./query").ClientRelationEvent[],
           "Failed to list thread roots",
         ),
       threadRootExists: (roomId, threadRootId) =>
-        fromInfraPromise(() => threadRootExists(env.DB, roomId, threadRootId), "Failed to load thread root"),
+        fromInfraPromise(
+          () => threadRootExists(env.DB, roomId, threadRootId),
+          "Failed to load thread root",
+        ),
       getThreadSubscriptionContent: (userId, roomId) =>
         fromInfraPromise(
           () => getThreadSubscriptionContent(env.DB, userId, roomId),

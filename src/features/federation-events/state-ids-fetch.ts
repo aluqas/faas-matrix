@@ -1,5 +1,8 @@
 import { getAuthChain } from "../../infra/db/database";
-import { getFederationRoomRecord, listFederationStateEventIdRows } from "../../infra/repositories/federation-events-repository";
+import {
+  getFederationRoomRecord,
+  listFederationStateEventIdRows,
+} from "../../infra/repositories/federation-events-repository";
 import type { AppEnv } from "../../shared/types";
 
 export async function fetchFederationStateIds(
@@ -27,7 +30,9 @@ export async function fetchFederationStateIds(
       }),
     ),
   );
-  const authChainIds = (await getAuthChain(env.DB, rootAuthEventIds)).map((event) => event.event_id);
+  const authChainIds = (await getAuthChain(env.DB, rootAuthEventIds)).map(
+    (event) => event.event_id,
+  );
 
   return {
     pdu_ids: stateEventIds,

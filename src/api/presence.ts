@@ -59,10 +59,7 @@ app.put("/_matrix/client/v3/presence/:userId/status", requireAuth(), async (c) =
     }).pipe(
       Effect.flatMap((input) =>
         setPresenceStatusEffect(
-          createPresenceCommandPorts(
-            c.env,
-            c.get("appContext").profile.name === "complement",
-          ),
+          createPresenceCommandPorts(c.env, c.get("appContext").profile.name === "complement"),
           input,
         ),
       ),
@@ -76,16 +73,12 @@ app.get("/_matrix/client/v3/presence/:userId/status", requireAuth(), (c) => {
     decodeGetPresenceStatusInput({
       targetUserId: decodeURIComponent(c.req.param("userId")),
     }).pipe(
-      Effect.flatMap((input) =>
-        getPresenceStatusEffect(createPresenceQueryPorts(c.env), input),
-      ),
+      Effect.flatMap((input) => getPresenceStatusEffect(createPresenceQueryPorts(c.env), input)),
     ),
     (presenceRecord) =>
       c.json({
         presence: presenceRecord.presence,
-        ...(presenceRecord.statusMsg !== undefined
-          ? { status_msg: presenceRecord.statusMsg }
-          : {}),
+        ...(presenceRecord.statusMsg !== undefined ? { status_msg: presenceRecord.statusMsg } : {}),
         ...(presenceRecord.lastActiveAgo !== undefined
           ? { last_active_ago: presenceRecord.lastActiveAgo }
           : {}),

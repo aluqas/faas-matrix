@@ -66,10 +66,7 @@ export function encodeClientKeysSignaturesUploadResponse(
   return { failures };
 }
 
-export function encodeClientKeysChangesResponse(
-  changed: Iterable<string>,
-  left: Iterable<string>,
-) {
+export function encodeClientKeysChangesResponse(changed: Iterable<string>, left: Iterable<string>) {
   return {
     changed: [...changed],
     left: [...left],

@@ -1,5 +1,9 @@
 import type { AppEnv } from "../../shared/types";
-import { fromInfraNullable, fromInfraPromise, fromInfraVoid } from "../../shared/effect/infra-effect";
+import {
+  fromInfraNullable,
+  fromInfraPromise,
+  fromInfraVoid,
+} from "../../shared/effect/infra-effect";
 import {
   deleteAccessTokensForDevice,
   deleteDeviceForUser,
@@ -16,9 +20,7 @@ import { getStoredDeviceKeys, putStoredDeviceKeys } from "./device-keys-gateway"
 import type { DeviceCommandPorts } from "./command";
 import type { DeviceQueryPorts } from "./query";
 
-export function createDeviceQueryPorts(
-  env: Pick<AppEnv["Bindings"], "DB">,
-): DeviceQueryPorts {
+export function createDeviceQueryPorts(env: Pick<AppEnv["Bindings"], "DB">): DeviceQueryPorts {
   return {
     deviceRepository: {
       listDevices: (userId) =>
@@ -33,10 +35,7 @@ export function createDeviceQueryPorts(
 }
 
 export function createDeviceCommandPorts(
-  env: Pick<
-    AppEnv["Bindings"],
-    "DB" | "USER_KEYS" | "DEVICE_KEYS" | "SERVER_NAME" | "CACHE"
-  > &
+  env: Pick<AppEnv["Bindings"], "DB" | "USER_KEYS" | "DEVICE_KEYS" | "SERVER_NAME" | "CACHE"> &
     AppEnv["Bindings"],
 ): DeviceCommandPorts {
   return {
@@ -58,13 +57,22 @@ export function createDeviceCommandPorts(
           "Failed to delete device tokens",
         ),
       deleteDevice: (userId, deviceId) =>
-        fromInfraVoid(() => deleteDeviceForUser(env.DB, userId, deviceId), "Failed to delete device"),
+        fromInfraVoid(
+          () => deleteDeviceForUser(env.DB, userId, deviceId),
+          "Failed to delete device",
+        ),
       deleteDevices: (userId, deviceIds) =>
-        fromInfraVoid(() => deleteDevicesForUser(env.DB, userId, deviceIds), "Failed to delete devices"),
+        fromInfraVoid(
+          () => deleteDevicesForUser(env.DB, userId, deviceIds),
+          "Failed to delete devices",
+        ),
     },
     userAuth: {
       getPasswordHash: (userId) =>
-        fromInfraNullable(() => getUserPasswordHash(env.DB, userId), "Failed to load password hash"),
+        fromInfraNullable(
+          () => getUserPasswordHash(env.DB, userId),
+          "Failed to load password hash",
+        ),
     },
     deviceKeysGateway: {
       getStoredDeviceKeys: (userId, deviceId) =>

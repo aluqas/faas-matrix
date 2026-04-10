@@ -29,10 +29,7 @@ import {
   loadUiaSession,
 } from "./uia";
 import { createKeysLogger } from "./shared";
-import type {
-  CrossSigningUploadRequest,
-  SignaturesUploadRequest,
-} from "../../shared/types/client";
+import type { CrossSigningUploadRequest, SignaturesUploadRequest } from "../../shared/types/client";
 import { isIdempotentCrossSigningUpload } from "../../api/keys-contracts";
 
 export interface CrossSigningUploadOutcome {
@@ -47,14 +44,17 @@ async function loadAuthContext(input: {
 }) {
   const { env, userId, request } = input;
   const hasExistingKeys = await hasCrossSigningKeysBackup(env.DB, userId);
-  const existingCSKeys = hasExistingKeys ? await fetchCrossSigningKeysFromDO(env as AppEnv["Bindings"], userId) : {};
+  const existingCSKeys = hasExistingKeys
+    ? await fetchCrossSigningKeysFromDO(env as AppEnv["Bindings"], userId)
+    : {};
   const uploadRequest = {
     ...(request.master_key ? { master_key: request.master_key } : {}),
     ...(request.self_signing_key ? { self_signing_key: request.self_signing_key } : {}),
     ...(request.user_signing_key ? { user_signing_key: request.user_signing_key } : {}),
     ...(request.auth ? { auth: request.auth } : {}),
   };
-  const idempotent = hasExistingKeys && isIdempotentCrossSigningUpload(existingCSKeys, uploadRequest);
+  const idempotent =
+    hasExistingKeys && isIdempotentCrossSigningUpload(existingCSKeys, uploadRequest);
   const userIsOIDC = await isOidcUser(env.DB, userId);
   const userHasPassword = await hasPassword(env.DB, userId);
 
@@ -196,7 +196,11 @@ export async function uploadCrossSigningKeys(input: {
   }
 
   const ssssDefault = await runClientEffect(
-    loadGlobalAccountDataEffect(env as AppEnv["Bindings"], typedUserId, "m.secret_storage.default_key"),
+    loadGlobalAccountDataEffect(
+      env as AppEnv["Bindings"],
+      typedUserId,
+      "m.secret_storage.default_key",
+    ),
   );
   await runClientEffect(
     logger.info("keys.command.ssss_state", {
@@ -280,7 +284,11 @@ export async function uploadKeySignatures(input: {
 
         if (signedKeyObj.device_id) {
           const deviceId = signedKeyObj.device_id;
-          const existingKey = await fetchDeviceKeyFromDO(env as AppEnv["Bindings"], userId, deviceId);
+          const existingKey = await fetchDeviceKeyFromDO(
+            env as AppEnv["Bindings"],
+            userId,
+            deviceId,
+          );
           if (existingKey) {
             existingKey.signatures = existingKey.signatures ?? {};
             existingKey.signatures[signerUserId] = {

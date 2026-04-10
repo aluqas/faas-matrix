@@ -21,10 +21,7 @@ function isSupportedProfileField(field: string | undefined): field is ProfileFie
 export function queryProfileResponse(
   input: ProfileLookupInput,
 ): Promise<ProfileResponseBody | null> {
-  const target = resolveLocalOrRemoteUserTarget(
-    input.userId as UserId,
-    input.localServerName,
-  );
+  const target = resolveLocalOrRemoteUserTarget(input.userId as UserId, input.localServerName);
   if (!target) {
     return Promise.resolve(null);
   }
@@ -37,9 +34,5 @@ export function queryProfileResponse(
     return input.getLocalProfile(target.userId);
   }
 
-  return input.fetchRemoteProfile(
-    target.serverName,
-    target.userId,
-    input.field,
-  );
+  return input.fetchRemoteProfile(target.serverName, target.userId, input.field);
 }

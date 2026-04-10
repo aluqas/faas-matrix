@@ -1,4 +1,8 @@
-import { countPublicRooms, getPublicRoomInfo, listPublicRoomIds } from "../../infra/repositories/federation-public-rooms-repository";
+import {
+  countPublicRooms,
+  getPublicRoomInfo,
+  listPublicRoomIds,
+} from "../../infra/repositories/federation-public-rooms-repository";
 
 export async function queryFederationPublicRooms(input: {
   db: D1Database;
@@ -11,7 +15,12 @@ export async function queryFederationPublicRooms(input: {
   nextBatch?: string;
   prevBatch?: string;
 }> {
-  const roomIds = await listPublicRoomIds(input.db, input.limit + 1, input.offset, input.searchTerm);
+  const roomIds = await listPublicRoomIds(
+    input.db,
+    input.limit + 1,
+    input.offset,
+    input.searchTerm,
+  );
   const hasMore = roomIds.length > input.limit;
   const chunk = await Promise.all(
     roomIds.slice(0, input.limit).map((roomId) => getPublicRoomInfo(input.db, roomId)),

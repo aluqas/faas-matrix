@@ -10,10 +10,7 @@ import {
   persistRoomAccountDataEffect,
 } from "./persistence";
 import type { AccountDataQueryPorts } from "./query";
-import {
-  loadDatabaseAccountDataEffect,
-  loadGlobalAccountDataEffect,
-} from "./storage";
+import { loadDatabaseAccountDataEffect, loadGlobalAccountDataEffect } from "./storage";
 
 export function createAccountDataQueryPorts(
   env: Pick<AppEnv["Bindings"], "DB" | "ACCOUNT_DATA" | "USER_KEYS">,
@@ -27,7 +24,10 @@ export function createAccountDataQueryPorts(
     },
     membership: {
       isUserJoinedToRoom: (userId, roomId) =>
-        fromInfraPromise(() => isUserJoinedToRoom(env.DB, roomId, userId), "Failed to verify room membership"),
+        fromInfraPromise(
+          () => isUserJoinedToRoom(env.DB, roomId, userId),
+          "Failed to verify room membership",
+        ),
     },
   };
 }
@@ -48,7 +48,10 @@ export function createAccountDataCommandPorts(
     },
     membership: {
       isUserJoinedToRoom: (userId, roomId) =>
-        fromInfraPromise(() => isUserJoinedToRoom(env.DB, roomId, userId), "Failed to verify room membership"),
+        fromInfraPromise(
+          () => isUserJoinedToRoom(env.DB, roomId, userId),
+          "Failed to verify room membership",
+        ),
     },
     accountDataNotifier: {
       notifyAccountDataChange: ({ userId, roomId, eventType }) =>

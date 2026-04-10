@@ -1,10 +1,7 @@
 import type { AccountDataContent, E2EEAccountDataMap } from "../../shared/types/account-data";
 import { normalizeE2EEAccountDataMap } from "../../shared/types/account-data";
 import type { Env } from "../../shared/types";
-import {
-  fetchDurableObjectJson,
-  postDurableObjectVoid,
-} from "../shared/do-gateway";
+import { fetchDurableObjectJson, postDurableObjectVoid } from "../shared/do-gateway";
 
 export async function getE2EEAccountDataFromDO(
   env: Pick<Env, "USER_KEYS">,
@@ -23,7 +20,13 @@ export async function getE2EEAccountDataFromDO(
   const url = eventType
     ? `http://internal/account-data/get?event_type=${encodeURIComponent(eventType)}`
     : "http://internal/account-data/get";
-  const payload = await fetchDurableObjectJson(env, "USER_KEYS", userId, url, "DO account-data get");
+  const payload = await fetchDurableObjectJson(
+    env,
+    "USER_KEYS",
+    userId,
+    url,
+    "DO account-data get",
+  );
   if (eventType !== undefined) {
     return normalizeE2EEAccountDataMap({ [eventType]: payload })[eventType] ?? null;
   }

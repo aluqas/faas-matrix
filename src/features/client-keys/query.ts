@@ -286,7 +286,12 @@ export async function queryClientKeyChanges(input: {
   const [localChanged, remoteChanged, newlyShared, currentMembersInJoinedRooms, noLongerShared] =
     await Promise.all([
       listVisibleLocalDeviceKeyChanges(db, typedUserId, fromDeviceKeyPosition, toDeviceKeyPosition),
-      listVisibleRemoteDeviceKeyChanges(db, typedUserId, fromDeviceKeyPosition, toDeviceKeyPosition),
+      listVisibleRemoteDeviceKeyChanges(
+        db,
+        typedUserId,
+        fromDeviceKeyPosition,
+        toDeviceKeyPosition,
+      ),
       listNewlySharedUsers(db, typedUserId, fromEventPosition, toEventPosition),
       listCurrentMembersInJoinedRooms(db, typedUserId, fromEventPosition, toEventPosition),
       listNoLongerSharedUsers(db, typedUserId, fromEventPosition, toEventPosition),

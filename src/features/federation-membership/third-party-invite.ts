@@ -37,7 +37,11 @@ export async function exchangeFederationThirdPartyInvite(input: {
     return Errors.notFound("Room not found").toResponse();
   }
 
-  const thirdPartyInviteEvent = await getFederationThirdPartyInvite(input.env.DB, input.roomId, token);
+  const thirdPartyInviteEvent = await getFederationThirdPartyInvite(
+    input.env.DB,
+    input.roomId,
+    token,
+  );
   if (!thirdPartyInviteEvent) {
     return new Response(
       JSON.stringify({
@@ -120,14 +124,19 @@ export async function exchangeFederationThirdPartyInvite(input: {
     );
   }
 
-  const [createEventId, joinRulesEventId, powerLevelsEventId, senderMembershipEventId, latestEvent] =
-    await Promise.all([
-      getFederationStateEventId(input.env.DB, input.roomId, "m.room.create"),
-      getFederationStateEventId(input.env.DB, input.roomId, "m.room.join_rules"),
-      getFederationStateEventId(input.env.DB, input.roomId, "m.room.power_levels"),
-      getFederationSenderMembershipEventId(input.env.DB, input.roomId, validated.sender),
-      getFederationLatestEvent(input.env.DB, input.roomId),
-    ]);
+  const [
+    createEventId,
+    joinRulesEventId,
+    powerLevelsEventId,
+    senderMembershipEventId,
+    latestEvent,
+  ] = await Promise.all([
+    getFederationStateEventId(input.env.DB, input.roomId, "m.room.create"),
+    getFederationStateEventId(input.env.DB, input.roomId, "m.room.join_rules"),
+    getFederationStateEventId(input.env.DB, input.roomId, "m.room.power_levels"),
+    getFederationSenderMembershipEventId(input.env.DB, input.roomId, validated.sender),
+    getFederationLatestEvent(input.env.DB, input.roomId),
+  ]);
 
   const authEvents: EventId[] = [];
   for (const candidate of [
@@ -164,7 +173,9 @@ export async function exchangeFederationThirdPartyInvite(input: {
     prev_events: prevEvents,
   };
 
-  const eventIdHash = await sha256(JSON.stringify({ ...inviteEvent, origin: input.env.SERVER_NAME }));
+  const eventIdHash = await sha256(
+    JSON.stringify({ ...inviteEvent, origin: input.env.SERVER_NAME }),
+  );
   const eventId = validatedEventId ?? `$${eventIdHash}`;
 
   const signedEvent = await signJson(

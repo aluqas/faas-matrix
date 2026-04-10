@@ -7,10 +7,7 @@ import { InfraError } from "../../matrix/application/domain-error";
 
 export interface TypingRequestPorts {
   membership: {
-    isUserJoinedToRoom(
-      roomId: string,
-      userId: string,
-    ): Effect.Effect<boolean, InfraError>;
+    isUserJoinedToRoom(roomId: string, userId: string): Effect.Effect<boolean, InfraError>;
   };
   executor: {
     execute(input: TypingCommandInput): Effect.Effect<void, InfraError>;

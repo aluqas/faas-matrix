@@ -69,13 +69,16 @@ describe("federation query route boundary", () => {
   });
 
   it("returns bad_json for malformed event relationships bodies", async () => {
-    const response = await app.request("http://localhost/_matrix/federation/unstable/event_relationships", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
+    const response = await app.request(
+      "http://localhost/_matrix/federation/unstable/event_relationships",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ event_id: "invalid" }),
       },
-      body: JSON.stringify({ event_id: "invalid" }),
-    });
+    );
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({

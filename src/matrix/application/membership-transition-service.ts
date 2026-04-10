@@ -1,10 +1,7 @@
 import {
-  getInviteStrippedState,
-  getMembership,
-  getRoomState,
-  getStateEvent,
-  updateMembership,
-} from "../../infra/db/database";
+  loadMembershipTransitionContextFromRepository,
+  persistMembershipTransitionResult,
+} from "../../infra/repositories/membership-transition-repository";
 import type { Membership, PDU } from "../../shared/types";
 import { toEventId, toRoomId, toUserId } from "../../shared/utils/ids";
 import type { MembershipRecord } from "../../infra/repositories/interfaces";
@@ -212,42 +209,6 @@ export function toMembershipCommand(input: MembershipTransitionInput): Membershi
   };
 }
 
-async function upsertKnockRecord(
-  db: D1Database,
-  roomId: string,
-  userId: string,
-  event: PDU,
-): Promise<void> {
-  const user = await db
-    .prepare(`
-    SELECT user_id FROM users WHERE user_id = ?
-  `)
-    .bind(userId)
-    .first<{ user_id: string }>();
-  if (!user) {
-    return;
-  }
-
-  const content = event.content as { reason?: string } | undefined;
-  await db
-    .prepare(`
-    INSERT OR REPLACE INTO room_knocks (room_id, user_id, reason, event_id, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `)
-    .bind(roomId, userId, content?.reason ?? null, event.event_id, Date.now())
-    .run();
-}
-
-async function clearKnockRecord(db: D1Database, roomId: string, userId: string): Promise<void> {
-  await db
-    .prepare(`
-    DELETE FROM room_knocks
-    WHERE room_id = ? AND user_id = ?
-  `)
-    .bind(roomId, userId)
-    .run();
-}
-
 export class MemberTransitionService {
   evaluate(input: MembershipTransitionInput): MembershipTransitionResult {
     const command = toMembershipCommand(input);
@@ -335,50 +296,21 @@ export async function applyMembershipTransitionToDatabase(
     inviteStrippedState: context.inviteStrippedState,
   });
 
-  if (stateKey && result.membershipToPersist) {
-    const memberContent = input.event.content as { displayname?: string; avatar_url?: string };
-    await updateMembership(
-      db,
-      toRoomId(input.roomId),
-      toUserId(stateKey),
-      result.membershipToPersist,
-      toEventId(input.event.event_id),
-      memberContent.displayname,
-      memberContent.avatar_url,
-    );
-  }
-
-  if (stateKey && result.shouldUpsertRoomState) {
-    await db
-      .prepare(`
-      INSERT OR REPLACE INTO room_state (room_id, event_type, state_key, event_id)
-      VALUES (?, ?, ?, ?)
-    `)
-      .bind(input.roomId, input.event.type, stateKey, input.event.event_id)
-      .run();
-  }
-
-  if (stateKey && result.shouldUpsertKnockState) {
-    await upsertKnockRecord(db, input.roomId, stateKey, input.event);
-  } else if (stateKey && result.shouldClearKnockState) {
-    await clearKnockRecord(db, input.roomId, stateKey);
+  if (stateKey) {
+    await persistMembershipTransitionResult(db, {
+      roomId: input.roomId,
+      event: input.event,
+      result,
+    });
   }
 
   return result;
 }
 
-export async function loadMembershipTransitionContext(
+export function loadMembershipTransitionContext(
   db: D1Database,
   roomId: string,
   stateKey?: string,
 ): Promise<MembershipTransitionContext> {
-  const typedRoomId = toRoomId(roomId);
-  return {
-    currentMembership: stateKey ? await getMembership(db, typedRoomId, toUserId(stateKey)) : null,
-    currentMemberEvent: stateKey
-      ? await getStateEvent(db, typedRoomId, "m.room.member", stateKey)
-      : null,
-    roomState: await getRoomState(db, typedRoomId),
-    inviteStrippedState: await getInviteStrippedState(db, typedRoomId),
-  };
+  return loadMembershipTransitionContextFromRepository(db, roomId, stateKey);
 }

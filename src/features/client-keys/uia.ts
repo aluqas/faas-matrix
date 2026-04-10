@@ -1,6 +1,9 @@
 import { Errors, MatrixApiError } from "../../shared/utils/errors";
 import { toUserId } from "../../shared/utils/ids";
-import { getUserPasswordHash, hasIdentityProviderLink } from "../../infra/repositories/user-auth-repository";
+import {
+  getUserPasswordHash,
+  hasIdentityProviderLink,
+} from "../../infra/repositories/user-auth-repository";
 import type { TokenSubmitRequest, UIAAuthDict, UiaSessionData } from "../../shared/types/client";
 import { parseUiaSessionData } from "../../api/keys-contracts";
 

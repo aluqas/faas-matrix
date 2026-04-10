@@ -10,9 +10,7 @@ import { fetchFederationEventById } from "../../features/federation-events/event
 import { fetchFederationMissingEvents } from "../../features/federation-events/missing-events";
 import { fetchFederationState } from "../../features/federation-events/state-fetch";
 import { fetchFederationStateIds } from "../../features/federation-events/state-ids-fetch";
-import {
-  logFederationRouteWarning,
-} from "./shared";
+import { logFederationRouteWarning } from "./shared";
 import { getFederationRoomRecord } from "../../infra/repositories/federation-events-repository";
 
 const app = new Hono<AppEnv>();

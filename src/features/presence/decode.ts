@@ -44,11 +44,7 @@ export function decodeSetPresenceStatusInput(input: {
     }
 
     const rawPresence = input.body["presence"];
-    if (
-      rawPresence !== "online" &&
-      rawPresence !== "offline" &&
-      rawPresence !== "unavailable"
-    ) {
+    if (rawPresence !== "online" && rawPresence !== "offline" && rawPresence !== "unavailable") {
       return yield* Effect.fail(
         typeof rawPresence === "string"
           ? Errors.invalidParam(
@@ -61,9 +57,7 @@ export function decodeSetPresenceStatusInput(input: {
 
     const rawStatusMessage = input.body["status_msg"];
     if (rawStatusMessage !== undefined && typeof rawStatusMessage !== "string") {
-      return yield* Effect.fail(
-        Errors.invalidParam("status_msg", "status_msg must be a string"),
-      );
+      return yield* Effect.fail(Errors.invalidParam("status_msg", "status_msg must be a string"));
     }
 
     return {

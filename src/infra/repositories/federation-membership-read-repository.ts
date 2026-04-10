@@ -188,10 +188,7 @@ export async function federationEventExists(db: D1Database, eventId: string): Pr
   return row !== null;
 }
 
-export async function federationLocalUserExists(
-  db: D1Database,
-  userId: string,
-): Promise<boolean> {
+export async function federationLocalUserExists(db: D1Database, userId: string): Promise<boolean> {
   const row = await executeKyselyQueryFirst<{ user_id: string }>(
     db,
     asCompiledQuery(sql<{ user_id: string }>`

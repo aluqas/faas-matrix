@@ -82,7 +82,10 @@ export interface RelationsReaderService {
     automaticEventId: string,
     threadRootId: string,
   ): Effect.Effect<number | null, InfraError>;
-  getLatestThreadStreamOrdering(roomId: RoomId, threadRootId: string): Effect.Effect<number, InfraError>;
+  getLatestThreadStreamOrdering(
+    roomId: RoomId,
+    threadRootId: string,
+  ): Effect.Effect<number, InfraError>;
 }
 
 export interface RelationsGatewayService {
@@ -117,9 +120,7 @@ function requireMembershipEffect(
   allowed: readonly Membership[],
   message: string,
 ): Effect.Effect<void, MatrixApiError> {
-  return hasMembership(membership, allowed)
-    ? Effect.void
-    : Effect.fail(Errors.forbidden(message));
+  return hasMembership(membership, allowed) ? Effect.void : Effect.fail(Errors.forbidden(message));
 }
 
 export function queryEventRelationshipsEffect(
@@ -184,7 +185,10 @@ export function queryEventRelationshipsEffect(
 export function listRelationEventsEffect(
   ports: RelationsQueryPorts,
   input: ListRelationsInput,
-): Effect.Effect<{ chunk: ClientRelationEvent[]; nextBatch?: string }, MatrixApiError | InfraError> {
+): Effect.Effect<
+  { chunk: ClientRelationEvent[]; nextBatch?: string },
+  MatrixApiError | InfraError
+> {
   return Effect.gen(function* () {
     const membership = yield* ports.membership.getMembership(input.roomId, input.authUserId);
     yield* requireMembershipEffect(membership, ["join", "leave"], "Not a member of this room");
@@ -252,11 +256,12 @@ export function putThreadSubscriptionEffect(
         );
       }
 
-      const automaticEventStreamOrdering = yield* ports.relationsReader.getThreadReplyStreamOrdering(
-        input.roomId,
-        input.automaticEventId,
-        input.threadRootId,
-      );
+      const automaticEventStreamOrdering =
+        yield* ports.relationsReader.getThreadReplyStreamOrdering(
+          input.roomId,
+          input.automaticEventId,
+          input.threadRootId,
+        );
       if (automaticEventStreamOrdering === null) {
         return yield* Effect.fail(
           customMatrixError(
@@ -293,7 +298,11 @@ export function putThreadSubscriptionEffect(
       };
     }
 
-    yield* ports.relationsReader.putThreadSubscriptionContent(input.authUserId, input.roomId, content);
+    yield* ports.relationsReader.putThreadSubscriptionContent(
+      input.authUserId,
+      input.roomId,
+      content,
+    );
   });
 }
 
@@ -348,6 +357,10 @@ export function deleteThreadSubscriptionEffect(
       unsubscribed_after: latestThreadStreamOrdering,
     };
 
-    yield* ports.relationsReader.putThreadSubscriptionContent(input.authUserId, input.roomId, content);
+    yield* ports.relationsReader.putThreadSubscriptionContent(
+      input.authUserId,
+      input.roomId,
+      content,
+    );
   });
 }

@@ -8,10 +8,7 @@ import { Errors, MatrixApiError } from "../shared/utils/errors";
 import { requireAuth } from "../infra/middleware/auth";
 import { runClientEffect } from "../matrix/application/runtime/effect-runtime";
 import { sendReceiptEffect, setReadMarkersEffect } from "../features/receipts/command";
-import {
-  decodeSendReceiptInput,
-  decodeSetReadMarkersInput,
-} from "../features/receipts/decode";
+import { decodeSendReceiptInput, decodeSetReadMarkersInput } from "../features/receipts/decode";
 import { createReceiptsCommandPorts } from "../features/receipts/effect-adapters";
 
 const app = new Hono<AppEnv>();
@@ -68,9 +65,7 @@ app.post(
         body: body.body,
         now: Date.now(),
       }).pipe(
-        Effect.flatMap((input) =>
-          sendReceiptEffect(createReceiptsCommandPorts(c.env), input),
-        ),
+        Effect.flatMap((input) => sendReceiptEffect(createReceiptsCommandPorts(c.env), input)),
       ),
       () => c.json({}),
     );
@@ -89,9 +84,7 @@ app.post("/_matrix/client/v3/rooms/:roomId/read_markers", requireAuth(), async (
       roomId: decodeURIComponent(c.req.param("roomId")),
       body: body.body,
     }).pipe(
-      Effect.flatMap((input) =>
-        setReadMarkersEffect(createReceiptsCommandPorts(c.env), input),
-      ),
+      Effect.flatMap((input) => setReadMarkersEffect(createReceiptsCommandPorts(c.env), input)),
     ),
     () => c.json({}),
   );

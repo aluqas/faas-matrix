@@ -203,8 +203,7 @@ export function decodePutThreadSubscriptionInput(input: {
       threadRootId: input.threadRootId,
     });
 
-    const requestedAutomaticEventId =
-      isRecord(input.body) ? input.body["automatic"] : undefined;
+    const requestedAutomaticEventId = isRecord(input.body) ? input.body["automatic"] : undefined;
     if (requestedAutomaticEventId !== undefined && typeof requestedAutomaticEventId !== "string") {
       return yield* Effect.fail(Errors.invalidParam("automatic", "Invalid automatic event ID"));
     }

@@ -124,7 +124,9 @@ async function handleSendJoin(
       origin,
       omitMembers,
       version,
-      waitUntil: (promise) =>{  c.executionCtx.waitUntil(promise); },
+      waitUntil: (promise) => {
+        c.executionCtx.waitUntil(promise);
+      },
       buildPartialResponse: buildPartialSendJoinResponse,
     });
   } catch (error) {
@@ -200,7 +202,9 @@ async function handleSendLeave(
       body,
       origin,
       version,
-      waitUntil: (promise) =>{  c.executionCtx.waitUntil(promise); },
+      waitUntil: (promise) => {
+        c.executionCtx.waitUntil(promise);
+      },
       envBindings: c.env,
     });
   } catch (error) {
@@ -307,7 +311,9 @@ app.put("/_matrix/federation/v1/send_knock/:roomId/:eventId", async (c) => {
       eventId,
       body,
       origin,
-      waitUntil: (promise) =>{  c.executionCtx.waitUntil(promise); },
+      waitUntil: (promise) => {
+        c.executionCtx.waitUntil(promise);
+      },
       envBindings: c.env,
     });
   } catch (error) {

@@ -8,7 +8,11 @@ import {
   writePresenceToCache,
 } from "../../infra/repositories/presence-repository";
 import { userExists } from "../../infra/repositories/user-auth-repository";
-import { fromInfraNullable, fromInfraPromise, fromInfraVoid } from "../../shared/effect/infra-effect";
+import {
+  fromInfraNullable,
+  fromInfraPromise,
+  fromInfraVoid,
+} from "../../shared/effect/infra-effect";
 import { getSharedServersInRoomsWithUserIncludingPartialState } from "../partial-state/shared-servers";
 import { queueFederationEdu } from "../shared/federation-edu-queue";
 import { executePresenceCommand } from "./command";
@@ -58,8 +62,7 @@ function createAsyncPresenceCommandPorts(
     },
     resolveInterestedServers: (userId) =>
       getSharedServersInRoomsWithUserIncludingPartialState(env.DB, env.CACHE, userId),
-    queueEdu: (destination, content) =>
-      queueFederationEdu(env, destination, "m.presence", content),
+    queueEdu: (destination, content) => queueFederationEdu(env, destination, "m.presence", content),
     debugEnabled,
   };
 }
@@ -89,13 +92,10 @@ export function createPresenceQueryPorts(
     },
     presenceStore: {
       getPresence: (userId) =>
-        fromInfraNullable(
-          async () => {
-            const record = await findPresenceByUserId(env.DB, userId, env.CACHE);
-            return record ? toPresenceStatusResult(record) : null;
-          },
-          "Failed to load presence",
-        ),
+        fromInfraNullable(async () => {
+          const record = await findPresenceByUserId(env.DB, userId, env.CACHE);
+          return record ? toPresenceStatusResult(record) : null;
+        }, "Failed to load presence"),
     },
   };
 }

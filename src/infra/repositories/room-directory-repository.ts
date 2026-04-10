@@ -12,10 +12,7 @@ interface RoomDirectoryDatabase {
 
 const qb = createKyselyBuilder<RoomDirectoryDatabase>();
 
-export async function findRoomIdByAlias(
-  db: D1Database,
-  alias: string,
-): Promise<RoomId | null> {
+export async function findRoomIdByAlias(db: D1Database, alias: string): Promise<RoomId | null> {
   const row = await executeKyselyQueryFirst<Pick<RoomAliasRow, "room_id">>(
     db,
     qb.selectFrom("room_aliases").select("room_id").where("alias", "=", alias),

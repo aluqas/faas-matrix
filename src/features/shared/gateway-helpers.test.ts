@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  fetchDurableObjectJson,
-  postDurableObjectVoid,
-} from "./do-gateway";
+import { fetchDurableObjectJson, postDurableObjectVoid } from "./do-gateway";
 import {
   deleteKvValue,
   getKvJsonValue,
@@ -11,7 +8,9 @@ import {
   putKvTextValue,
 } from "./kv-gateway";
 
-function createDurableObjectEnv(responseFactory: (request: Request) => Response | Promise<Response>) {
+function createDurableObjectEnv(
+  responseFactory: (request: Request) => Response | Promise<Response>,
+) {
   return {
     USER_KEYS: {
       idFromName: (name: string) => name,
@@ -43,8 +42,8 @@ function createKvNamespace() {
 
 describe("shared gateway helpers", () => {
   it("wraps durable object fetch success and failure", async () => {
-    const okEnv = createDurableObjectEnv(async () =>
-      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    const okEnv = createDurableObjectEnv(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
     );
     await expect(
       fetchDurableObjectJson(
@@ -56,9 +55,7 @@ describe("shared gateway helpers", () => {
       ),
     ).resolves.toEqual({ ok: true });
 
-    const failingEnv = createDurableObjectEnv(async () =>
-      new Response("boom", { status: 503 }),
-    );
+    const failingEnv = createDurableObjectEnv(async () => new Response("boom", { status: 503 }));
     await expect(
       postDurableObjectVoid(
         failingEnv,

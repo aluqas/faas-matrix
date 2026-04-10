@@ -1,7 +1,10 @@
 import type { DeviceKeysPayload } from "../../shared/types/client";
 import { parseDeviceKeysPayload } from "../../api/keys-contracts";
 
-function getUserKeysDO(env: Pick<import("../../shared/types").Env, "USER_KEYS">, userId: string): DurableObjectStub {
+function getUserKeysDO(
+  env: Pick<import("../../shared/types").Env, "USER_KEYS">,
+  userId: string,
+): DurableObjectStub {
   const id = env.USER_KEYS.idFromName(userId);
   return env.USER_KEYS.get(id);
 }

@@ -51,8 +51,16 @@ export function putGlobalAccountDataEffect(
   input: PutGlobalAccountDataInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify other users account data");
-    yield* ports.accountDataWriter.putGlobalAccountData(input.targetUserId, input.eventType, input.content);
+    yield* requireOwnUser(
+      input.authUserId,
+      input.targetUserId,
+      "Cannot modify other users account data",
+    );
+    yield* ports.accountDataWriter.putGlobalAccountData(
+      input.targetUserId,
+      input.eventType,
+      input.content,
+    );
     yield* ports.accountDataNotifier.notifyAccountDataChange({
       userId: input.targetUserId,
       eventType: input.eventType,
@@ -74,7 +82,11 @@ export function deleteGlobalAccountDataEffect(
   input: DeleteGlobalAccountDataInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify other users account data");
+    yield* requireOwnUser(
+      input.authUserId,
+      input.targetUserId,
+      "Cannot modify other users account data",
+    );
     yield* ports.accountDataWriter.deleteGlobalAccountData(input.targetUserId, input.eventType);
     yield* ports.accountDataNotifier.notifyAccountDataChange({
       userId: input.targetUserId,
@@ -88,7 +100,11 @@ export function putRoomAccountDataEffect(
   input: PutRoomAccountDataInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify other users account data");
+    yield* requireOwnUser(
+      input.authUserId,
+      input.targetUserId,
+      "Cannot modify other users account data",
+    );
     yield* requireJoinedRoom(
       (userId, roomId) => ports.membership.isUserJoinedToRoom(userId, roomId),
       input.targetUserId,
@@ -122,13 +138,21 @@ export function deleteRoomAccountDataEffect(
   input: DeleteRoomAccountDataInput,
 ): Effect.Effect<void, MatrixApiError | InfraError> {
   return Effect.gen(function* () {
-    yield* requireOwnUser(input.authUserId, input.targetUserId, "Cannot modify other users account data");
+    yield* requireOwnUser(
+      input.authUserId,
+      input.targetUserId,
+      "Cannot modify other users account data",
+    );
     yield* requireJoinedRoom(
       (userId, roomId) => ports.membership.isUserJoinedToRoom(userId, roomId),
       input.targetUserId,
       input.roomId,
     );
-    yield* ports.accountDataWriter.deleteRoomAccountData(input.targetUserId, input.roomId, input.eventType);
+    yield* ports.accountDataWriter.deleteRoomAccountData(
+      input.targetUserId,
+      input.roomId,
+      input.eventType,
+    );
     yield* ports.accountDataNotifier.notifyAccountDataChange({
       userId: input.targetUserId,
       roomId: input.roomId,

@@ -1,5 +1,10 @@
 import { sql, type RawBuilder } from "kysely";
-import { createKyselyBuilder, executeKyselyQuery, executeKyselyQueryFirst, type CompiledQuery } from "../../infra/db/kysely";
+import {
+  createKyselyBuilder,
+  executeKyselyQuery,
+  executeKyselyQueryFirst,
+  type CompiledQuery,
+} from "../../infra/db/kysely";
 import type { MatrixSignatures, PDU, StoredPduRow } from "../../shared/types";
 import { toEventId } from "../../shared/utils/ids";
 
@@ -190,7 +195,10 @@ export function getMinimumDepthForEvents(
     asCompiledQuery(sql<{ min_depth: number | null }>`
       SELECT MIN(depth) AS min_depth
       FROM events
-      WHERE event_id IN (${sql.join(eventIds.map((eventId) => sql`${eventId}`), sql`, `)})
+      WHERE event_id IN (${sql.join(
+        eventIds.map((eventId) => sql`${eventId}`),
+        sql`, `,
+      )})
     `),
   ).then((row) => row?.min_depth ?? null);
 }

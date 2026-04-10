@@ -24,7 +24,11 @@ function toServerKeyNotFoundError(keyId?: string | null): MatrixApiError {
 
 function buildLocalServerKeysResponse(
   serverName: string,
-  keys: Awaited<ReturnType<FederationQueryPorts["serverKeysRepository"]["getCurrentServerKeys"]>> extends Effect.Effect<infer A, any> ? A : never,
+  keys: Awaited<
+    ReturnType<FederationQueryPorts["serverKeysRepository"]["getCurrentServerKeys"]>
+  > extends Effect.Effect<infer A, any>
+    ? A
+    : never,
 ): ServerKeyResponse | null {
   if (keys.length === 0) {
     return null;

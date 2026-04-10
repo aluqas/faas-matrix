@@ -11,7 +11,11 @@ export async function fetchFederationBackfill(input: {
   roomId: string;
   limit: number;
   startEventIds: EventId[];
-}): Promise<{ origin: string; origin_server_ts: number; pdus: ReturnType<typeof toFederationPduFromRow>[] } | null> {
+}): Promise<{
+  origin: string;
+  origin_server_ts: number;
+  pdus: ReturnType<typeof toFederationPduFromRow>[];
+} | null> {
   const room = await getFederationRoomRecord(input.env.DB, input.roomId);
   if (!room) {
     return null;

@@ -9,9 +9,7 @@ export function requireOwnUser(
   targetUserId: UserId,
   errorMessage: string,
 ): Effect.Effect<void, MatrixApiError> {
-  return authUserId === targetUserId
-    ? Effect.void
-    : Effect.fail(Errors.forbidden(errorMessage));
+  return authUserId === targetUserId ? Effect.void : Effect.fail(Errors.forbidden(errorMessage));
 }
 
 export function requireLocalUser(

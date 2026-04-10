@@ -114,13 +114,12 @@ export async function getNextNamedStreamPosition(
   return upsertResult?.position ?? 1;
 }
 
-export async function listUserDeviceIds(
-  db: D1Database,
-  userId: UserId,
-): Promise<string[]> {
+export async function listUserDeviceIds(db: D1Database, userId: UserId): Promise<string[]> {
   const rows = await executeKyselyQuery<Pick<DeviceRow, "device_id">>(
     db,
-    qb.selectFrom("devices").select("device_id").where("user_id", "=", userId),
+    asCompiledQuery(
+      sql<Pick<DeviceRow, "device_id">>`SELECT device_id FROM devices WHERE user_id = ${userId}`,
+    ),
   );
   return rows.map((row) => row.device_id);
 }
@@ -139,22 +138,31 @@ export async function insertToDeviceMessage(
 ): Promise<void> {
   await executeKyselyRun(
     db,
-    qb
-      .insertInto("to_device_messages")
-      .values({
-        recipient_user_id: input.recipientUserId,
-        recipient_device_id: input.recipientDeviceId,
-        sender_user_id: input.senderUserId,
-        event_type: input.eventType,
-        content: JSON.stringify(input.content),
-        message_id: input.messageId,
-        stream_position: input.streamPosition,
-        delivered: 0,
-        created_at: Date.now(),
-      })
-      .onConflict((oc) =>
-        oc.columns(["recipient_user_id", "recipient_device_id", "message_id"]).doNothing(),
-      ),
+    asCompiledQuery(sql`
+      INSERT INTO to_device_messages (
+        recipient_user_id,
+        recipient_device_id,
+        sender_user_id,
+        event_type,
+        content,
+        message_id,
+        stream_position,
+        delivered,
+        created_at
+      )
+      VALUES (
+        ${input.recipientUserId},
+        ${input.recipientDeviceId},
+        ${input.senderUserId},
+        ${input.eventType},
+        ${JSON.stringify(input.content)},
+        ${input.messageId},
+        ${input.streamPosition},
+        0,
+        ${Date.now()}
+      )
+      ON CONFLICT (recipient_user_id, recipient_device_id, message_id) DO NOTHING
+    `),
   );
 }
 
@@ -245,9 +253,7 @@ export async function loadToDeviceMessagesBatch(
 
   const maxPos = await executeKyselyQueryFirst<{ max_pos: number | null }>(
     db,
-    qb
-      .selectFrom("to_device_messages")
-      .select((eb) => eb.fn.max("stream_position").as("max_pos")),
+    qb.selectFrom("to_device_messages").select((eb) => eb.fn.max("stream_position").as("max_pos")),
   );
 
   return {
