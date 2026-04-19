@@ -1,23 +1,66 @@
 import { Effect } from "effect";
 import type { TypingCommandInput, TypingCommandPorts } from "./contracts";
-import { runClientEffect } from "../../matrix/application/runtime/effect-runtime";
 import { withLogContext } from "../../matrix/application/logging";
 import { Errors, type MatrixApiError } from "../../shared/utils/errors";
 import { InfraError } from "../../matrix/application/domain-error";
+import { fromInfraPromise, fromInfraVoid } from "../../shared/effect/infra-effect";
+import type { TypingEduContent } from "./contracts";
 
-export interface TypingRequestPorts {
-  membership: {
-    isUserJoinedToRoom(roomId: string, userId: string): Effect.Effect<boolean, InfraError>;
+export interface TypingCommandEffectPorts {
+  debugEnabled?: boolean | undefined;
+  typingState: {
+    setRoomTyping(
+      roomId: string,
+      userId: string,
+      typing: boolean,
+      timeoutMs?: number,
+    ): Effect.Effect<void, InfraError>;
   };
-  executor: {
-    execute(input: TypingCommandInput): Effect.Effect<void, InfraError>;
+  interestedServers: {
+    listInterestedServers(roomId: string): Effect.Effect<string[], InfraError>;
+  };
+  federation: {
+    queueTypingEdu(destination: string, content: TypingEduContent): Effect.Effect<void, InfraError>;
   };
 }
 
-export async function executeTypingCommand(
+export interface TypingRequestPorts extends TypingCommandEffectPorts {
+  membership: {
+    isUserJoinedToRoom(roomId: string, userId: string): Effect.Effect<boolean, InfraError>;
+  };
+}
+
+function createCompatibilityTypingPorts(ports: TypingCommandPorts): TypingCommandEffectPorts {
+  return {
+    debugEnabled: ports.debugEnabled,
+    typingState: {
+      setRoomTyping: (roomId, userId, typing, timeoutMs) =>
+        fromInfraVoid(
+          () => Promise.resolve(ports.setRoomTyping(roomId, userId, typing, timeoutMs)),
+          "Failed to update typing state",
+        ),
+    },
+    interestedServers: {
+      listInterestedServers: (roomId) =>
+        fromInfraPromise(
+          () => Promise.resolve(ports.resolveInterestedServers(roomId)),
+          "Failed to resolve typing destinations",
+        ),
+    },
+    federation: {
+      queueTypingEdu: (destination, content) =>
+        fromInfraVoid(
+          () => Promise.resolve(ports.queueEdu(destination, content)),
+          "Failed to queue typing EDU",
+        ),
+    },
+  };
+}
+
+export function executeTypingCommandEffect(
   input: TypingCommandInput,
-  ports: TypingCommandPorts,
-): Promise<void> {
+  ports: TypingCommandEffectPorts,
+): Effect.Effect<void, InfraError> {
   const logger = withLogContext({
     component: "typing",
     operation: "command",
@@ -26,39 +69,54 @@ export async function executeTypingCommand(
     debugEnabled: ports.debugEnabled,
   });
 
-  await runClientEffect(
-    logger.info("typing.command.start", {
+  return Effect.gen(function* () {
+    yield* logger.info("typing.command.start", {
       typing: input.typing,
       timeout_ms: input.timeoutMs,
-    }),
-  );
+    });
 
-  await ports.setRoomTyping(input.roomId, input.userId, input.typing, input.timeoutMs);
+    yield* ports.typingState.setRoomTyping(
+      input.roomId,
+      input.userId,
+      input.typing,
+      input.timeoutMs,
+    );
 
-  const destinations = [...new Set(await ports.resolveInterestedServers(input.roomId))];
-  await runClientEffect(
-    logger.debug("typing.command.resolve_destinations", {
+    const destinations = [
+      ...new Set(yield* ports.interestedServers.listInterestedServers(input.roomId)),
+    ];
+    yield* logger.debug("typing.command.resolve_destinations", {
       destination_count: destinations.length,
       destinations,
-    }),
-  );
-  if (destinations.length === 0) {
-    await runClientEffect(logger.info("typing.command.success", { destination_count: 0 }));
-    return;
-  }
+    });
+    if (destinations.length === 0) {
+      yield* logger.info("typing.command.success", { destination_count: 0 });
+      return;
+    }
 
-  const content = {
-    room_id: input.roomId,
-    user_id: input.userId,
-    typing: input.typing,
-    timeout: input.timeoutMs,
-  };
+    const content: TypingEduContent = {
+      room_id: input.roomId,
+      user_id: input.userId,
+      typing: input.typing,
+      timeout: input.timeoutMs,
+    };
 
-  await Promise.all(destinations.map((destination) => ports.queueEdu(destination, content)));
-  await runClientEffect(
-    logger.info("typing.command.success", {
+    for (const destination of destinations) {
+      yield* ports.federation.queueTypingEdu(destination, content);
+    }
+
+    yield* logger.info("typing.command.success", {
       destination_count: destinations.length,
-    }),
+    });
+  });
+}
+
+export function executeTypingCommand(
+  input: TypingCommandInput,
+  ports: TypingCommandPorts,
+): Promise<void> {
+  return Effect.runPromise(
+    executeTypingCommandEffect(input, createCompatibilityTypingPorts(ports)),
   );
 }
 
@@ -72,6 +130,6 @@ export function setTypingEffect(
       return yield* Effect.fail(Errors.forbidden("Not a member of this room"));
     }
 
-    yield* ports.executor.execute(input);
+    yield* executeTypingCommandEffect(input, ports);
   });
 }

@@ -1,28 +1,24 @@
-import {
-  clearDeferredAuthMarkerForEvent,
-  deleteRoomStateEvent,
-  getDeferredPartialStateAuthEventsForRoom,
-  getEvent,
-  getRoomState,
-  rejectProcessedPdu,
-  setRoomStateEvent,
-  storeEvent,
-  updateMembership,
-} from "../../../infra/db/database";
+import { Effect } from "effect";
 import { checkEventAuth } from "../../../infra/db/event-auth";
 import {
+  clearDeferredFederationAuthMarker,
+  deleteFederatedRoomState,
   ensureFederatedRoomStubRecord,
   federationEventExists,
-  getEffectiveMembershipForRealtimeUser,
+  getDeferredFederationAuthEvents,
+  getFederationRoomState,
+  getFederationStoredEvent,
   getFederationRoomVersion,
   listFederationMembershipStatePointers,
   loadFederationStateBundleFromRepository,
   persistInviteStrippedStateRecords,
+  rejectDeferredFederationAuthEvent,
+  restoreFederationMembershipState,
+  storeFederationEvent,
   upsertFederatedRoomState,
 } from "../../../infra/repositories/federation-state-repository";
 import type { Membership, PDU } from "../../../shared/types";
 import { toEventId, toRoomId, toUserId } from "../../../shared/utils/ids";
-import { extractServerNameFromMatrixId } from "../../../shared/utils/matrix-ids";
 import type { FederationRepository } from "../../../infra/repositories/interfaces";
 import type { RealtimeCapability } from "../../../shared/runtime/runtime-capabilities";
 import {
@@ -30,15 +26,19 @@ import {
   loadMembershipTransitionContext,
   type MembershipTransitionSource,
 } from "../membership-transition-service";
+import type { InfraError } from "../domain-error";
 import { EventQueryService, type MissingEventsQuery } from "./event-query-service";
 import { tryValidateIncomingPdu } from "../pdu-validator";
-import { ingestPresenceEdu } from "../../../features/presence/ingest";
+import { ingestPresenceEduEffect } from "../../../features/presence/ingest";
 import type { PresenceEduContent } from "../../../features/presence/contracts";
-import { getPartialStateJoinForRoom } from "../../../features/partial-state/tracker";
-import { ingestTypingEdu } from "../../../features/typing/ingest";
+import { createFederationTypingIngestPorts } from "../../../features/typing/effect-adapters";
+import { ingestTypingEduEffect } from "../../../features/typing/ingest";
 import type { TypingEduContent } from "../../../features/typing/contracts";
+import { createFederationReceiptIngestPorts } from "../../../features/receipts/effect-adapters";
+import { ingestReceiptEduEffect } from "../../../features/receipts/ingest";
 import { ingestDirectToDeviceEdu } from "../../../features/to-device/ingest";
 import type { DirectToDeviceEduContent } from "../../../features/to-device/contracts";
+import { fromInfraPromise, fromInfraVoid } from "../../../shared/effect/infra-effect";
 import {
   getMembershipEventMembership,
   getPartialStateDeferredPreviousEventId,
@@ -60,6 +60,16 @@ export function loadFederationStateBundle(
   return loadFederationStateBundleFromRepository(db, roomId);
 }
 
+export function loadFederationStateBundleEffect(
+  db: D1Database,
+  roomId: string,
+): Effect.Effect<FederationStateBundle, InfraError> {
+  return fromInfraPromise(
+    () => loadFederationStateBundleFromRepository(db, roomId),
+    "Failed to load federation state bundle",
+  );
+}
+
 export async function persistFederationMembershipEvent(
   db: D1Database,
   input: {
@@ -72,7 +82,7 @@ export async function persistFederationMembershipEvent(
   const context = await loadMembershipTransitionContext(db, input.roomId, input.event.state_key);
 
   if (!existing) {
-    await storeEvent(db, input.event);
+    await storeFederationEvent(db, input.event);
   }
 
   if (!shouldApplyMembershipStateSnapshot(context.currentMemberEvent, input.event, input.source)) {
@@ -85,6 +95,20 @@ export async function persistFederationMembershipEvent(
     source: input.source ?? "federation",
     context,
   });
+}
+
+export function persistFederationMembershipEventEffect(
+  db: D1Database,
+  input: {
+    roomId: string;
+    event: PDU;
+    source?: MembershipTransitionSource;
+  },
+): Effect.Effect<void, InfraError> {
+  return fromInfraVoid(
+    () => persistFederationMembershipEvent(db, input),
+    "Failed to persist federation membership event",
+  );
 }
 
 export function shouldApplyMembershipStateSnapshot(
@@ -138,7 +162,7 @@ export async function restoreDeferredPartialStateMemberships(
     if (!currentEventId) {
       continue;
     }
-    const currentEvent = await getEvent(db, currentEventId);
+    const currentEvent = await getFederationStoredEvent(db, currentEventId);
     if (!currentEvent) {
       continue;
     }
@@ -157,7 +181,7 @@ export async function restoreDeferredPartialStateMemberships(
     if (!typedPreviousEventId) {
       continue;
     }
-    const previousEvent = await getEvent(db, typedPreviousEventId);
+    const previousEvent = await getFederationStoredEvent(db, typedPreviousEventId);
     if (
       !previousEvent ||
       previousEvent.type !== "m.room.member" ||
@@ -166,21 +190,31 @@ export async function restoreDeferredPartialStateMemberships(
       continue;
     }
 
-    const previousContent = previousEvent.content as { displayname?: string; avatar_url?: string };
-    await upsertFederatedRoomState(db, roomId, "m.room.member", row.state_key, previousEventId);
-    await updateMembership(
-      db,
-      toRoomId(roomId),
-      toUserId(row.state_key),
-      previousMembership,
-      typedPreviousEventId,
-      previousContent.displayname,
-      previousContent.avatar_url,
-    );
+    const typedRoomId = toRoomId(roomId);
+    const typedUserId = toUserId(row.state_key);
+    if (!typedRoomId || !typedUserId) {
+      continue;
+    }
+    await restoreFederationMembershipState(db, {
+      roomId: typedRoomId,
+      userId: typedUserId,
+      membership: previousMembership,
+      event: previousEvent,
+    });
     restored += 1;
   }
 
   return restored;
+}
+
+export function restoreDeferredPartialStateMembershipsEffect(
+  db: D1Database,
+  roomId: string,
+): Effect.Effect<number, InfraError> {
+  return fromInfraPromise(
+    () => restoreDeferredPartialStateMemberships(db, roomId),
+    "Failed to restore deferred partial-state memberships",
+  );
 }
 
 export async function reevaluateDeferredPartialStateAuthEvents(
@@ -188,12 +222,16 @@ export async function reevaluateDeferredPartialStateAuthEvents(
   roomId: string,
 ): Promise<void> {
   const typedRoomId = toRoomId(roomId);
-  const deferredEvents = await getDeferredPartialStateAuthEventsForRoom(db, typedRoomId);
+  if (!typedRoomId) {
+    return;
+  }
+
+  const deferredEvents = await getDeferredFederationAuthEvents(db, typedRoomId);
   if (deferredEvents.length === 0) return;
 
   const roomVersion = await getFederationRoomVersion(db, roomId);
 
-  const currentState = await getRoomState(db, typedRoomId);
+  const currentState = await getFederationRoomState(db, typedRoomId);
   const currentStateMap = new Map(
     currentState.map((e) => [`${e.type}\0${e.state_key ?? ""}`, e.event_id]),
   );
@@ -205,40 +243,53 @@ export async function reevaluateDeferredPartialStateAuthEvents(
       event.state_key !== undefined ? currentStateMap.get(stateMapKey) : undefined;
 
     if (authResult.allowed) {
-      await clearDeferredAuthMarkerForEvent(db, toEventId(event.event_id));
+      const typedEventId = toEventId(event.event_id);
+      if (!typedEventId) {
+        continue;
+      }
+      await clearDeferredFederationAuthMarker(db, typedEventId);
       if (event.state_key !== undefined && currentStateEventId !== event.event_id) {
-        await setRoomStateEvent(
-          db,
-          typedRoomId,
-          event.type,
-          event.state_key,
-          toEventId(event.event_id),
-        );
+        await upsertFederatedRoomState(db, typedRoomId, event.type, event.state_key, typedEventId);
       }
     } else {
-      await rejectProcessedPdu(
+      const typedEventId = toEventId(event.event_id);
+      if (!typedEventId) {
+        continue;
+      }
+      await rejectDeferredFederationAuthEvent(
         db,
-        toEventId(event.event_id),
+        typedEventId,
         authResult.error ?? "Auth failed after partial-state completion",
       );
       if (event.state_key !== undefined) {
         if (currentStateEventId === event.event_id) {
           const previousEventId = getPartialStateDeferredPreviousEventId(event);
-          if (previousEventId) {
-            await setRoomStateEvent(
+          const typedPreviousEventId = previousEventId ? toEventId(previousEventId) : null;
+          if (typedPreviousEventId) {
+            await upsertFederatedRoomState(
               db,
               typedRoomId,
               event.type,
               event.state_key,
-              toEventId(previousEventId),
+              typedPreviousEventId,
             );
           } else {
-            await deleteRoomStateEvent(db, typedRoomId, event.type, event.state_key);
+            await deleteFederatedRoomState(db, typedRoomId, event.type, event.state_key);
           }
         }
       }
     }
   }
+}
+
+export function reevaluateDeferredPartialStateAuthEventsEffect(
+  db: D1Database,
+  roomId: string,
+): Effect.Effect<void, InfraError> {
+  return fromInfraVoid(
+    () => reevaluateDeferredPartialStateAuthEvents(db, roomId),
+    "Failed to reevaluate deferred partial-state auth events",
+  );
 }
 
 export async function persistInviteStrippedState(
@@ -289,7 +340,7 @@ export async function persistFederationStateSnapshot(
       room_id: event.room_id || input.roomId,
     };
     if (!(await federationEventExists(db, normalizedEvent.event_id))) {
-      await storeEvent(db, normalizedEvent, { skipRoomState: true });
+      await storeFederationEvent(db, normalizedEvent, { skipRoomState: true });
     }
   }
 
@@ -314,11 +365,27 @@ export async function persistFederationStateSnapshot(
     }
 
     if (!(await federationEventExists(db, normalizedEvent.event_id))) {
-      await storeEvent(db, normalizedEvent);
+      await storeFederationEvent(db, normalizedEvent);
     }
 
     await upsertRoomState(db, input.roomId, normalizedEvent);
   }
+}
+
+export function persistFederationStateSnapshotEffect(
+  db: D1Database,
+  input: {
+    roomId: string;
+    roomVersion: string;
+    stateEvents: unknown[];
+    authChain: unknown[];
+    source?: MembershipTransitionSource;
+  },
+): Effect.Effect<void, InfraError> {
+  return fromInfraVoid(
+    () => persistFederationStateSnapshot(db, input),
+    "Failed to persist federation state snapshot",
+  );
 }
 
 const eventQueryService = new EventQueryService();
@@ -335,7 +402,30 @@ export async function handleFederationPresenceEdu(
   now: number,
   content: PresenceEduContent,
 ): Promise<void> {
-  await ingestPresenceEdu(repository, now, content);
+  await Effect.runPromise(
+    ingestPresenceEduEffect(
+      {
+        presenceStore: {
+          upsertPresence: (userId, presence, statusMessage, lastActiveTs, currentlyActive) =>
+            fromInfraVoid(
+              () =>
+                Promise.resolve(
+                  repository.upsertPresence(
+                    userId,
+                    presence,
+                    statusMessage,
+                    lastActiveTs,
+                    currentlyActive,
+                  ),
+                ),
+              "Failed to apply presence EDU",
+            ),
+        },
+      },
+      now,
+      content,
+    ),
+  );
 }
 
 export async function handleFederationDeviceListEdu(
@@ -365,30 +455,17 @@ export async function handleFederationTypingEdu(
   cache: KVNamespace | undefined,
   content: TypingEduContent,
 ): Promise<void> {
-  if (!realtime.setRoomTyping) {
-    return;
-  }
-
-  await ingestTypingEdu(origin, content, {
-    getMembership(roomId: string, userId: string) {
-      return getEffectiveMembershipForRealtimeUser(db, roomId, userId);
-    },
-    async isPartialStateRoom(roomId: string) {
-      const typedRoomId = toRoomId(roomId);
-      if (!typedRoomId) {
-        return false;
-      }
-      return (await getPartialStateJoinForRoom(cache, typedRoomId)) !== null;
-    },
-    async setRoomTyping(roomId: string, userId: string, typing: boolean, timeoutMs?: number) {
-      const typedRoomId = toRoomId(roomId);
-      const typedUserId = toUserId(userId);
-      if (!typedRoomId || !typedUserId) {
-        return;
-      }
-      await realtime.setRoomTyping?.(typedRoomId, typedUserId, typing, timeoutMs);
-    },
-  });
+  await Effect.runPromise(
+    ingestTypingEduEffect(
+      origin,
+      content,
+      createFederationTypingIngestPorts({
+        db,
+        realtime,
+        cache,
+      }),
+    ),
+  );
 }
 
 export async function handleFederationReceiptEdu(
@@ -398,71 +475,16 @@ export async function handleFederationReceiptEdu(
   cache: KVNamespace | undefined,
   content: Record<string, unknown>,
 ): Promise<void> {
-  if (!realtime.setRoomReceipt) {
-    return;
-  }
-
-  for (const [roomId, receiptsByType] of Object.entries(content)) {
-    if (!receiptsByType || typeof receiptsByType !== "object" || Array.isArray(receiptsByType)) {
-      continue;
-    }
-
-    const typedRoomId = toRoomId(roomId);
-    const partialStateRoom = typedRoomId
-      ? (await getPartialStateJoinForRoom(cache, typedRoomId)) !== null
-      : false;
-    for (const [receiptType, receiptsByUser] of Object.entries(receiptsByType)) {
-      if (!receiptsByUser || typeof receiptsByUser !== "object" || Array.isArray(receiptsByUser)) {
-        continue;
-      }
-
-      for (const [userId, receipt] of Object.entries(receiptsByUser)) {
-        if (extractServerNameFromMatrixId(userId) !== origin) {
-          continue;
-        }
-        if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) {
-          continue;
-        }
-
-        const receiptRecord = receipt as Record<string, unknown>;
-        const eventIds = Array.isArray(receiptRecord["event_ids"])
-          ? receiptRecord["event_ids"].filter(
-              (eventId): eventId is string => typeof eventId === "string",
-            )
-          : [];
-        const eventId = eventIds[0];
-        if (!eventId) {
-          continue;
-        }
-
-        const membership = await getEffectiveMembershipForRealtimeUser(db, roomId, userId);
-        if (membership !== "join" && !partialStateRoom) {
-          continue;
-        }
-
-        const data =
-          receiptRecord["data"] &&
-          typeof receiptRecord["data"] === "object" &&
-          !Array.isArray(receiptRecord["data"])
-            ? (receiptRecord["data"] as Record<string, unknown>)
-            : {};
-        const ts = typeof data["ts"] === "number" ? data["ts"] : undefined;
-        const typedUserId = toUserId(userId);
-        const typedEventId = toEventId(eventId);
-        if (!typedRoomId || !typedUserId || !typedEventId) {
-          continue;
-        }
-        await realtime.setRoomReceipt(
-          typedRoomId,
-          typedUserId,
-          typedEventId,
-          receiptType,
-          typeof data["thread_id"] === "string" ? data["thread_id"] : undefined,
-          ts,
-        );
-      }
-    }
-  }
+  await Effect.runPromise(
+    ingestReceiptEduEffect(
+      createFederationReceiptIngestPorts({
+        db,
+        realtime,
+        cache,
+      }),
+      { origin, content },
+    ),
+  );
 }
 
 export async function handleFederationDirectToDeviceEdu(

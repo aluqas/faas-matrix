@@ -8,7 +8,7 @@ import {
   type RoomId,
   type UserId,
 } from "../../shared/types";
-import { toEventId, toUserId } from "../../shared/utils/ids";
+import { toEventId } from "../../shared/utils/ids";
 import type {
   GetRoomMembersInput,
   GetRoomMessagesInput,
@@ -20,12 +20,12 @@ import type {
   TimestampToEventInput,
 } from "../../shared/types/rooms";
 import {
-  getMembership,
-  getRoomEvents,
-  getRoomMembers,
-  getRoomState,
-  getStateEvent,
-} from "../../infra/db/database";
+  getRoomEventsForQuery,
+  getRoomMembersForQuery,
+  getRoomMembershipForQuery,
+  getRoomStateEventForQuery,
+  getRoomStateForQuery,
+} from "../../infra/repositories/room-query-repository";
 import { EventQueryService } from "./orchestrators/event-query-service";
 import { DomainError, InfraError } from "./domain-error";
 import {
@@ -53,33 +53,11 @@ export type {
 const eventQueries = new EventQueryService();
 
 const defaultDependencies: RoomQueryDependencies = {
-  getMembership: async (db, roomId, userId) => {
-    const membership = await getMembership(db, roomId, userId);
-    const eventId = membership ? toEventId(membership.eventId) : null;
-    return membership && eventId
-      ? {
-          membership: membership.membership,
-          eventId,
-        }
-      : null;
-  },
-  getRoomState,
-  getStateEvent,
-  getRoomMembers: async (db: D1Database, roomId: RoomId, membership?: Membership) =>
-    (await getRoomMembers(db, roomId, membership)).flatMap((member) => {
-      const userId = toUserId(member.userId);
-      return userId
-        ? [
-            {
-              userId,
-              membership: member.membership,
-              ...(member.displayName !== undefined ? { displayName: member.displayName } : {}),
-              ...(member.avatarUrl !== undefined ? { avatarUrl: member.avatarUrl } : {}),
-            },
-          ]
-        : [];
-    }),
-  getRoomEvents,
+  getMembership: getRoomMembershipForQuery,
+  getRoomState: getRoomStateForQuery,
+  getStateEvent: getRoomStateEventForQuery,
+  getRoomMembers: getRoomMembersForQuery,
+  getRoomEvents: getRoomEventsForQuery,
   getVisibleEventForUser: (db, roomId, eventId, userId) =>
     eventQueries.getVisibleEventForUser(db, roomId, eventId, userId),
   findClosestEventByTimestamp: async (db, roomId, ts, dir) => {
@@ -163,10 +141,10 @@ export class MatrixRoomQueryService {
 
   private fromPromise<A>(
     message: string,
-    operation: () => Promise<A>,
+    operation: () => Promise<A> | A,
   ): Effect.Effect<A, InfraError> {
     return Effect.tryPromise({
-      try: operation,
+      try: () => Promise.resolve(operation()),
       catch: (cause) => toInfraError(message, cause),
     });
   }

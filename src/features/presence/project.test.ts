@@ -22,7 +22,7 @@ class FakePresenceDatabase {
         return this;
       },
       all: () => {
-        if (query.includes("FROM room_state rs")) {
+        if (/from\s+"?room_state"?\s+(as\s+)?"?rs"?/i.test(query)) {
           return {
             results: this.visibleUsers.map((user_id) => ({ user_id })),
           };

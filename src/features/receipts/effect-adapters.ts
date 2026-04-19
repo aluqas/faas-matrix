@@ -1,13 +1,18 @@
 import type { AppEnv } from "../../shared/types";
+import type { RealtimeCapability } from "../../shared/runtime/runtime-capabilities";
 import { fromInfraPromise, fromInfraVoid } from "../../shared/effect/infra-effect";
 import { upsertAccountDataRecord } from "../../infra/repositories/account-data-repository";
+import { getEffectiveMembershipForRealtimeUser } from "../../infra/repositories/federation-state-repository";
 import {
   isUserJoinedToRealtimeRoom,
   listRemoteJoinedServersInRoom,
 } from "../../infra/repositories/realtime-room-repository";
+import { toRoomId } from "../../shared/utils/ids";
+import { getPartialStateJoinForRoom } from "../partial-state/tracker";
 import { queueFederationEdu } from "../shared/federation-edu-queue";
 import { setRoomReceiptState } from "../shared/room-do-gateway";
 import type { ReceiptsCommandPorts } from "./command";
+import type { ReceiptIngestPorts } from "./ingest";
 
 export function createReceiptsCommandPorts(
   env: Pick<AppEnv["Bindings"], "DB" | "ROOMS" | "SERVER_NAME"> & AppEnv["Bindings"],
@@ -52,6 +57,44 @@ export function createReceiptsCommandPorts(
           () => queueFederationEdu(env, destination, "m.receipt", content),
           "Failed to queue receipt EDU",
         ),
+    },
+  };
+}
+
+export function createFederationReceiptIngestPorts(input: {
+  db: D1Database;
+  realtime: RealtimeCapability;
+  cache?: KVNamespace | undefined;
+}): ReceiptIngestPorts {
+  return {
+    membership: {
+      getMembership: (roomId, userId) =>
+        fromInfraPromise(
+          () => getEffectiveMembershipForRealtimeUser(input.db, roomId, userId),
+          "Failed to check receipt EDU membership",
+        ),
+      isPartialStateRoom: (roomId) =>
+        fromInfraPromise(
+          async () => (await getPartialStateJoinForRoom(input.cache, roomId)) !== null,
+          "Failed to check receipt EDU partial-state room",
+        ),
+    },
+    roomReceiptStore: {
+      putReceipt: (roomId, userId, eventId, receiptType, threadId, ts) =>
+        fromInfraVoid(async () => {
+          const typedRoomId = toRoomId(roomId);
+          if (!typedRoomId) {
+            return;
+          }
+          await input.realtime.setRoomReceipt?.(
+            typedRoomId,
+            userId,
+            eventId,
+            receiptType,
+            threadId,
+            ts,
+          );
+        }, "Failed to apply receipt EDU"),
     },
   };
 }

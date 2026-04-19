@@ -1,4 +1,6 @@
+import { sql, type RawBuilder } from "kysely";
 import {
+  type CompiledQuery,
   createKyselyBuilder,
   executeKyselyQuery,
   executeKyselyQueryFirst,
@@ -25,6 +27,12 @@ export interface MembershipRecord {
 }
 
 const qb = createKyselyBuilder<MembershipDatabase>();
+
+function asCompiledQuery<T>(query: RawBuilder<T>): CompiledQuery {
+  return {
+    compile: () => query.compile(qb),
+  };
+}
 
 /**
  * Shared CTE chain: denormalized `room_memberships` ∪ supplemental `room_state`
@@ -67,46 +75,38 @@ export async function getUserRoomIdsWithEffectiveMembership(
   userId: UserId,
   membership?: Membership,
 ): Promise<RoomId[]> {
-  let query = `
-    WITH membership_sources AS (
-      SELECT room_id, membership
-      FROM room_memberships
-      WHERE user_id = ?
+  const membershipFilter = membership ? sql`AND membership = ${membership}` : sql``;
+  const rows = await executeKyselyQuery<{ room_id: string }>(
+    db,
+    asCompiledQuery(sql<{ room_id: string }>`
+      WITH membership_sources AS (
+        SELECT room_id, membership
+        FROM room_memberships
+        WHERE user_id = ${userId}
 
-      UNION
+        UNION
 
-      SELECT
-        rs.room_id,
-        json_extract(e.content, '$.membership') AS membership
-      FROM room_state rs
-      JOIN events e ON rs.event_id = e.event_id
-      WHERE rs.event_type = 'm.room.member'
-        AND rs.state_key = ?
-        AND NOT EXISTS (
-          SELECT 1
-          FROM room_memberships rm
-          WHERE rm.room_id = rs.room_id
-            AND rm.user_id = rs.state_key
-        )
-    )
-    SELECT DISTINCT room_id
-    FROM membership_sources
-    WHERE membership IN ('join', 'invite', 'leave', 'ban', 'knock')
-  `;
-  const params: string[] = [userId, userId];
-
-  if (membership) {
-    query += ` AND membership = ?`;
-    params.push(membership);
-  }
-
-  const result = await db
-    .prepare(query)
-    .bind(...params)
-    .all<{ room_id: string }>();
-  return result.results
-    .map((r) => toRoomId(r.room_id))
-    .filter((roomId): roomId is RoomId => roomId !== null);
+        SELECT
+          rs.room_id,
+          json_extract(e.content, '$.membership') AS membership
+        FROM room_state rs
+        JOIN events e ON rs.event_id = e.event_id
+        WHERE rs.event_type = 'm.room.member'
+          AND rs.state_key = ${userId}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM room_memberships rm
+            WHERE rm.room_id = rs.room_id
+              AND rm.user_id = rs.state_key
+          )
+      )
+      SELECT DISTINCT room_id
+      FROM membership_sources
+      WHERE membership IN ('join', 'invite', 'leave', 'ban', 'knock')
+      ${membershipFilter}
+    `),
+  );
+  return rows.map((r) => toRoomId(r.room_id)).filter((roomId): roomId is RoomId => roomId !== null);
 }
 
 export async function getMembershipForUser(
@@ -193,20 +193,20 @@ export async function getEffectiveJoinedMemberCount(
   db: D1Database,
   roomId: RoomId,
 ): Promise<number> {
-  const result = await db
-    .prepare(
-      `
+  const result = await executeKyselyQueryFirst<{ cnt: number }>(
+    db,
+    asCompiledQuery(sql<{ cnt: number }>`
       WITH effective_members AS (
         SELECT user_id
         FROM room_memberships
-        WHERE room_id = ? AND membership = 'join'
+        WHERE room_id = ${roomId} AND membership = 'join'
 
         UNION
 
         SELECT rs.state_key AS user_id
         FROM room_state rs
         JOIN events e ON rs.event_id = e.event_id
-        WHERE rs.room_id = ?
+        WHERE rs.room_id = ${roomId}
           AND rs.event_type = 'm.room.member'
           AND rs.state_key IS NOT NULL
           AND json_extract(e.content, '$.membership') = 'join'
@@ -218,9 +218,7 @@ export async function getEffectiveJoinedMemberCount(
           )
       )
       SELECT COUNT(*) AS cnt FROM effective_members
-      `,
-    )
-    .bind(roomId, roomId)
-    .first<{ cnt: number }>();
+    `),
+  );
   return result?.cnt ?? 0;
 }

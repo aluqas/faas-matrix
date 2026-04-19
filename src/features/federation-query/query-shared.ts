@@ -11,16 +11,17 @@ import {
 import { InfraError } from "../../matrix/application/domain-error";
 import type { FederationProfile } from "../../matrix/application/legacy/federation-query-service";
 import {
-  buildFederatedEventRelationshipsResponse,
+  buildFederatedEventRelationshipsResponseEffect,
+  createRelationshipServicePorts,
   type EventRelationshipsRequest,
 } from "../../matrix/application/relationship-service";
+import type { PDU, UserId } from "../../shared/types";
 import { fetchRemoteProfileResponse } from "../profile/profile-federation-gateway";
 import {
   fetchNotarizedServerKeys,
   getOrCreateNotarySigningKey,
   signNotaryServerKeyResponse,
 } from "./notary-gateway";
-import type { UserId } from "../../shared/types";
 import type { ProfileField } from "../../shared/types/profile";
 import { fromInfraNullable, fromInfraPromise } from "../../shared/effect/infra-effect";
 
@@ -45,9 +46,11 @@ export interface FederationDirectoryQueryInput {
   roomAlias: string;
 }
 
-export type FederationRelationshipsResult = Awaited<
-  ReturnType<typeof buildFederatedEventRelationshipsResponse>
->;
+export interface FederationRelationshipsResult {
+  events: PDU[];
+  limited: boolean;
+  auth_chain: PDU[];
+}
 
 export interface FederationProfileRepository {
   getLocalProfile(userId: UserId): Effect.Effect<FederationProfile | null, InfraError>;
@@ -109,6 +112,11 @@ export function createFederationQueryPorts(input: {
     DB: input.db,
     CACHE: input.cache,
   };
+  const relationshipPorts = createRelationshipServicePorts({
+    db: input.db,
+    cache: input.cache,
+    localServerName: input.localServerName,
+  });
 
   return {
     localServerName: input.localServerName,
@@ -157,10 +165,7 @@ export function createFederationQueryPorts(input: {
     },
     relationshipsReader: {
       buildEventRelationships: (request) =>
-        fromInfraNullable(
-          () => buildFederatedEventRelationshipsResponse(input.db, request),
-          "Failed to build event relationships",
-        ),
+        buildFederatedEventRelationshipsResponseEffect(relationshipPorts, request),
     },
   };
 }

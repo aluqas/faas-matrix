@@ -6,7 +6,7 @@ import {
   listCrossSigningSignaturesForKey,
   listUserDevices,
   localUserExists,
-} from "../../infra/repositories/federation-e2ee-repository";
+} from "../../infra/repositories/e2ee-repository";
 import { fromInfraPromise } from "../../shared/effect/infra-effect";
 import {
   fetchAllDeviceKeysFromDO,

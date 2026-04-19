@@ -13,4 +13,12 @@ describe("presence route boundary", () => {
     expect(source).toMatch(/setPresenceStatusEffect/);
     expect(source).toMatch(/getPresenceStatusEffect/);
   });
+
+  it("keeps presence feature code free of client runtime execution", () => {
+    const command = readFileSync(
+      new URL("../features/presence/command.ts", import.meta.url),
+      "utf8",
+    );
+    expect(command).not.toMatch(/\brunClientEffect\(/);
+  });
 });

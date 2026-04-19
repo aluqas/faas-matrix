@@ -1,15 +1,11 @@
 import { Effect } from "effect";
 import type { AppContext } from "../../shared/runtime/app-context";
 import type { SyncResponse } from "../../shared/types";
-import {
-  InfraError,
-  type InfraError as InfraErrorType,
-} from "../../matrix/application/domain-error";
+import { type InfraError as InfraErrorType } from "../../matrix/application/domain-error";
 import { requireLogContext, withLogContext } from "../../matrix/application/logging";
 import type { SyncRepository } from "../../infra/repositories/interfaces";
-import { executePresenceCommand } from "../presence/command";
-import { getSharedServersInRoomsWithUserIncludingPartialState } from "../partial-state/shared-servers";
-import { upsertPresence, writePresenceToCache } from "../../infra/repositories/presence-repository";
+import { setPresenceStatusEffect } from "../presence/command";
+import { createPresenceCommandPortsFromAppContext } from "../presence/effect-adapters";
 import { assembleSyncResponseEffect } from "./assembler";
 import { summarizeSyncResponse, type SyncUserInput } from "./contracts";
 import { createEffectPartialStatePort, createEffectSyncQueryPort } from "./effect-adapters";
@@ -41,59 +37,10 @@ export function projectSyncResponseEffect(
   return Effect.gen(function* () {
     const requestedPresence = input.setPresence;
     if (requestedPresence) {
-      yield* Effect.tryPromise({
-        try: () =>
-          executePresenceCommand(
-            {
-              userId: input.userId,
-              presence: requestedPresence,
-              now: appContext.capabilities.clock.now(),
-            },
-            {
-              localServerName: appContext.capabilities.config.serverName,
-              persistPresence: async (presenceInput) => {
-                const db = appContext.capabilities.sql.connection as D1Database;
-                await upsertPresence(
-                  db,
-                  presenceInput.userId,
-                  presenceInput.presence,
-                  presenceInput.statusMessage ?? null,
-                  presenceInput.now,
-                );
-                const cache = appContext.capabilities.kv.cache as KVNamespace | undefined;
-                if (cache) {
-                  await writePresenceToCache(
-                    cache,
-                    presenceInput.userId,
-                    presenceInput.presence,
-                    presenceInput.statusMessage ?? null,
-                    presenceInput.now,
-                  );
-                }
-              },
-              resolveInterestedServers: (userId) =>
-                getSharedServersInRoomsWithUserIncludingPartialState(
-                  appContext.capabilities.sql.connection as D1Database,
-                  appContext.capabilities.kv.cache as KVNamespace | undefined,
-                  userId,
-                ),
-              queueEdu: async (destination, content) => {
-                await appContext.capabilities.federation?.queueEdu?.(
-                  destination,
-                  "m.presence",
-                  content as unknown as Record<string, unknown>,
-                );
-              },
-              debugEnabled: appContext.profile.name === "complement",
-            },
-          ),
-        catch: (cause) =>
-          new InfraError({
-            errcode: "M_UNKNOWN",
-            message: "Failed to update presence from /sync",
-            status: 500,
-            cause,
-          }),
+      yield* setPresenceStatusEffect(createPresenceCommandPortsFromAppContext(appContext), {
+        userId: input.userId,
+        presence: requestedPresence,
+        now: appContext.capabilities.clock.now(),
       });
     }
 

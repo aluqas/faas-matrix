@@ -2,7 +2,6 @@ import { Effect } from "effect";
 import { parseDeviceKeysPayload } from "../../../api/keys-contracts";
 import type { AppContext } from "../../../shared/runtime/app-context";
 import { withIdempotency, type IdempotencyStore } from "../../../shared/runtime/idempotency";
-import { getServersInEncryptedRoomsWithUser, getUserDevices } from "../../../infra/db/database";
 import { checkEventAuth } from "../../../infra/db/event-auth";
 import {
   createFederationFanoutPorts,
@@ -38,6 +37,10 @@ import { Errors, MatrixApiError } from "../../../shared/utils/errors";
 import { parseUserId, toEventId, toRoomId, toUserId } from "../../../shared/utils/ids";
 import type { EventPipeline } from "../../domain/event-pipeline";
 import type { RoomRepository } from "../../../infra/repositories/interfaces";
+import {
+  getEncryptedSharedServersForRoomService,
+  getUserDevicesForRoomService,
+} from "../../../infra/repositories/room-service-repository";
 import { DomainError, toMatrixApiError } from "../domain-error";
 import { emitEffectWarning } from "../runtime/effect-debug";
 import { runClientEffect } from "../runtime/effect-runtime";
@@ -447,7 +450,7 @@ export class MatrixRoomService {
     const cache = this.appContext.capabilities.kv.cache as KVNamespace;
     const deviceKeysKv = this.appContext.capabilities.kv.deviceKeys as KVNamespace | undefined;
     const preJoinSharedServers = db
-      ? await getServersInEncryptedRoomsWithUser(db, input.userId)
+      ? await getEncryptedSharedServersForRoomService(db, input.userId)
       : [];
     const validated = await runClientEffect(
       validateJoinRoomRequest({
@@ -548,16 +551,21 @@ export class MatrixRoomService {
             joinRulesContent,
             currentMembership: currentMembership?.membership,
             checkAllowedRoomMembership: (allowedRoomId) =>
-              Effect.promise(() => {
+              Effect.promise(async () => {
                 const typedAllowedRoomId = toRoomId(allowedRoomId);
                 if (!typedAllowedRoomId) {
-                  return Promise.resolve(false);
+                  return false;
                 }
 
-                return repository
-                  .getMembership(typedAllowedRoomId, auth.userId)
-                  .then((m) => m?.membership === "join")
-                  .catch(() => false);
+                try {
+                  const membership = await repository.getMembership(
+                    typedAllowedRoomId,
+                    auth.userId,
+                  );
+                  return membership?.membership === "join";
+                } catch {
+                  return false;
+                }
               }),
           }),
         );
@@ -673,7 +681,9 @@ export class MatrixRoomService {
                   getSharedServersInEncryptedRoomsWithUserIncludingPartialState(db, cache, userId),
                 getUserDevices: (userId) => {
                   const typedUserId = toUserId(userId);
-                  return typedUserId ? getUserDevices(db, typedUserId) : Promise.resolve([]);
+                  return typedUserId
+                    ? getUserDevicesForRoomService(db, typedUserId)
+                    : Promise.resolve([]);
                 },
                 getStoredDeviceKeys: (userId, deviceId) =>
                   getStoredDeviceKeysFromKv(deviceKeysKv, userId, deviceId),

@@ -11,4 +11,9 @@ describe("typing route boundary", () => {
     expect(source).toMatch(/decodeSetTypingInput/);
     expect(source).toMatch(/setTypingEffect/);
   });
+
+  it("keeps typing feature code free of client runtime execution", () => {
+    const command = readFileSync(new URL("../features/typing/command.ts", import.meta.url), "utf8");
+    expect(command).not.toMatch(/\brunClientEffect\(/);
+  });
 });

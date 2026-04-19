@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import {
   loadMembershipTransitionContextFromRepository,
   persistMembershipTransitionResult,
@@ -5,6 +6,8 @@ import {
 import type { Membership, PDU } from "../../shared/types";
 import { toEventId, toRoomId, toUserId } from "../../shared/utils/ids";
 import type { MembershipRecord } from "../../infra/repositories/interfaces";
+import { InfraError } from "./domain-error";
+import { fromInfraPromise, fromInfraVoid } from "../../shared/effect/infra-effect";
 
 export type MembershipTransitionSource = "client" | "federation" | "workflow";
 export type MembershipSyncCategory = "invite" | "join" | "leave" | "knock";
@@ -89,6 +92,37 @@ export type TransitionContextLoader = (
   roomId: string,
   stateKey?: string,
 ) => Promise<MembershipTransitionContext>;
+
+export interface MembershipTransitionPorts {
+  transitionRepository: {
+    loadContext(
+      roomId: string,
+      stateKey?: string,
+    ): Effect.Effect<MembershipTransitionContext, InfraError>;
+    persistResult(input: {
+      roomId: string;
+      event: PDU;
+      result: MembershipTransitionResult;
+    }): Effect.Effect<void, InfraError>;
+  };
+}
+
+export function createMembershipTransitionPorts(db: D1Database): MembershipTransitionPorts {
+  return {
+    transitionRepository: {
+      loadContext: (roomId, stateKey) =>
+        fromInfraPromise(
+          () => loadMembershipTransitionContextFromRepository(db, roomId, stateKey),
+          "Failed to load membership transition context",
+        ),
+      persistResult: (input) =>
+        fromInfraVoid(
+          () => persistMembershipTransitionResult(db, input),
+          "Failed to persist membership transition",
+        ),
+    },
+  };
+}
 
 function toAuthStateFromInviteStrippedState(
   roomId: string,
@@ -271,7 +305,45 @@ export class MemberTransitionService {
 
 export const MembershipTransitionService = MemberTransitionService;
 
-export async function applyMembershipTransitionToDatabase(
+export function applyMembershipTransitionEffect(
+  ports: MembershipTransitionPorts,
+  input: {
+    roomId: string;
+    event: PDU;
+    source: MembershipTransitionSource;
+    context?: MembershipTransitionContext;
+  },
+): Effect.Effect<MembershipTransitionResult, InfraError> {
+  return Effect.gen(function* () {
+    const stateKey = input.event.state_key;
+    const context =
+      input.context ??
+      (yield* ports.transitionRepository.loadContext(input.roomId, input.event.state_key));
+
+    const service = new MemberTransitionService();
+    const result = service.evaluate({
+      event: input.event,
+      roomId: input.roomId,
+      source: input.source,
+      currentMembership: context.currentMembership,
+      currentMemberEvent: context.currentMemberEvent,
+      roomState: context.roomState,
+      inviteStrippedState: context.inviteStrippedState,
+    });
+
+    if (stateKey) {
+      yield* ports.transitionRepository.persistResult({
+        roomId: input.roomId,
+        event: input.event,
+        result,
+      });
+    }
+
+    return result;
+  });
+}
+
+export function applyMembershipTransitionToDatabase(
   db: D1Database,
   input: {
     roomId: string;
@@ -280,31 +352,9 @@ export async function applyMembershipTransitionToDatabase(
     context?: MembershipTransitionContext;
   },
 ): Promise<MembershipTransitionResult> {
-  const stateKey = input.event.state_key;
-  const context =
-    input.context ??
-    (await loadMembershipTransitionContext(db, input.roomId, input.event.state_key));
-
-  const service = new MemberTransitionService();
-  const result = service.evaluate({
-    event: input.event,
-    roomId: input.roomId,
-    source: input.source,
-    currentMembership: context.currentMembership,
-    currentMemberEvent: context.currentMemberEvent,
-    roomState: context.roomState,
-    inviteStrippedState: context.inviteStrippedState,
-  });
-
-  if (stateKey) {
-    await persistMembershipTransitionResult(db, {
-      roomId: input.roomId,
-      event: input.event,
-      result,
-    });
-  }
-
-  return result;
+  return Effect.runPromise(
+    applyMembershipTransitionEffect(createMembershipTransitionPorts(db), input),
+  );
 }
 
 export function loadMembershipTransitionContext(

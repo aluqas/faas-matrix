@@ -3,9 +3,9 @@ import {
   toFederationClaimedOneTimeKeyRecord,
   toFederationDeviceSignatureRecord,
   toFederationStoredDeviceRecord,
-} from "./federation-e2ee-repository";
+} from "./e2ee-repository";
 
-describe("federation e2ee repository row parsers", () => {
+describe("e2ee repository row parsers", () => {
   it("normalizes signature and device rows", () => {
     expect(
       toFederationDeviceSignatureRecord({

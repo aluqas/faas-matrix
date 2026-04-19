@@ -27,8 +27,30 @@ describe("app-core repository boundaries", () => {
       "utf8",
     );
     expect(source).not.toMatch(/\bprepare\(/);
+    expect(source).not.toMatch(/infra\/db\/database/);
     expect(source).toMatch(/\bloadFederationStateBundleFromRepository\(/);
     expect(source).toMatch(/\bfederationEventExists\(/);
-    expect(source).toMatch(/\bgetEffectiveMembershipForRealtimeUser\(/);
+    expect(source).toMatch(/\bingestReceiptEduEffect\(/);
+    expect(source).toMatch(/\bingestTypingEduEffect\(/);
+  });
+
+  it("keeps relationship-service free of direct database helper imports", () => {
+    const source = readFileSync(new URL("./relationship-service.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/infra\/db\/database/);
+    expect(source).toMatch(/\bgetAuthChainForRelations\(/);
+  });
+
+  it("keeps target app-core repositories free of database helper imports", () => {
+    const repositories = [
+      "../../infra/repositories/membership-transition-repository.ts",
+      "../../infra/repositories/federation-state-repository.ts",
+      "../../infra/repositories/relations-repository.ts",
+      "../../infra/repositories/event-query-repository.ts",
+    ];
+
+    for (const repository of repositories) {
+      const source = readFileSync(new URL(repository, import.meta.url), "utf8");
+      expect(source).not.toMatch(/infra\/db\/database/);
+    }
   });
 });

@@ -5,14 +5,17 @@ import { createServerAclPolicy } from "../server-acl/policy";
 import type { PresenceEduContent } from "../presence/contracts";
 import type { TypingEduContent } from "../typing/contracts";
 import type { DirectToDeviceEduContent } from "../to-device/contracts";
+import { fromInfraVoid } from "../../shared/effect/infra-effect";
 import { emitEffectWarningEffect } from "../../matrix/application/runtime/effect-debug";
 import {
   handleFederationDeviceListEdu,
   handleFederationDirectToDeviceEdu,
-  handleFederationPresenceEdu,
-  handleFederationReceiptEdu,
-  handleFederationTypingEdu,
 } from "../../matrix/application/orchestrators/federation-handler-service";
+import { ingestPresenceEduEffect } from "../presence/ingest";
+import { createFederationTypingIngestPorts } from "../typing/effect-adapters";
+import { ingestTypingEduEffect } from "../typing/ingest";
+import { createFederationReceiptIngestPorts } from "../receipts/effect-adapters";
+import { ingestReceiptEduEffect } from "../receipts/ingest";
 import {
   getRoomScopedEduRoomIds,
   toRawFederationEdu,
@@ -107,10 +110,29 @@ export async function ingestFederationEdu(
   switch (eduType) {
     case "m.presence": {
       if (isPresenceEduContent(content)) {
-        await handleFederationPresenceEdu(
-          ports.repository,
-          ports.appContext.capabilities.clock.now(),
-          content,
+        await ports.runEffect(
+          ingestPresenceEduEffect(
+            {
+              presenceStore: {
+                upsertPresence: (userId, presence, statusMessage, lastActiveTs, currentlyActive) =>
+                  fromInfraVoid(
+                    () =>
+                      Promise.resolve(
+                        ports.repository.upsertPresence(
+                          userId,
+                          presence,
+                          statusMessage,
+                          lastActiveTs,
+                          currentlyActive,
+                        ),
+                      ),
+                    "Failed to apply presence EDU",
+                  ),
+              },
+            },
+            ports.appContext.capabilities.clock.now(),
+            content,
+          ),
         );
       }
       break;
@@ -121,23 +143,33 @@ export async function ingestFederationEdu(
     }
     case "m.typing": {
       if (isTypingEduContent(content)) {
-        await handleFederationTypingEdu(
-          ports.appContext.capabilities.sql.connection as D1Database,
-          input.origin,
-          ports.appContext.capabilities.realtime,
-          ports.appContext.capabilities.kv.cache as KVNamespace | undefined,
-          content,
+        await ports.runEffect(
+          ingestTypingEduEffect(
+            input.origin,
+            content,
+            createFederationTypingIngestPorts({
+              db: ports.appContext.capabilities.sql.connection as D1Database,
+              realtime: ports.appContext.capabilities.realtime,
+              cache: ports.appContext.capabilities.kv.cache as KVNamespace | undefined,
+            }),
+          ),
         );
       }
       break;
     }
     case "m.receipt": {
-      await handleFederationReceiptEdu(
-        ports.appContext.capabilities.sql.connection as D1Database,
-        input.origin,
-        ports.appContext.capabilities.realtime,
-        ports.appContext.capabilities.kv.cache as KVNamespace | undefined,
-        content,
+      await ports.runEffect(
+        ingestReceiptEduEffect(
+          createFederationReceiptIngestPorts({
+            db: ports.appContext.capabilities.sql.connection as D1Database,
+            realtime: ports.appContext.capabilities.realtime,
+            cache: ports.appContext.capabilities.kv.cache as KVNamespace | undefined,
+          }),
+          {
+            origin: input.origin,
+            content,
+          },
+        ),
       );
       break;
     }

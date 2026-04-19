@@ -4,7 +4,7 @@ import {
   claimFallbackKey,
   claimUnclaimedOneTimeKey,
   markStoredOneTimeKeyClaimed,
-} from "../../infra/repositories/federation-e2ee-repository";
+} from "../../infra/repositories/e2ee-repository";
 import { loadStoredOneTimeKeyBuckets, saveStoredOneTimeKeyBuckets } from "./e2ee-gateway";
 
 export interface ClaimedOneTimeKeyResult extends FederationClaimedOneTimeKeyRecord {

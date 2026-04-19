@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import type { AppEnv } from "../../shared/types";
+import type { AppContext } from "../../shared/runtime/app-context";
 import type { PresenceRecord } from "../../infra/repositories/presence-repository";
 import {
   findPresenceByUserId,
@@ -15,8 +16,7 @@ import {
 } from "../../shared/effect/infra-effect";
 import { getSharedServersInRoomsWithUserIncludingPartialState } from "../partial-state/shared-servers";
 import { queueFederationEdu } from "../shared/federation-edu-queue";
-import { executePresenceCommand } from "./command";
-import type { PresenceCommandInput, PresenceCommandPorts } from "./contracts";
+import type { PresenceCommandEffectPorts } from "./command";
 import type { PresenceQueryPorts, PresenceStatusResult } from "./query";
 import { InfraError } from "../../matrix/application/domain-error";
 
@@ -29,55 +29,104 @@ function toPresenceStatusResult(record: PresenceRecord): PresenceStatusResult {
   };
 }
 
-export interface PresenceCommandEffectPorts {
-  executor: {
-    execute(input: PresenceCommandInput): Effect.Effect<void, InfraError>;
-  };
-}
-
-function createAsyncPresenceCommandPorts(
-  env: Pick<AppEnv["Bindings"], "DB" | "CACHE" | "SERVER_NAME"> & AppEnv["Bindings"],
-  debugEnabled: boolean,
-): PresenceCommandPorts {
-  return {
-    localServerName: env.SERVER_NAME,
-    async persistPresence(input) {
-      await upsertPresence(
-        env.DB,
-        input.userId,
-        input.presence,
-        input.statusMessage ?? null,
-        input.now,
-      );
-
-      if (env.CACHE) {
-        await writePresenceToCache(
-          env.CACHE,
-          input.userId,
-          input.presence,
-          input.statusMessage ?? null,
-          input.now,
-        );
-      }
-    },
-    resolveInterestedServers: (userId) =>
-      getSharedServersInRoomsWithUserIncludingPartialState(env.DB, env.CACHE, userId),
-    queueEdu: (destination, content) => queueFederationEdu(env, destination, "m.presence", content),
-    debugEnabled,
-  };
-}
-
 export function createPresenceCommandPorts(
   env: Pick<AppEnv["Bindings"], "DB" | "CACHE" | "SERVER_NAME"> & AppEnv["Bindings"],
   debugEnabled: boolean,
 ): PresenceCommandEffectPorts {
   return {
-    executor: {
-      execute: (input) =>
+    localServerName: env.SERVER_NAME,
+    debugEnabled,
+    presenceStore: {
+      persistPresence: (input) =>
+        fromInfraVoid(async () => {
+          await upsertPresence(
+            env.DB,
+            input.userId,
+            input.presence,
+            input.statusMessage ?? null,
+            input.now,
+          );
+
+          if (env.CACHE) {
+            await writePresenceToCache(
+              env.CACHE,
+              input.userId,
+              input.presence,
+              input.statusMessage ?? null,
+              input.now,
+            );
+          }
+        }, "Failed to persist presence"),
+    },
+    interestedServers: {
+      listInterestedServers: (userId) =>
         fromInfraPromise(
-          () => executePresenceCommand(input, createAsyncPresenceCommandPorts(env, debugEnabled)),
-          "Failed to update presence",
+          () => getSharedServersInRoomsWithUserIncludingPartialState(env.DB, env.CACHE, userId),
+          "Failed to resolve presence destinations",
         ),
+    },
+    federation: {
+      queuePresenceEdu: (destination, content) =>
+        fromInfraVoid(
+          () =>
+            queueFederationEdu(
+              env,
+              destination,
+              "m.presence",
+              content as unknown as Record<string, unknown>,
+            ),
+          "Failed to queue presence EDU",
+        ),
+    },
+  };
+}
+
+export function createPresenceCommandPortsFromAppContext(
+  appContext: AppContext,
+): PresenceCommandEffectPorts {
+  const db = appContext.capabilities.sql.connection as D1Database;
+  const cache = appContext.capabilities.kv.cache as KVNamespace | undefined;
+  return {
+    localServerName: appContext.capabilities.config.serverName,
+    debugEnabled: appContext.profile.name === "complement",
+    presenceStore: {
+      persistPresence: (input) =>
+        fromInfraVoid(async () => {
+          await upsertPresence(
+            db,
+            input.userId,
+            input.presence,
+            input.statusMessage ?? null,
+            input.now,
+          );
+
+          if (cache) {
+            await writePresenceToCache(
+              cache,
+              input.userId,
+              input.presence,
+              input.statusMessage ?? null,
+              input.now,
+            );
+          }
+        }, "Failed to persist presence"),
+    },
+    interestedServers: {
+      listInterestedServers: (userId) =>
+        fromInfraPromise(
+          () => getSharedServersInRoomsWithUserIncludingPartialState(db, cache, userId),
+          "Failed to resolve presence destinations",
+        ),
+    },
+    federation: {
+      queuePresenceEdu: (destination, content) =>
+        fromInfraVoid(async () => {
+          await appContext.capabilities.federation?.queueEdu?.(
+            destination,
+            "m.presence",
+            content as unknown as Record<string, unknown>,
+          );
+        }, "Failed to queue presence EDU"),
     },
   };
 }

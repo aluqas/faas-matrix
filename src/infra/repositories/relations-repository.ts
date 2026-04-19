@@ -438,6 +438,35 @@ export async function queryRelationEventTree(
   return { roomId, events, limited: false };
 }
 
+export async function getAuthChainForRelations(db: D1Database, eventIds: string[]): Promise<PDU[]> {
+  const seen = new Set<string>();
+  const chain: PDU[] = [];
+  const queue = [...eventIds];
+
+  while (queue.length > 0) {
+    const eventId = queue.shift();
+    if (!eventId || seen.has(eventId)) {
+      continue;
+    }
+    seen.add(eventId);
+
+    const row = await getFederationEventRowById(db, eventId);
+    if (!row) {
+      continue;
+    }
+
+    const event = toFederationPduFromRow(row);
+    chain.push(event);
+    for (const authEventId of event.auth_events) {
+      if (!seen.has(authEventId)) {
+        queue.push(authEventId);
+      }
+    }
+  }
+
+  return chain;
+}
+
 export async function getRemoteServersForRelationRoom(
   db: D1Database,
   roomId: string,
