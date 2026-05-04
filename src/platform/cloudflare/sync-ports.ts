@@ -1,16 +1,14 @@
 import { Effect } from "effect";
-import type { Env } from "../../shared/types";
+import type { Env } from "./env";
 import { CloudflareSyncRepository } from "./matrix-repositories";
 import type {
   PartialStatePort,
   SlidingSyncStatePort,
   SyncQueryPort,
-} from "../../features/sync/effect-ports";
-import { toInfraError } from "../../features/sync/effect-ports";
-import {
-  createEffectPartialStatePort,
-  createEffectSyncQueryPort,
-} from "../../features/sync/effect-adapters";
+} from "../../fatrix-backend/application/features/sync/ports/effect-ports";
+import { toInfraError } from "../../fatrix-backend/application/features/sync/ports/effect-ports";
+import { createEffectSyncQueryPort } from "../../fatrix-backend/application/features/sync/queries/effect-sync-query-port";
+import { createEffectPartialStatePort } from "./adapters/application-ports/sync/partial-state-port";
 
 export function createCloudflareSyncQueryPort(env: Env): SyncQueryPort {
   return createEffectSyncQueryPort(new CloudflareSyncRepository(env));

@@ -4,39 +4,39 @@
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import type { AppEnv } from "./shared/types";
+import type { AppEnv } from "./fatrix-api/hono-env";
 
 // Import API routes
-import versions from "./api/versions";
-import login from "./api/login";
-import rooms from "./api/rooms";
-import sync from "./api/sync";
-import profile from "./api/profile";
-import voip from "./api/voip";
-import keys from "./api/keys";
-import federation from "./api/federation";
-import keyBackups from "./api/key-backups";
-import toDevice from "./api/to-device";
-import push from "./api/push";
-import accountData from "./api/account-data";
-import typing from "./api/typing";
-import receipts from "./api/receipts";
-import tags from "./api/tags";
-import devices from "./api/devices";
-import presence from "./api/presence";
-import aliases from "./api/aliases";
-import relations from "./api/relations";
-import spaces from "./api/spaces";
-import account from "./api/account";
-import serverNotices from "./api/server-notices";
-import report from "./api/report";
-import { validateFilterDefinition } from "./api/filter-validation";
-// import qrLogin from './api/qr-login'; // QR feature commented out - requires MSC4108/OIDC for Element X
-import { rateLimitMiddleware } from "./infra/middleware/rate-limit";
-import { requireAuth } from "./infra/middleware/auth";
-import { analyticsMiddleware } from "./infra/middleware/analytics";
+import versions from "./fatrix-api/versions";
+import login from "./fatrix-api/login";
+import rooms from "./fatrix-api/rooms";
+import sync from "./fatrix-api/sync";
+import profile from "./fatrix-api/profile";
+import voip from "./fatrix-api/voip";
+import keys from "./fatrix-api/keys";
+import federation from "./fatrix-api/federation";
+import keyBackups from "./fatrix-api/key-backups";
+import toDevice from "./fatrix-api/to-device";
+import push from "./fatrix-api/push";
+import accountData from "./fatrix-api/account-data";
+import typing from "./fatrix-api/typing";
+import receipts from "./fatrix-api/receipts";
+import tags from "./fatrix-api/tags";
+import devices from "./fatrix-api/devices";
+import presence from "./fatrix-api/presence";
+import aliases from "./fatrix-api/aliases";
+import relations from "./fatrix-api/relations";
+import spaces from "./fatrix-api/spaces";
+import account from "./fatrix-api/account";
+import serverNotices from "./fatrix-api/server-notices";
+import report from "./fatrix-api/report";
+import { validateFilterDefinition } from "./fatrix-api/filter-validation";
+// import qrLogin from './fatrix-api/qr-login'; // QR feature commented out - requires MSC4108/OIDC for Element X
+import { rateLimitMiddleware } from "./fatrix-api/middleware/rate-limit";
+import { requireAuth } from "./fatrix-api/middleware/auth";
+import { analyticsMiddleware } from "./fatrix-api/middleware/analytics";
 import { appContextMiddleware } from "./platform/cloudflare/app-context";
-import { FEDERATION_OUTBOUND_DO_NAME } from "./infra/federation/federation-outbound";
+import { FEDERATION_OUTBOUND_DO_NAME } from "./platform/cloudflare/adapters/federation/federation-outbound";
 import { handleAppError } from "./platform/cloudflare/http-error-handler";
 
 // Import Durable Objects
@@ -49,7 +49,7 @@ export {
   UserKeysDurableObject,
   PushDurableObject,
   RateLimitDurableObject,
-} from "./platform/durable-objects";
+} from "./platform/cloudflare/durable-objects";
 
 // Import Workflows
 export {
@@ -58,7 +58,7 @@ export {
   FederationCatchupWorkflow,
   MediaCleanupWorkflow,
   StateCompactionWorkflow,
-} from "./platform/workflows";
+} from "./platform/cloudflare/workflows";
 
 // Create the main app
 // strict: false normalises trailing slashes so e.g. PUT /state/m.room.join_rules/
@@ -73,7 +73,7 @@ async function dispatchLazyRoute(c: Context<AppEnv>, loader: () => Promise<LazyR
 }
 
 async function renderAdminDashboard(serverName: string): Promise<string> {
-  const module = await import("./features/admin/dashboard");
+  const module = await import("./fatrix-backend/application/features/admin/dashboard");
   return module.adminDashboardHtml(serverName);
 }
 
@@ -145,16 +145,16 @@ app.get("/admin/", (c) => {
 
 // Lazily load infrequently-used heavy modules to reduce worker startup cost,
 // especially for Complement cold starts.
-const loadAdmin = () => import("./api/admin");
-const loadOidcAuth = () => import("./api/oidc-auth");
-const loadOauth = () => import("./api/oauth");
-const loadCalls = () => import("./api/calls");
-const loadRtc = () => import("./api/rtc");
-const loadAppservice = () => import("./api/appservice");
-const loadIdentity = () => import("./api/identity");
-const loadSlidingSync = () => import("./api/sliding-sync");
-const loadMedia = () => import("./api/media");
-const loadSearch = () => import("./api/search");
+const loadAdmin = () => import("./fatrix-api/admin");
+const loadOidcAuth = () => import("./fatrix-api/oidc-auth");
+const loadOauth = () => import("./fatrix-api/oauth");
+const loadCalls = () => import("./fatrix-api/calls");
+const loadRtc = () => import("./fatrix-api/rtc");
+const loadAppservice = () => import("./fatrix-api/appservice");
+const loadIdentity = () => import("./fatrix-api/identity");
+const loadSlidingSync = () => import("./fatrix-api/sliding-sync");
+const loadMedia = () => import("./fatrix-api/media");
+const loadSearch = () => import("./fatrix-api/search");
 
 app.all("/admin/api/*", (c) => dispatchLazyRoute(c, loadAdmin));
 app.all("/_synapse/admin/*", (c) => dispatchLazyRoute(c, loadAdmin));

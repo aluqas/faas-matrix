@@ -1,5 +1,5 @@
-import type { IdempotencyStore } from "../../shared/runtime/idempotency";
-import { getTransaction, storeTransaction } from "../../infra/realtime/transactions";
+import type { IdempotencyStore } from "../../fetherate/runtime/idempotency";
+import { getTransaction, storeTransaction } from "./adapters/realtime/transactions";
 
 export class CloudflareIdempotencyStore implements IdempotencyStore<Record<string, unknown>> {
   constructor(private readonly db: D1Database) {}

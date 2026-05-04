@@ -1,7 +1,5 @@
 import type { MiddlewareHandler } from "hono";
 import type {
-  AppEnv,
-  Env,
   EventId,
   EventType,
   PDU,
@@ -9,21 +7,23 @@ import type {
   RoomJoinWorkflowParams,
   RoomJoinWorkflowStatus,
   UserId,
-} from "../../shared/types";
-import type { AppContext } from "../../shared/runtime/app-context";
-import { createFeatureProfile } from "../../shared/config/feature-profile";
-import type { RuntimeCapabilities } from "../../shared/runtime/runtime-capabilities";
+} from "../../fatrix-model/types";
+import type { AppEnv } from "../../fatrix-api/hono-env";
+import type { Env } from "./env";
+import type { AppContext } from "../../fatrix-backend/ports/runtime/app-context";
+import { createFeatureProfile } from "../../fatrix-backend/config/feature-profile";
+import type { RuntimeCapabilities } from "../../fatrix-backend/ports/runtime/runtime-capabilities";
 import {
   generateEventId,
   generateOpaqueId,
   generateRoomId,
   formatRoomAlias,
-} from "../../shared/utils/ids";
+} from "../../fatrix-model/utils/ids";
 import {
   createMatrixServiceRegistry,
   type MatrixServiceRegistry,
-} from "../../matrix/service-registry";
-import { getPartialStateStatus } from "../../features/partial-state/tracker";
+} from "../../fatrix-backend/service-registry";
+import { getPartialStateStatus } from "../../fatrix-backend/application/features/partial-state/tracker";
 import {
   CloudflareDeliveryQueue,
   CloudflareDiscoveryService,
@@ -37,7 +37,13 @@ import { CloudflareIdempotencyStore } from "./idempotency-store";
 import {
   enqueueFederationEdu,
   enqueueFederationPdu,
-} from "../../infra/federation/federation-outbound";
+} from "./adapters/federation/federation-outbound";
+import { createFederationTypingIngestPorts } from "./adapters/application-ports/typing/effect-adapters";
+import { createFederationReceiptIngestPorts } from "./adapters/application-ports/receipts/effect-adapters";
+import { ingestDirectToDeviceEdu } from "./adapters/application-ports/to-device/ingest";
+import { createPresenceCommandPortsFromAppContext } from "./adapters/application-ports/presence/effect-adapters";
+import { createEffectPartialStatePort } from "./adapters/application-ports/sync/partial-state-port";
+import { createSyncTopLevelProjectionPorts } from "./adapters/application-ports/sync/top-level-ports";
 
 function createRuntimeCapabilities(
   env: Env,
@@ -85,7 +91,9 @@ function createRuntimeCapabilities(
           if (Date.now() - startedAt >= workflowWaitTimeoutMs) {
             break;
           }
-          await new Promise((resolve) => setTimeout(resolve, 200));
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 200);
+          });
           status = await instance.status();
         }
 
@@ -213,10 +221,34 @@ function createCloudflareAppContext(
     syncRepository: new CloudflareSyncRepository(env),
     federationRepository: new CloudflareFederationRepository(env),
     idempotencyStore: new CloudflareIdempotencyStore(env.DB),
+    syncApplicationPorts: {
+      partialState: createEffectPartialStatePort(env.DB, env.CACHE),
+      presenceCommand: createPresenceCommandPortsFromAppContext(appContext),
+      topLevel: createSyncTopLevelProjectionPorts({
+        db: env.DB,
+        cache: env.CACHE,
+        debugEnabled: profile.name === "complement",
+      }),
+    },
     signedTransport: new CloudflareSignedTransport(),
     discoveryService: new CloudflareDiscoveryService(env),
     deliveryQueue: new CloudflareDeliveryQueue(),
     remoteKeyCache: new CloudflareRemoteKeyCache(env),
+    federationEduHandlers: {
+      typing: createFederationTypingIngestPorts({
+        db: env.DB,
+        realtime: capabilities.realtime,
+        cache: env.CACHE,
+      }),
+      receipts: createFederationReceiptIngestPorts({
+        db: env.DB,
+        realtime: capabilities.realtime,
+        cache: env.CACHE,
+      }),
+      directToDevice: {
+        ingest: (origin, content) => ingestDirectToDeviceEdu(env.DB, origin, content),
+      },
+    },
   });
 
   return appContext;

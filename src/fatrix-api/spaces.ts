@@ -1,0 +1,310 @@
+// Spaces API
+// Implements: https://spec.matrix.org/v1.12/client-server-api/#spaces
+//
+// Spaces are a way to organize rooms into hierarchical groups
+
+import { Hono } from "hono";
+import type { Context } from "hono";
+import type { AppEnv } from "./hono-env";
+import { isJsonObject } from "../fatrix-model/types/common";
+import type {
+  PublicRoomSummary,
+  SpaceHierarchyChildEdge,
+  SpaceHierarchyChildStateEvent,
+  SpaceHierarchyRoom,
+  SpaceHierarchySnapshot,
+} from "../fatrix-model/types/client";
+import { Errors } from "../fatrix-model/utils/errors";
+import { requireAuth } from "./middleware/auth";
+import {
+  EventQueryService,
+  selectSpaceChildren,
+  type SpaceChildEdge,
+} from "../fatrix-backend/application/orchestrators/event-query-service";
+import { federationGet } from "../platform/cloudflare/adapters/federation/federation-keys";
+import { toRoomId, toUserId } from "../fatrix-model/utils/ids";
+
+const app = new Hono<AppEnv>();
+const queries = new EventQueryService();
+type AppContext = Context<AppEnv>;
+
+function filterHierarchyEdges(edges: SpaceChildEdge[], suggestedOnly: boolean): SpaceChildEdge[] {
+  return selectSpaceChildren(edges, {
+    suggestedOnly,
+    limit: Number.MAX_SAFE_INTEGER,
+    offset: 0,
+  }).children;
+}
+
+function toHierarchyChildEdges(edges: SpaceChildEdge[]): SpaceHierarchyChildEdge[] {
+  return edges.flatMap((edge) => {
+    const roomId = toRoomId(edge.roomId);
+    return roomId ? [{ roomId, content: edge.content }] : [];
+  });
+}
+
+function getFallbackSpaceSender(roomId: string): ReturnType<typeof toUserId> {
+  const [, serverName] = roomId.split(":");
+  return serverName ? toUserId(`@unknown:${serverName}`) : null;
+}
+
+function toChildrenState(edges: SpaceChildEdge[]): SpaceHierarchyChildStateEvent[] {
+  return edges.flatMap((edge) => {
+    const stateKey = toRoomId(edge.roomId);
+    const sender = getFallbackSpaceSender(edge.roomId);
+    if (!stateKey || !sender) {
+      return [];
+    }
+    return [
+      {
+        type: "m.space.child" as const,
+        state_key: stateKey,
+        content: edge.content,
+        sender,
+        origin_server_ts: 0,
+      },
+    ];
+  });
+}
+
+function toSpaceChild(room: PublicRoomSummary, childEdges: SpaceChildEdge[]): SpaceHierarchyRoom {
+  return {
+    ...room,
+    children_state: toChildrenState(childEdges),
+  };
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parseViaServers(content: Record<string, unknown>): string[] {
+  const via = content.via;
+  if (!Array.isArray(via)) {
+    return [];
+  }
+
+  return via.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
+}
+
+function parseFederationRoom(room: unknown): SpaceHierarchyRoom | null {
+  if (!isJsonObject(room) || typeof room.room_id !== "string") {
+    return null;
+  }
+  const roomId = toRoomId(room.room_id);
+  if (!roomId) {
+    return null;
+  }
+
+  const children_state = (Array.isArray(room.children_state) ? room.children_state : []).flatMap(
+    (event) => {
+      if (!isJsonObject(event)) {
+        return [];
+      }
+
+      if (
+        event.type !== "m.space.child" ||
+        typeof event.state_key !== "string" ||
+        !isObject(event.content)
+      ) {
+        return [];
+      }
+
+      const stateKey = toRoomId(event.state_key);
+      const sender =
+        (typeof event.sender === "string" ? toUserId(event.sender) : null) ??
+        getFallbackSpaceSender(event.state_key);
+      if (!stateKey || !sender) {
+        return [];
+      }
+
+      return [
+        {
+          type: "m.space.child" as const,
+          state_key: stateKey,
+          content: event.content,
+          sender,
+          origin_server_ts: typeof event.origin_server_ts === "number" ? event.origin_server_ts : 0,
+        },
+      ];
+    },
+  );
+
+  return {
+    room_id: roomId,
+    ...(typeof room.room_type === "string" ? { room_type: room.room_type } : {}),
+    ...(typeof room.name === "string" ? { name: room.name } : {}),
+    ...(typeof room.topic === "string" ? { topic: room.topic } : {}),
+    ...(typeof room.canonical_alias === "string" ? { canonical_alias: room.canonical_alias } : {}),
+    ...(typeof room.avatar_url === "string" ? { avatar_url: room.avatar_url } : {}),
+    ...(typeof room.join_rule === "string" ? { join_rule: room.join_rule } : {}),
+    num_joined_members: typeof room.num_joined_members === "number" ? room.num_joined_members : 0,
+    world_readable: room.world_readable === true,
+    guest_can_join: room.guest_can_join === true,
+    children_state,
+  };
+}
+
+async function loadLocalSnapshot(
+  db: D1Database,
+  roomId: string,
+  suggestedOnly: boolean,
+): Promise<SpaceHierarchySnapshot | null> {
+  if (!(await queries.roomExists(db, roomId))) {
+    return null;
+  }
+
+  const room = await queries.getRoomPublicInfo(db, roomId);
+  if (!room) {
+    return null;
+  }
+
+  const childEdges = filterHierarchyEdges(
+    await queries.getSpaceChildEdges(db, roomId),
+    suggestedOnly,
+  );
+  return {
+    room: toSpaceChild(room, childEdges),
+    childEdges: toHierarchyChildEdges(childEdges),
+  };
+}
+
+async function fetchRemoteSnapshot(
+  c: AppContext,
+  roomId: string,
+  viaServers: string[],
+  suggestedOnly: boolean,
+): Promise<SpaceHierarchySnapshot | null> {
+  const remoteTargets = viaServers.filter((server) => server !== c.env.SERVER_NAME);
+
+  for (const server of remoteTargets) {
+    try {
+      const query = new URLSearchParams();
+      query.set("limit", "100");
+      if (suggestedOnly) {
+        query.set("suggested_only", "true");
+      }
+
+      const response = await federationGet(
+        server,
+        `/_matrix/federation/v1/hierarchy/${encodeURIComponent(roomId)}?${query.toString()}`,
+        c.env.SERVER_NAME,
+        c.env.DB,
+        c.env.CACHE,
+      );
+      if (!response.ok) {
+        continue;
+      }
+
+      const body = await response.json();
+      if (!isJsonObject(body)) {
+        continue;
+      }
+      const room = parseFederationRoom(isJsonObject(body.room) ? body.room : null);
+      if (!room) {
+        continue;
+      }
+
+      const childEdges = filterHierarchyEdges(
+        room.children_state.map((event) => ({
+          roomId: event.state_key,
+          content: event.content,
+        })),
+        suggestedOnly,
+      );
+
+      return {
+        room: {
+          ...room,
+          children_state: toChildrenState(childEdges),
+        },
+        childEdges: toHierarchyChildEdges(childEdges),
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+async function loadHierarchySnapshot(
+  c: AppContext,
+  roomId: string,
+  viaServers: string[],
+  suggestedOnly: boolean,
+): Promise<SpaceHierarchySnapshot | null> {
+  const local = await loadLocalSnapshot(c.env.DB, roomId, suggestedOnly);
+  if (local) {
+    return local;
+  }
+
+  return fetchRemoteSnapshot(c, roomId, viaServers, suggestedOnly);
+}
+
+app.get("/_matrix/client/v1/rooms/:roomId/hierarchy", requireAuth(), async (c) => {
+  const userId = c.get("userId");
+  const roomId = c.req.param("roomId");
+  if (!(await queries.roomExists(c.env.DB, roomId))) {
+    return Errors.notFound("Room not found").toResponse();
+  }
+
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
+  const offsetToken = c.req.query("from");
+  const offset =
+    offsetToken && offsetToken.startsWith("offset_")
+      ? Math.max(0, Number.parseInt(offsetToken.slice("offset_".length), 10) || 0)
+      : 0;
+  const maxDepth = Math.max(0, parseInt(c.req.query("max_depth") ?? "100", 10));
+  const suggestedOnly = c.req.query("suggested_only") === "true";
+
+  const rooms: SpaceHierarchyRoom[] = [];
+  const visited = new Set<string>();
+
+  const visit = async (
+    currentRoomId: string,
+    viaServers: string[],
+    depth: number,
+    forceVisible = false,
+  ): Promise<void> => {
+    if (visited.has(currentRoomId)) {
+      return;
+    }
+    visited.add(currentRoomId);
+
+    const snapshot = await loadHierarchySnapshot(c, currentRoomId, viaServers, suggestedOnly);
+    if (!snapshot) {
+      return;
+    }
+
+    const isVisible =
+      forceVisible ||
+      snapshot.room.world_readable ||
+      (await queries.isRoomVisibleToUser(c.env.DB, currentRoomId, userId));
+    if (!isVisible) {
+      return;
+    }
+
+    rooms.push(snapshot.room);
+    if (depth >= maxDepth) {
+      return;
+    }
+
+    for (const edge of snapshot.childEdges) {
+      await visit(edge.roomId, parseViaServers(edge.content), depth + 1);
+    }
+  };
+
+  await visit(roomId, [c.env.SERVER_NAME], 0, true);
+
+  const response: Record<string, unknown> = {
+    rooms: rooms.slice(offset, offset + limit),
+  };
+  if (rooms.length > offset + limit) {
+    response.next_batch = `offset_${offset + limit}`;
+  }
+
+  return c.json(response);
+});
+
+export default app;

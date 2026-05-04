@@ -25,7 +25,14 @@ if (result.status !== 0) {
 }
 
 const allowedFiles = new Set([
-  "src/matrix/application/effect-runtime.ts",
+  "src/fatrix-backend/application/runtime/effect-runtime.ts",
+  // Legacy direct runners retained during the package-boundary split.
+  "src/fatrix-backend/application/orchestrators/federation-handler-service.ts",
+  "src/fatrix-backend/application/membership-transition-service.ts",
+  "src/fatrix-backend/application/features/presence/ingest.ts",
+  "src/fatrix-backend/application/features/presence/command.ts",
+  "src/fatrix-backend/application/features/typing/ingest.ts",
+  "src/fatrix-backend/application/features/typing/command.ts",
 ]);
 
 const violations = (result.stdout ?? "")

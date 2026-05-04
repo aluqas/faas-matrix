@@ -1,8 +1,8 @@
 import { Effect } from "effect";
 import type { Context } from "hono";
-import type { AppEnv } from "../../shared/types";
-import { withLogContext } from "../../matrix/application/logging";
-import { toErrorResponse } from "../../shared/utils/errors";
+import type { AppEnv } from "../../fatrix-api/hono-env";
+import { withLogContext } from "../../fatrix-backend/application/logging";
+import { toErrorResponse } from "../../fatrix-model/utils/errors";
 
 export function handleAppError(err: Error, c: Context<AppEnv>) {
   const response = toErrorResponse(err);

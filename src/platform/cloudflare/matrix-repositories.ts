@@ -1,6 +1,6 @@
-import { discoverServer } from "../../infra/federation/server-discovery";
-import { EFFECTIVE_MEMBERSHIPS_AND_JOINED_MEMBERS_CTE } from "../../infra/repositories/membership-repository";
-import { upsertPresence as dbUpsertPresence } from "../../infra/repositories/presence-repository";
+import { discoverServer } from "./adapters/federation/server-discovery";
+import { EFFECTIVE_MEMBERSHIPS_AND_JOINED_MEMBERS_CTE } from "./adapters/repositories/membership-repository";
+import { upsertPresence as dbUpsertPresence } from "./adapters/repositories/presence-repository";
 import {
   createRoom,
   createRoomAlias,
@@ -20,27 +20,27 @@ import {
   notifyUsersOfEvent,
   storeEvent,
   updateMembership,
-} from "../../infra/db/database";
+} from "./adapters/db/database";
 import {
   getGlobalAccountData,
   getRoomAccountData,
   upsertAccountDataRecord,
-} from "../../infra/repositories/account-data-repository";
-import { getReceiptsForRoom } from "../../features/receipts/project";
-import { getToDeviceMessages } from "../../features/to-device/project";
-import { getTypingUsers } from "../../features/typing/project";
-import { countUnreadNotificationSummaryWithRules } from "../../infra/realtime/push-rule-evaluator";
+} from "./adapters/repositories/account-data-repository";
+import { getReceiptsForRoom } from "./adapters/application-ports/receipts/project";
+import { getToDeviceMessages } from "./adapters/application-ports/to-device/project";
+import { getTypingUsers } from "./adapters/application-ports/typing/project";
+import { countUnreadNotificationSummaryWithRules } from "./adapters/realtime/push-rule-evaluator";
 import type {
   DeviceId,
-  Env,
   EventId,
   PDU,
   Room,
   RoomId,
   ToDeviceEvent,
   UserId,
-} from "../../shared/types";
-import type { AccountDataContent } from "../../shared/types/account-data";
+} from "../../fatrix-model/types";
+import type { Env } from "./env";
+import type { AccountDataContent } from "../../fatrix-model/types/account-data";
 import type {
   FederationProcessedPdu,
   FederationRepository,
@@ -48,16 +48,16 @@ import type {
   ReceiptEvent,
   RoomRepository,
   SyncRepository,
-} from "../../infra/repositories/interfaces";
-import { toUserId } from "../../shared/utils/ids";
-import { validateUrl } from "../../shared/utils/url-validator";
+} from "../../fatrix-backend/ports/repositories";
+import { toUserId } from "../../fatrix-model/utils/ids";
+import { validateUrl } from "../../fetherate/utils/url-validator";
 import type {
   DeliveryQueue,
   DiscoveryService,
   RemoteKeyCache,
   SignedTransport,
-} from "../../features/federation-core/contracts";
-import { persistFederationMembershipEvent } from "../../matrix/application/orchestrators/federation-handler-service";
+} from "../../fatrix-backend/application/federation/transactions/contracts";
+import { persistFederationMembershipEvent } from "../../fatrix-backend/application/orchestrators/federation-handler-service";
 
 function parseJsonWithFallback<T>(value: string | null | undefined, fallback: T): T {
   if (!value) {

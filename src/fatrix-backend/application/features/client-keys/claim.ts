@@ -1,0 +1,74 @@
+import type { Env } from "../../../../platform/cloudflare/env";
+import type {
+  JsonObjectMap,
+  KeysClaimRequest,
+  UserOneTimeKeysMap,
+} from "../../../../fatrix-model/types/client";
+import { runClientEffect } from "../../runtime/effect-runtime";
+import { createKeysLogger } from "./shared";
+import {
+  claimOneTimeKeyFromStoreChain,
+  toClaimedOneTimeKeyEntry,
+} from "../../../../platform/cloudflare/adapters/application-ports/federation-e2ee/e2ee-claim-store";
+import { toUserId } from "../../../../fatrix-model/utils/ids";
+
+export async function claimClientKeys(input: {
+  env: Pick<
+    Env,
+    | "DB"
+    | "CACHE"
+    | "ONE_TIME_KEYS"
+    | "USER_KEYS"
+    | "CROSS_SIGNING_KEYS"
+    | "DEVICE_KEYS"
+    | "SERVER_NAME"
+  >;
+  userId: string | null;
+  request: KeysClaimRequest;
+}): Promise<{ oneTimeKeys: UserOneTimeKeysMap; failures: JsonObjectMap }> {
+  const logger = createKeysLogger("claim", { user_id: input.userId });
+  const requestedKeys = input.request.one_time_keys;
+
+  await runClientEffect(
+    logger.info("keys.command.start", {
+      command: "claim",
+      requested_user_count: requestedKeys ? Object.keys(requestedKeys).length : 0,
+    }),
+  );
+
+  const oneTimeKeys: UserOneTimeKeysMap = {};
+  const failures: JsonObjectMap = {};
+
+  if (requestedKeys) {
+    for (const [userId, devices] of Object.entries(requestedKeys)) {
+      const typedUserId = toUserId(userId);
+      if (!typedUserId) {
+        continue;
+      }
+      oneTimeKeys[typedUserId] = {};
+
+      for (const [deviceId, algorithm] of Object.entries(devices)) {
+        const claimedKey = await claimOneTimeKeyFromStoreChain(
+          input.env,
+          typedUserId,
+          deviceId,
+          algorithm,
+          Date.now(),
+        );
+
+        if (claimedKey) {
+          oneTimeKeys[typedUserId][deviceId] = toClaimedOneTimeKeyEntry(claimedKey);
+        }
+      }
+    }
+  }
+
+  await runClientEffect(
+    logger.info("keys.command.success", {
+      command: "claim",
+      returned_user_count: Object.keys(oneTimeKeys).length,
+    }),
+  );
+
+  return { oneTimeKeys, failures };
+}

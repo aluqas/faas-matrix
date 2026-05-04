@@ -8,16 +8,16 @@
     "useUnknownInCatchVariables": true
   },
   "include": [
-    "src/matrix/application/domain-error.ts",
-    "src/matrix/application/effect-debug.ts",
-    "src/matrix/application/effect-runtime.ts",
-    "src/matrix/application/logging.ts",
-    "src/matrix/application/features/presence/**/*.ts",
-    "src/matrix/application/features/to-device/**/*.ts",
-    "src/matrix/application/features/typing/**/*.ts",
-    "src/api/presence.ts",
-    "src/api/typing.ts",
-    "src/api/to-device.ts"
+    "src/fatrix-backend/application/domain-error.ts",
+    "src/fatrix-backend/application/runtime/effect-debug.ts",
+    "src/fatrix-backend/application/runtime/effect-runtime.ts",
+    "src/fatrix-backend/application/logging.ts",
+    "src/fatrix-backend/application/features/presence/**/*.ts",
+    "src/fatrix-backend/application/features/to-device/**/*.ts",
+    "src/fatrix-backend/application/features/typing/**/*.ts",
+    "src/fatrix-api/presence.ts",
+    "src/fatrix-api/typing.ts",
+    "src/fatrix-api/to-device.ts"
   ],
   "exclude": ["node_modules", "src/**/*.test.ts"]
 }
