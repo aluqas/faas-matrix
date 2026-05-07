@@ -25,7 +25,7 @@ export function createFederationOutboundPort(env: Pick<Env, "FEDERATION">): Fede
   return {
     async enqueuePdu(input) {
       const stub = getOutboundStub(env);
-      await stub.fetch(
+      const response = await stub.fetch(
         new Request("http://internal/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -37,6 +37,9 @@ export function createFederationOutboundPort(env: Pick<Env, "FEDERATION">): Fede
           }),
         }),
       );
+      if (!response.ok) {
+        throw new Error(`Failed to enqueue federation PDU: ${response.status}`);
+      }
     },
     async enqueueEdu(input) {
       const stub = getOutboundStub(env);
@@ -60,10 +63,16 @@ export async function enqueueFederationPdu(
   destination: string,
   roomId: RoomId,
   event: PDU,
+  explicitEventId?: EventId,
 ): Promise<void> {
+  const eventId = explicitEventId ?? event.event_id;
+  if (!eventId) {
+    throw new Error("Cannot enqueue federation PDU without an event ID");
+  }
+
   await createFederationOutboundPort(env).enqueuePdu({
     destination,
-    eventId: event.event_id,
+    eventId,
     roomId,
     pdu: event as unknown as Record<string, unknown>,
   });

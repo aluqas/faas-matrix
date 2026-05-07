@@ -194,8 +194,12 @@ export function getServerName(id: string | null | undefined): ServerName | null 
     return null;
   }
 
-  const match = id.match(/:([^:]+)$/);
-  return match ? match[1] : null;
+  const colonIndex = id.indexOf(":");
+  if (colonIndex === -1) {
+    return null;
+  }
+
+  return id.slice(colonIndex + 1);
 }
 
 // Type guards for Matrix IDs

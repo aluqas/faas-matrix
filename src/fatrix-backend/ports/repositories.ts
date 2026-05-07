@@ -69,6 +69,7 @@ export interface RoomRepository {
   getMembership(roomId: RoomId, userId: UserId): Promise<MembershipRecord | null>;
   getStateEvent(roomId: RoomId, eventType: string, stateKey?: string): Promise<PDU | null>;
   getLatestRoomEvents(roomId: RoomId, limit: number): Promise<PDU[]>;
+  findLocalAuthorizingUser(roomId: RoomId, serverName: string): Promise<string | null>;
 }
 
 export interface SyncRepository {

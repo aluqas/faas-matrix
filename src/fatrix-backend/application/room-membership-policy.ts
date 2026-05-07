@@ -19,6 +19,10 @@ export interface JoinAuthorizationResult {
   alreadyJoined: boolean;
   joinRule: JoinRule;
   policy: RoomVersionPolicy;
+  /** Set for successful restricted/knock_restricted joins. The user ID of the local
+   *  homeserver resident who authorized the join (to be written as
+   *  `join_authorised_via_users_server` in the join event content). */
+  authorizingUser?: string;
 }
 
 export interface KnockAuthorizationResult {
@@ -260,6 +264,13 @@ export function authorizeLocalJoin(input: {
    * If absent, restricted joins are denied unconditionally.
    */
   checkAllowedRoomMembership?: (roomId: string) => Effect.Effect<boolean>;
+  /**
+   * Port for resolving a local homeserver user who can authorize a restricted join
+   * (i.e., a resident user in the restricted room with sufficient invite power level).
+   * Required for restricted/knock_restricted joins to produce `join_authorised_via_users_server`.
+   * If absent or returns null, the join is denied.
+   */
+  resolveAuthorizingUser?: () => Effect.Effect<string | null>;
 }): Effect.Effect<JoinAuthorizationResult, DomainError> {
   return resolveJoinRuleContext({
     roomVersion: input.roomVersion,
@@ -286,6 +297,7 @@ export function authorizeLocalJoin(input: {
         return authorizeRestrictedJoin(
           input.joinRulesContent?.allow ?? [],
           input.checkAllowedRoomMembership,
+          input.resolveAuthorizingUser,
           joinRule,
           policy,
         );
@@ -299,6 +311,7 @@ export function authorizeLocalJoin(input: {
 function authorizeRestrictedJoin(
   allowList: RestrictedJoinAllowEntry[],
   checkPort: ((roomId: string) => Effect.Effect<boolean>) | undefined,
+  resolveAuthorizingUser: (() => Effect.Effect<string | null>) | undefined,
   joinRule: JoinRule,
   policy: RoomVersionPolicy,
 ): Effect.Effect<JoinAuthorizationResult, DomainError> {
@@ -315,15 +328,37 @@ function authorizeRestrictedJoin(
   }
 
   return Effect.gen(function* () {
+    let membershipSatisfied = false;
     for (const allowedRoomId of allowedRoomIds) {
       const isMember = yield* checkPort(allowedRoomId);
       if (isMember) {
-        return { alreadyJoined: false, joinRule, policy } satisfies JoinAuthorizationResult;
+        membershipSatisfied = true;
+        break;
       }
     }
-    return yield* Effect.fail(
-      forbidden("Not a member of an allowed room for this restricted room"),
-    );
+
+    if (!membershipSatisfied) {
+      return yield* Effect.fail(
+        forbidden("Not a member of an allowed room for this restricted room"),
+      );
+    }
+
+    if (!resolveAuthorizingUser) {
+      return yield* Effect.fail(
+        forbidden("Cannot authorize restricted join: no authorizing user resolver provided"),
+      );
+    }
+
+    const authorizingUser = yield* resolveAuthorizingUser();
+    if (!authorizingUser) {
+      return yield* Effect.fail(
+        forbidden(
+          "Cannot authorize restricted join: no local user with invite power found in the room",
+        ),
+      );
+    }
+
+    return { alreadyJoined: false, joinRule, policy, authorizingUser } satisfies JoinAuthorizationResult;
   });
 }
 

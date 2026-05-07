@@ -59,7 +59,7 @@ export interface RealtimeCapability {
 
 export interface FederationCapability {
   queueEdu?(destination: string, eduType: string, content: Record<string, unknown>): Promise<void>;
-  queuePdu?(destination: string, roomId: RoomId, pdu: PDU): Promise<void>;
+  queuePdu?(destination: string, roomId: RoomId, pdu: PDU, eventId?: EventId): Promise<void>;
 }
 
 export interface MetricsCapability {

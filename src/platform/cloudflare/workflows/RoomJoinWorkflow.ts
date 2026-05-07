@@ -9,7 +9,7 @@
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import type { DeviceId, EventId, PDU, RoomId, ServerName, UserId } from "../../../fatrix-model/types";
 import type { Env } from "../env";
-import { generateEventId, toEventId, toUserId } from "../../../fatrix-model/utils/ids";
+import { generateEventId, getServerName, toEventId, toUserId } from "../../../fatrix-model/utils/ids";
 import { isJsonObject } from "../../../fatrix-model/types/common";
 import type { PartialStateJoinMarker, PartialStateStatus } from "../../../fatrix-model/types/partial-state";
 import { calculateContentHash, calculateReferenceHashEventId } from "../../../fatrix-model/utils/crypto";
@@ -371,10 +371,6 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
         }
         const sendJoinResponse = sendJoinResult.value;
         remoteSendJoinResponse = sendJoinResponse;
-        const partialStateRoomIsEncrypted =
-          hasEncryptionStateEvent(sendJoinResponse.state) ||
-          hasEncryptionStateEvent(sendJoinResponse.auth_chain);
-
         // Process the room state received from the remote server
         await step.do("process-remote-state", async () => {
           const roomVersion = remoteEventTemplate?.room_version ?? "10";
@@ -392,21 +388,6 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
           if (!partialStateEventId) {
             throw new Error("partial send_join response missing prev_event boundary");
           }
-
-          const eventId = partialStateEventId;
-          await step.do("mark-partial-state", async () => {
-            const marker: PartialStateJoinMarker = {
-              roomId,
-              userId,
-              eventId,
-              startedAt: Date.now(),
-              encrypted: partialStateRoomIsEncrypted,
-              ...withDefined("remoteServer", successfulRemoteServer),
-              ...withDefined("serversInRoom", sendJoinResponse.servers_in_room),
-            };
-            await upsertPartialStateJoinMetadata(this.env.DB, marker);
-            await markPartialStateJoin(this.env.CACHE, marker);
-          });
         }
       }
 
@@ -424,9 +405,27 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
           source: "workflow",
           context: transitionContext,
         });
+        await this.notifyMemberBatch([{ userId }], joinEventData);
       });
 
       if (isRemote && successfulRemoteServer && partialStateEventId) {
+        const eventId = partialStateEventId;
+        await step.do("mark-partial-state", async () => {
+          const marker: PartialStateJoinMarker = {
+            roomId,
+            userId,
+            eventId,
+            startedAt: Date.now(),
+            encrypted:
+              hasEncryptionStateEvent(remoteSendJoinResponse?.state) ||
+              hasEncryptionStateEvent(remoteSendJoinResponse?.auth_chain),
+            ...withDefined("remoteServer", successfulRemoteServer),
+            ...withDefined("serversInRoom", remoteSendJoinResponse?.servers_in_room),
+          };
+          await upsertPartialStateJoinMetadata(this.env.DB, marker);
+          await markPartialStateJoin(this.env.CACHE, marker);
+        });
+
         await step.do(
           "resync-partial-state",
           {
@@ -452,10 +451,24 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
 
       await step.do("publish-device-lists", async () => {
         try {
+          const joinedServers = new Set<string>();
+          const roomServer = getServerName(roomId);
+          if (roomServer) {
+            joinedServers.add(roomServer);
+          }
+          const joinedMembers = await getRoomMembers(this.env.DB, roomId, "join");
+          for (const member of joinedMembers) {
+            const memberServer = getServerName(member.userId);
+            if (memberServer) {
+              joinedServers.add(memberServer);
+            }
+          }
+
           const published = await publishDeviceListUpdatesForNewlySharedServers(
             {
               userId,
               previouslySharedServers: preJoinSharedServers,
+              sharedServersAfterJoin: [...joinedServers],
             },
             {
               localServerName: this.env.SERVER_NAME,
@@ -549,7 +562,6 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
             ...withDefined("serversInRoom", remoteSendJoinResponse?.servers_in_room),
           });
           await clearPartialStateJoin(this.env.CACHE, userId, roomId);
-          await this.notifyMemberBatch([{ userId }], joinEventData);
         });
       }
 
@@ -701,6 +713,10 @@ export class RoomJoinWorkflow extends WorkflowEntrypoint<Env, JoinParams> {
     const roomVersion = remoteEventTemplate?.room_version;
     const memberContent: JsonObject = {
       membership: "join",
+      ...withDefined(
+        "join_authorised_via_users_server",
+        remoteEventTemplate?.event?.join_authorised_via_users_server,
+      ),
     };
 
     if (displayName) {

@@ -32,6 +32,7 @@ export interface RemoteJoinTemplateEvent {
   auth_events?: string[];
   prev_events?: string[];
   depth?: number;
+  join_authorised_via_users_server?: string;
 }
 
 export interface RemoteJoinTemplate {
@@ -114,6 +115,10 @@ export function toRemoteJoinTemplate(value: unknown): RemoteJoinTemplate | null 
 
   if (typeof event["depth"] === "number") {
     templateEvent.depth = event["depth"];
+  }
+  const content = toJsonObject(event["content"]);
+  if (typeof content?.["join_authorised_via_users_server"] === "string") {
+    templateEvent.join_authorised_via_users_server = content["join_authorised_via_users_server"];
   }
 
   return {

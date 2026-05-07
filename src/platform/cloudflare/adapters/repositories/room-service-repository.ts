@@ -1,6 +1,6 @@
 import { sql, type RawBuilder } from "kysely";
 import { createKyselyBuilder, executeKyselyQuery, type CompiledQuery } from "../db/kysely";
-import type { Device, UserId } from "../../../../fatrix-model/types";
+import type { Device, RoomId, UserId } from "../../../../fatrix-model/types";
 import { toUserId } from "../../../../fatrix-model/utils/ids";
 
 type DeviceRow = {
@@ -77,6 +77,49 @@ export async function getUserDevicesForRoomService(
       },
     ];
   });
+}
+
+/**
+ * Returns distinct remote server names that have joined members in the given room,
+ * excluding the local server. Used to populate `sharedServersAfterJoin` for
+ * device-list publication upon room join, including non-encrypted rooms.
+ */
+export async function getRemoteServersInRoom(
+  db: D1Database,
+  roomId: RoomId,
+  localServerName: string,
+): Promise<string[]> {
+  const rows = await executeKyselyQuery<ServerNameRow>(
+    db,
+    asCompiledQuery(sql<ServerNameRow>`
+      WITH current_members AS (
+        SELECT user_id FROM room_memberships WHERE room_id = ${roomId} AND membership = 'join'
+
+        UNION
+
+        SELECT rs.state_key AS user_id
+        FROM room_state rs
+        JOIN events e ON rs.event_id = e.event_id
+        WHERE rs.room_id = ${roomId}
+          AND rs.event_type = 'm.room.member'
+          AND rs.state_key IS NOT NULL
+          AND json_extract(e.content, '$.membership') = 'join'
+          AND NOT EXISTS (
+            SELECT 1 FROM room_memberships rm
+            WHERE rm.room_id = rs.room_id AND rm.user_id = rs.state_key
+          )
+      )
+      SELECT DISTINCT
+        CASE
+          WHEN INSTR(user_id, ':') > 0 THEN SUBSTR(user_id, INSTR(user_id, ':') + 1)
+          ELSE NULL
+        END AS server_name
+      FROM current_members
+    `),
+  );
+  return rows
+    .map((row) => row.server_name)
+    .filter((server): server is string => server !== null && server !== localServerName);
 }
 
 export async function getEncryptedSharedServersForRoomService(

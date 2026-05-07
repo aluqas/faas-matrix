@@ -18,6 +18,9 @@ start_wrangler() {
   log_json info startup.wrangler.begin "Starting wrangler dev" \
     log_level "${WRANGLER_LOG_LEVEL}" \
     wrangler_port "${WRANGLER_PORT}"
+  if [ -f /complement/ca/ca.crt ]; then
+    export NODE_EXTRA_CA_CERTS=/complement/ca/ca.crt
+  fi
   "${WRANGLER_BIN}" dev \
     --config "${WRANGLER_CONFIG}" \
     --local \

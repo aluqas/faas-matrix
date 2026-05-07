@@ -144,6 +144,74 @@ export function getFederationCurrentStateMembership(
   );
 }
 
+/**
+ * Finds a local homeserver user who is joined to the room and has at least
+ * the invite power level. Used to populate `join_authorised_via_users_server`
+ * when building restricted join templates.
+ */
+export async function findLocalAuthorizingUserInRoom(
+  db: D1Database,
+  roomId: string,
+  serverName: string,
+): Promise<string | null> {
+  // Get all local joined members
+  const localMembers = await executeKyselyQuery<{ user_id: string }>(
+    db,
+    asCompiledQuery(sql<{ user_id: string }>`
+      SELECT user_id
+      FROM room_memberships
+      WHERE room_id = ${roomId}
+        AND membership = 'join'
+        AND user_id LIKE '%:' || ${serverName}
+    `),
+  );
+
+  if (localMembers.length === 0) {
+    return null;
+  }
+
+  // Get power levels to check invite threshold
+  const powerLevelsRow = await executeKyselyQueryFirst<{ content: string }>(
+    db,
+    asCompiledQuery(sql<{ content: string }>`
+      SELECT e.content
+      FROM room_state rs
+      JOIN events e ON rs.event_id = e.event_id
+      WHERE rs.room_id = ${roomId} AND rs.event_type = 'm.room.power_levels'
+    `),
+  );
+
+  let invitePower = 0;
+  const usersMap: Record<string, number> = {};
+  let usersDefault = 0;
+
+  if (powerLevelsRow) {
+    try {
+      const pl = JSON.parse(powerLevelsRow.content) as {
+        invite?: number;
+        users_default?: number;
+        users?: Record<string, number>;
+      };
+      invitePower = pl.invite ?? 0;
+      usersDefault = pl.users_default ?? 0;
+      if (pl.users && typeof pl.users === "object") {
+        Object.assign(usersMap, pl.users);
+      }
+    } catch {
+      // malformed power levels — use defaults
+    }
+  }
+
+  for (const { user_id } of localMembers) {
+    const userPower = user_id in usersMap ? (usersMap[user_id] ?? 0) : usersDefault;
+    if (userPower >= invitePower) {
+      return user_id;
+    }
+  }
+
+  return null;
+}
+
 export async function isUserJoinedToAllowedRoom(
   db: D1Database,
   roomId: string,

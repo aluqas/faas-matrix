@@ -26,6 +26,7 @@ import {
   getRoomAccountData,
   upsertAccountDataRecord,
 } from "./adapters/repositories/account-data-repository";
+import { findLocalAuthorizingUserInRoom } from "./adapters/repositories/federation-membership-read-repository";
 import { getReceiptsForRoom } from "./adapters/application-ports/receipts/project";
 import { getToDeviceMessages } from "./adapters/application-ports/to-device/project";
 import { getTypingUsers } from "./adapters/application-ports/typing/project";
@@ -185,6 +186,10 @@ export class CloudflareRoomRepository implements RoomRepository {
 
   getLatestRoomEvents(roomId: RoomId, limit: number): Promise<PDU[]> {
     return getLatestRoomEventsByDepth(this.env.DB, roomId, limit);
+  }
+
+  findLocalAuthorizingUser(roomId: RoomId, serverName: string): Promise<string | null> {
+    return findLocalAuthorizingUserInRoom(this.env.DB, roomId, serverName);
   }
 }
 

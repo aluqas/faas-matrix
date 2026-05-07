@@ -1016,13 +1016,14 @@ export async function ingestFederationPdu(
     const federationCap = ports.appContext.capabilities.federation;
     const queuePdu =
       federationCap?.queuePdu !== undefined
-        ? (dest: string, rid: PDU["room_id"], p: PDU) => federationCap.queuePdu!(dest, rid, p)
+        ? (dest: string, rid: PDU["room_id"], p: PDU, eventId: PDU["event_id"]) =>
+            federationCap.queuePdu!(dest, rid, p, eventId)
         : undefined;
     if (db && queuePdu && !deferredPartialStateAuthReason) {
       await fanoutEventToRemoteServers(
         {
-          enqueuePdu: ({ destination, roomId: targetRoomId, pdu }) =>
-            queuePdu(destination, targetRoomId, pdu as unknown as PDU),
+          enqueuePdu: ({ destination, eventId, roomId: targetRoomId, pdu }) =>
+            queuePdu(destination, targetRoomId, pdu as unknown as PDU, eventId),
         },
         db,
         ports.appContext.capabilities.config.serverName,

@@ -274,6 +274,31 @@ export async function projectJoinedRoom(
     }
   }
 
+  if (
+    query.sincePosition > 0 &&
+    currentMembership?.membership === "join" &&
+    typeof currentMembership.streamOrdering === "number" &&
+    currentMembership.streamOrdering >= query.sincePosition &&
+    !stateEvents.some((event) => event.event_id === currentMembership.eventId) &&
+    !timelineEvents.some((event) => event.event_id === currentMembership.eventId)
+  ) {
+    const membershipEvent = await repository.getEvent(currentMembership.eventId);
+    if (
+      membershipEvent?.type === "m.room.member" &&
+      membershipEvent.state_key === query.userId &&
+      (membershipEvent.content as { membership?: string } | undefined)?.membership === "join"
+    ) {
+      const clientEvent = toClientEvent(membershipEvent);
+      const timelineIncluded =
+        applyEventFilterWithoutLimit([clientEvent], query.roomFilter?.timeline).length > 0;
+      if (timelineIncluded) {
+        stateEvents.push(clientEvent);
+        timelineEvents.push(clientEvent);
+        timelineSourceEvents.push(membershipEvent);
+      }
+    }
+  }
+
   if (query.fullState || query.sincePosition === 0) {
     for (const event of roomState) {
       const clientEvent = toClientEvent(event);

@@ -68,6 +68,7 @@ app.get("/_matrix/federation/v1/make_join/:roomId/:userId", async (c) => {
     db: c.env.DB,
     roomId,
     userId,
+    serverName: c.env.SERVER_NAME,
   });
   if (result instanceof Response) {
     return result;
@@ -81,6 +82,7 @@ app.get("/_matrix/federation/v1/make_join/:roomId/:userId", async (c) => {
     currentMembershipEventId: result.currentMembershipEventId,
     currentStateMembership: result.currentStateMembership,
     currentStateMembershipEventId: result.currentStateMembershipEventId,
+    joinAuthorisedViaUsersServer: result.event.content.join_authorised_via_users_server,
     authEvents: result.event.auth_events,
     prevEvents: result.event.prev_events,
     depth: result.event.depth,

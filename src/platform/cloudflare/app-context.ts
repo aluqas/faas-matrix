@@ -169,8 +169,8 @@ function createRuntimeCapabilities(
       async queueEdu(destination: string, eduType: string, content: Record<string, unknown>) {
         await enqueueFederationEdu(env, destination, eduType, content);
       },
-      async queuePdu(destination: string, roomId: RoomId, pdu: PDU) {
-        await enqueueFederationPdu(env, destination, roomId, pdu);
+      async queuePdu(destination: string, roomId: RoomId, pdu: PDU, eventId?: PDU["event_id"]) {
+        await enqueueFederationPdu(env, destination, roomId, pdu, eventId);
       },
     },
     metrics: {

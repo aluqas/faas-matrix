@@ -7,6 +7,7 @@ import {
   type JoinRulesContent,
 } from "../../room-membership-policy";
 import {
+  findLocalAuthorizingUserInRoom,
   getFederationCurrentStateMembership,
   getFederationLatestEvent,
   getFederationMembershipRecord,
@@ -20,6 +21,7 @@ export async function buildFederationMakeJoinTemplate(input: {
   db: D1Database;
   roomId: RoomId;
   userId: UserId;
+  serverName: string;
 }): Promise<
   | {
       roomVersion: string;
@@ -28,7 +30,7 @@ export async function buildFederationMakeJoinTemplate(input: {
         sender: UserId;
         type: "m.room.member";
         state_key: UserId;
-        content: { membership: "join" };
+        content: { membership: "join"; join_authorised_via_users_server?: string };
         origin_server_ts: number;
         depth: number;
         auth_events: string[];
@@ -64,16 +66,22 @@ export async function buildFederationMakeJoinTemplate(input: {
     ? (JSON.parse(joinRulesEvent.content) as JoinRulesContent)
     : null;
 
+  let authorizingUser: string | undefined;
   try {
-    await runFederationEffect(
+    const authResult = await runFederationEffect(
       authorizeLocalJoin({
         roomVersion: String(room.roomVersion),
         joinRulesContent,
         currentMembership: currentMembership?.membership as Membership | undefined,
         checkAllowedRoomMembership: (allowedRoomId) =>
           Effect.promise(() => isUserJoinedToAllowedRoom(input.db, allowedRoomId, input.userId)),
+        resolveAuthorizingUser: () =>
+          Effect.promise(() =>
+            findLocalAuthorizingUserInRoom(input.db, input.roomId, input.serverName),
+          ),
       }),
     );
+    authorizingUser = authResult.authorizingUser;
   } catch (error) {
     return error instanceof Error && "toResponse" in error
       ? (error as { toResponse: () => Response }).toResponse()
@@ -97,7 +105,10 @@ export async function buildFederationMakeJoinTemplate(input: {
       sender: input.userId,
       type: "m.room.member",
       state_key: input.userId,
-      content: { membership: "join" },
+      content: {
+        membership: "join",
+        ...(authorizingUser ? { join_authorised_via_users_server: authorizingUser } : {}),
+      },
       origin_server_ts: Date.now(),
       depth,
       auth_events: authEvents,

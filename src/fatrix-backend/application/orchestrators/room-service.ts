@@ -16,7 +16,6 @@ import {
 import { getDefaultRoomVersion, getRoomVersion } from "../../../fatrix-model/room-versions";
 import {
   ErrorCodes,
-  type EventId,
   type PDU,
   type RoomId,
   type RoomJoinWorkflowStatus,
@@ -32,13 +31,18 @@ import type {
   ModerateRoomInput,
   SendEventInput,
 } from "../../../fatrix-model/types/rooms";
-import { calculateContentHash, signJson } from "../../../fatrix-model/utils/crypto";
+import {
+  calculateContentHash,
+  calculateReferenceHashEventId,
+  signJson,
+} from "../../../fatrix-model/utils/crypto";
 import { Errors, MatrixApiError } from "../../../fatrix-model/utils/errors";
 import { parseUserId, toEventId, toRoomId, toUserId } from "../../../fatrix-model/utils/ids";
 import type { EventPipeline } from "../domain/event-pipeline";
 import type { RoomRepository } from "../../ports/repositories";
 import {
   getEncryptedSharedServersForRoomService,
+  getRemoteServersInRoom,
   getUserDevicesForRoomService,
 } from "../../../platform/cloudflare/adapters/repositories/room-service-repository";
 import { runClientEffect } from "../runtime/effect-runtime";
@@ -244,8 +248,8 @@ export class MatrixRoomService {
     const federation = this.appContext.capabilities.federation;
     const queuePdu =
       federation?.queuePdu !== undefined
-        ? (destination: string, targetRoomId: PDU["room_id"], pdu: PDU) =>
-            federation.queuePdu!(destination, targetRoomId, pdu)
+        ? (destination: string, targetRoomId: PDU["room_id"], pdu: PDU, eventId: PDU["event_id"]) =>
+            federation.queuePdu!(destination, targetRoomId, pdu, eventId)
         : undefined;
     if (!db || !queuePdu) {
       return;
@@ -253,8 +257,8 @@ export class MatrixRoomService {
 
     await fanoutEventToRemoteServersWithPorts(
       createFederationFanoutPorts({
-        enqueuePdu: ({ destination, roomId: targetRoomId, pdu }) =>
-          queuePdu(destination, targetRoomId, pdu as unknown as PDU),
+        enqueuePdu: ({ destination, eventId, roomId: targetRoomId, pdu }) =>
+          queuePdu(destination, targetRoomId, pdu as unknown as PDU, eventId),
       }),
       db,
       this.appContext.capabilities.config.serverName,
@@ -527,6 +531,7 @@ export class MatrixRoomService {
       throw Errors.notFound("Room not found");
     }
 
+    let localJoinAuthorizingUser: string | undefined;
     await this.eventPipeline.execute({
       input,
       validate: () => {},
@@ -542,7 +547,8 @@ export class MatrixRoomService {
         );
         const joinRulesContent = (joinRulesEvent?.content ?? null) as JoinRulesContent | null;
         const repository = this.repository;
-        await runClientEffect(
+        const serverName = this.appContext.capabilities.config.serverName;
+        const authResult = await runClientEffect(
           authorizeLocalJoin({
             roomVersion: auth.roomVersion,
             joinRulesContent,
@@ -564,8 +570,13 @@ export class MatrixRoomService {
                   return false;
                 }
               }),
+            resolveAuthorizingUser: () =>
+              Effect.promise(() =>
+                repository.findLocalAuthorizingUser(validated.roomId, serverName),
+              ),
           }),
         );
+        localJoinAuthorizingUser = authResult.authorizingUser;
       },
       buildEvent: async (_pipelineInput, auth) => {
         const currentMembership = await this.repository.getMembership(
@@ -616,7 +627,12 @@ export class MatrixRoomService {
           ...withOptionalValue("createEventId", createEvent?.event_id),
           prevEventIds: latestEvents.map((event) => event.event_id),
           depth: (latestEvents[0]?.depth ?? 0) + 1,
-          ...withOptionalValue("content", validated.content),
+          content: {
+            ...validated.content,
+            ...(localJoinAuthorizingUser
+              ? { join_authorised_via_users_server: localJoinAuthorizingUser }
+              : {}),
+          },
           ...withOptionalValue(
             "unsigned",
             prevContent
@@ -666,10 +682,19 @@ export class MatrixRoomService {
               return;
             }
 
+            const remoteServersInRoom = db
+              ? await getRemoteServersInRoom(
+                  db,
+                  validated.roomId,
+                  this.appContext.capabilities.config.serverName,
+                )
+              : [];
+
             const published = await publishDeviceListUpdatesForNewlySharedServers(
               {
                 userId: input.userId,
                 previouslySharedServers: preJoinSharedServers,
+                sharedServersAfterJoin: remoteServersInRoom,
               },
               {
                 localServerName: this.appContext.capabilities.config.serverName,
@@ -775,13 +800,54 @@ export class MatrixRoomService {
         throw Errors.unknown("Remote server did not return a knock template");
       }
 
-      const eventId = toEventId(
-        await this.appContext.capabilities.id.generateEventId(
-          this.appContext.capabilities.config.serverName,
-        ),
+      const knockRoomVersion =
+        typeof makeKnock.room_version === "string" ? makeKnock.room_version : "10";
+      const authEvents = Array.isArray(makeKnock.event.auth_events)
+        ? makeKnock.event.auth_events.flatMap((id) => {
+            const typedId = typeof id === "string" ? toEventId(id) : null;
+            return typedId ? [typedId] : [];
+          })
+        : [];
+      const prevEvents = Array.isArray(makeKnock.event.prev_events)
+        ? makeKnock.event.prev_events.flatMap((id) => {
+            const typedId = typeof id === "string" ? toEventId(id) : null;
+            return typedId ? [typedId] : [];
+          })
+        : [];
+      const depth =
+        typeof makeKnock.event.depth === "number" ? makeKnock.event.depth : 1;
+      const knockContent = {
+        membership: "knock",
+        ...(input.reason !== undefined ? { reason: input.reason } : {}),
+      };
+      const baseKnockEvent = {
+        room_id: input.roomId,
+        sender: input.userId,
+        type: "m.room.member",
+        state_key: input.userId,
+        content: knockContent,
+        origin_server_ts: this.appContext.capabilities.clock.now(),
+        depth,
+        auth_events: authEvents,
+        prev_events: prevEvents,
+      };
+      const knockHash = await calculateContentHash(
+        baseKnockEvent as unknown as Record<string, unknown>,
       );
+      const knockEventWithHash = { ...baseKnockEvent, hashes: { sha256: knockHash } };
+      const knockEventIdRaw =
+        getRoomVersion(knockRoomVersion)?.eventIdFormat === "v1"
+          ? await this.appContext.capabilities.id.generateEventId(
+              this.appContext.capabilities.config.serverName,
+              knockRoomVersion,
+            )
+          : await calculateReferenceHashEventId(
+              knockEventWithHash as unknown as Record<string, unknown>,
+              knockRoomVersion,
+            );
+      const eventId = toEventId(knockEventIdRaw);
       if (!eventId) {
-        throw Errors.unknown("Failed to generate a valid event ID");
+        throw Errors.unknown("Failed to generate a valid event ID for remote knock");
       }
       const event: PDU = {
         event_id: eventId,
@@ -789,24 +855,12 @@ export class MatrixRoomService {
         sender: input.userId,
         type: "m.room.member",
         state_key: input.userId,
-        content: {
-          membership: "knock",
-          ...(input.reason !== undefined ? { reason: input.reason } : {}),
-        },
-        origin_server_ts: this.appContext.capabilities.clock.now(),
-        depth: typeof makeKnock.event.depth === "number" ? makeKnock.event.depth : 1,
-        auth_events: Array.isArray(makeKnock.event.auth_events)
-          ? makeKnock.event.auth_events.flatMap((id) => {
-              const typedId = typeof id === "string" ? toEventId(id) : null;
-              return typedId ? [typedId] : [];
-            })
-          : [],
-        prev_events: Array.isArray(makeKnock.event.prev_events)
-          ? makeKnock.event.prev_events.flatMap((id) => {
-              const typedId = typeof id === "string" ? toEventId(id) : null;
-              return typedId ? [typedId] : [];
-            })
-          : [],
+        content: knockContent,
+        origin_server_ts: knockEventWithHash.origin_server_ts,
+        depth,
+        auth_events: authEvents,
+        prev_events: prevEvents,
+        hashes: { sha256: knockHash },
       };
 
       const sendKnockResponse = await federationPut(
@@ -863,58 +917,32 @@ export class MatrixRoomService {
       }),
     );
 
-    const eventId = toEventId(
-      await this.appContext.capabilities.id.generateEventId(
-        this.appContext.capabilities.config.serverName,
-      ),
-    );
-    if (!eventId) {
-      throw Errors.unknown("Failed to generate a valid event ID");
-    }
     const createEvent = await this.repository.getStateEvent(input.roomId, "m.room.create");
     const powerLevelsEvent = await this.repository.getStateEvent(
       input.roomId,
       "m.room.power_levels",
     );
-
-    const authEvents: EventId[] = [];
-    if (createEvent) {
-      const eventId = toEventId(createEvent.event_id);
-      if (eventId) authEvents.push(eventId);
-    }
-    if (joinRulesEvent) {
-      const eventId = toEventId(joinRulesEvent.event_id);
-      if (eventId) authEvents.push(eventId);
-    }
-    if (powerLevelsEvent) {
-      const eventId = toEventId(powerLevelsEvent.event_id);
-      if (eventId) authEvents.push(eventId);
-    }
-    if (currentMembership) {
-      const eventId = toEventId(currentMembership.eventId);
-      if (eventId) authEvents.push(eventId);
-    }
-
     const latestEvents = await this.repository.getLatestRoomEvents(input.roomId, 1);
-    const prevEvents: EventId[] = latestEvents
-      .map((event) => toEventId(event.event_id))
-      .filter((id): id is EventId => id !== null);
 
-    const event: PDU = {
-      event_id: eventId,
-      room_id: input.roomId,
+    const event = await createMembershipEvent({
+      roomId: input.roomId,
+      userId: input.userId,
       sender: input.userId,
-      type: "m.room.member",
-      state_key: input.userId,
-      content: {
-        membership: "knock",
-        ...(input.reason !== undefined ? { reason: input.reason } : {}),
-      },
-      origin_server_ts: this.appContext.capabilities.clock.now(),
+      membership: "knock",
+      serverName: this.appContext.capabilities.config.serverName,
+      generateEventId: (targetServerName, roomVersion) =>
+        this.appContext.capabilities.id.generateEventId(targetServerName, roomVersion),
+      now: () => this.appContext.capabilities.clock.now(),
+      roomVersion: room.room_version,
+      ...withOptionalValue("currentMembershipEventId", currentMembership?.eventId),
+      ...withOptionalValue("createEventId", createEvent?.event_id),
+      ...withOptionalValue("joinRulesEventId", joinRulesEvent?.event_id),
+      ...withOptionalValue("powerLevelsEventId", powerLevelsEvent?.event_id),
+      prevEventIds: latestEvents.map((e) => e.event_id),
       depth: (latestEvents[0]?.depth ?? 0) + 1,
-      auth_events: authEvents,
-      prev_events: prevEvents,
-    };
+      ...(input.reason !== undefined ? { content: { reason: input.reason } } : {}),
+    });
+    const eventId = event.event_id;
 
     const roomStateForAuth: PDU[] = [];
     for (const stateEvent of [createEvent, joinRulesEvent, powerLevelsEvent]) {
@@ -940,6 +968,9 @@ export class MatrixRoomService {
 
     await this.repository.persistMembershipEvent(input.roomId, event, "client");
     await this.repository.notifyUsersOfEvent(input.roomId, eventId, "m.room.member");
+    const knockFanoutDb = this.getFederationDb();
+    const knockServerName = this.appContext.capabilities.config.serverName;
+    const knockRoomVersion = room.room_version;
     this.deferRoomAsyncTask(
       logger,
       {
@@ -948,7 +979,12 @@ export class MatrixRoomService {
         event_id: eventId,
         phase: "fanout_knock",
       },
-      () => this.fanoutEventToFederation(input.roomId, event),
+      async () => {
+        const signedEvent = knockFanoutDb
+          ? await attachFederationMetadata(knockFanoutDb, knockServerName, event, knockRoomVersion)
+          : event;
+        await this.fanoutEventToFederation(input.roomId, signedEvent);
+      },
     );
 
     await runClientEffect(
@@ -974,7 +1010,10 @@ export class MatrixRoomService {
     await this.eventPipeline.execute({
       input,
       validate: () => {},
-      resolveAuth: () => ({ userId: input.userId }),
+      resolveAuth: async () => {
+        const room = await this.repository.getRoom(input.roomId);
+        return { userId: input.userId, roomVersion: room?.room_version };
+      },
       authorize: async (_pipelineInput, auth) => {
         const membership = await this.repository.getMembership(input.roomId, auth.userId);
         await runClientEffect(validateLeavePreconditions(membership?.membership));
@@ -1014,6 +1053,7 @@ export class MatrixRoomService {
           generateEventId: (targetServerName, roomVersion) =>
             this.appContext.capabilities.id.generateEventId(targetServerName, roomVersion),
           now: () => this.appContext.capabilities.clock.now(),
+          ...withOptionalValue("roomVersion", auth.roomVersion),
           ...withOptionalValue("currentMembershipEventId", currentMembership?.eventId),
           ...withOptionalValue("powerLevelsEventId", powerLevelsEvent?.event_id),
           ...withOptionalValue("createEventId", createEvent?.event_id),
@@ -1038,12 +1078,15 @@ export class MatrixRoomService {
         await this.repository.persistMembershipEvent(input.roomId, event, "client");
         return { eventId: event.event_id, alreadyLeft: false };
       },
-      fanout: async (_pipelineInput, _auth, event, persisted) => {
+      fanout: async (_pipelineInput, auth, event, persisted) => {
         if (!event || persisted.alreadyLeft) {
           return;
         }
 
         await this.repository.notifyUsersOfEvent(input.roomId, event.event_id, "m.room.member");
+        const leaveFanoutDb = this.getFederationDb();
+        const leaveServerName = this.appContext.capabilities.config.serverName;
+        const leaveRoomVersion = auth.roomVersion;
         this.deferRoomAsyncTask(
           logger,
           {
@@ -1052,7 +1095,12 @@ export class MatrixRoomService {
             event_id: event.event_id,
             phase: "fanout_leave",
           },
-          () => this.fanoutEventToFederation(input.roomId, event),
+          async () => {
+            const signedEvent = leaveFanoutDb
+              ? await attachFederationMetadata(leaveFanoutDb, leaveServerName, event, leaveRoomVersion)
+              : event;
+            await this.fanoutEventToFederation(input.roomId, signedEvent);
+          },
         );
       },
     });
