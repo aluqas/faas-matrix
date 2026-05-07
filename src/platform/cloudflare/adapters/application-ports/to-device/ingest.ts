@@ -27,7 +27,10 @@ export async function ingestDirectToDeviceEdu(
     for (const [deviceId, messageContent] of Object.entries(deviceMessages)) {
       const targetDevices =
         deviceId === "*"
-          ? await listUserDeviceIds(db, recipientUserId as import("../../../../../fatrix-model/types").UserId)
+          ? await listUserDeviceIds(
+              db,
+              recipientUserId as import("../../../../../fatrix-model/types").UserId,
+            )
           : [deviceId];
 
       for (const targetDeviceId of targetDevices) {

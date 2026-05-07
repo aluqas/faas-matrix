@@ -1,8 +1,4 @@
-import {
-  createKyselyBuilder,
-  executeKyselyQueryFirst,
-  executeKyselyRun,
-} from "../db/kysely";
+import { createKyselyBuilder, executeKyselyQueryFirst, executeKyselyRun } from "../db/kysely";
 import type { ProfileField, ProfileResponseBody } from "../../../../fatrix-model/types/profile";
 import type { Generated } from "kysely";
 

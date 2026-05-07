@@ -5,7 +5,11 @@ import { Errors } from "../../fatrix-model/utils/errors";
 import { toEventId, toRoomId, toUserId } from "../../fatrix-model/utils/ids";
 import { requireAuth } from "../middleware/auth";
 import { invalidateRoomCache } from "../../platform/cloudflare/adapters/realtime/room-cache";
-import { getEvent, getMembership, updateMembership } from "../../platform/cloudflare/adapters/db/database";
+import {
+  getEvent,
+  getMembership,
+  updateMembership,
+} from "../../platform/cloudflare/adapters/db/database";
 import {
   isRecord,
   MAX_ROOM_EVENT_CONTENT_BYTES,

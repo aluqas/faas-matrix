@@ -10,10 +10,7 @@ import {
   persistRoomAccountDataEffect,
 } from "./persistence";
 import type { AccountDataQueryPorts } from "../../../../../fatrix-backend/application/features/account-data/query";
-import {
-  loadDatabaseAccountDataEffect,
-  loadGlobalAccountDataEffect,
-} from "./storage";
+import { loadDatabaseAccountDataEffect, loadGlobalAccountDataEffect } from "./storage";
 
 export function createAccountDataQueryPorts(
   env: Pick<Env, "DB" | "ACCOUNT_DATA" | "USER_KEYS">,

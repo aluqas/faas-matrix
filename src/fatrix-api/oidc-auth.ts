@@ -17,7 +17,12 @@ import {
 import { formatUserId } from "../fatrix-model/utils/ids";
 import { generateAccessToken, generateDeviceId } from "../fatrix-model/utils/ids";
 import { hashToken } from "../fatrix-model/utils/crypto";
-import { createUser, getUserById, createDevice, createAccessToken } from "../platform/cloudflare/adapters/db/database";
+import {
+  createUser,
+  getUserById,
+  createDevice,
+  createAccessToken,
+} from "../platform/cloudflare/adapters/db/database";
 import { requireAuth } from "./middleware/auth";
 import { generateOpaqueId } from "../fatrix-model/utils/ids";
 

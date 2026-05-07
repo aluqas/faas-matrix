@@ -8,7 +8,10 @@ import {
 import type { RoomId, UserId } from "../../../../../fatrix-model/types/matrix";
 import { findAccountDataRecord } from "../../repositories/account-data-repository";
 import { InfraError } from "../../../../../fatrix-backend/application/domain-error";
-import { requireLogContext, withLogContext } from "../../../../../fatrix-backend/application/logging";
+import {
+  requireLogContext,
+  withLogContext,
+} from "../../../../../fatrix-backend/application/logging";
 import { fromInfraNullable } from "../../../../../fatrix-backend/application/effect/infra-effect";
 import { getKvTextValue } from "../shared/kv-gateway";
 import { getE2EEAccountDataFromDO as loadE2EEAccountDataFromDO } from "./e2ee-gateway";

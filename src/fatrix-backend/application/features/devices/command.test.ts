@@ -4,7 +4,9 @@ import { deleteDeviceEffect, deleteDevicesEffect } from "./command";
 import type { DeviceCommandPorts } from "./command";
 import { runClientEffect } from "../../runtime/effect-runtime";
 
-function makePorts(overrides: Partial<DeviceCommandPorts["deviceRepository"]> = {}): DeviceCommandPorts {
+function makePorts(
+  overrides: Partial<DeviceCommandPorts["deviceRepository"]> = {},
+): DeviceCommandPorts {
   return {
     localServerName: "test.local",
     deviceRepository: {

@@ -10,7 +10,10 @@ import type {
   UpdateProfileFieldInput,
 } from "../../../fatrix-model/types/profile";
 import type { JsonValue } from "../../../fatrix-model/types/common";
-import { SetAvatarUrlRequestSchema, SetDisplayNameRequestSchema } from "../../../fatrix-model/types/profile";
+import {
+  SetAvatarUrlRequestSchema,
+  SetDisplayNameRequestSchema,
+} from "../../../fatrix-model/types/profile";
 import { isJsonObject, isJsonValue } from "../../../fatrix-model/types/common";
 import { DomainError } from "../../../fatrix-backend/application/domain-error";
 

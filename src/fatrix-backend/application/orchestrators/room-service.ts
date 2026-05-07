@@ -56,10 +56,7 @@ import {
   buildModerationAuthorizationContext,
   buildModerationMembershipEvent,
 } from "../features/rooms/policies/moderation";
-import {
-  getPowerLevelsContent,
-  getUserPowerLevel,
-} from "../features/rooms/policies/power-levels";
+import { getPowerLevelsContent, getUserPowerLevel } from "../features/rooms/policies/power-levels";
 import {
   deriveV12RoomId,
   usesHashBasedRoomId,
@@ -814,8 +811,7 @@ export class MatrixRoomService {
             return typedId ? [typedId] : [];
           })
         : [];
-      const depth =
-        typeof makeKnock.event.depth === "number" ? makeKnock.event.depth : 1;
+      const depth = typeof makeKnock.event.depth === "number" ? makeKnock.event.depth : 1;
       const knockContent = {
         membership: "knock",
         ...(input.reason !== undefined ? { reason: input.reason } : {}),
@@ -1097,7 +1093,12 @@ export class MatrixRoomService {
           },
           async () => {
             const signedEvent = leaveFanoutDb
-              ? await attachFederationMetadata(leaveFanoutDb, leaveServerName, event, leaveRoomVersion)
+              ? await attachFederationMetadata(
+                  leaveFanoutDb,
+                  leaveServerName,
+                  event,
+                  leaveRoomVersion,
+                )
               : event;
             await this.fanoutEventToFederation(input.roomId, signedEvent);
           },
@@ -1358,8 +1359,7 @@ export class MatrixRoomService {
             event,
             roomVersion,
           ),
-        fanoutEventToFederation: (roomId, event) =>
-          this.fanoutEventToFederation(roomId, event),
+        fanoutEventToFederation: (roomId, event) => this.fanoutEventToFederation(roomId, event),
       },
       input,
     );

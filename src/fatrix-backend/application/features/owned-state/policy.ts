@@ -1,7 +1,11 @@
 import { ErrorCodes } from "../../../../fatrix-model/types";
 import type { RoomVersionPolicy } from "../../room-version-policy";
 import { DomainError } from "../../domain-error";
-import { isValidLocalpart, isValidServerName, parseUserId } from "../../../../fatrix-model/utils/ids";
+import {
+  isValidLocalpart,
+  isValidServerName,
+  parseUserId,
+} from "../../../../fatrix-model/utils/ids";
 
 interface OwnedStateAuthorizationInput {
   policy: RoomVersionPolicy;

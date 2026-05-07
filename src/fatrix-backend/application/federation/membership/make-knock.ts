@@ -1,10 +1,7 @@
 import type { Membership, RoomId, UserId } from "../../../../fatrix-model/types";
 import { Errors } from "../../../../fatrix-model/utils/errors";
 import { runFederationEffect } from "../../runtime/effect-runtime";
-import {
-  authorizeLocalKnock,
-  type JoinRulesContent,
-} from "../../room-membership-policy";
+import { authorizeLocalKnock, type JoinRulesContent } from "../../room-membership-policy";
 import {
   getFederationLatestEvent,
   getFederationMembershipRecord,

@@ -23,6 +23,11 @@ export class MatrixSyncService {
   ) {}
 
   syncUser(input: SyncUserInput): Effect.Effect<SyncResponse, InfraError> {
-    return projectSyncResponseEffect(this.appContext, this.repository, this.applicationPorts, input);
+    return projectSyncResponseEffect(
+      this.appContext,
+      this.repository,
+      this.applicationPorts,
+      input,
+    );
   }
 }

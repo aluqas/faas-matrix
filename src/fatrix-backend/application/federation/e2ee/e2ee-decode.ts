@@ -7,7 +7,10 @@ import {
 } from "../../../../fatrix-model/types";
 import { isJsonObject } from "../../../../fatrix-model/types/common";
 import { UserIdSchema } from "../../../../fatrix-model/types/schema";
-import { parseE2EEKeysClaimRequest, parseE2EEKeysQueryRequest } from "../../../../fatrix-model/types/e2ee";
+import {
+  parseE2EEKeysClaimRequest,
+  parseE2EEKeysQueryRequest,
+} from "../../../../fatrix-model/types/e2ee";
 import { DomainError } from "../../domain-error";
 
 function malformed(message: string): DomainError {

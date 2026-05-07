@@ -4,7 +4,11 @@ import {
   getUserPasswordHash,
   hasIdentityProviderLink,
 } from "../../../../platform/cloudflare/adapters/repositories/user-auth-repository";
-import type { TokenSubmitRequest, UIAAuthDict, UiaSessionData } from "../../../../fatrix-model/types/client";
+import type {
+  TokenSubmitRequest,
+  UIAAuthDict,
+  UiaSessionData,
+} from "../../../../fatrix-model/types/client";
 import { parseUiaSessionData } from "../../../../fatrix-model/types/keys-contracts";
 
 const UIA_SESSION_TTL_SECONDS = 300;

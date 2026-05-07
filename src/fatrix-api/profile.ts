@@ -27,7 +27,10 @@ import {
   encodeProfileFieldResponse,
   encodeProfileResponseBody,
 } from "../fatrix-backend/application/features/profile/encoder";
-import { queryCustomProfileKeyEffect, queryProfileEffect } from "../fatrix-backend/application/features/profile/query";
+import {
+  queryCustomProfileKeyEffect,
+  queryProfileEffect,
+} from "../fatrix-backend/application/features/profile/query";
 
 const app = new Hono<AppEnv>();
 

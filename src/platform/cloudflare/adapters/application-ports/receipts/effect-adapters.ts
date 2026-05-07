@@ -1,6 +1,9 @@
 import type { Env } from "../../../env";
 import type { RealtimeCapability } from "../../../../../fatrix-backend/ports/runtime/runtime-capabilities";
-import { fromInfraPromise, fromInfraVoid } from "../../../../../fatrix-backend/application/effect/infra-effect";
+import {
+  fromInfraPromise,
+  fromInfraVoid,
+} from "../../../../../fatrix-backend/application/effect/infra-effect";
 import { upsertAccountDataRecord } from "../../repositories/account-data-repository";
 import { getEffectiveMembershipForRealtimeUser } from "../../repositories/federation-state-repository";
 import {

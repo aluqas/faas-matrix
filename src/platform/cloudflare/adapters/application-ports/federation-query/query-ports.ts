@@ -2,7 +2,10 @@ import {
   buildFederatedEventRelationshipsResponseEffect,
   createRelationshipServicePorts,
 } from "../../../../../fatrix-backend/application/relationship-service";
-import { fromInfraNullable, fromInfraPromise } from "../../../../../fatrix-backend/application/effect/infra-effect";
+import {
+  fromInfraNullable,
+  fromInfraPromise,
+} from "../../../../../fatrix-backend/application/effect/infra-effect";
 import type { FederationQueryPorts } from "../../../../../fatrix-backend/application/federation/query/query-shared";
 import { fetchRemoteProfileResponse } from "../profile/profile-federation-gateway";
 import { getLocalProfileRecord } from "../../repositories/profile-repository";

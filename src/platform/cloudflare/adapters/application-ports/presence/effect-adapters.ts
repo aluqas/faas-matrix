@@ -134,9 +134,7 @@ export function createPresenceCommandPortsFromAppContext(
   };
 }
 
-export function createPresenceQueryPorts(
-  env: Pick<Env, "DB" | "CACHE">,
-): PresenceQueryPorts {
+export function createPresenceQueryPorts(env: Pick<Env, "DB" | "CACHE">): PresenceQueryPorts {
   return {
     userDirectory: {
       userExists: (userId) =>

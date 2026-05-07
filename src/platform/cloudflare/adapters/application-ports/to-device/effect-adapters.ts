@@ -13,7 +13,10 @@ import {
 } from "../../repositories/to-device-repository";
 import { queueFederationEdu } from "../shared/federation-edu-queue";
 import type { ToDeviceCommandInput } from "../../../../../fatrix-backend/application/features/to-device/contracts";
-import { dispatchToDeviceMessages, type ToDeviceRequestPorts } from "../../../../../fatrix-backend/application/features/to-device/command";
+import {
+  dispatchToDeviceMessages,
+  type ToDeviceRequestPorts,
+} from "../../../../../fatrix-backend/application/features/to-device/command";
 
 export function createToDeviceRequestPorts(
   env: Pick<Env, "DB" | "SERVER_NAME"> & Env,
@@ -50,7 +53,10 @@ export function createToDeviceRequestPorts(
             dispatchToDeviceMessages(input, {
               localServerName: env.SERVER_NAME,
               getUserDevices: (recipientUserId: string) =>
-                listUserDeviceIds(env.DB, recipientUserId as import("../../../../../fatrix-model/types").UserId),
+                listUserDeviceIds(
+                  env.DB,
+                  recipientUserId as import("../../../../../fatrix-model/types").UserId,
+                ),
               nextStreamPosition: (streamName: string) =>
                 getNextNamedStreamPosition(env.DB, streamName),
               storeLocalMessage: (message) => insertToDeviceMessage(env.DB, message),

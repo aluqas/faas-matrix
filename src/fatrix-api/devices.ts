@@ -27,7 +27,10 @@ import {
   createDeviceCommandPorts,
   createDeviceQueryPorts,
 } from "../platform/cloudflare/adapters/application-ports/devices/effect-adapters";
-import { getDeviceEffect, listDevicesEffect } from "../fatrix-backend/application/features/devices/query";
+import {
+  getDeviceEffect,
+  listDevicesEffect,
+} from "../fatrix-backend/application/features/devices/query";
 
 const app = new Hono<AppEnv>();
 

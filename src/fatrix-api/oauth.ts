@@ -14,7 +14,11 @@ import {
   formatUserId,
   toUserId,
 } from "../fatrix-model/utils/ids";
-import { createDevice, createAccessToken, getUserById } from "../platform/cloudflare/adapters/db/database";
+import {
+  createDevice,
+  createAccessToken,
+  getUserById,
+} from "../platform/cloudflare/adapters/db/database";
 
 const app = new Hono<AppEnv>();
 

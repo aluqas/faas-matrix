@@ -358,7 +358,12 @@ function authorizeRestrictedJoin(
       );
     }
 
-    return { alreadyJoined: false, joinRule, policy, authorizingUser } satisfies JoinAuthorizationResult;
+    return {
+      alreadyJoined: false,
+      joinRule,
+      policy,
+      authorizingUser,
+    } satisfies JoinAuthorizationResult;
   });
 }
 

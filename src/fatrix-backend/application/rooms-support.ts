@@ -7,7 +7,10 @@ import type {
   RoomMemberContent,
   UserId,
 } from "../../fatrix-model/types";
-import { calculateContentHash, calculateReferenceHashEventId } from "../../fatrix-model/utils/crypto";
+import {
+  calculateContentHash,
+  calculateReferenceHashEventId,
+} from "../../fatrix-model/utils/crypto";
 import { toEventId, toRoomId, toUserId } from "../../fatrix-model/utils/ids";
 import type { RoomRepository } from "../ports/repositories";
 

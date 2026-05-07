@@ -24,7 +24,10 @@ import {
   encodeClientKeysUploadResponse,
 } from "../fatrix-backend/application/features/e2ee-shared/encoder";
 import { uploadClientKeys } from "../fatrix-backend/application/features/client-keys/upload";
-import { queryClientKeyChanges, queryClientKeys } from "../fatrix-backend/application/features/client-keys/query";
+import {
+  queryClientKeyChanges,
+  queryClientKeys,
+} from "../fatrix-backend/application/features/client-keys/query";
 import { claimClientKeys } from "../fatrix-backend/application/features/client-keys/claim";
 import { createKeysLogger } from "../fatrix-backend/application/features/client-keys/shared";
 import {
@@ -35,7 +38,10 @@ import {
   loadUiaSession,
   completeUiaSsoCallback,
 } from "../fatrix-backend/application/features/client-keys/uia";
-import { uploadCrossSigningKeys, uploadKeySignatures } from "../fatrix-backend/application/features/client-keys/cross-signing";
+import {
+  uploadCrossSigningKeys,
+  uploadKeySignatures,
+} from "../fatrix-backend/application/features/client-keys/cross-signing";
 import {
   type SignaturesUploadRequest,
   type TokenSubmitRequest,

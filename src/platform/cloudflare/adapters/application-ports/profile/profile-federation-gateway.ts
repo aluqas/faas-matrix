@@ -1,10 +1,7 @@
 import type { UserId } from "../../../../../fatrix-model/types";
 import type { Env } from "../../../env";
 import { isJsonObject } from "../../../../../fatrix-model/types/common";
-import type {
-  ProfileField,
-  ProfileResponseBody,
-} from "../../../../../fatrix-model/types/profile";
+import type { ProfileField, ProfileResponseBody } from "../../../../../fatrix-model/types/profile";
 import { getOrCreateNotarySigningKey } from "../federation-query/notary-gateway";
 import { fetchFederationJson } from "../shared/federation-http-gateway";
 

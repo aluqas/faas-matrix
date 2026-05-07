@@ -35,8 +35,7 @@ export function createDeviceQueryPorts(env: Pick<Env, "DB">): DeviceQueryPorts {
 }
 
 export function createDeviceCommandPorts(
-  env: Pick<Env, "DB" | "USER_KEYS" | "DEVICE_KEYS" | "SERVER_NAME" | "CACHE"> &
-    Env,
+  env: Pick<Env, "DB" | "USER_KEYS" | "DEVICE_KEYS" | "SERVER_NAME" | "CACHE"> & Env,
 ): DeviceCommandPorts {
   return {
     localServerName: env.SERVER_NAME,

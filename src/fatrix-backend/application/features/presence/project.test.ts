@@ -44,9 +44,7 @@ describe("projectPresenceEvents – self projection", () => {
     const db: D1Database = {
       prepare: (_sql: string) => ({
         bind: (...params: unknown[]) => {
-          const ids = params.filter(
-            (p): p is UserId => typeof p === "string" && p.startsWith("@"),
-          );
+          const ids = params.filter((p): p is UserId => typeof p === "string" && p.startsWith("@"));
           if (ids.length > 0) {
             candidatesSeen.push(ids);
           }

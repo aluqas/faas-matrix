@@ -1,10 +1,7 @@
 import type { JoinedRoom, RoomId, UserId } from "../../../../../fatrix-model/types";
 import type { SyncRepository } from "../../../../ports/repositories";
 import type { JoinedRoomProjectionQuery } from "../../../orchestrators/sync-projection";
-import {
-  projectJoinedRoom,
-  shouldIncludeRoom,
-} from "../../../orchestrators/sync-projection";
+import { projectJoinedRoom, shouldIncludeRoom } from "../../../orchestrators/sync-projection";
 
 export interface RoomDeltaProjectionPorts {
   repository: SyncRepository;

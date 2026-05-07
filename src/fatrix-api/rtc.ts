@@ -6,7 +6,10 @@ import { Hono } from "hono";
 import type { AppEnv } from "./hono-env";
 import type { GetTokenRequest, GetTokenResponse, OpenIDToken } from "../fatrix-model/types/client";
 import { Errors } from "../fatrix-model/utils/errors";
-import { generateLiveKitToken, getLiveKitConfig } from "../platform/cloudflare/adapters/integrations/livekit";
+import {
+  generateLiveKitToken,
+  getLiveKitConfig,
+} from "../platform/cloudflare/adapters/integrations/livekit";
 import { parseJsonObjectBody } from "./shared-validation";
 
 const app = new Hono<AppEnv>();

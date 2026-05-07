@@ -8,7 +8,10 @@ import type {
   PutGlobalAccountDataInput,
   PutRoomAccountDataInput,
 } from "../../../fatrix-model/types/account-data";
-import type { AccountDataContent, AccountDataEventType } from "../../../fatrix-model/types/account-data";
+import type {
+  AccountDataContent,
+  AccountDataEventType,
+} from "../../../fatrix-model/types/account-data";
 import { isJsonObject } from "../../../fatrix-model/types/common";
 import { RoomIdSchema, UserIdSchema } from "../../../fatrix-model/types/schema";
 import { DomainError } from "../../../fatrix-backend/application/domain-error";

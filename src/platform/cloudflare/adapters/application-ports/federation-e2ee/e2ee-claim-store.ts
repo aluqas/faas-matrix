@@ -1,7 +1,4 @@
-import type {
-  FederationClaimedOneTimeKeyRecord,
-  UserId,
-} from "../../../../../fatrix-model/types";
+import type { FederationClaimedOneTimeKeyRecord, UserId } from "../../../../../fatrix-model/types";
 import type { Env } from "../../../env";
 import type {
   DeviceOneTimeKeysMap,

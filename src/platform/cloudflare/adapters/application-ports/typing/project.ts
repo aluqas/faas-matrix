@@ -3,10 +3,7 @@ import type { Env } from "../../../env";
 import { parseTypingUsersResponse } from "../../../../../fatrix-backend/application/features/typing/project";
 import { getRoomTypingState } from "../shared/room-do-gateway";
 
-export async function getTypingUsers(
-  env: Pick<Env, "ROOMS">,
-  roomId: RoomId,
-): Promise<UserId[]> {
+export async function getTypingUsers(env: Pick<Env, "ROOMS">, roomId: RoomId): Promise<UserId[]> {
   return parseTypingUsersResponse(await getRoomTypingState(env, roomId));
 }
 

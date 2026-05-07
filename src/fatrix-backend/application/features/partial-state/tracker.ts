@@ -1,5 +1,8 @@
 import type { RoomId, UserId } from "../../../../fatrix-model/types/matrix";
-import type { PartialStateJoinMarker, PartialStateStatus } from "../../../../fatrix-model/types/partial-state";
+import type {
+  PartialStateJoinMarker,
+  PartialStateStatus,
+} from "../../../../fatrix-model/types/partial-state";
 import { toEventId, toRoomId, toUserId } from "../../../../fatrix-model/utils/ids";
 
 export type { PartialStateJoinMarker, PartialStateStatus };

@@ -14,7 +14,10 @@ import type {
 import { Errors, MatrixApiError } from "../../../../fatrix-model/utils/errors";
 import { toUserId } from "../../../../fatrix-model/utils/ids";
 import { extractServerNameFromMatrixId } from "../../../../fatrix-model/utils/matrix-ids";
-import type { CrossSigningKeysStore, DeviceKeysPayload } from "../../../../fatrix-model/types/client";
+import type {
+  CrossSigningKeysStore,
+  DeviceKeysPayload,
+} from "../../../../fatrix-model/types/client";
 import { InfraError } from "../../domain-error";
 import {
   attachCrossSigningKeys,

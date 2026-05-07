@@ -69,7 +69,8 @@ export async function buildSlidingSyncExtensions(
   // ── to_device ─────────────────────────────────────────────────────────────
   if (config.to_device) {
     const limit = config.to_device.limit ?? 100;
-    const { getToDeviceMessages } = await import("../platform/cloudflare/adapters/application-ports/to-device/project");
+    const { getToDeviceMessages } =
+      await import("../platform/cloudflare/adapters/application-ports/to-device/project");
     const { events, nextBatch } = await getToDeviceMessages(
       db,
       userId,

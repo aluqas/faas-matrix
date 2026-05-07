@@ -1,5 +1,9 @@
 import { Data } from "effect";
-import type { DomainErrorKind, DomainErrorShape, InfraErrorShape } from "../../fatrix-model/types/error";
+import type {
+  DomainErrorKind,
+  DomainErrorShape,
+  InfraErrorShape,
+} from "../../fatrix-model/types/error";
 import { MatrixApiError } from "../../fatrix-model/utils/errors";
 export type { DomainErrorKind };
 

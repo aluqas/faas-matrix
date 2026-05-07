@@ -1,13 +1,13 @@
 import type { EventId, Membership, RoomId } from "../../../../fatrix-model/types";
 import type { Env } from "../../../../platform/cloudflare/env";
 import { Errors } from "../../../../fatrix-model/utils/errors";
-import { fanoutEventToFederation, notifyUsersOfEvent } from "../../../../platform/cloudflare/adapters/db/database";
+import {
+  fanoutEventToFederation,
+  notifyUsersOfEvent,
+} from "../../../../platform/cloudflare/adapters/db/database";
 import { persistFederationMembershipEvent } from "../../orchestrators/federation-handler-service";
 import { requiresFullCreateEventInStrippedState } from "../../features/rooms/policies/room-version-semantics";
-import {
-  authorizeLocalKnock,
-  type JoinRulesContent,
-} from "../../room-membership-policy";
+import { authorizeLocalKnock, type JoinRulesContent } from "../../room-membership-policy";
 import { runFederationEffect } from "../../runtime/effect-runtime";
 import { runDomainValidation } from "../../domain-validation";
 import { validateSendKnockRequest } from "../validation";

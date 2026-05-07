@@ -1,9 +1,6 @@
 import type { UserId } from "../../../../../fatrix-model/types";
 import type { Env } from "../../../env";
-import {
-  getLocalProfileRecord,
-  updateLocalProfile,
-} from "../../repositories/profile-repository";
+import { getLocalProfileRecord, updateLocalProfile } from "../../repositories/profile-repository";
 import {
   fromInfraNullable,
   fromInfraPromise,

@@ -1,8 +1,15 @@
 import { Effect } from "effect";
-import type { EventRelationshipsRequest, RelationCursor } from "../../../../fatrix-model/types/events";
+import type {
+  EventRelationshipsRequest,
+  RelationCursor,
+} from "../../../../fatrix-model/types/events";
 import type { RoomId, UserId } from "../../../../fatrix-model/types";
 import { Errors, MatrixApiError } from "../../../../fatrix-model/utils/errors";
-import { parseEventIdLike, parseRoomIdLike, parseUserIdLike } from "../../../../fatrix-model/utils/ids";
+import {
+  parseEventIdLike,
+  parseRoomIdLike,
+  parseUserIdLike,
+} from "../../../../fatrix-model/utils/ids";
 import { parseSyncToken } from "../sync/types/contracts";
 import {
   type ListRelationsInput,

@@ -29,7 +29,10 @@ import {
   loadUiaSession,
 } from "./uia";
 import { createKeysLogger } from "./shared";
-import type { CrossSigningUploadRequest, SignaturesUploadRequest } from "../../../../fatrix-model/types/client";
+import type {
+  CrossSigningUploadRequest,
+  SignaturesUploadRequest,
+} from "../../../../fatrix-model/types/client";
 import { isIdempotentCrossSigningUpload } from "../../../../fatrix-model/types/keys-contracts";
 
 export interface CrossSigningUploadOutcome {
@@ -196,11 +199,7 @@ export async function uploadCrossSigningKeys(input: {
   }
 
   const ssssDefault = await runClientEffect(
-    loadGlobalAccountDataEffect(
-      env as Env,
-      typedUserId,
-      "m.secret_storage.default_key",
-    ),
+    loadGlobalAccountDataEffect(env as Env, typedUserId, "m.secret_storage.default_key"),
   );
   await runClientEffect(
     logger.info("keys.command.ssss_state", {
@@ -284,11 +283,7 @@ export async function uploadKeySignatures(input: {
 
         if (signedKeyObj.device_id) {
           const deviceId = signedKeyObj.device_id;
-          const existingKey = await fetchDeviceKeyFromDO(
-            env as Env,
-            userId,
-            deviceId,
-          );
+          const existingKey = await fetchDeviceKeyFromDO(env as Env, userId, deviceId);
           if (existingKey) {
             existingKey.signatures = existingKey.signatures ?? {};
             existingKey.signatures[signerUserId] = {

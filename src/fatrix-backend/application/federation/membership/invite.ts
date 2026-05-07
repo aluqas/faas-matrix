@@ -8,7 +8,10 @@ import {
   persistFederationMembershipEvent,
   persistInviteStrippedState,
 } from "../../orchestrators/federation-handler-service";
-import { decideInvitePermission, loadInvitePermissionConfig } from "../../features/invite-permissions/policy";
+import {
+  decideInvitePermission,
+  loadInvitePermissionConfig,
+} from "../../features/invite-permissions/policy";
 import { runDomainValidation } from "../../domain-validation";
 import { validateInviteRequest } from "../validation";
 import { federationLocalUserExists } from "../../../../platform/cloudflare/adapters/repositories/federation-membership-read-repository";
@@ -82,11 +85,9 @@ export async function processFederationInvite(input: {
       validated.event.origin_server_ts,
     depth: (signedEvent["depth"] as PDU["depth"] | undefined) ?? validated.event.depth,
     auth_events:
-      (signedEvent["auth_events"] as PDU["auth_events"] | undefined) ??
-      validated.event.auth_events,
+      (signedEvent["auth_events"] as PDU["auth_events"] | undefined) ?? validated.event.auth_events,
     prev_events:
-      (signedEvent["prev_events"] as PDU["prev_events"] | undefined) ??
-      validated.event.prev_events,
+      (signedEvent["prev_events"] as PDU["prev_events"] | undefined) ?? validated.event.prev_events,
     unsigned: (signedEvent["unsigned"] as PDU["unsigned"] | undefined) ?? validated.event.unsigned,
     hashes: signedEvent["hashes"] as { sha256: string } | undefined,
     signatures: signedEvent["signatures"] as MatrixSignatures | undefined,

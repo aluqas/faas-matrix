@@ -6,7 +6,11 @@ import { ErrorCodes } from "../../fatrix-model/types";
 import { Errors, MatrixApiError } from "../../fatrix-model/utils/errors";
 import { parseRoomAlias, toRoomId, toUserId } from "../../fatrix-model/utils/ids";
 import { federationGet } from "../../platform/cloudflare/adapters/federation/federation-keys";
-import { getMembership, getRoomByAlias, getStateEvent } from "../../platform/cloudflare/adapters/db/database";
+import {
+  getMembership,
+  getRoomByAlias,
+  getStateEvent,
+} from "../../platform/cloudflare/adapters/db/database";
 
 export function toRouteErrorResponse(error: unknown): Response | null {
   if (error instanceof SyntaxError) {

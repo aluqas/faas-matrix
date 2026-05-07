@@ -2,7 +2,11 @@ import type { EventId, PDU, RoomId } from "../../../../fatrix-model/types";
 import type { Env } from "../../../../platform/cloudflare/env";
 import { Errors } from "../../../../fatrix-model/utils/errors";
 import { calculateReferenceHashEventId } from "../../../../fatrix-model/utils/crypto";
-import { fanoutEventToFederation, notifyUsersOfEvent, storeEvent } from "../../../../platform/cloudflare/adapters/db/database";
+import {
+  fanoutEventToFederation,
+  notifyUsersOfEvent,
+  storeEvent,
+} from "../../../../platform/cloudflare/adapters/db/database";
 import {
   applyMembershipTransitionToDatabase,
   loadMembershipTransitionContext,

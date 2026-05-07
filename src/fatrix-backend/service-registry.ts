@@ -1,10 +1,6 @@
 import type { AppContext } from "./ports/runtime/app-context";
 import { DefaultEventPipeline, type EventPipeline } from "./application/domain/event-pipeline";
-import type {
-  FederationRepository,
-  RoomRepository,
-  SyncRepository,
-} from "./ports/repositories";
+import type { FederationRepository, RoomRepository, SyncRepository } from "./ports/repositories";
 import { MatrixRoomService } from "./application/orchestrators/room-service";
 import { MatrixRoomQueryService } from "./application/room-query-service";
 import { MatrixSyncService } from "./application/orchestrators/sync-service";

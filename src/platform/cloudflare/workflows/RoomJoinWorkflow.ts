@@ -7,12 +7,30 @@
 // - Step persistence for resume on failure
 
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:workers";
-import type { DeviceId, EventId, PDU, RoomId, ServerName, UserId } from "../../../fatrix-model/types";
+import type {
+  DeviceId,
+  EventId,
+  PDU,
+  RoomId,
+  ServerName,
+  UserId,
+} from "../../../fatrix-model/types";
 import type { Env } from "../env";
-import { generateEventId, getServerName, toEventId, toUserId } from "../../../fatrix-model/utils/ids";
+import {
+  generateEventId,
+  getServerName,
+  toEventId,
+  toUserId,
+} from "../../../fatrix-model/utils/ids";
 import { isJsonObject } from "../../../fatrix-model/types/common";
-import type { PartialStateJoinMarker, PartialStateStatus } from "../../../fatrix-model/types/partial-state";
-import { calculateContentHash, calculateReferenceHashEventId } from "../../../fatrix-model/utils/crypto";
+import type {
+  PartialStateJoinMarker,
+  PartialStateStatus,
+} from "../../../fatrix-model/types/partial-state";
+import {
+  calculateContentHash,
+  calculateReferenceHashEventId,
+} from "../../../fatrix-model/utils/crypto";
 import { federationGet, federationPut } from "../adapters/federation/federation-keys";
 import { getRoomVersion } from "../../../fatrix-model/room-versions";
 import {

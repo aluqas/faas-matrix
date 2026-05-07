@@ -1,5 +1,8 @@
 import type { Effect } from "effect";
-import { withIdempotency, type IdempotencyStore } from "../../../../../fetherate/runtime/idempotency";
+import {
+  withIdempotency,
+  type IdempotencyStore,
+} from "../../../../../fetherate/runtime/idempotency";
 import type { AppContext } from "../../../../ports/runtime/app-context";
 import type { EventPipeline } from "../../../domain/event-pipeline";
 import { DomainError, toMatrixApiError } from "../../../domain-error";
@@ -9,9 +12,7 @@ import type { RoomRepository } from "../../../../ports/repositories";
 import type { PDU } from "../../../../../fatrix-model/types";
 import type { SendEventInput } from "../../../../../fatrix-model/types/rooms";
 import { Errors, MatrixApiError } from "../../../../../fatrix-model/utils/errors";
-import {
-  assertCreateEventNotReplaceable,
-} from "../policies/room-version-semantics";
+import { assertCreateEventNotReplaceable } from "../policies/room-version-semantics";
 import {
   assertOwnedStateEventAllowed,
   assertRedactionAllowed,
@@ -180,7 +181,11 @@ export async function sendRoomEventCommand(
             return { eventId: event.event_id };
           },
           fanout: async (_pipelineInput, _auth, event) => {
-            await ports.repository.notifyUsersOfEvent(input.roomId, event.event_id, input.eventType);
+            await ports.repository.notifyUsersOfEvent(
+              input.roomId,
+              event.event_id,
+              input.eventType,
+            );
           },
           notifyFederation: (_pipelineInput, auth, event) => {
             ports.deferRoomAsyncTask(

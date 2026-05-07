@@ -7,7 +7,11 @@ import {
   executeKyselyQueryFirst,
   executeKyselyRun,
 } from "../db/kysely";
-import type { CrossSigningKeysStore, JsonObject, JsonObjectMap } from "../../../../fatrix-model/types/client";
+import type {
+  CrossSigningKeysStore,
+  JsonObject,
+  JsonObjectMap,
+} from "../../../../fatrix-model/types/client";
 import type {
   FederationClaimedOneTimeKeyRecord,
   FederationDeviceSignatureRecord,

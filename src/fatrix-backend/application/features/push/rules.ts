@@ -252,8 +252,9 @@ export function getDefaultRulesForUser(userId: string): {
       );
     }
     if (nextRule.rule_id === ".m.rule.is_user_mention" && nextRule.conditions) {
-      nextRule.conditions = nextRule.conditions.map((condition): PushCondition =>
-        condition.key?.includes("user_ids") ? { ...condition, value: userId } : { ...condition },
+      nextRule.conditions = nextRule.conditions.map(
+        (condition): PushCondition =>
+          condition.key?.includes("user_ids") ? { ...condition, value: userId } : { ...condition },
       );
     }
     return nextRule;
@@ -355,9 +356,7 @@ export async function evaluatePushRules(
         !rule.actions.includes("dont_notify") && rule.actions.some((action) => action === "notify");
       const highlight = rule.actions.some(
         (action) =>
-          typeof action === "object" &&
-          action.set_tweak === "highlight" &&
-          action.value !== false,
+          typeof action === "object" && action.set_tweak === "highlight" && action.value !== false,
       );
 
       return { notify, actions: rule.actions, highlight };
