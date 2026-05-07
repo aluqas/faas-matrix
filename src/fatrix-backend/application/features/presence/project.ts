@@ -56,7 +56,10 @@ export async function projectPresenceEvents(
   query: PresenceProjectionQuery,
 ): Promise<PresenceProjectionResult> {
   const visibleUsers = await dbListVisibleUsers(db, query.userId, query.visibleRoomIds);
-  const presenceByUser = await getPresenceForUsers(db, visibleUsers, cache);
+  // Always include self so that "set presence → read back via /sync" works even
+  // when listVisibleUsers excludes the requesting user from room member candidates.
+  const candidates: UserId[] = Array.from(new Set([query.userId, ...visibleUsers]));
+  const presenceByUser = await getPresenceForUsers(db, candidates, cache);
 
   return {
     events: applyEventFilter(

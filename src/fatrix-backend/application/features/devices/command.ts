@@ -205,12 +205,14 @@ export function deleteDeviceEffect(
     const verified = yield* Effect.tryPromise({
       try: () => verifyPasswordAuth(input.authUserId, input.auth, passwordHash),
       catch: (cause) =>
-        new InfraError({
-          errcode: "M_UNKNOWN",
-          message: "Failed to verify device deletion password",
-          status: 500,
-          cause,
-        }),
+        cause instanceof MatrixApiError
+          ? cause
+          : new InfraError({
+              errcode: "M_UNKNOWN",
+              message: "Failed to verify device deletion password",
+              status: 500,
+              cause,
+            }),
     });
     if (!verified.ok) {
       return {
@@ -235,12 +237,14 @@ export function deleteDevicesEffect(
     const verified = yield* Effect.tryPromise({
       try: () => verifyPasswordAuth(input.authUserId, input.auth, passwordHash),
       catch: (cause) =>
-        new InfraError({
-          errcode: "M_UNKNOWN",
-          message: "Failed to verify bulk device deletion password",
-          status: 500,
-          cause,
-        }),
+        cause instanceof MatrixApiError
+          ? cause
+          : new InfraError({
+              errcode: "M_UNKNOWN",
+              message: "Failed to verify bulk device deletion password",
+              status: 500,
+              cause,
+            }),
     });
     if (!verified.ok) {
       return {

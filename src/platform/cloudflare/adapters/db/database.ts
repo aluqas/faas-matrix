@@ -1,6 +1,8 @@
 // Database service layer for D1
 
+import { sql } from "kysely";
 import { getUserRoomIdsWithEffectiveMembership } from "../repositories/membership-repository";
+import { createKyselyBuilder, executeKyselyRun } from "./kysely";
 import type {
   DeviceId,
   Device,
@@ -293,19 +295,36 @@ export async function updateUserProfile(
 }
 
 // Device operations
+type DevicesTable = {
+  user_id: string;
+  device_id: string;
+  display_name: string | null;
+  created_at: number;
+};
+
 export async function createDevice(
   db: D1Database,
   userId: UserId,
   deviceId: DeviceId,
   displayName?: string,
 ): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO devices (user_id, device_id, display_name, created_at)
-     VALUES (?, ?, ?, ?)`,
-    )
-    .bind(userId, deviceId, displayName ?? null, Date.now())
-    .run();
+  const ky = createKyselyBuilder<{ devices: DevicesTable }>();
+  const query = ky
+    .insertInto("devices")
+    .values({
+      user_id: userId,
+      device_id: deviceId,
+      display_name: displayName ?? null,
+      created_at: Date.now(),
+    })
+    .onConflict((oc) =>
+      oc.columns(["user_id", "device_id"]).doUpdateSet({
+        display_name: sql<
+          string | null
+        >`CASE WHEN excluded.display_name IS NOT NULL THEN excluded.display_name ELSE devices.display_name END`,
+      }),
+    );
+  await executeKyselyRun(db, query);
 }
 
 export async function getDevice(

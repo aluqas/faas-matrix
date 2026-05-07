@@ -166,7 +166,7 @@ if (runFilter) {
 
 const dockerCapture = dockerLogsEnabled ? startDockerLogCapture(dockerLogPath, image) : null;
 const logFd = fs.openSync(logPath, "w");
-const proc = Bun.spawn(["go", ...runArgs], {
+const proc = Bun.spawn([...resolveGoCommand(), ...runArgs], {
   cwd: complementDir,
   env: runEnv,
   stdout: logFd,
@@ -363,9 +363,47 @@ function createComplementEnvironment(input: {
 
 async function listTests(pattern: string): Promise<void> {
   console.log(`==> Listing tests matching: ${pattern}`);
-  await $`COMPLEMENT_BASE_IMAGE=${image} go test ./tests/... -list ${pattern}`
-    .cwd(complementDir)
-    .nothrow();
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+  env.COMPLEMENT_BASE_IMAGE = image;
+
+  const proc = Bun.spawn([...resolveGoCommand(), "test", "./tests/...", "-list", pattern], {
+    cwd: complementDir,
+    env,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    process.exit(exitCode);
+  }
+}
+
+function resolveGoCommand(): string[] {
+  if (executableExists("go")) {
+    return ["go"];
+  }
+  if (executableExists("mise")) {
+    return ["mise", "exec", "--", "go"];
+  }
+  fail("Complement requires Go. Install Go or run through mise from this repository.");
+}
+
+function executableExists(command: string): boolean {
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (dir === "") {
+      continue;
+    }
+    try {
+      fs.accessSync(path.join(dir, command), fs.constants.X_OK);
+      return true;
+    } catch {}
+  }
+  return false;
 }
 
 async function buildImage() {

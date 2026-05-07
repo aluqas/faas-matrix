@@ -1,7 +1,7 @@
 # Complement Status
 
 Current-state Complement status for this repository.
-Last updated: 2026-04-09.
+Last updated: 2026-05-06.
 
 This document is intentionally current-state only. Historical progression and old run-to-run comparisons are out of scope here.
 For active repair planning and sampled failure signatures from the latest broad rerun, see [`docs/matrix/complement-remediation-plan.md`](./complement-remediation-plan.md).
@@ -79,7 +79,44 @@ What it proved:
 
 ## Latest Broad Mixed Rerun
 
-### 2026-04-09 (current)
+### 2026-05-06 (current)
+
+Artifacts:
+
+- raw log: [`2026-05-05_17-33-21-77850.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-05-05_17-33-21-77850.log)
+- summary: [`2026-05-05_17-33-21-77850.summary.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-05-05_17-33-21-77850.summary.json)
+- classified: [`2026-05-05_17-33-21-77850.classified.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-05-05_17-33-21-77850.classified.json)
+
+Result:
+
+- top-level summary: `207 total / 115 pass / 90 fail / 2 skip` (56%)
+- overall classification: `mixed`
+- classifier split: `88 implementation_fail`, `2 infra_flake`
+
+Delta vs 2026-04-09: **+1 pass, -1 fail**
+
+Newly passing vs 2026-04-09:
+
+- `TestAsyncUpload`
+- `TestInboundCanReturnMissingEvents`
+- `TestUnknownEndpoints`
+
+Newly failing vs 2026-04-09:
+
+- `TestDeviceManagement`
+- `TestRelationsPaginationSync`
+
+infra_flake in this run: `TestPartialStateJoin` (parent, transport_skew), `TestFederationThumbnail` (transport_skew)
+
+Interpretation:
+
+- the harness is now runnable from the default script path in this repository, including environments where `go` is available only through `mise`
+- broad-run reach is unchanged at 207 top-level tests, but the pass/fail mix improved slightly from 2026-04-09
+- media async upload compatibility, unknown endpoint Matrix error shaping, and inbound missing-events behavior are no longer broad-run red buckets
+- the new red buckets are narrower: device deletion UI-auth owner mismatch and relation pagination across a sync-token boundary
+- this run remains `mixed`, so it is still triage evidence rather than a replacement for the stable docs/spec baseline
+
+### 2026-04-09 (previous)
 
 Artifacts:
 
@@ -92,7 +129,7 @@ Result:
 - top-level summary: `207 total / 114 pass / 91 fail / 2 skip` (55%)
 - overall classification: `mixed`
 
-Delta vs 2026-04-05: **−15 pass, +15 fail**
+Delta vs 2026-04-05: **-15 pass, +15 fail**
 
 Regressions (tests that were green evidence, now red in this run):
 
@@ -121,7 +158,7 @@ infra_flake in this run: `TestPartialStateJoin` (parent, transport_skew), `TestF
 Interpretation:
 
 - the regression from types-contract hardening (2026-04-09 refactor) has surfaced previously-silent issues at runtime
-- this run is now the working baseline for triage; the 2026-04-05 run is no longer current
+- this run was the working baseline for triage until the 2026-05-06 rerun
 - sampled concrete failures and the remediation plan now live in [`docs/matrix/complement-remediation-plan.md`](./complement-remediation-plan.md)
 - broad rerun regressions do not automatically invalidate targeted green evidence, but they do mean those areas are not yet aggregate-stable
 
@@ -153,7 +190,7 @@ These are currently green in either the stable full-run baseline or clean target
   - `TestEventAuth`
 - sync / filtering / device-list hot paths
   - `TestSyncOmitsStateChangeOnFilteredEvents`
-  - `TestDeviceManagement`
+  - `TestDeviceManagement` basic get/list/update/delete subtests remain positive evidence, but the parent test is aggregate-red in the 2026-05-06 broad rerun on the UI-auth owner-mismatch delete path
   - `TestDeviceListsUpdateOverFederation`
   - `TestUserAppearsInChangedDeviceListOnJoinOverFederation`
   - `TestInviteFiltering`

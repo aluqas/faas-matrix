@@ -1,7 +1,7 @@
 # Complement Remediation Plan
 
 Current triage and remediation notes for the latest broad Complement rerun.
-Last updated: 2026-04-09.
+Last updated: 2026-05-06.
 
 This document is for active debugging and repair planning.
 It complements `docs/matrix/complement-analysis.md`, which remains the current-state evidence and baseline document.
@@ -10,78 +10,99 @@ It complements `docs/matrix/complement-analysis.md`, which remains the current-s
 
 Artifacts:
 
-- raw log: [`2026-04-09_05-34-24-93047.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-09_05-34-24-93047.log)
-- summary: [`2026-04-09_05-34-24-93047.summary.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-09_05-34-24-93047.summary.json)
-- classified: [`2026-04-09_05-34-24-93047.classified.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-04-09_05-34-24-93047.classified.json)
+- raw log: [`2026-05-05_17-33-21-77850.log`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-05-05_17-33-21-77850.log)
+- summary: [`2026-05-05_17-33-21-77850.summary.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-05-05_17-33-21-77850.summary.json)
+- classified: [`2026-05-05_17-33-21-77850.classified.json`](/Users/saqula/Documents/02_codes/github.com/aluqas/faas-matrix/logs/2026-05-05_17-33-21-77850.classified.json)
 
 Result:
 
-- top-level summary: `207 total / 114 pass / 91 fail / 2 skip` (55%)
+- top-level summary: `207 total / 115 pass / 90 fail / 2 skip` (56%)
 - overall classification: `mixed`
+- classifier split: `88 implementation_fail`, `2 infra_flake`
 
 Interpretation:
 
-- this run regressed −15 pass vs 2026-04-05 (`129 pass / 76 fail`)
-- the regression is attributed to types-contract hardening (2026-04-09 refactor) surfacing previously-silent runtime issues
+- this run improves by +1 pass vs 2026-04-09 (`114 pass / 91 fail`)
+- the harness now reaches Complement from the default `bun run complement:run` path, including environments where `go` is available through `mise`
 - it is still classified `mixed`; the stable full-run baseline for spec evidence remains the 2026-04-02 run
 - this run is now the working baseline for triage; concrete failure signatures below are updated accordingly
 
-## 2026-04-09 Regression Summary
+## 2026-05-06 Delta Summary
 
-Tests that were previously green evidence and are now red in this run:
+Newly passing vs 2026-04-09:
 
-- `TestACLs`, `TestEventAuth`, `TestGetMissingEventsGapFilling`, `TestInboundCanReturnMissingEvents`
-- `TestInviteFiltering`, `TestRemoteTyping`, `TestSyncOmitsStateChangeOnFilteredEvents`
-- `TestUnbanViaInvite`, `TestUnknownEndpoints`
+- `TestAsyncUpload`
+- `TestInboundCanReturnMissingEvents`
+- `TestUnknownEndpoints`
+
+Newly failing vs 2026-04-09:
+
+- `TestDeviceManagement`
+- `TestRelationsPaginationSync`
 
 Working interpretation:
 
-- these were passing against the untyped runtime surface; the types-contract refactor introduced stricter ID handling and parse-helper usage that exposed latent runtime divergences
-- they should each be reproduced in a targeted rerun before treating as stable implementation regressions
-- they are not yet demoted from the green-evidence list in `complement-analysis.md` but are flagged as aggregate-unstable
+- the media async-upload compatibility and Matrix-shaped unknown endpoint gaps from 2026-04-09 are no longer active broad-run failures
+- inbound missing-events behavior is green again in the broad run, but adjacent missing-event and gap-filling families remain red
+- the new failures are narrower and should be reproduced targeted before treating them as stable regressions
 
-New tests reaching the baseline in this run (from spec v1.17 / newer Complement) that are currently red:
+Newer spec v1.17 / Complement buckets that reached the broad-run surface in 2026-04-09 and are still red:
 
 - `TestComplementCanCreateValidV12Rooms`, `TestMSC4311FullCreateEventOnStrippedState`
 - `TestEventRelationships`, `TestFederatedEventRelationships`
 - `TestTxnIdempotency`, `TestTxnIdempotencyScopedToDevice`, `TestTxnScopeOnLocalEcho`
 
+## Recent Broad-Run Resolutions
+
+These buckets were red in the 2026-04-09 broad run and are no longer red in the 2026-05-06 broad run:
+
+- `TestAsyncUpload`: `POST /_matrix/media/v1/create`, async upload, duplicate upload rejection, and download paths pass.
+- `TestUnknownEndpoints`: unknown client, federation, key, and media paths now return expected Matrix-shaped 404/405 responses.
+- `TestInboundCanReturnMissingEvents`: world-readable, shared, invited, and joined visibility get-missing-events subtests pass.
+
 ## Concrete Failure Signatures
 
-### 1. Media async upload surface is still incomplete
+### 1. Device deletion UI-auth owner mismatch returns 500
 
 Observed failure:
 
-- `TestAsyncUpload` fails immediately because Complement calls `POST /_matrix/media/v1/create`
-- the server returns `404 Not Found`
+- `TestDeviceManagement/DELETE_/device/{deviceId}_requires_UI_auth_user_to_match_device_owner`
+- expected `403`, got `500 Internal Server Error`
+- response body: `{"errcode":"M_UNKNOWN","error":"Failed to verify device deletion password"}`
 
 Working interpretation:
 
-- the implementation currently exposes async upload create under `/_matrix/client/v1/media/create`
-- the `/_matrix/media/v1/create` alias expected by Complement is missing
-- this is a route compatibility gap, not a deep media pipeline bug
+- basic device get/list/update/delete subtests pass in the same parent test
+- the failure is isolated to the UI-auth path where the authenticated UI-auth user does not own the target device
+- password verification or owner validation is throwing through as an internal error instead of returning a controlled Matrix `M_FORBIDDEN` response
 
 Relevant code:
 
-- `src/api/media.ts`
-- `src/index.ts`
+- `src/fatrix-api/devices.ts`
+- `src/fatrix-api/middleware/auth.ts`
+- `src/fatrix-backend/application/features/devices/command.ts`
+- `src/platform/cloudflare/adapters/repositories/devices-repository.ts`
 
-### 2. Unknown media endpoints do not consistently return Matrix JSON errors
+### 2. Relation pagination leaks a pre-sync relation event
 
 Observed failure:
 
-- `TestUnknownEndpoints/Media_endpoints` fails because `/_matrix/media/unknown` returns a non-JSON 404 body
+- `TestRelationsPaginationSync`
+- `GET /_matrix/client/v1/rooms/{roomId}/relations/{eventId}?dir=f&from=s14&limit=3`
+- response `chunk` includes an unexpected `"reply 0 before sync token"` relation event
 
 Working interpretation:
 
-- top-level fallback handling in `src/index.ts` is Matrix-shaped
-- lazy-loaded media routes are bypassing that behavior for unknown media paths
-- the route boundary between the root app and `src/api/media.ts` is not preserving a shared Matrix error contract
+- relation pagination is not respecting the sync-token boundary expected by Complement
+- the issue is a timeline/read-model ordering problem rather than route reachability
+- the same family should be checked against event relationship projection and relation pagination token construction
 
 Relevant code:
 
-- `src/index.ts`
-- `src/api/media.ts`
+- `src/fatrix-api/relations.ts`
+- `src/fatrix-backend/application/features/relations/query.ts`
+- `src/fatrix-backend/application/features/sync/projectors/top-level.ts`
+- `src/platform/cloudflare/adapters/repositories/relations-repository.ts`
 
 ### 3. Presence is stored, but not reliably projected into `/sync`
 
@@ -274,24 +295,24 @@ Why this matters:
 
 ## Repair Plans
 
-## Plan A: Fast compatibility wins
+## Plan A: Fast targeted wins
 
 Target:
 
-- `TestAsyncUpload`
-- `TestUnknownEndpoints/Media_endpoints`
+- `TestDeviceManagement/DELETE_/device/{deviceId}_requires_UI_auth_user_to_match_device_owner`
 - `TestTxnIdempotencyScopedToDevice`
+- `TestRelationsPaginationSync`
 
 Actions:
 
-- add `/_matrix/media/v1/create` compatibility for async upload create
-- ensure unknown media endpoints return Matrix JSON error bodies
+- return a controlled `403` when UI-auth succeeds for a user that does not own the target device
 - make login/device creation idempotent for repeated `(user_id, device_id)` logins
+- enforce relation pagination boundaries around sync tokens so forward pagination does not leak pre-token relation events
 
 Expected effect:
 
 - quick pass-count improvement
-- reduced noise from obvious route compatibility and device lifecycle gaps
+- reduced noise from narrow, reproducible device lifecycle and relation pagination gaps
 
 ## Plan B: Presence projection unification
 
@@ -377,7 +398,7 @@ Reasoning:
 - Plan C removes the most duplicated specification logic and is the largest source of guard proliferation
 - Plan B benefits from a single projection model and reduces duplicated read-path behavior
 - Plan D is easier once membership and projection boundaries are cleaner
-- Plan A is still valid for tactical compatibility work, but it should not dominate the architecture if compatibility is not a priority
+- Plan A is still valid for tactical targeted fixes, but it should not dominate the architecture once the narrow regressions are reproduced and isolated
 
 ## Incremental TDD-First Rearchitecture
 
@@ -462,7 +483,7 @@ Stack note:
 
 Use this document as:
 
-- the active triage and repair plan for the broad `2026-04-09` mixed run
+- the active triage and repair plan for the broad `2026-05-06` mixed run
 - a reference when choosing targeted reruns and implementation order
 
 Do not use this document alone as spec evidence:

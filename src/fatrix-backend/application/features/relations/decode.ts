@@ -22,6 +22,16 @@ function parseRelationCursor(token: string | undefined): RelationCursor | null {
   }
 
   if (token.startsWith("s")) {
+    // Simple stream token "s14" — extract the numeric part directly.
+    // parseSyncToken only handles canonical "s{N}_td{N}_dk{N}" format and
+    // returns events=0 for plain "s14", so we must parse simple tokens first.
+    const simpleMatch = token.match(/^s(\d+)$/);
+    if (simpleMatch) {
+      return {
+        value: Number.parseInt(simpleMatch[1] ?? "0", 10),
+        column: "stream_ordering",
+      };
+    }
     return {
       value: parseSyncToken(token).events,
       column: "stream_ordering",

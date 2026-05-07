@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createDevice,
   deleteAllUserDevices,
   deleteDevice,
   getAuthChain,
@@ -36,6 +37,49 @@ class MockD1Database {
     };
   }
 }
+
+describe("createDevice", () => {
+  it("inserts a new device using ON CONFLICT upsert SQL", async () => {
+    const queries: string[] = [];
+    const boundParams: unknown[][] = [];
+    const db = {
+      prepare(query: string) {
+        queries.push(query);
+        return {
+          bind: (...params: unknown[]) => {
+            boundParams.push(params);
+            return { run: () => ({ success: true }) };
+          },
+        };
+      },
+    } as unknown as D1Database;
+
+    await createDevice(db, "@alice:test", "DEVICE1", "Alice's phone");
+
+    expect(queries.some((q) => /ON CONFLICT/i.test(q))).toBe(true);
+    expect(queries.some((q) => /DO UPDATE SET/i.test(q))).toBe(true);
+    expect(boundParams.flat()).toContain("@alice:test");
+    expect(boundParams.flat()).toContain("DEVICE1");
+    expect(boundParams.flat()).toContain("Alice's phone");
+  });
+
+  it("does not overwrite an existing display_name when none is provided", async () => {
+    const queries: string[] = [];
+    const db = {
+      prepare(query: string) {
+        queries.push(query);
+        return {
+          bind: () => ({ run: () => ({ success: true }) }),
+        };
+      },
+    } as unknown as D1Database;
+
+    await createDevice(db, "@alice:test", "DEVICE1");
+
+    const upsertSql = queries.find((q) => /ON CONFLICT/i.test(q)) ?? "";
+    expect(upsertSql).toContain("ELSE devices.display_name END");
+  });
+});
 
 describe("database state helpers", () => {
   it("adds m.room.create to room state when it only exists in events", async () => {
